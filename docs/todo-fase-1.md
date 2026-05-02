@@ -1,6 +1,6 @@
 # Todo — Fase 1 (MVP)
 
-> Aggiornato al: 2026-05-02 (Step 4)
+> Aggiornato al: 2026-05-02 (Step 5)
 
 ## Step 0 — Bootstrap repo
 - [x] Inizializza repo con `LICENSE` GPL 2.0, `README.md`, `.gitignore`
@@ -57,10 +57,13 @@
 - [x] Rust: vault_crea_aperto, vault_cifrato, vault_unlock aggiornato
 
 ## Step 5 — Tray icon + global hotkey
-- [ ] Implementa tray con glifo SVG
-- [ ] Menu contestuale
-- [ ] Registra hotkey globale
-- [ ] Test hotkey in background
+- [x] Implementa tray con glifo SVG (da Step 1, PNG generation deferred)
+- [x] Menu contestuale (5 voci: palette, nuovo, libreria, impostazioni, esci)
+- [x] Registra hotkey globale (Rust-side con parse_hotkey, toggle palette show/hide)
+- [x] Comando registra_hotkey per cambio a runtime (onboarding, impostazioni)
+- [x] Toggle palette: show+center+focus / hide, Escape chiude palette
+- [x] Caricamento hotkey da preferenze.json all'avvio
+- [ ] Test hotkey in background ⚠️ richiede `pnpm dev` + toolchain
 
 ## Step 6 — Command Palette (Variante B Raycast)
 - [ ] Window frameless dedicata
