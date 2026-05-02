@@ -1,6 +1,6 @@
 # Todo — Fase 1 (MVP)
 
-> Aggiornato al: 2026-05-02 (Step 5)
+> Aggiornato al: 2026-05-02 (Step 6)
 
 ## Step 0 — Bootstrap repo
 - [x] Inizializza repo con `LICENSE` GPL 2.0, `README.md`, `.gitignore`
@@ -66,12 +66,15 @@
 - [ ] Test hotkey in background ⚠️ richiede `pnpm dev` + toolchain
 
 ## Step 6 — Command Palette (Variante B Raycast)
-- [ ] Window frameless dedicata
-- [ ] Componente Svelte custom
-- [ ] Fuzzy search FTS5
-- [ ] Navigation tastiera
-- [ ] Espansione inline form segnaposti
-- [ ] Cmd/Ctrl+Enter = compila e copia
+- [x] Window frameless dedicata (da Step 1, 640×480 alwaysOnTop)
+- [x] Componente CommandPalette.svelte con due modalità (ricerca/compila)
+- [x] Fuzzy search FTS5 con sanitizzazione query e prefix matching (word*)
+- [x] Navigation tastiera (↑↓ naviga, Enter seleziona, Escape chiudi/indietro)
+- [x] Espansione inline form segnaposti (parser template.ts, form auto-generato)
+- [x] Ctrl+Enter = compila e copia negli appunti (Web Clipboard API)
+- [x] Anteprima live del prompt compilato
+- [x] Rust: modulo prompt con prompt_cerca (recenti + FTS5 MATCH)
+- [x] TypeScript: lib/template.ts (estraiSegnaposti, compila, contaCompilati)
 
 ## Step 7 — Libreria (finestra principale)
 - [ ] Layout 3 pannelli responsive

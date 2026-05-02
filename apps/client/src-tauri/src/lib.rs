@@ -1,6 +1,7 @@
 mod errore;
 mod migrazione;
 mod preferenze;
+mod prompt;
 mod vault;
 
 use tauri::{
@@ -206,6 +207,7 @@ pub fn run() {
             vault::vault_cambia_password,
             preferenze::preferenze_carica,
             preferenze::preferenze_salva,
+            prompt::prompt_cerca,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())
