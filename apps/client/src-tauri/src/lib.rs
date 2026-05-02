@@ -1,3 +1,4 @@
+mod editor;
 mod errore;
 mod libreria;
 mod migrazione;
@@ -214,6 +215,9 @@ pub fn run() {
             libreria::libreria_dettaglio,
             libreria::libreria_toggle_preferito,
             libreria::libreria_tag_lista,
+            editor::prompt_crea,
+            editor::prompt_aggiorna,
+            editor::prompt_elimina,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())

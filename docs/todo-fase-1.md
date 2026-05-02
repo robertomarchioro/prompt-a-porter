@@ -1,6 +1,6 @@
 # Todo — Fase 1 (MVP)
 
-> Aggiornato al: 2026-05-02 (Step 7)
+> Aggiornato al: 2026-05-02 (Step 8)
 
 ## Step 0 — Bootstrap repo
 - [x] Inizializza repo con `LICENSE` GPL 2.0, `README.md`, `.gitignore`
@@ -89,15 +89,18 @@
 - [x] Tempo relativo italianizzato (ora, Nm fa, Nh fa, ieri, Ng fa, data breve)
 
 ## Step 8 — Editor prompt
-- [ ] Modale 2 colonne
-- [ ] CodeMirror 6 con highlight {{...}}
-- [ ] Parser segnaposti live
-- [ ] Tabella segnaposti reattiva
-- [ ] Tag picker con autocomplete
-- [ ] Switch privato/team
-- [ ] Anteprima rendering
-- [ ] Autosave con debounce
-- [ ] Hotkey editor
+- [x] Modale 2 colonne (960×720, grid 1.3fr/1fr, scrim + backdrop-filter)
+- [x] CodeMirror 6 con highlight {{...}} (ViewPlugin + Decoration.mark, baseTheme)
+- [x] Parser segnaposti live ($derived da estraiSegnaposti sul body CM)
+- [x] Tabella segnaposti reattiva (pills nella colonna destra, aggiornamento live)
+- [x] Tag picker con autocomplete (carica tag esistenti, suggerimenti filtrati, Enter/Backspace)
+- [x] Switch privato/team (toggle segmentato con stato visuale attivo)
+- [x] Anteprima rendering ({@html renderPreview} con XSS-safe escaping)
+- [x] Autosave con debounce (2s, solo prompt esistenti, indicatore stato)
+- [x] Hotkey editor (Ctrl+S salva, Escape chiude)
+- [x] Rust: modulo editor con prompt_crea, prompt_aggiorna, prompt_elimina
+- [x] Rust: sincronizza_tags (find-or-create) + ricostruisci_fts (delete-all + bulk INSERT)
+- [x] Libreria: bottone "+ Nuovo", Modifica abilitato, {#key} per stato fresco editor
 
 ## Step 9 — Renderer / Compilatore
 - [ ] Vista 2 colonne (form + preview)
