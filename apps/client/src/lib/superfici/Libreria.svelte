@@ -2,6 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { Button, EmptyState, NavItem, Tag } from "$lib/components";
   import { estraiSegnaposti } from "$lib/template";
+  import EditorPrompt from "./EditorPrompt.svelte";
 
   interface PromptCard {
     id: string;
@@ -61,6 +62,9 @@
   let hotkeyCombo = $state("Ctrl+Shift+P");
   let passwordInput = $state("");
   let erroreUnlock = $state("");
+  let mostraEditor = $state(false);
+  let editorKey = $state(0);
+  let promptPerEditor = $state<PromptDettaglio | null>(null);
 
   const titoloVista = $derived(
     vistaCorrente === "recenti"
@@ -458,6 +462,15 @@
           <h2 class="lista-titolo">{titoloVista}</h2>
           <span class="lista-count">{conteggioVista}</span>
           <div class="lista-spacer"></div>
+          <Button
+            variante="primary"
+            dimensione="sm"
+            onclick={() => {
+              promptPerEditor = null;
+              editorKey++;
+              mostraEditor = true;
+            }}>+ Nuovo</Button
+          >
           <select
             class="lista-sort"
             bind:value={ordine}
@@ -595,8 +608,14 @@
               >
                 {promptDet.preferito ? "★" : "☆"}
               </Button>
-              <Button variante="ghost" dimensione="sm" disabled
-                >Modifica</Button
+              <Button
+                variante="ghost"
+                dimensione="sm"
+                onclick={() => {
+                  promptPerEditor = promptDet;
+                  editorKey++;
+                  mostraEditor = true;
+                }}>Modifica</Button
               >
               <Button variante="primary" dimensione="sm" disabled
                 >Compila</Button
@@ -675,6 +694,19 @@
         <kbd class="statusbar-kbd">{hotkeyCombo}</kbd>
       </div>
     </footer>
+
+    {#if mostraEditor}
+      {#key editorKey}
+        <EditorPrompt
+          prompt={promptPerEditor}
+          onchiudi={() => (mostraEditor = false)}
+          onsalvato={() => {
+            mostraEditor = false;
+            caricaDati();
+          }}
+        />
+      {/key}
+    {/if}
   </div>
 {/if}
 
