@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import CommandPalette from "$lib/superfici/CommandPalette.svelte";
   import DemoComponenti from "$lib/superfici/DemoComponenti.svelte";
   import OnboardingWizard from "$lib/superfici/OnboardingWizard.svelte";
 
@@ -29,23 +30,12 @@
     }
   });
 
-  $effect(() => {
-    if (etichetta === "palette") {
-      function nascondiFinestraPalette(e: KeyboardEvent) {
-        if (e.key === "Escape") finestra.hide();
-      }
-      window.addEventListener("keydown", nascondiFinestraPalette);
-      return () => window.removeEventListener("keydown", nascondiFinestraPalette);
-    }
-  });
 </script>
 
 {#if mostraDemo}
   <DemoComponenti />
 {:else if etichetta === "palette"}
-  <main class="palette-root">
-    <p class="placeholder">Command Palette — in arrivo (Step 6)</p>
-  </main>
+  <CommandPalette />
 {:else if onboardingCompletato === null}
   <main class="libreria-root">
     <div class="benvenuto">
@@ -113,17 +103,4 @@
     padding: var(--sp-1) var(--sp-2);
   }
 
-  .palette-root {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    background: var(--bg-raised);
-    color: var(--text-muted);
-    font-family: var(--font-ui);
-  }
-
-  .placeholder {
-    font-size: var(--fs-base);
-  }
 </style>
