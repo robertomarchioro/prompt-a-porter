@@ -1,6 +1,6 @@
 # Todo — Fase 1 (MVP)
 
-> Aggiornato al: 2026-05-02 (Step 6)
+> Aggiornato al: 2026-05-02 (Step 7)
 
 ## Step 0 — Bootstrap repo
 - [x] Inizializza repo con `LICENSE` GPL 2.0, `README.md`, `.gitignore`
@@ -77,11 +77,16 @@
 - [x] TypeScript: lib/template.ts (estraiSegnaposti, compila, contaCompilati)
 
 ## Step 7 — Libreria (finestra principale)
-- [ ] Layout 3 pannelli responsive
-- [ ] Sidebar workspace switcher + viste + tag
-- [ ] Lista centrale con search, sort, card
-- [ ] Pannello dettaglio
-- [ ] Status bar
+- [x] Layout 3 pannelli responsive (CSS Grid 240px / 360px / 1fr + status bar 28px)
+- [x] Sidebar workspace switcher + viste (Recenti/Preferiti/Tutti) + visibilità + tag dinamici
+- [x] Lista centrale con search debounced, sort (recente/popolare/A-Z), prompt card con icone visibilità
+- [x] Pannello dettaglio con header, azioni (preferiti/modifica/compila), body preview con placeholder pill, parametri grid
+- [x] Status bar con sync dot, versione, hotkey combo
+- [x] Rust: modulo libreria con 5 comandi (conteggi, lista, dettaglio, toggle_preferito, tag_lista)
+- [x] Rust: seed dati base (workspace Personale + utente locale) su creazione/unlock vault
+- [x] Query parametrizzate con named_params (LIKE + tag JOIN opzionali, nessun SQL injection)
+- [x] Schermata unlock vault per vault cifrati (auto-unlock per non cifrati)
+- [x] Tempo relativo italianizzato (ora, Nm fa, Nh fa, ieri, Ng fa, data breve)
 
 ## Step 8 — Editor prompt
 - [ ] Modale 2 colonne

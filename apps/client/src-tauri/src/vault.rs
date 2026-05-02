@@ -207,6 +207,7 @@ pub fn vault_crea(password: String, state: State<'_, VaultState>) -> Result<(), 
 
     // Esegui migrazioni sullo schema vuoto
     migrazione::esegui_migrazioni(&conn)?;
+    crate::libreria::assicura_dati_base(&conn)?;
 
     // Salva metadata (salt + parametri, MAI la chiave)
     let meta = VaultMeta {
@@ -241,6 +242,7 @@ pub fn vault_crea_aperto(state: State<'_, VaultState>) -> Result<(), PapErrore> 
     let conn = Connection::open(&db_path)?;
 
     migrazione::esegui_migrazioni(&conn)?;
+    crate::libreria::assicura_dati_base(&conn)?;
 
     let meta = VaultMeta {
         salt_hex: String::new(),
@@ -298,6 +300,7 @@ pub fn vault_unlock(password: String, state: State<'_, VaultState>) -> Result<()
     }
 
     migrazione::esegui_migrazioni(&conn)?;
+    crate::libreria::assicura_dati_base(&conn)?;
 
     let mut guard = state.conn.lock().unwrap();
     *guard = Some(conn);
