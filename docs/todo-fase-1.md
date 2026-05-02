@@ -1,6 +1,6 @@
 # Todo — Fase 1 (MVP)
 
-> Aggiornato al: 2026-05-02
+> Aggiornato al: 2026-05-02 (Step 4)
 
 ## Step 0 — Bootstrap repo
 - [x] Inizializza repo con `LICENSE` GPL 2.0, `README.md`, `.gitignore`
@@ -46,9 +46,15 @@
 - [ ] Verifica visiva nel browser ⚠️ richiede `pnpm dev`
 
 ## Step 4 — Onboarding
-- [ ] Wizard 3 step (Profilo → Password vault → Hotkey)
-- [ ] Strength meter password
-- [ ] Salva profilo e config in file prefs
+- [x] Wizard 3 step (Profilo → Password vault → Hotkey)
+- [x] Strength meter password (4 livelli, calcolo entropia)
+- [x] Salva profilo e config in file prefs (preferenze.json via Tauri command)
+- [x] Componenti: StrengthMeter, ProfileCard, HotkeyInput
+- [x] Supporto vault non cifrato (opzione "Salta cifratura")
+- [x] "Salta tour" con vault non cifrato e preferenze default
+- [x] Navigazione tastiera (Enter=avanti, Esc=reset hotkey)
+- [x] Rust: modulo preferenze con preferenze_carica/preferenze_salva
+- [x] Rust: vault_crea_aperto, vault_cifrato, vault_unlock aggiornato
 
 ## Step 5 — Tray icon + global hotkey
 - [ ] Implementa tray con glifo SVG

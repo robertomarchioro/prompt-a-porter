@@ -1,5 +1,6 @@
 mod errore;
 mod migrazione;
+mod preferenze;
 mod vault;
 
 use tauri::{
@@ -18,7 +19,8 @@ pub fn run() {
                 .app_data_dir()
                 .expect("Impossibile ottenere la directory dati dell'app");
 
-            app.manage(vault::VaultState::new(data_dir));
+            app.manage(vault::VaultState::new(data_dir.clone()));
+            app.manage(preferenze::PreferenzeState::new(data_dir));
 
             // Menu contestuale del tray
             let apri = MenuItem::with_id(app, "apri_palette", "Apri palette", true, None::<&str>)?;
@@ -67,9 +69,13 @@ pub fn run() {
             vault::vault_esiste,
             vault::vault_aperto,
             vault::vault_crea,
+            vault::vault_crea_aperto,
+            vault::vault_cifrato,
             vault::vault_unlock,
             vault::vault_lock,
             vault::vault_cambia_password,
+            preferenze::preferenze_carica,
+            preferenze::preferenze_salva,
         ])
         .run(tauri::generate_context!())
         .expect("Errore durante l'avvio di Prompt a Porter");

@@ -22,6 +22,10 @@ const ARGON2_PARALLELISM: u32 = 4;
 
 // ────────────────── Vault Meta ──────────────────
 
+fn default_cifrato() -> bool {
+    true
+}
+
 /// Metadata del vault salvata in chiaro accanto al DB.
 /// Contiene il salt per la derivazione della chiave, mai la chiave stessa.
 #[derive(Debug, Serialize, Deserialize)]
@@ -32,6 +36,8 @@ pub struct VaultMeta {
     pub argon2_memory_kib: u32,
     pub argon2_time_cost: u32,
     pub argon2_parallelism: u32,
+    #[serde(default = "default_cifrato")]
+    pub cifrato: bool,
 }
 
 // ────────────────── Vault State ─────────────────
@@ -210,6 +216,7 @@ pub fn vault_crea(password: String, state: State<'_, VaultState>) -> Result<(), 
         argon2_memory_kib: ARGON2_MEMORY_KIB,
         argon2_time_cost: ARGON2_TIME_COST,
         argon2_parallelism: ARGON2_PARALLELISM,
+        cifrato: true,
     };
     salva_meta(&state.meta_path(), &meta)?;
 
@@ -219,6 +226,48 @@ pub fn vault_crea(password: String, state: State<'_, VaultState>) -> Result<(), 
 
     log::info!("Vault creato: {}", db_path.display());
     Ok(())
+}
+
+/// Crea un nuovo vault senza cifratura (DB in chiaro).
+#[tauri::command]
+pub fn vault_crea_aperto(state: State<'_, VaultState>) -> Result<(), PapErrore> {
+    if state.esiste() {
+        return Err(PapErrore::VaultGiaAperto);
+    }
+
+    fs::create_dir_all(&state.data_dir)?;
+
+    let db_path = state.db_path();
+    let conn = Connection::open(&db_path)?;
+
+    migrazione::esegui_migrazioni(&conn)?;
+
+    let meta = VaultMeta {
+        salt_hex: String::new(),
+        db_nome: "pap-vault.db".to_string(),
+        creato_a: timestamp_iso(),
+        argon2_memory_kib: 0,
+        argon2_time_cost: 0,
+        argon2_parallelism: 0,
+        cifrato: false,
+    };
+    salva_meta(&state.meta_path(), &meta)?;
+
+    let mut guard = state.conn.lock().unwrap();
+    *guard = Some(conn);
+
+    log::info!("Vault creato (non cifrato): {}", db_path.display());
+    Ok(())
+}
+
+/// Verifica se il vault è cifrato.
+#[tauri::command]
+pub fn vault_cifrato(state: State<'_, VaultState>) -> Result<bool, PapErrore> {
+    if !state.esiste() {
+        return Err(PapErrore::VaultNonEsiste);
+    }
+    let meta = leggi_meta(&state.meta_path())?;
+    Ok(meta.cifrato)
 }
 
 /// Sblocca il vault esistente con la password.
@@ -233,20 +282,21 @@ pub fn vault_unlock(password: String, state: State<'_, VaultState>) -> Result<()
     }
 
     let meta = leggi_meta(&state.meta_path())?;
-    let salt = hex_a_bytes(&meta.salt_hex)?;
-    let chiave = deriva_chiave(
-        &password,
-        &salt,
-        meta.argon2_memory_kib,
-        meta.argon2_time_cost,
-        meta.argon2_parallelism,
-    )?;
-
     let conn = Connection::open(state.db_path())?;
-    applica_chiave(&conn, &chiave)?;
-    verifica_chiave(&conn)?;
 
-    // Esegui eventuali migrazioni pendenti (aggiornamento versione app)
+    if meta.cifrato {
+        let salt = hex_a_bytes(&meta.salt_hex)?;
+        let chiave = deriva_chiave(
+            &password,
+            &salt,
+            meta.argon2_memory_kib,
+            meta.argon2_time_cost,
+            meta.argon2_parallelism,
+        )?;
+        applica_chiave(&conn, &chiave)?;
+        verifica_chiave(&conn)?;
+    }
+
     migrazione::esegui_migrazioni(&conn)?;
 
     let mut guard = state.conn.lock().unwrap();
@@ -327,6 +377,7 @@ pub fn vault_cambia_password(
         argon2_memory_kib: ARGON2_MEMORY_KIB,
         argon2_time_cost: ARGON2_TIME_COST,
         argon2_parallelism: ARGON2_PARALLELISM,
+        cifrato: true,
     };
     drop(guard);
     salva_meta(&state.meta_path(), &meta_nuova)?;
@@ -366,6 +417,7 @@ mod test {
             argon2_memory_kib: 4096,
             argon2_time_cost: 1,
             argon2_parallelism: 1,
+            cifrato: true,
         };
         salva_meta(&state.meta_path(), &meta).unwrap();
         drop(conn);
@@ -398,6 +450,7 @@ mod test {
             argon2_memory_kib: 4096,
             argon2_time_cost: 1,
             argon2_parallelism: 1,
+            cifrato: true,
         };
         salva_meta(&state.meta_path(), &meta).unwrap();
         drop(conn);

@@ -1,11 +1,33 @@
 <script lang="ts">
+  import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import DemoComponenti from "$lib/superfici/DemoComponenti.svelte";
+  import OnboardingWizard from "$lib/superfici/OnboardingWizard.svelte";
 
   const finestra = getCurrentWindow();
   const etichetta = finestra.label;
-
   const mostraDemo = new URLSearchParams(window.location.search).has("demo");
+
+  let onboardingCompletato = $state<boolean | null>(null);
+
+  interface Preferenze {
+    onboarding_completato: boolean;
+  }
+
+  async function caricaPreferenze() {
+    try {
+      const prefs = await invoke<Preferenze>("preferenze_carica");
+      onboardingCompletato = prefs.onboarding_completato;
+    } catch {
+      onboardingCompletato = false;
+    }
+  }
+
+  $effect(() => {
+    if (etichetta === "libreria" && !mostraDemo) {
+      caricaPreferenze();
+    }
+  });
 </script>
 
 {#if mostraDemo}
@@ -14,6 +36,14 @@
   <main class="palette-root">
     <p class="placeholder">Command Palette — in arrivo (Step 6)</p>
   </main>
+{:else if onboardingCompletato === null}
+  <main class="libreria-root">
+    <div class="benvenuto">
+      <p class="hint subtle">Caricamento…</p>
+    </div>
+  </main>
+{:else if !onboardingCompletato}
+  <OnboardingWizard oncompletato={() => (onboardingCompletato = true)} />
 {:else}
   <main class="libreria-root">
     <div class="benvenuto">
