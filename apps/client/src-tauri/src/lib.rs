@@ -8,21 +8,153 @@ use tauri::{
     tray::TrayIconBuilder,
     Manager,
 };
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+
+fn toggle_palette(app: &tauri::AppHandle) {
+    if let Some(palette) = app.get_webview_window("palette") {
+        if palette.is_visible().unwrap_or(false) {
+            let _ = palette.hide();
+        } else {
+            let _ = palette.show();
+            let _ = palette.center();
+            let _ = palette.set_focus();
+        }
+    }
+}
+
+fn converti_tasto(tasto: &str) -> Option<Code> {
+    match tasto {
+        "A" => Some(Code::KeyA),
+        "B" => Some(Code::KeyB),
+        "C" => Some(Code::KeyC),
+        "D" => Some(Code::KeyD),
+        "E" => Some(Code::KeyE),
+        "F" => Some(Code::KeyF),
+        "G" => Some(Code::KeyG),
+        "H" => Some(Code::KeyH),
+        "I" => Some(Code::KeyI),
+        "J" => Some(Code::KeyJ),
+        "K" => Some(Code::KeyK),
+        "L" => Some(Code::KeyL),
+        "M" => Some(Code::KeyM),
+        "N" => Some(Code::KeyN),
+        "O" => Some(Code::KeyO),
+        "P" => Some(Code::KeyP),
+        "Q" => Some(Code::KeyQ),
+        "R" => Some(Code::KeyR),
+        "S" => Some(Code::KeyS),
+        "T" => Some(Code::KeyT),
+        "U" => Some(Code::KeyU),
+        "V" => Some(Code::KeyV),
+        "W" => Some(Code::KeyW),
+        "X" => Some(Code::KeyX),
+        "Y" => Some(Code::KeyY),
+        "Z" => Some(Code::KeyZ),
+        "0" => Some(Code::Digit0),
+        "1" => Some(Code::Digit1),
+        "2" => Some(Code::Digit2),
+        "3" => Some(Code::Digit3),
+        "4" => Some(Code::Digit4),
+        "5" => Some(Code::Digit5),
+        "6" => Some(Code::Digit6),
+        "7" => Some(Code::Digit7),
+        "8" => Some(Code::Digit8),
+        "9" => Some(Code::Digit9),
+        "SPACE" => Some(Code::Space),
+        "ENTER" => Some(Code::Enter),
+        "TAB" => Some(Code::Tab),
+        "BACKSPACE" => Some(Code::Backspace),
+        "DELETE" => Some(Code::Delete),
+        "ESCAPE" => Some(Code::Escape),
+        "ARROWUP" => Some(Code::ArrowUp),
+        "ARROWDOWN" => Some(Code::ArrowDown),
+        "ARROWLEFT" => Some(Code::ArrowLeft),
+        "ARROWRIGHT" => Some(Code::ArrowRight),
+        "F1" => Some(Code::F1),
+        "F2" => Some(Code::F2),
+        "F3" => Some(Code::F3),
+        "F4" => Some(Code::F4),
+        "F5" => Some(Code::F5),
+        "F6" => Some(Code::F6),
+        "F7" => Some(Code::F7),
+        "F8" => Some(Code::F8),
+        "F9" => Some(Code::F9),
+        "F10" => Some(Code::F10),
+        "F11" => Some(Code::F11),
+        "F12" => Some(Code::F12),
+        _ => None,
+    }
+}
+
+fn parse_hotkey(combo: &str) -> Result<Shortcut, String> {
+    let parti: Vec<&str> = combo.split('+').collect();
+    if parti.is_empty() {
+        return Err("Hotkey vuota".into());
+    }
+
+    let mut mods = Modifiers::empty();
+    for p in &parti[..parti.len() - 1] {
+        match p.to_lowercase().as_str() {
+            "ctrl" | "control" => mods |= Modifiers::CONTROL,
+            "shift" => mods |= Modifiers::SHIFT,
+            "alt" => mods |= Modifiers::ALT,
+            "super" | "meta" | "cmd" | "command" => mods |= Modifiers::META,
+            _ => return Err(format!("Modificatore sconosciuto: {p}")),
+        }
+    }
+
+    let tasto = parti.last().unwrap();
+    let tasto_upper = tasto.to_uppercase();
+    let code = converti_tasto(&tasto_upper)
+        .ok_or_else(|| format!("Tasto non supportato: {tasto}"))?;
+
+    let mods_opt = if mods.is_empty() { None } else { Some(mods) };
+    Ok(Shortcut::new(mods_opt, code))
+}
+
+fn carica_hotkey_preferenze(data_dir: &std::path::Path) -> String {
+    let prefs_path = data_dir.join("preferenze.json");
+    if let Ok(json) = std::fs::read_to_string(prefs_path) {
+        if let Ok(prefs) = serde_json::from_str::<preferenze::Preferenze>(&json) {
+            return prefs.hotkey;
+        }
+    }
+    "Ctrl+Shift+P".to_string()
+}
+
+fn registra_shortcut(app: &tauri::AppHandle, combo: &str) -> Result<(), String> {
+    let _ = app.global_shortcut().unregister_all();
+    let shortcut = parse_hotkey(combo)?;
+    app.global_shortcut()
+        .on_shortcut(shortcut, |app_handle, _, event| {
+            if event.state == ShortcutState::Pressed {
+                toggle_palette(app_handle);
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    log::info!("Hotkey registrata: {combo}");
+    Ok(())
+}
+
+#[tauri::command]
+fn registra_hotkey(combo: String, app: tauri::AppHandle) -> Result<(), String> {
+    registra_shortcut(&app, &combo)
+}
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
-            // Inizializza lo stato del vault con la directory dati dell'app
             let data_dir = app
                 .path()
                 .app_data_dir()
                 .expect("Impossibile ottenere la directory dati dell'app");
 
             app.manage(vault::VaultState::new(data_dir.clone()));
-            app.manage(preferenze::PreferenzeState::new(data_dir));
+            app.manage(preferenze::PreferenzeState::new(data_dir.clone()));
 
-            // Menu contestuale del tray
+            // ── Menu contestuale del tray ──
+
             let apri = MenuItem::with_id(app, "apri_palette", "Apri palette", true, None::<&str>)?;
             let nuovo =
                 MenuItem::with_id(app, "nuovo_prompt", "Nuovo prompt", true, None::<&str>)?;
@@ -39,18 +171,9 @@ pub fn run() {
                 .tooltip("Prompt a Porter")
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "apri_palette" => {
-                        if let Some(finestra) = app.get_webview_window("palette") {
-                            let _ = finestra.show();
-                            let _ = finestra.set_focus();
-                        }
+                        toggle_palette(app);
                     }
-                    "mostra_libreria" => {
-                        if let Some(finestra) = app.get_webview_window("libreria") {
-                            let _ = finestra.show();
-                            let _ = finestra.set_focus();
-                        }
-                    }
-                    "impostazioni" => {
+                    "nuovo_prompt" | "mostra_libreria" | "impostazioni" => {
                         if let Some(finestra) = app.get_webview_window("libreria") {
                             let _ = finestra.show();
                             let _ = finestra.set_focus();
@@ -62,6 +185,13 @@ pub fn run() {
                     _ => {}
                 })
                 .build(app)?;
+
+            // ── Registra hotkey globale ──
+
+            let hotkey_combo = carica_hotkey_preferenze(&data_dir);
+            if let Err(e) = registra_shortcut(app.handle(), &hotkey_combo) {
+                log::warn!("Impossibile registrare hotkey '{hotkey_combo}': {e}");
+            }
 
             Ok(())
         })
@@ -76,6 +206,7 @@ pub fn run() {
             vault::vault_cambia_password,
             preferenze::preferenze_carica,
             preferenze::preferenze_salva,
+            registra_hotkey,
         ])
         .run(tauri::generate_context!())
         .expect("Errore durante l'avvio di Prompt a Porter");

@@ -70,6 +70,7 @@
           crea_prompt_esempio: false,
         },
       });
+      await invoke("registra_hotkey", { combo: "Ctrl+Shift+P" });
       oncompletato?.();
     } catch (e) {
       errore = String(e);
@@ -99,6 +100,7 @@
         },
       });
 
+      await invoke("registra_hotkey", { combo: hotkey });
       oncompletato?.();
     } catch (e) {
       errore = String(e);

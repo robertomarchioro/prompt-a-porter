@@ -28,6 +28,16 @@
       caricaPreferenze();
     }
   });
+
+  $effect(() => {
+    if (etichetta === "palette") {
+      function nascondiFinestraPalette(e: KeyboardEvent) {
+        if (e.key === "Escape") finestra.hide();
+      }
+      window.addEventListener("keydown", nascondiFinestraPalette);
+      return () => window.removeEventListener("keydown", nascondiFinestraPalette);
+    }
+  });
 </script>
 
 {#if mostraDemo}
