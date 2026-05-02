@@ -35,9 +35,15 @@
 - [ ] Test con `cargo test` ⚠️ richiede toolchain Rust locale
 
 ## Step 3 — Componenti UI base (porting design)
-- [ ] Porta primitive da app.css a componenti Svelte
-- [ ] Pagina demo /components per test visivo dark/light e 3 toni
-- [ ] Verifica accessibilità tastiera + focus ring + ARIA
+- [x] Porta 16 primitive da app.css a componenti Svelte 5 con props tipizzate
+      Button, Input, Textarea, Select, Field, Switch, Kbd, Tag, Badge,
+      Placeholder, NavItem, ListItem, EmptyState, Toast, Skeleton, Tooltip
+- [x] Barrel export in `components/index.ts`
+- [x] Classi utility globali in app.css (.eyebrow, .muted, .row, .spacer, ecc.)
+- [x] Pagina demo `?demo` con switch tema/tono per test visivo dark/light × 3 toni
+- [x] Accessibilità: aria-checked (Switch), aria-current (NavItem), aria-selected (ListItem),
+      aria-invalid (Input/Textarea), role=status (Toast), focus-visible ring, keyboard nav
+- [ ] Verifica visiva nel browser ⚠️ richiede `pnpm dev`
 
 ## Step 4 — Onboarding
 - [ ] Wizard 3 step (Profilo → Password vault → Hotkey)

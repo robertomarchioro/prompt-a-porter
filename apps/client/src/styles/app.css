@@ -82,3 +82,42 @@ a {
 a:hover {
   color: var(--accent-team-strong);
 }
+
+/* ── Classi utility globali (dal design system) ── */
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+.subtle {
+  color: var(--text-subtle);
+}
+.strong {
+  color: var(--text-strong);
+}
+
+.row {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+}
+.row-tight {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.spacer {
+  flex: 1;
+}
