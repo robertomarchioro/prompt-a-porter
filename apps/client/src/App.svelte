@@ -1,11 +1,16 @@
 <script lang="ts">
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import DemoComponenti from "$lib/superfici/DemoComponenti.svelte";
 
   const finestra = getCurrentWindow();
   const etichetta = finestra.label;
+
+  const mostraDemo = new URLSearchParams(window.location.search).has("demo");
 </script>
 
-{#if etichetta === "palette"}
+{#if mostraDemo}
+  <DemoComponenti />
+{:else if etichetta === "palette"}
   <main class="palette-root">
     <p class="placeholder">Command Palette — in arrivo (Step 6)</p>
   </main>
@@ -16,6 +21,9 @@
       <p class="sottotitolo">Libreria locale per prompt AI</p>
       <p class="hint">
         Premi <kbd>Ctrl+Shift+P</kbd> per aprire la command palette
+      </p>
+      <p class="hint subtle">
+        Apri <a href="/?demo">?demo</a> per la galleria componenti
       </p>
     </div>
   </main>
@@ -53,6 +61,7 @@
   .hint {
     font-size: var(--fs-sm);
     color: var(--text-subtle);
+    margin: 0 0 var(--sp-2);
   }
 
   kbd {
