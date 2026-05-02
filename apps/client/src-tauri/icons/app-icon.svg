@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FBBF24"/>
+      <stop offset="50%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="108%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#92400E" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Sfondo: quadrato arrotondato stile macOS con gradiente ambra -->
+  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+
+  <!-- Braces: glifo Lucide "braces" scalato e centrato, bianche -->
+  <svg x="180" y="180" width="664" height="664" viewBox="0 0 24 24">
+    <path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"
+          fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
+          filter="url(#shadow)"/>
+    <path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"
+          fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
+          filter="url(#shadow)"/>
+  </svg>
+</svg>

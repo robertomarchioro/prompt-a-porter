@@ -17,7 +17,8 @@
 - [x] Struttura directory Svelte: components, superfici, stores, lib_template, lib_vault, lib_sync, i18n
 - [x] File i18n: it.json + en.json con tutte le stringhe delle 8 superfici
 - [x] Rust: Cargo.toml, lib.rs con tray + menu contestuale, capabilities ACL
-- [ ] Genera icone app con `pnpm tauri icon` ⚠️ richiede PNG sorgente 1024×1024
+- [x] Icone: SVG sorgenti (Lucide `braces`, ISC license) + tool HTML per generare PNG
+- [ ] Genera PNG finali con `genera-icone.html` o `pnpm tauri icon` ⚠️ richiede browser/toolchain
 
 ## Step 2 — Setup vault SQLite + SQLCipher
 - [ ] Integra SQLCipher (tauri-plugin-sql o rusqlite bundled-sqlcipher)
