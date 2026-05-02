@@ -21,13 +21,18 @@
 - [ ] Genera PNG finali con `genera-icone.html` o `pnpm tauri icon` ⚠️ richiede browser/toolchain
 
 ## Step 2 — Setup vault SQLite + SQLCipher
-- [ ] Integra SQLCipher (tauri-plugin-sql o rusqlite bundled-sqlcipher)
-- [ ] Crea schema iniziale
-- [ ] Migration system (versioned SQL files in src-tauri/migrations/)
-- [ ] Comando Tauri `vault_unlock(password)`
-- [ ] Comando Tauri `vault_lock()`
-- [ ] Comando Tauri `vault_change_password(old, new)` con re-key
-- [ ] Test vault: apertura, chiusura, password errata
+- [x] Integra `rusqlite` con `bundled-sqlcipher` (rimosso `tauri-plugin-sql`)
+- [x] Schema iniziale V001: 8 tabelle + FTS5 + 8 indici
+- [x] Migration system: SQL embedded via `include_str!()`, tabella `_Migrazioni`
+- [x] Comando Tauri `vault_crea(password)` — genera salt, Argon2id, crea DB
+- [x] Comando Tauri `vault_unlock(password)` — deriva chiave, apre DB, verifica
+- [x] Comando Tauri `vault_lock()` — chiude connessione
+- [x] Comando Tauri `vault_cambia_password(old, new)` — re-key con nuovo salt
+- [x] Comandi ausiliari: `vault_esiste()`, `vault_aperto()`
+- [x] Tipo errore `PapErrore` serializzabile per Tauri
+- [x] Test: creazione, unlock, password errata, re-key, hex roundtrip, migrazioni idempotenti
+- [x] Documentazione schema in `docs/schema-dati.md` con diagramma ER Mermaid
+- [ ] Test con `cargo test` ⚠️ richiede toolchain Rust locale
 
 ## Step 3 — Componenti UI base (porting design)
 - [ ] Porta primitive da app.css a componenti Svelte

@@ -19,7 +19,6 @@
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-global-shortcut": "^2.0.0",
-    "@tauri-apps/plugin-sql": "^2.0.0",
     "@codemirror/autocomplete": "^6.0.0",
     "@codemirror/commands": "^6.0.0",
     "@codemirror/language": "^6.0.0",
