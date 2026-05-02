@@ -1,0 +1,123 @@
+{
+  "app": {
+    "nome": "Prompt a Porter",
+    "sottotitolo": "Local prompt library for AI",
+    "versione": "0.1.0"
+  },
+  "palette": {
+    "placeholder": "Search prompts, tags, or actions…",
+    "recenti": "Recent",
+    "risultati": "Results",
+    "azioni": "Actions",
+    "nessun_risultato": "No results",
+    "compila_e_copia": "Compile and copy"
+  },
+  "libreria": {
+    "titolo": "Library",
+    "recenti": "Recent",
+    "preferiti": "Favorites",
+    "tutti": "All prompts",
+    "privati": "Private",
+    "team": "Team",
+    "tag": "Tags",
+    "cerca": "Search…",
+    "nessun_prompt": "No prompts yet",
+    "crea_primo": "Create your first prompt"
+  },
+  "editor": {
+    "titolo_placeholder": "Prompt title",
+    "descrizione_placeholder": "Short description (optional)",
+    "body_placeholder": "Write your prompt here…\nUse {{placeholder}} for parameters",
+    "segnaposti": "Placeholders",
+    "nome": "Name",
+    "tipo": "Type",
+    "default": "Default",
+    "obbligatorio": "Req.",
+    "anteprima": "Preview",
+    "salva": "Save",
+    "annulla": "Cancel",
+    "salvato": "Saved",
+    "modifiche_non_salvate": "Unsaved changes",
+    "privato": "Private",
+    "workspace": "Workspace"
+  },
+  "renderer": {
+    "titolo": "Compile prompt",
+    "compilati": "{n} of {total} filled",
+    "copia": "Copy",
+    "copiato": "Copied!",
+    "formato_markdown": "Markdown",
+    "formato_plain": "Plain text",
+    "formato_json": "JSON",
+    "token_stima": "~{count} tokens"
+  },
+  "impostazioni": {
+    "titolo": "Settings",
+    "account": "Account",
+    "sync": "Sync",
+    "hotkey": "Shortcuts",
+    "aspetto": "Appearance",
+    "vault": "Vault",
+    "lingua": "Language",
+    "info": "About",
+    "tema": "Theme",
+    "tema_auto": "Auto",
+    "tema_chiaro": "Light",
+    "tema_scuro": "Dark",
+    "tono": "Tone",
+    "tono_zinc": "Zinc (neutral)",
+    "tono_slate": "Slate (cool)",
+    "tono_stone": "Stone (warm)",
+    "vault_path": "Vault path",
+    "vault_mostra": "Show in file manager",
+    "vault_cambia_password": "Change password",
+    "vault_esporta": "Export",
+    "vault_importa": "Import",
+    "vault_elimina": "Delete vault",
+    "vault_elimina_conferma": "This action is irreversible. All prompts will be deleted."
+  },
+  "onboarding": {
+    "benvenuto": "Welcome to Prompt a Porter",
+    "step_profilo": "Choose your profile",
+    "profilo_personale": "Personal",
+    "profilo_personale_desc": "Just for you. Local vault, no server needed.",
+    "profilo_team": "Team",
+    "profilo_team_desc": "Share prompts with your team via sync server.",
+    "step_password": "Protect your vault",
+    "password_placeholder": "Vault password",
+    "password_conferma": "Confirm password",
+    "step_hotkey": "Global shortcut",
+    "hotkey_desc": "Press this key combination to open the palette from any app",
+    "completato": "All set!",
+    "inizia": "Get started"
+  },
+  "auth": {
+    "login": "Log in",
+    "email": "Email",
+    "password": "Password",
+    "accedi": "Log in",
+    "password_dimenticata": "Forgot password?",
+    "server_url": "Server URL"
+  },
+  "tray": {
+    "apri_palette": "Open palette",
+    "nuovo_prompt": "New prompt",
+    "mostra_libreria": "Show library",
+    "sync_ora": "Sync now",
+    "impostazioni": "Settings",
+    "esci": "Quit"
+  },
+  "comune": {
+    "salva": "Save",
+    "annulla": "Cancel",
+    "elimina": "Delete",
+    "conferma": "Confirm",
+    "avanti": "Next",
+    "indietro": "Back",
+    "chiudi": "Close",
+    "cerca": "Search",
+    "caricamento": "Loading…",
+    "errore": "Error",
+    "successo": "Done"
+  }
+}
