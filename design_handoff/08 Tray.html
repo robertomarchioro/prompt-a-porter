@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="it" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<title>PromptVault — Tray icon</title>
+<link rel="stylesheet" href="tokens.css" />
+<link rel="stylesheet" href="app.css" />
+<style>
+  body { background: var(--bg-canvas); }
+  .scene { padding: var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-7); align-items: stretch; min-height: 100vh; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-7); }
+
+  .panel {
+    background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg);
+    padding: var(--sp-5);
+  }
+  .panel h2 { margin: 0 0 var(--sp-2); font-size: var(--fs-base); color: var(--text-strong); font-weight: var(--fw-semibold); }
+  .panel .sub { color: var(--text-muted); font-size: var(--fs-xs); margin: 0 0 var(--sp-4); }
+
+  /* Icon canvas */
+  .icon-canvas { display: grid; grid-template-columns: auto auto auto; gap: var(--sp-5); align-items: end; }
+  .icon-block { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); }
+  .icon-block .frame {
+    background: var(--bg-canvas);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: var(--sp-3);
+    display: grid; place-items: center;
+  }
+  .icon-block .frame.dark { background: oklch(0.18 0.01 256); }
+  .icon-block .frame.light { background: oklch(0.98 0.005 256); }
+  .icon-block .label { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+
+  .pixel-grid {
+    display: inline-grid;
+    grid-template-columns: repeat(16, 14px);
+    grid-template-rows:    repeat(16, 14px);
+    gap: 1px;
+    background: oklch(0.30 0.01 256 / 0.3);
+    padding: 1px;
+    border-radius: 4px;
+  }
+  .pixel-grid > i { background: var(--bg-canvas); }
+  .pixel-grid > i.on { background: var(--text-strong); }
+  .pixel-grid > i.dot { background: var(--accent-private); }
+
+  /* Menubar mock */
+  .menubar-mock {
+    background: oklch(from var(--bg-surface) calc(l + 0.04) c h);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+    padding: 8px var(--sp-3);
+    display: flex; align-items: center; gap: var(--sp-3);
+    height: 32px;
+    box-shadow: 0 1px 0 oklch(0 0 0 / 0.4);
+  }
+  .menubar-mock .mb-app { color: var(--text-default); font-size: 13px; font-weight: 500; }
+  .menubar-mock .mb-spacer { flex: 1; }
+  .menubar-mock .mb-icon { color: var(--text-default); display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px; }
+  .menubar-mock .mb-icon.active { background: oklch(from var(--accent-team) l c h / 0.3); }
+  .menubar-mock .mb-clock { color: var(--text-default); font-size: 13px; font-feature-settings: "tnum"; }
+
+  .stage-tray {
+    position: relative; padding: var(--sp-7) var(--sp-6) var(--sp-5);
+    background: linear-gradient(180deg, oklch(0.20 0.01 256), oklch(0.22 0.01 256));
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-subtle);
+    overflow: visible;
+    min-height: 480px;
+  }
+
+  /* Context menu */
+  .ctx-menu {
+    position: absolute; top: 56px; right: 60px;
+    width: 280px;
+    background: oklch(0.24 0.01 256 / 0.95);
+    backdrop-filter: blur(20px) saturate(150%);
+    border: 1px solid oklch(1 0 0 / 0.08);
+    border-radius: var(--radius-md);
+    box-shadow: 0 12px 48px oklch(0 0 0 / 0.5), 0 0 0 0.5px oklch(0 0 0 / 0.6);
+    padding: 4px;
+    font-size: 13px;
+  }
+  .ctx-section { padding: 6px 4px; }
+  .ctx-section + .ctx-section { border-top: 1px solid oklch(1 0 0 / 0.06); }
+  .ctx-header {
+    padding: 6px 12px 4px;
+    font-family: var(--font-mono); font-size: 10px;
+    text-transform: uppercase; letter-spacing: var(--tracking-caps);
+    color: oklch(1 0 0 / 0.4);
+  }
+  .ctx-row {
+    display: flex; align-items: center; gap: var(--sp-2);
+    padding: 6px 12px;
+    border-radius: 4px;
+    color: oklch(1 0 0 / 0.85);
+    cursor: default;
+  }
+  .ctx-row:hover { background: var(--accent-team); color: var(--accent-team-on); }
+  .ctx-row .ico { width: 14px; color: oklch(1 0 0 / 0.5); flex-shrink: 0; }
+  .ctx-row:hover .ico { color: currentColor; }
+  .ctx-row .spacer { flex: 1; }
+  .ctx-row .meta { color: oklch(1 0 0 / 0.4); font-family: var(--font-mono); font-size: 11px; }
+  .ctx-row:hover .meta { color: oklch(1 0 0 / 0.7); }
+  .ctx-row.workspace { padding-left: 22px; font-family: var(--font-mono); font-size: 12px; }
+  .ctx-row.workspace.active { color: var(--accent-private); }
+  .ctx-row.workspace .check { color: var(--accent-private); width: 14px; margin-left: -22px; margin-right: 8px; }
+
+  /* Pointer hint */
+  .arrow-hint {
+    position: absolute; top: 38px; right: 200px;
+    width: 80px; height: 30px;
+    color: var(--accent-private); font-family: var(--font-mono); font-size: 11px;
+  }
+
+  .swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-2); margin-top: var(--sp-3); }
+  .swatch { padding: var(--sp-2); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 4px; align-items: center; background: var(--bg-canvas); border: 1px solid var(--border-subtle); }
+  .swatch i { width: 100%; height: 28px; border-radius: 4px; }
+  .swatch span { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+
+  .specs { display: grid; grid-template-columns: 90px 1fr; gap: var(--sp-2) var(--sp-3); font-size: var(--fs-xs); margin-top: var(--sp-3); }
+  .specs dt { color: var(--text-subtle); font-family: var(--font-mono); font-size: 11px; }
+  .specs dd { margin: 0; color: var(--text-default); }
+</style>
+</head>
+<body>
+<div class="scene">
+  <a class="back-link" href="index.html">← index</a>
+  <div class="theme-toggle"><button data-theme-set="light">Light</button><button data-theme-set="dark" aria-pressed="true">Dark</button></div>
+
+  <div>
+    <h1 style="margin: 0 0 var(--sp-1); font-size: var(--fs-2xl); color: var(--text-strong);">Tray icon · stati e menu</h1>
+    <p style="margin: 0; color: var(--text-muted); max-width: 70ch;">Glifo monocromatico — un quadrato chiuso con notch a destra (vault) e un punto pieno per indicare attività. Disegnato a 16×16 e 32×32 per snap pixel-perfect su menubar Retina e non.</p>
+  </div>
+
+  <div class="grid">
+
+    <!-- LEFT: glifo + griglia pixel -->
+    <div class="panel">
+      <h2>Glifo</h2>
+      <p class="sub">Outline 1.5px · zero gradient · zero ombre interne. Il punto rosso/ambra appare solo per gli stati "ha aggiornamenti" o "sync in errore".</p>
+
+      <div class="icon-canvas">
+        <!-- 16px dark -->
+        <div class="icon-block">
+          <div class="frame dark">
+            <svg width="32" height="32" viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="1.25" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges">
+              <rect x="2" y="3" width="9" height="10" />
+              <path d="M11 6 L13 6 L13 10 L11 10 Z" />
+              <line x1="5" y1="6" x2="8" y2="6" />
+              <line x1="5" y1="8" x2="8" y2="8" />
+              <line x1="5" y1="10" x2="7" y2="10" />
+            </svg>
+          </div>
+          <span class="label">16 · idle</span>
+        </div>
+
+        <!-- 16 con dot -->
+        <div class="icon-block">
+          <div class="frame dark">
+            <svg width="32" height="32" viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="1.25" stroke-linecap="square" shape-rendering="crispEdges">
+              <rect x="2" y="3" width="9" height="10" />
+              <path d="M11 6 L13 6 L13 10 L11 10 Z" />
+              <line x1="5" y1="6" x2="8" y2="6" />
+              <line x1="5" y1="8" x2="8" y2="8" />
+              <line x1="5" y1="10" x2="7" y2="10" />
+              <circle cx="13.5" cy="3" r="1.5" fill="oklch(0.78 0.14 78)" stroke="none" />
+            </svg>
+          </div>
+          <span class="label">16 · attivo</span>
+        </div>
+
+        <!-- 32 -->
+        <div class="icon-block">
+          <div class="frame dark">
+            <svg width="48" height="48" viewBox="0 0 32 32" fill="none" stroke="white" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
+              <rect x="4" y="6" width="18" height="20" />
+              <path d="M22 12 L26 12 L26 20 L22 20 Z" />
+              <line x1="9"  y1="12" x2="17" y2="12" />
+              <line x1="9"  y1="16" x2="17" y2="16" />
+              <line x1="9"  y1="20" x2="14" y2="20" />
+            </svg>
+          </div>
+          <span class="label">32 · @2x</span>
+        </div>
+
+        <!-- light variants -->
+        <div class="icon-block">
+          <div class="frame light">
+            <svg width="32" height="32" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.25" stroke-linecap="square" shape-rendering="crispEdges">
+              <rect x="2" y="3" width="9" height="10" />
+              <path d="M11 6 L13 6 L13 10 L11 10 Z" />
+              <line x1="5" y1="6" x2="8" y2="6" />
+              <line x1="5" y1="8" x2="8" y2="8" />
+              <line x1="5" y1="10" x2="7" y2="10" />
+            </svg>
+          </div>
+          <span class="label">light</span>
+        </div>
+        <div class="icon-block">
+          <div class="frame light">
+            <svg width="32" height="32" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.25" stroke-linecap="square" shape-rendering="crispEdges">
+              <rect x="2" y="3" width="9" height="10" />
+              <path d="M11 6 L13 6 L13 10 L11 10 Z" />
+              <line x1="5" y1="6" x2="8" y2="6" />
+              <line x1="5" y1="8" x2="8" y2="8" />
+              <line x1="5" y1="10" x2="7" y2="10" />
+              <circle cx="13.5" cy="3" r="1.5" fill="oklch(0.62 0.18 30)" stroke="none" />
+            </svg>
+          </div>
+          <span class="label">light · err</span>
+        </div>
+        <div class="icon-block">
+          <div class="frame light">
+            <svg width="48" height="48" viewBox="0 0 32 32" fill="none" stroke="black" stroke-width="2" stroke-linecap="square">
+              <rect x="4" y="6" width="18" height="20" />
+              <path d="M22 12 L26 12 L26 20 L22 20 Z" />
+              <line x1="9"  y1="12" x2="17" y2="12" />
+              <line x1="9"  y1="16" x2="17" y2="16" />
+              <line x1="9"  y1="20" x2="14" y2="20" />
+            </svg>
+          </div>
+          <span class="label">32 · @2x light</span>
+        </div>
+      </div>
+
+      <dl class="specs">
+        <dt>viewbox</dt><dd>16×16 / 32×32 — square padding 2px</dd>
+        <dt>stroke</dt><dd>1.25px @16 · 2px @32 · square caps · miter joins</dd>
+        <dt>colore</dt><dd>currentColor (Apple template image — segue dark/light menubar)</dd>
+        <dt>dot stato</dt><dd>1.5px radius · ambra (idle aggiornamenti) · rosso (errore sync)</dd>
+      </dl>
+    </div>
+
+    <!-- RIGHT: menubar + menu -->
+    <div class="panel" style="background: var(--bg-canvas);">
+      <h2>Menu contestuale</h2>
+      <p class="sub">Click sul tray apre questo menu con stile macOS nativo (vibrancy + accent del sistema). Click+option permette switch workspace al volo.</p>
+
+      <div class="stage-tray">
+        <div class="menubar-mock">
+          <span class="mb-app">PromptVault</span>
+          <span class="mb-spacer"></span>
+          <span class="mb-icon">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" shape-rendering="crispEdges"><rect x="2" y="3" width="9" height="10"/><path d="M11 6h2v4h-2z"/><line x1="5" y1="6" x2="8" y2="6"/><line x1="5" y1="8" x2="8" y2="8"/><line x1="5" y1="10" x2="7" y2="10"/></svg>
+          </span>
+          <span class="mb-icon active">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" shape-rendering="crispEdges">
+              <rect x="2" y="3" width="9" height="10"/><path d="M11 6h2v4h-2z"/><line x1="5" y1="6" x2="8" y2="6"/><line x1="5" y1="8" x2="8" y2="8"/><line x1="5" y1="10" x2="7" y2="10"/>
+              <circle cx="13.5" cy="3" r="1.5" fill="oklch(0.78 0.14 78)" stroke="none"/>
+            </svg>
+          </span>
+          <span class="mb-clock">14:02</span>
+        </div>
+
+        <svg class="arrow-hint" viewBox="0 0 80 30">
+          <path d="M5 25 Q 30 5, 60 18" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 3"/>
+          <path d="M55 14 L 62 18 L 56 22" fill="none" stroke="currentColor" stroke-width="1.2"/>
+          <text x="0" y="15" fill="currentColor">click qui</text>
+        </svg>
+
+        <div class="ctx-menu">
+          <div class="ctx-section">
+            <div class="ctx-row" style="padding-top: 10px; padding-bottom: 4px; pointer-events: none;">
+              <strong style="color: white;">PromptVault</strong>
+              <span class="spacer"></span>
+              <span class="meta">v0.1.0</span>
+            </div>
+            <div class="ctx-row" style="padding-top: 0; padding-bottom: 8px; pointer-events: none;">
+              <span style="color: oklch(1 0 0 / 0.5); font-size: 11px;">12 prompt · sync 2 min fa</span>
+            </div>
+          </div>
+
+          <div class="ctx-section">
+            <div class="ctx-row">
+              <span class="ico">⌘K</span>
+              Apri Command Palette
+              <span class="spacer"></span>
+              <span class="meta">⌃⇧P</span>
+            </div>
+            <div class="ctx-row">
+              <span class="ico">＋</span>
+              Nuovo prompt
+              <span class="spacer"></span>
+              <span class="meta">⌘N</span>
+            </div>
+            <div class="ctx-row">
+              <span class="ico">📋</span>
+              Mostra libreria
+              <span class="spacer"></span>
+              <span class="meta">⌘L</span>
+            </div>
+          </div>
+
+          <div class="ctx-section">
+            <div class="ctx-header">Workspace</div>
+            <div class="ctx-row workspace active">
+              <span class="check">✓</span>
+              Acme · IT Ops
+            </div>
+            <div class="ctx-row workspace">
+              Acme · Finance
+            </div>
+            <div class="ctx-row workspace">
+              Personale
+            </div>
+          </div>
+
+          <div class="ctx-section">
+            <div class="ctx-row">
+              <span class="ico">⟳</span>
+              Sincronizza ora
+              <span class="spacer"></span>
+              <span class="meta">⌘R</span>
+            </div>
+            <div class="ctx-row">
+              <span class="ico">⚙︎</span>
+              Impostazioni…
+              <span class="spacer"></span>
+              <span class="meta">⌘,</span>
+            </div>
+          </div>
+
+          <div class="ctx-section">
+            <div class="ctx-row">
+              <span class="ico">↗</span>
+              Esci da PromptVault
+              <span class="spacer"></span>
+              <span class="meta">⌘Q</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="swatches">
+        <div class="swatch"><i style="background: oklch(0.78 0.14 78);"></i><span>dot · idle</span></div>
+        <div class="swatch"><i style="background: oklch(0.62 0.18 30);"></i><span>dot · errore</span></div>
+        <div class="swatch"><i style="background: oklch(0.70 0.18 290);"></i><span>menu hover</span></div>
+        <div class="swatch"><i style="background: oklch(0.24 0.01 256);"></i><span>menu bg</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  document.querySelectorAll('.theme-toggle button').forEach(b => b.addEventListener('click', () => {
+    document.documentElement.setAttribute('data-theme', b.dataset.themeSet);
+    document.querySelectorAll('.theme-toggle button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+  }));
+</script>
+</body>
+</html>

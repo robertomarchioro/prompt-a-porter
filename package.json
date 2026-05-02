@@ -1,0 +1,19 @@
+{
+  "name": "prompt-a-porter",
+  "private": true,
+  "description": "Libreria locale e di team per prompt AI — template parametrici, vault cifrato, sync opzionale",
+  "license": "GPL-2.0-only",
+  "author": "Roberto Marchioro",
+  "scripts": {
+    "dev": "pnpm --filter @pap/client dev",
+    "build": "pnpm --filter @pap/client build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "check": "pnpm -r check"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<title>PromptVault — Design System v0.1</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="tokens.css" />
+<style>
+  /* =====================================================================
+     Layout della documentazione (NON parte del DS — solo per la pagina).
+     I componenti sono in fondo, isolati, e usano solo i token.
+     ===================================================================== */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-ui);
+    font-size: var(--fs-base);
+    line-height: var(--lh-normal);
+    color: var(--text-default);
+    background: var(--bg-canvas);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Pagina root usa slate/dark come chrome */
+  html { background: oklch(0.13 0.012 250); color: oklch(0.88 0.012 250); font-family: var(--font-ui); }
+  .page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: var(--sp-7) var(--sp-6) var(--sp-8);
+  }
+  .page-head { margin-bottom: var(--sp-7); }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    color: oklch(0.66 0.014 250);
+    margin: 0 0 var(--sp-2);
+  }
+  h1.title {
+    font-size: var(--fs-3xl);
+    font-weight: var(--fw-semibold);
+    letter-spacing: var(--tracking-tight);
+    margin: 0 0 var(--sp-2);
+    color: oklch(0.97 0.01 250);
+  }
+  .lede {
+    font-size: var(--fs-lg);
+    color: oklch(0.78 0.012 250);
+    margin: 0;
+    max-width: 64ch;
+  }
+  section.block { margin-top: var(--sp-7); }
+  section.block > .block-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: var(--sp-4);
+    margin-bottom: var(--sp-4);
+    padding-bottom: var(--sp-3);
+    border-bottom: 1px solid oklch(0.30 0.014 250);
+  }
+  h2.section-title {
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-semibold);
+    letter-spacing: var(--tracking-tight);
+    margin: 0;
+    color: oklch(0.97 0.01 250);
+  }
+  .section-meta {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: oklch(0.55 0.014 250);
+  }
+  p.note, p.rationale {
+    color: oklch(0.74 0.012 250);
+    max-width: 72ch;
+    line-height: var(--lh-loose);
+  }
+  p.rationale {
+    border-left: 2px solid oklch(0.78 0.14 78);
+    padding: var(--sp-1) 0 var(--sp-1) var(--sp-3);
+    margin: var(--sp-3) 0 0;
+    color: oklch(0.82 0.012 250);
+  }
+  p.rationale strong { color: oklch(0.97 0.01 250); font-weight: var(--fw-semibold); }
+  code.inline {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+    background: oklch(0.21 0.014 250);
+    border: 1px solid oklch(0.30 0.014 250);
+    border-radius: var(--radius-sm);
+    padding: 1px 6px;
+    color: oklch(0.92 0.012 250);
+  }
+
+  /* Tone switcher */
+  .tone-switcher {
+    display: inline-flex; gap: 2px;
+    background: oklch(0.21 0.014 250);
+    border: 1px solid oklch(0.30 0.014 250);
+    border-radius: var(--radius-md);
+    padding: 3px;
+  }
+  .tone-switcher button {
+    appearance: none; border: 0; background: transparent;
+    font: inherit; font-size: var(--fs-sm); font-weight: var(--fw-medium);
+    color: oklch(0.74 0.012 250);
+    padding: 6px 12px; border-radius: 7px;
+    cursor: pointer; transition: background var(--motion-fast) var(--easing-standard), color var(--motion-fast);
+  }
+  .tone-switcher button:hover { color: oklch(0.97 0.01 250); }
+  .tone-switcher button[aria-pressed="true"] {
+    background: oklch(0.30 0.014 250);
+    color: oklch(0.97 0.01 250);
+  }
+  .tone-switcher button:focus-visible { outline: 2px solid oklch(0.70 0.18 290); outline-offset: 2px; }
+
+  /* Side-by-side dark/light frame */
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-4);
+  }
+  @media (max-width: 900px) { .pair { grid-template-columns: 1fr; } }
+  .frame {
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid oklch(0.30 0.014 250);
+    background: var(--bg-canvas);
+    isolation: isolate;
+  }
+  .frame > .frame-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--sp-2) var(--sp-3);
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--tracking-wide);
+  }
+  .frame > .frame-head .dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: var(--sp-2); vertical-align: middle;
+  }
+  .frame > .frame-head .dot.dark  { background: oklch(0.30 0.014 250); border: 1px solid oklch(0.46 0.018 250); }
+  .frame > .frame-head .dot.light { background: oklch(0.97 0.01 250);  border: 1px solid oklch(0.74 0.012 250); }
+  .frame > .frame-body { padding: var(--sp-5); }
+
+  /* Token cards grids */
+  .grid-tokens {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--sp-2);
+  }
+  .swatch {
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+    overflow: hidden;
+    background: var(--bg-surface);
+  }
+  .swatch .chip { height: 56px; }
+  .swatch .meta { padding: var(--sp-2) var(--sp-3); font-family: var(--font-mono); font-size: var(--fs-xs); }
+  .swatch .meta .name { color: var(--text-strong); display: block; font-weight: var(--fw-medium); }
+  .swatch .meta .val  { color: var(--text-subtle); display: block; margin-top: 2px; word-break: break-all; }
+
+  /* Type spec rows */
+  .type-row {
+    display: grid; grid-template-columns: 96px 1fr 120px;
+    gap: var(--sp-4); align-items: baseline;
+    padding: var(--sp-3) 0;
+    border-bottom: 1px dashed var(--border-subtle);
+  }
+  .type-row:last-child { border-bottom: 0; }
+  .type-row .label { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-subtle); }
+  .type-row .sample { color: var(--text-strong); }
+  .type-row .spec { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-muted); text-align: right; }
+
+  /* Spacing & radius previews */
+  .scale-row { display: flex; align-items: flex-end; gap: var(--sp-3); flex-wrap: wrap; }
+  .scale-cell { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); }
+  .scale-cell .bar { background: var(--accent-private); border-radius: var(--radius-sm); }
+  .scale-cell .lbl { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-muted); }
+
+  .radii-row { display: flex; gap: var(--sp-3); flex-wrap: wrap; }
+  .radii-cell {
+    width: 96px; height: 80px; display: grid; place-items: center;
+    background: var(--bg-overlay); border: 1px solid var(--border-default);
+    color: var(--text-strong); font-family: var(--font-mono); font-size: var(--fs-xs);
+  }
+
+  .shadow-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-4); }
+  .shadow-cell {
+    height: 80px; border-radius: var(--radius-md);
+    background: var(--bg-surface);
+    display: grid; place-items: center;
+    color: var(--text-default); font-family: var(--font-mono); font-size: var(--fs-xs);
+  }
+
+  /* Component bench */
+  .bench { display: grid; gap: var(--sp-5); }
+  .bench-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: var(--sp-5);
+    align-items: start;
+  }
+  .bench-row > .legend {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-subtle);
+    padding-top: var(--sp-2);
+  }
+  .bench-row > .legend strong { color: var(--text-strong); display: block; font-size: var(--fs-sm); margin-bottom: 2px; font-weight: var(--fw-medium); }
+  .bench-grid { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; }
+
+  /* ---------- C O M P O N E N T S  (tutto via token) ---------- */
+
+  /* Button */
+  .btn {
+    --_h: 32px;
+    --_px: 12px;
+    --_bg: var(--bg-overlay);
+    --_bg-hover: var(--border-default);
+    --_fg: var(--text-strong);
+    --_border: var(--border-default);
+    --_ring: var(--accent-team);
+
+    appearance: none;
+    display: inline-flex; align-items: center; gap: var(--sp-2);
+    height: var(--_h); padding: 0 var(--_px);
+    font-family: var(--font-ui); font-size: var(--fs-sm); font-weight: var(--fw-medium);
+    line-height: 1; letter-spacing: var(--tracking-normal);
+    color: var(--_fg);
+    background: var(--_bg);
+    border: 1px solid var(--_border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background var(--motion-fast) var(--easing-standard),
+                transform var(--motion-fast) var(--easing-standard),
+                box-shadow var(--motion-fast) var(--easing-standard);
+  }
+  .btn:hover { background: var(--_bg-hover); }
+  .btn:active { transform: translateY(0.5px); }
+  .btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg-canvas), 0 0 0 4px var(--_ring); }
+  .btn[disabled] { color: var(--text-disabled); cursor: not-allowed; opacity: 0.7; }
+  .btn[data-loading="true"] { color: transparent; pointer-events: none; position: relative; }
+  .btn[data-loading="true"]::after {
+    content: ""; position: absolute; inset: 0; margin: auto;
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--text-muted); border-top-color: transparent;
+    animation: spin 700ms linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .btn .kbd {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px; padding: 0 4px; margin-left: var(--sp-1);
+    font-family: var(--font-mono); font-size: 11px; line-height: 1;
+    color: var(--text-muted);
+    background: oklch(from var(--_bg) l c h / 0.6);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+  }
+
+  .btn--primary  { --_bg: var(--accent-team); --_bg-hover: var(--accent-team-strong); --_fg: var(--accent-team-on); --_border: transparent; }
+  .btn--private  { --_bg: var(--accent-private); --_bg-hover: var(--accent-private-strong); --_fg: var(--accent-private-on); --_border: transparent; --_ring: var(--accent-private); }
+  .btn--ghost    { --_bg: transparent; --_bg-hover: var(--bg-overlay); --_border: transparent; }
+  .btn--danger   { --_bg: var(--danger); --_bg-hover: oklch(from var(--danger) calc(l - 0.05) c h); --_fg: oklch(0.99 0.005 25); --_border: transparent; --_ring: var(--danger); }
+
+  .btn--sm { --_h: 26px; --_px: 8px; font-size: var(--fs-xs); }
+  .btn--lg { --_h: 40px; --_px: 16px; font-size: var(--fs-base); }
+
+  /* Input */
+  .field { display: flex; flex-direction: column; gap: 6px; min-width: 220px; }
+  .field-label {
+    font-size: var(--fs-xs); font-weight: var(--fw-medium);
+    letter-spacing: var(--tracking-wide); color: var(--text-muted);
+    font-family: var(--font-mono); text-transform: uppercase;
+  }
+  .field-hint  { font-size: var(--fs-xs); color: var(--text-subtle); }
+  .field-error { font-size: var(--fs-xs); color: var(--danger); }
+  .input, .textarea {
+    width: 100%;
+    font-family: var(--font-ui); font-size: var(--fs-sm); color: var(--text-strong);
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 8px 12px;
+    transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
+  }
+  .input { height: 34px; }
+  .textarea { min-height: 96px; padding: 10px 12px; font-family: var(--font-mono); font-size: var(--fs-sm); line-height: var(--lh-loose); resize: vertical; }
+  .input::placeholder, .textarea::placeholder { color: var(--text-subtle); }
+  .input:hover, .textarea:hover { border-color: var(--border-strong); }
+  .input:focus, .textarea:focus {
+    outline: none;
+    border-color: var(--accent-team);
+    box-shadow: 0 0 0 3px var(--accent-team-soft);
+  }
+  .input[aria-invalid="true"], .textarea[aria-invalid="true"] {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 3px var(--danger-soft);
+  }
+  .input[disabled], .textarea[disabled] { color: var(--text-disabled); cursor: not-allowed; }
+
+  /* Placeholder highlighting — TRE varianti */
+  .prompt-body {
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-loose);
+    color: var(--text-default);
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: var(--sp-3) var(--sp-4);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  /* Variante A: pill/chip tinto (tipo IDE variabile) */
+  .ph-pill {
+    display: inline; /* resta in flusso del testo */
+    font-family: var(--font-mono);
+    color: var(--accent-private);
+    background: var(--accent-private-soft);
+    border-radius: var(--radius-sm);
+    padding: 1px 6px;
+    font-weight: var(--fw-medium);
+  }
+  .ph-pill .ph-braces { opacity: 0.55; font-weight: var(--fw-regular); }
+
+  /* Variante B: underline + colore solo testo */
+  .ph-underline {
+    color: var(--accent-private);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-private);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+    font-weight: var(--fw-medium);
+  }
+  .ph-underline .ph-braces { color: var(--text-subtle); text-decoration: none; font-weight: var(--fw-regular); }
+
+  /* Variante C: bordo sottile + graffe sbiadite */
+  .ph-bordered {
+    color: var(--accent-private);
+    border: 1px solid var(--accent-private);
+    border-radius: var(--radius-sm);
+    padding: 1px 6px;
+    font-weight: var(--fw-medium);
+  }
+  .ph-bordered .ph-braces { color: var(--text-subtle); font-weight: var(--fw-regular); opacity: 0.7; }
+
+  /* Footer */
+  footer {
+    margin-top: var(--sp-8);
+    padding-top: var(--sp-5);
+    border-top: 1px solid oklch(0.30 0.014 250);
+    color: oklch(0.55 0.014 250);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    display: flex; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap;
+  }
+
+  /* Helpers */
+  .stack-3 > * + * { margin-top: var(--sp-3); }
+  .stack-4 > * + * { margin-top: var(--sp-4); }
+  .row { display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: center; }
+
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="page-head">
+    <p class="eyebrow">PromptVault · v0.1 · GPL-2.0</p>
+    <h1 class="title">Design System</h1>
+    <p class="lede">Tokens, scale e tre componenti chiave come prova del concept. Tutto via CSS Custom Properties, senza framework. Dark e light side-by-side; tre temperature neutre selezionabili.</p>
+
+    <div class="row" style="margin-top: var(--sp-5); justify-content: space-between;">
+      <div class="row">
+        <span class="eyebrow" style="margin: 0 var(--sp-2) 0 0;">Tone</span>
+        <div class="tone-switcher" role="tablist" aria-label="Temperatura della palette neutra">
+          <button type="button" data-tone="slate" aria-pressed="true">Slate <span style="color:var(--text-subtle); margin-left:6px;">freddo</span></button>
+          <button type="button" data-tone="stone" aria-pressed="false">Stone <span style="color:var(--text-subtle); margin-left:6px;">caldo</span></button>
+          <button type="button" data-tone="zinc"  aria-pressed="false">Zinc <span style="color:var(--text-subtle); margin-left:6px;">neutro</span></button>
+        </div>
+      </div>
+      <div class="section-meta">tokens.css · tokens.json</div>
+    </div>
+
+    <p class="rationale" style="margin-top: var(--sp-5);">
+      <strong>Razionale.</strong> Il prodotto è invocato decine di volte al giorno tramite hotkey — la tipografia di sistema garantisce zero costo di rendering all'apertura del Command Palette, mentre <code class="inline">JetBrains Mono</code> è preferito a Fira Code perché le ligature confondono i <code class="inline">{{</code> dei segnaposti. Radii morbidi (6/10/14) e ombre definite seguono Raycast: il prodotto deve sembrare un <em>tool</em>, non un'app web.
+    </p>
+  </header>
+
+  <!-- =================== COLORI: NEUTRI =================== -->
+  <section class="block">
+    <div class="block-head">
+      <h2 class="section-title">Colori — Neutri</h2>
+      <span class="section-meta">8 step · backgrounds · borders · text</span>
+    </div>
+
+    <div class="pair">
+      <!-- DARK -->
+      <div class="frame" data-theme="dark" data-tone-target>
+        <div class="frame-head"><span><span class="dot dark"></span>Dark</span><span data-tone-label>slate</span></div>
+        <div class="frame-body">
+          <div class="grid-tokens">
+            <div class="swatch"><div class="chip" style="background:var(--bg-canvas)"></div><div class="meta"><span class="name">bg.canvas</span><span class="val" data-token-val="--bg-canvas"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--bg-surface)"></div><div class="meta"><span class="name">bg.surface</span><span class="val" data-token-val="--bg-surface"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--bg-raised)"></div><div class="meta"><span class="name">bg.raised</span><span class="val" data-token-val="--bg-raised"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--bg-overlay)"></div><div class="meta"><span class="name">bg.overlay</span><span class="val" data-token-val="--bg-overlay"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--bg-input)"></div><div class="meta"><span class="name">bg.input</span><span class="val" data-token-val="--bg-input"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--border-subtle)"></div><div class="meta"><span class="name">border.subtle</span><span class="val" data-token-val="--border-subtle"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--border-default)"></div><div class="meta"><span class="name">border.default</span><span class="val" data-token-val="--border-default"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--border-strong)"></div><div class="meta"><span class="name">border.strong</span><span class="val" data-token-val="--border-strong"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--text-strong)"></div><div class="meta"><span class="name">text.strong</span><span class="val" data-token-val="--text-strong"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--text-default)"></div><div class="meta"><span class="name">text.default</span><span class="val" data-token-val="--text-default"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--text-muted)"></div><div class="meta"><span class="name">text.muted</span><span class="val" data-token-val="--text-muted"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--text-subtle)"></div><div class="meta"><span class="name">text.subtle</span><span class="val" data-token-val="--text-subtle"></span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIGHT -->
+      <div class="frame" data-theme="light" data-tone-target>
+        <div class="frame-head"><span><span class="dot light"></span>Light</span><span data-tone-label>slate</span></div>
+        <div class="frame-body">
+          <div class="grid-tokens">
+            <div class="swatch"><div class="chip" style="background:var(--bg-canvas)"></div><div class="meta"><span class="name">bg.canvas</span><span class="val" data-token-val="--bg-canvas"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--bg-surface)"></div><div class="meta"><span class="name">bg.surface</span><span class="val" data-token-val="--bg-surface"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--bg-raised)"></div><div class="meta"><span class="name">bg.raised</span><span class="val" data-token-val="--bg-raised"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--bg-overlay)"></div><div class="meta"><span class="name">bg.overlay</span><span class="val" data-token-val="--bg-overlay"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--bg-input)"></div><div class="meta"><span class="name">bg.input</span><span class="val" data-token-val="--bg-input"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--border-subtle)"></div><div class="meta"><span class="name">border.subtle</span><span class="val" data-token-val="--border-subtle"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--border-default)"></div><div class="meta"><span class="name">border.default</span><span class="val" data-token-val="--border-default"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--border-strong)"></div><div class="meta"><span class="name">border.strong</span><span class="val" data-token-val="--border-strong"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--text-strong)"></div><div class="meta"><span class="name">text.strong</span><span class="val" data-token-val="--text-strong"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--text-default)"></div><div class="meta"><span class="name">text.default</span><span class="val" data-token-val="--text-default"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--text-muted)"></div><div class="meta"><span class="name">text.muted</span><span class="val" data-token-val="--text-muted"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--text-subtle)"></div><div class="meta"><span class="name">text.subtle</span><span class="val" data-token-val="--text-subtle"></span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="rationale">
+      <strong>Razionale neutri.</strong> Tre toni (slate, stone, zinc) per testare in contesto la temperatura giusta prima di committare. Croma sempre &lt; 0.02 sui background → percepiti come "grigi" ma con un'identità calda/fredda riconoscibile a colpo d'occhio. Dark di default per utenza developer; il light non è un negativo del dark — è ricostruito con luminanze appropriate per WCAG AA (testo default ≥ 7:1 sul canvas).
+    </p>
+  </section>
+
+  <!-- =================== COLORI: ACCENT + SEMANTICI =================== -->
+  <section class="block">
+    <div class="block-head">
+      <h2 class="section-title">Colori — Accent &amp; semantici</h2>
+      <span class="section-meta">privato (ambra) · team (viola) · success/warning/danger/info</span>
+    </div>
+
+    <div class="pair">
+      <div class="frame" data-theme="dark" data-tone-target>
+        <div class="frame-head"><span><span class="dot dark"></span>Dark</span><span class="section-meta">accent</span></div>
+        <div class="frame-body">
+          <div class="grid-tokens">
+            <div class="swatch"><div class="chip" style="background:var(--accent-private)"></div><div class="meta"><span class="name" style="color: var(--accent-private)">accent.private</span><span class="val" data-token-val="--accent-private"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--accent-private-soft)"></div><div class="meta"><span class="name">accent.private.soft</span><span class="val">18% alpha</span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--accent-team)"></div><div class="meta"><span class="name" style="color: var(--accent-team)">accent.team</span><span class="val" data-token-val="--accent-team"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--accent-team-soft)"></div><div class="meta"><span class="name">accent.team.soft</span><span class="val">18% alpha</span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--success)"></div><div class="meta"><span class="name">success</span><span class="val" data-token-val="--success"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--warning)"></div><div class="meta"><span class="name">warning</span><span class="val" data-token-val="--warning"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--danger)"></div><div class="meta"><span class="name">danger</span><span class="val" data-token-val="--danger"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--info)"></div><div class="meta"><span class="name">info</span><span class="val" data-token-val="--info"></span></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="frame" data-theme="light" data-tone-target>
+        <div class="frame-head"><span><span class="dot light"></span>Light</span><span class="section-meta">accent</span></div>
+        <div class="frame-body">
+          <div class="grid-tokens">
+            <div class="swatch"><div class="chip" style="background:var(--accent-private)"></div><div class="meta"><span class="name" style="color: var(--accent-private)">accent.private</span><span class="val" data-token-val="--accent-private"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--accent-private-soft)"></div><div class="meta"><span class="name">accent.private.soft</span><span class="val">16% alpha</span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--accent-team)"></div><div class="meta"><span class="name" style="color: var(--accent-team)">accent.team</span><span class="val" data-token-val="--accent-team"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--accent-team-soft)"></div><div class="meta"><span class="name">accent.team.soft</span><span class="val">14% alpha</span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--success)"></div><div class="meta"><span class="name">success</span><span class="val" data-token-val="--success"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--warning)"></div><div class="meta"><span class="name">warning</span><span class="val" data-token-val="--warning"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--danger)"></div><div class="meta"><span class="name">danger</span><span class="val" data-token-val="--danger"></span></div></div>
+            <div class="swatch"><div class="chip" style="background:var(--info)"></div><div class="meta"><span class="name">info</span><span class="val" data-token-val="--info"></span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="rationale">
+      <strong>Razionale accent.</strong> L'<em>ambra</em> (privato) e il <em>viola</em> (team) sono complementari in spazio OKLCH ma non opposti — restano leggibili sovrapposti nello stesso elenco. Stessa cromaticità in dark; in light entrambi sono scuriti per garantire 4.5:1 sul testo bianco dei pulsanti. <code class="inline">.soft</code> è la stessa hue al ~16-18% alpha — base ideale per badge, sfondo placeholder, righe selezionate.
+    </p>
+  </section>
+
+  <!-- =================== TIPOGRAFIA =================== -->
+  <section class="block">
+    <div class="block-head">
+      <h2 class="section-title">Tipografia</h2>
+      <span class="section-meta">UI: system stack · Body prompt: JetBrains Mono</span>
+    </div>
+
+    <div class="pair">
+      <div class="frame" data-theme="dark" data-tone-target>
+        <div class="frame-head"><span><span class="dot dark"></span>Dark</span><span class="section-meta">scale UI</span></div>
+        <div class="frame-body">
+          <div class="type-row"><span class="label">3xl / 28</span><span class="sample" style="font-size:var(--fs-3xl); font-weight:var(--fw-semibold); letter-spacing:var(--tracking-tight); line-height:var(--lh-tight);">Libreria prompt</span><span class="spec">600 · -0.01em</span></div>
+          <div class="type-row"><span class="label">2xl / 22</span><span class="sample" style="font-size:var(--fs-2xl); font-weight:var(--fw-semibold);">Editor prompt</span><span class="spec">600 · 0</span></div>
+          <div class="type-row"><span class="label">xl / 18</span><span class="sample" style="font-size:var(--fs-xl); font-weight:var(--fw-semibold);">Sezione</span><span class="spec">600 · 0</span></div>
+          <div class="type-row"><span class="label">lg / 16</span><span class="sample" style="font-size:var(--fs-lg); font-weight:var(--fw-medium);">Titolo prompt</span><span class="spec">500 · 0</span></div>
+          <div class="type-row"><span class="label">base / 14</span><span class="sample" style="font-size:var(--fs-base);">Body UI standard — il livello di default per tutto il chrome dell'app.</span><span class="spec">400 · 0</span></div>
+          <div class="type-row"><span class="label">sm / 13</span><span class="sample" style="font-size:var(--fs-sm); color: var(--text-muted);">Meta secondaria · ultima modifica · autore</span><span class="spec">400 · 0</span></div>
+          <div class="type-row"><span class="label">xs / 12</span><span class="sample" style="font-size:var(--fs-xs); color: var(--text-subtle); font-family: var(--font-mono); letter-spacing: var(--tracking-wide);">HINT · KBD · CAPTION</span><span class="spec">400 · 0.02em</span></div>
+          <div class="type-row"><span class="label">mono</span><span class="sample" style="font-family: var(--font-mono); font-size: var(--fs-sm); line-height: var(--lh-loose); color: var(--text-default);">Sei un assistente esperto in <span style="color:var(--accent-private); font-weight:500;">{{dominio}}</span>. Rispondi in <span style="color:var(--accent-private); font-weight:500;">{{lingua}}</span>.</span><span class="spec">JetBrains Mono</span></div>
+        </div>
+      </div>
+      <div class="frame" data-theme="light" data-tone-target>
+        <div class="frame-head"><span><span class="dot light"></span>Light</span><span class="section-meta">scale UI</span></div>
+        <div class="frame-body">
+          <div class="type-row"><span class="label">3xl / 28</span><span class="sample" style="font-size:var(--fs-3xl); font-weight:var(--fw-semibold); letter-spacing:var(--tracking-tight); line-height:var(--lh-tight);">Libreria prompt</span><span class="spec">600 · -0.01em</span></div>
+          <div class="type-row"><span class="label">2xl / 22</span><span class="sample" style="font-size:var(--fs-2xl); font-weight:var(--fw-semibold);">Editor prompt</span><span class="spec">600 · 0</span></div>
+          <div class="type-row"><span class="label">xl / 18</span><span class="sample" style="font-size:var(--fs-xl); font-weight:var(--fw-semibold);">Sezione</span><span class="spec">600 · 0</span></div>
+          <div class="type-row"><span class="label">lg / 16</span><span class="sample" style="font-size:var(--fs-lg); font-weight:var(--fw-medium);">Titolo prompt</span><span class="spec">500 · 0</span></div>
+          <div class="type-row"><span class="label">base / 14</span><span class="sample" style="font-size:var(--fs-base);">Body UI standard — il livello di default per tutto il chrome dell'app.</span><span class="spec">400 · 0</span></div>
+          <div class="type-row"><span class="label">sm / 13</span><span class="sample" style="font-size:var(--fs-sm); color: var(--text-muted);">Meta secondaria · ultima modifica · autore</span><span class="spec">400 · 0</span></div>
+          <div class="type-row"><span class="label">xs / 12</span><span class="sample" style="font-size:var(--fs-xs); color: var(--text-subtle); font-family: var(--font-mono); letter-spacing: var(--tracking-wide);">HINT · KBD · CAPTION</span><span class="spec">400 · 0.02em</span></div>
+          <div class="type-row"><span class="label">mono</span><span class="sample" style="font-family: var(--font-mono); font-size: var(--fs-sm); line-height: var(--lh-loose); color: var(--text-default);">Sei un assistente esperto in <span style="color:var(--accent-private); font-weight:500;">{{dominio}}</span>. Rispondi in <span style="color:var(--accent-private); font-weight:500;">{{lingua}}</span>.</span><span class="spec">JetBrains Mono</span></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="rationale">
+      <strong>Razionale type.</strong> Scala compatta a passi piccoli (12→13→14→15→16→18→22→28) — i salti larghi tipo Tailwind producono gerarchie troppo plateali per un tool desktop. La differenza percepita sulle righe del Command Palette è di 1-2 px e basta. Le label uppercase mono a 12 px (<code class="inline">tracking-wide</code>) sono la firma del prodotto: identificano metadata e shortcut.
+    </p>
+  </section>
+
+  <!-- =================== SPACING / RADII / SHADOWS =================== -->
+  <section class="block">
+    <div class="block-head">
+      <h2 class="section-title">Spaziatura, radii, ombre</h2>
+      <span class="section-meta">scala 4px · radii 6/10/14 · shadow sm/md/lg</span>
+    </div>
+
+    <div class="pair">
+      <div class="frame" data-theme="dark" data-tone-target>
+        <div class="frame-head"><span><span class="dot dark"></span>Dark</span><span class="section-meta">scale</span></div>
+        <div class="frame-body stack-4">
+          <div>
+            <p class="eyebrow" style="color: var(--text-muted);">Spacing — base 4px</p>
+            <div class="scale-row">
+              <div class="scale-cell"><div class="bar" style="width:4px;height:4px"></div><span class="lbl">1 / 4</span></div>
+              <div class="scale-cell"><div class="bar" style="width:8px;height:8px"></div><span class="lbl">2 / 8</span></div>
+              <div class="scale-cell"><div class="bar" style="width:12px;height:12px"></div><span class="lbl">3 / 12</span></div>
+              <div class="scale-cell"><div class="bar" style="width:16px;height:16px"></div><span class="lbl">4 / 16</span></div>
+              <div class="scale-cell"><div class="bar" style="width:24px;height:24px"></div><span class="lbl">5 / 24</span></div>
+              <div class="scale-cell"><div class="bar" style="width:32px;height:32px"></div><span class="lbl">6 / 32</span></div>
+              <div class="scale-cell"><div class="bar" style="width:48px;height:48px"></div><span class="lbl">7 / 48</span></div>
+              <div class="scale-cell"><div class="bar" style="width:64px;height:64px"></div><span class="lbl">8 / 64</span></div>
+            </div>
+          </div>
+          <div>
+            <p class="eyebrow" style="color: var(--text-muted);">Radii</p>
+            <div class="radii-row">
+              <div class="radii-cell" style="border-radius: var(--radius-sm)">sm · 6</div>
+              <div class="radii-cell" style="border-radius: var(--radius-md)">md · 10</div>
+              <div class="radii-cell" style="border-radius: var(--radius-lg)">lg · 14</div>
+              <div class="radii-cell" style="border-radius: var(--radius-full); width: 80px;">full</div>
+            </div>
+          </div>
+          <div>
+            <p class="eyebrow" style="color: var(--text-muted);">Shadows</p>
+            <div class="shadow-row">
+              <div class="shadow-cell" style="box-shadow: var(--shadow-sm)">sm</div>
+              <div class="shadow-cell" style="box-shadow: var(--shadow-md)">md</div>
+              <div class="shadow-cell" style="box-shadow: var(--shadow-lg)">lg</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="frame" data-theme="light" data-tone-target>
+        <div class="frame-head"><span><span class="dot light"></span>Light</span><span class="section-meta">scale</span></div>
+        <div class="frame-body stack-4">
+          <div>
+            <p class="eyebrow" style="color: var(--text-muted);">Spacing — base 4px</p>
+            <div class="scale-row">
+              <div class="scale-cell"><div class="bar" style="width:4px;height:4px"></div><span class="lbl">1 / 4</span></div>
+              <div class="scale-cell"><div class="bar" style="width:8px;height:8px"></div><span class="lbl">2 / 8</span></div>
+              <div class="scale-cell"><div class="bar" style="width:12px;height:12px"></div><span class="lbl">3 / 12</span></div>
+              <div class="scale-cell"><div class="bar" style="width:16px;height:16px"></div><span class="lbl">4 / 16</span></div>
+              <div class="scale-cell"><div class="bar" style="width:24px;height:24px"></div><span class="lbl">5 / 24</span></div>
+              <div class="scale-cell"><div class="bar" style="width:32px;height:32px"></div><span class="lbl">6 / 32</span></div>
+              <div class="scale-cell"><div class="bar" style="width:48px;height:48px"></div><span class="lbl">7 / 48</span></div>
+              <div class="scale-cell"><div class="bar" style="width:64px;height:64px"></div><span class="lbl">8 / 64</span></div>
+            </div>
+          </div>
+          <div>
+            <p class="eyebrow" style="color: var(--text-muted);">Radii</p>
+            <div class="radii-row">
+              <div class="radii-cell" style="border-radius: var(--radius-sm)">sm · 6</div>
+              <div class="radii-cell" style="border-radius: var(--radius-md)">md · 10</div>
+              <div class="radii-cell" style="border-radius: var(--radius-lg)">lg · 14</div>
+              <div class="radii-cell" style="border-radius: var(--radius-full); width: 80px;">full</div>
+            </div>
+          </div>
+          <div>
+            <p class="eyebrow" style="color: var(--text-muted);">Shadows</p>
+            <div class="shadow-row">
+              <div class="shadow-cell" style="box-shadow: var(--shadow-sm)">sm</div>
+              <div class="shadow-cell" style="box-shadow: var(--shadow-md)">md</div>
+              <div class="shadow-cell" style="box-shadow: var(--shadow-lg)">lg</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== COMPONENT POC: BUTTON =================== -->
+  <section class="block">
+    <div class="block-head">
+      <h2 class="section-title">Componente — Button</h2>
+      <span class="section-meta">primary · private · ghost · danger · 6 stati</span>
+    </div>
+
+    <div class="pair">
+      <div class="frame" data-theme="dark" data-tone-target>
+        <div class="frame-head"><span><span class="dot dark"></span>Dark</span><span class="section-meta">.btn</span></div>
+        <div class="frame-body stack-4">
+          <div class="bench-row">
+            <div class="legend"><strong>Primary</strong>azione team / default</div>
+            <div class="bench-grid">
+              <button class="btn btn--primary">Salva prompt</button>
+              <button class="btn btn--primary"><span>Compila</span><span class="kbd">⌘↵</span></button>
+              <button class="btn btn--primary" data-loading="true">Loading</button>
+              <button class="btn btn--primary" disabled>Disabled</button>
+              <button class="btn btn--primary btn--sm">Sm</button>
+              <button class="btn btn--primary btn--lg">Large CTA</button>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="legend"><strong>Private</strong>azione su prompt privato</div>
+            <div class="bench-grid">
+              <button class="btn btn--private">Rendi privato</button>
+              <button class="btn btn--private"><span>Cifra vault</span></button>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="legend"><strong>Secondary / Ghost</strong>default + ghost</div>
+            <div class="bench-grid">
+              <button class="btn">Annulla</button>
+              <button class="btn">Aggiungi tag <span class="kbd">T</span></button>
+              <button class="btn btn--ghost">Vedi cronologia</button>
+              <button class="btn btn--ghost" disabled>Disabled</button>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="legend"><strong>Danger</strong>distruttivo / irreversibile</div>
+            <div class="bench-grid">
+              <button class="btn btn--danger">Elimina prompt</button>
+              <button class="btn btn--danger" data-loading="true">Loading</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="frame" data-theme="light" data-tone-target>
+        <div class="frame-head"><span><span class="dot light"></span>Light</span><span class="section-meta">.btn</span></div>
+        <div class="frame-body stack-4">
+          <div class="bench-row">
+            <div class="legend"><strong>Primary</strong>azione team / default</div>
+            <div class="bench-grid">
+              <button class="btn btn--primary">Salva prompt</button>
+              <button class="btn btn--primary"><span>Compila</span><span class="kbd">⌘↵</span></button>
+              <button class="btn btn--primary" data-loading="true">Loading</button>
+              <button class="btn btn--primary" disabled>Disabled</button>
+              <button class="btn btn--primary btn--sm">Sm</button>
+              <button class="btn btn--primary btn--lg">Large CTA</button>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="legend"><strong>Private</strong>azione su prompt privato</div>
+            <div class="bench-grid">
+              <button class="btn btn--private">Rendi privato</button>
+              <button class="btn btn--private"><span>Cifra vault</span></button>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="legend"><strong>Secondary / Ghost</strong>default + ghost</div>
+            <div class="bench-grid">
+              <button class="btn">Annulla</button>
+              <button class="btn">Aggiungi tag <span class="kbd">T</span></button>
+              <button class="btn btn--ghost">Vedi cronologia</button>
+              <button class="btn btn--ghost" disabled>Disabled</button>
+            </div>
+          </div>
+          <div class="bench-row">
+            <div class="legend"><strong>Danger</strong>distruttivo / irreversibile</div>
+            <div class="bench-grid">
+              <button class="btn btn--danger">Elimina prompt</button>
+              <button class="btn btn--danger" data-loading="true">Loading</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="rationale">
+      <strong>Razionale Button.</strong> Altezza standard 32 px (sm 26, lg 40) — corrisponde alla densità "bilanciata" richiesta. Il <code class="inline">.kbd</code> integrato nel pulsante invece che a fianco è una scelta deliberata: in app keyboard-first lo shortcut è parte del bottone, non un'aggiunta. <code class="inline">btn--primary</code> usa l'accent <strong>team</strong> (viola) perché è l'azione contestuale di default in un mondo collaborativo; <code class="inline">btn--private</code> usa l'ambra solo quando l'azione cambia visibilità del prompt — mai come sostituto del primary.
+    </p>
+  </section>
+
+  <!-- =================== COMPONENT POC: INPUT =================== -->
+  <section class="block">
+    <div class="block-head">
+      <h2 class="section-title">Componente — Input &amp; Field</h2>
+      <span class="section-meta">label / hint / error · default · focus · invalid · disabled</span>
+    </div>
+
+    <div class="pair">
+      <div class="frame" data-theme="dark" data-tone-target>
+        <div class="frame-head"><span><span class="dot dark"></span>Dark</span><span class="section-meta">.field · .input · .textarea</span></div>
+        <div class="frame-body stack-4">
+          <div class="row" style="align-items: flex-start; gap: var(--sp-4); flex-wrap: wrap;">
+            <div class="field">
+              <label class="field-label" for="d1">Titolo</label>
+              <input id="d1" class="input" placeholder="Es. Riassunto bug report" />
+              <span class="field-hint">Mostrato nel Command Palette.</span>
+            </div>
+            <div class="field">
+              <label class="field-label" for="d2">Hotkey</label>
+              <input id="d2" class="input" value="Ctrl+Shift+P" />
+              <span class="field-hint">Premi una combinazione per cambiare.</span>
+            </div>
+            <div class="field">
+              <label class="field-label" for="d3">URL server</label>
+              <input id="d3" class="input" value="not-an-url" aria-invalid="true" />
+              <span class="field-error">Inserire un URL https valido.</span>
+            </div>
+            <div class="field">
+              <label class="field-label" for="d4">Workspace</label>
+              <input id="d4" class="input" value="Acme — IT Ops" disabled />
+              <span class="field-hint">Cambia dalla sidebar.</span>
+            </div>
+          </div>
+          <div class="field" style="min-width: 100%;">
+            <label class="field-label" for="d5">Body prompt</label>
+            <textarea id="d5" class="textarea" placeholder="Scrivi il tuo prompt. Usa {{nome}} per i segnaposti.">Sei un Senior {{ruolo}}. Analizza il seguente {{tipo_documento}} e produci un riassunto in {{lingua}}.</textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="frame" data-theme="light" data-tone-target>
+        <div class="frame-head"><span><span class="dot light"></span>Light</span><span class="section-meta">.field · .input · .textarea</span></div>
+        <div class="frame-body stack-4">
+          <div class="row" style="align-items: flex-start; gap: var(--sp-4); flex-wrap: wrap;">
+            <div class="field">
+              <label class="field-label" for="l1">Titolo</label>
+              <input id="l1" class="input" placeholder="Es. Riassunto bug report" />
+              <span class="field-hint">Mostrato nel Command Palette.</span>
+            </div>
+            <div class="field">
+              <label class="field-label" for="l2">Hotkey</label>
+              <input id="l2" class="input" value="Ctrl+Shift+P" />
+              <span class="field-hint">Premi una combinazione per cambiare.</span>
+            </div>
+            <div class="field">
+              <label class="field-label" for="l3">URL server</label>
+              <input id="l3" class="input" value="not-an-url" aria-invalid="true" />
+              <span class="field-error">Inserire un URL https valido.</span>
+            </div>
+            <div class="field">
+              <label class="field-label" for="l4">Workspace</label>
+              <input id="l4" class="input" value="Acme — IT Ops" disabled />
+              <span class="field-hint">Cambia dalla sidebar.</span>
+            </div>
+          </div>
+          <div class="field" style="min-width: 100%;">
+            <label class="field-label" for="l5">Body prompt</label>
+            <textarea id="l5" class="textarea" placeholder="Scrivi il tuo prompt. Usa {{nome}} per i segnaposti.">Sei un Senior {{ruolo}}. Analizza il seguente {{tipo_documento}} e produci un riassunto in {{lingua}}.</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="rationale">
+      <strong>Razionale Input.</strong> Focus ring usa <code class="inline">box-shadow</code> a 3 px con l'accent team al ~18% alpha invece di un outline duro: rispetta il <code class="inline">prefers-reduced-motion</code> (nessuna animazione) ma resta chiaramente visibile. Lo stato <code class="inline">aria-invalid="true"</code> riusa lo stesso pattern con <code class="inline">--danger-soft</code> — un'unica primitiva, due semantiche.
+    </p>
+  </section>
+
+  <!-- =================== COMPONENT POC: PLACEHOLDER HIGHLIGHT =================== -->
+  <section class="block">
+    <div class="block-head">
+      <h2 class="section-title">Componente chiave — Highlighting segnaposti</h2>
+      <span class="section-meta">3 varianti da scegliere · stessa stringa · stesso accent</span>
+    </div>
+
+    <div class="pair">
+      <div class="frame" data-theme="dark" data-tone-target>
+        <div class="frame-head"><span><span class="dot dark"></span>Dark</span><span class="section-meta">{{...}}</span></div>
+        <div class="frame-body stack-4">
+          <div>
+            <p class="eyebrow" style="color: var(--text-muted);">Variante A — Pill / chip tinto</p>
+            <div class="prompt-body">Sei un <span class="ph-pill"><span class="ph-braces">{{</span>ruolo<span class="ph-braces">}}</span></span> esperto in <span class="ph-pill"><span class="ph-braces">{{</span>dominio<span class="ph-braces">}}</span></span>.
+Analizza il seguente <span class="ph-pill"><span class="ph-braces">{{</span>tipo_documento<span class="ph-braces">}}</span></span> e produci un riassunto in <span class="ph-pill"><span class="ph-braces">{{</span>lingua<span class="ph-braces">}}</span></span>, tono <span class="ph-pill"><span class="ph-braces">{{</span>tono<span class="ph-braces">}}</span></span>.</div>
+          </div>
+          <div>
+            <p class="eyebrow" style="color: var(--text-muted);">Variante B — Underline + colore testo</p>
+            <div class="prompt-body">Sei un <span class="ph-underline"><span class="ph-braces">{{</span>ruolo<span class="ph-braces">}}</span></span> esperto in <span class="ph-underline"><span class="ph-braces">{{</span>dominio<span class="ph-braces">}}</span></span>.
+Analizza il seguente <span class="ph-underline"><span class="ph-braces">{{</span>tipo_documento<span class="ph-braces">}}</span></span> e produci un riassunto in <span class="ph-underline"><span class="ph-braces">{{</span>lingua<span class="ph-braces">}}</span></span>, tono <span class="ph-underline"><span class="ph-braces">{{</span>tono<span class="ph-braces">}}</span></span>.</div>
+          </div>
+          <div>
+            <p class="eyebrow" style="color: var(--text-muted);">Variante C — Bordo sottile + graffe sbiadite</p>
+            <div class="prompt-body">Sei un <span class="ph-bordered"><span class="ph-braces">{{</span>ruolo<span class="ph-braces">}}</span></span> esperto in <span class="ph-bordered"><span class="ph-braces">{{</span>dominio<span class="ph-braces">}}</span></span>.
+Analizza il seguente <span class="ph-bordered"><span class="ph-braces">{{</span>tipo_documento<span class="ph-braces">}}</span></span> e produci un riassunto in <span class="ph-bordered"><span class="ph-braces">{{</span>lingua<span class="ph-braces">}}</span></span>, tono <span class="ph-bordered"><span class="ph-braces">{{</span>tono<span class="ph-braces">}}</span></span>.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="frame" data-theme="light" data-tone-target>
+        <div class="frame-head"><span><span class="dot light"></span>Light</span><span class="section-meta">{{...}}</span></div>
+        <div class="frame-body stack-4">
+          <div>
+            <p class="eyebrow" style="color: var(--text-muted);">Variante A — Pill / chip tinto</p>
+            <div class="prompt-body">Sei un <span class="ph-pill"><span class="ph-braces">{{</span>ruolo<span class="ph-braces">}}</span></span> esperto in <span class="ph-pill"><span class="ph-braces">{{</span>dominio<span class="ph-braces">}}</span></span>.
+Analizza il seguente <span class="ph-pill"><span class="ph-braces">{{</span>tipo_documento<span class="ph-braces">}}</span></span> e produci un riassunto in <span class="ph-pill"><span class="ph-braces">{{</span>lingua<span class="ph-braces">}}</span></span>, tono <span class="ph-pill"><span class="ph-braces">{{</span>tono<span class="ph-braces">}}</span></span>.</div>
+          </div>
+          <div>
+            <p class="eyebrow" style="color: var(--text-muted);">Variante B — Underline + colore testo</p>
+            <div class="prompt-body">Sei un <span class="ph-underline"><span class="ph-braces">{{</span>ruolo<span class="ph-braces">}}</span></span> esperto in <span class="ph-underline"><span class="ph-braces">{{</span>dominio<span class="ph-braces">}}</span></span>.
+Analizza il seguente <span class="ph-underline"><span class="ph-braces">{{</span>tipo_documento<span class="ph-braces">}}</span></span> e produci un riassunto in <span class="ph-underline"><span class="ph-braces">{{</span>lingua<span class="ph-braces">}}</span></span>, tono <span class="ph-underline"><span class="ph-braces">{{</span>tono<span class="ph-braces">}}</span></span>.</div>
+          </div>
+          <div>
+            <p class="eyebrow" style="color: var(--text-muted);">Variante C — Bordo sottile + graffe sbiadite</p>
+            <div class="prompt-body">Sei un <span class="ph-bordered"><span class="ph-braces">{{</span>ruolo<span class="ph-braces">}}</span></span> esperto in <span class="ph-bordered"><span class="ph-braces">{{</span>dominio<span class="ph-braces">}}</span></span>.
+Analizza il seguente <span class="ph-bordered"><span class="ph-braces">{{</span>tipo_documento<span class="ph-braces">}}</span></span> e produci un riassunto in <span class="ph-bordered"><span class="ph-braces">{{</span>lingua<span class="ph-braces">}}</span></span>, tono <span class="ph-bordered"><span class="ph-braces">{{</span>tono<span class="ph-braces">}}</span></span>.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="rationale">
+      <strong>Razionale highlighting.</strong> I segnaposti sono <em>cittadini di prima classe</em>: il principio è che chi guarda il body deve vedere immediatamente quali sono i parametri.
+      <br>· <strong>A · pill</strong>: massima leggibilità, ma rischia di "frammentare" la lettura del prompt come prosa — meglio in editor con poco testo e tanti placeholder.
+      <br>· <strong>B · underline</strong>: il prompt resta leggibile come testo, il segnaposto è una "parola speciale". Più rispettoso del flusso, meno aggressivo. La mia raccomandazione di default.
+      <br>· <strong>C · bordo</strong>: middle ground — più tecnico, evoca un campo. Buono per il <em>renderer</em> dove i segnaposti diventano click-target.
+      <br>In tutti i casi le graffe <code class="inline">{{ }}</code> sono al 55-70% di opacità: aiutano a parsare ma non rubano l'occhio.
+    </p>
+  </section>
+
+  <!-- =================== Z-INDEX TABLE =================== -->
+  <section class="block">
+    <div class="block-head">
+      <h2 class="section-title">Z-index</h2>
+      <span class="section-meta">scala documentata</span>
+    </div>
+    <div class="frame" data-theme="dark" data-tone-target>
+      <div class="frame-head"><span><span class="dot dark"></span>Dark</span><span class="section-meta">--z-*</span></div>
+      <div class="frame-body">
+        <div class="grid-tokens" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));">
+          <div class="swatch"><div class="meta"><span class="name">z.base</span><span class="val">0 · contenuto in flusso</span></div></div>
+          <div class="swatch"><div class="meta"><span class="name">z.sticky</span><span class="val">100 · header sidebar</span></div></div>
+          <div class="swatch"><div class="meta"><span class="name">z.dropdown</span><span class="val">200 · select / combobox</span></div></div>
+          <div class="swatch"><div class="meta"><span class="name">z.overlay</span><span class="val">300 · scrim modale</span></div></div>
+          <div class="swatch"><div class="meta"><span class="name">z.modal</span><span class="val">400 · dialog</span></div></div>
+          <div class="swatch"><div class="meta"><span class="name">z.toast</span><span class="val">500 · feedback "Copiato ✓"</span></div></div>
+          <div class="swatch"><div class="meta"><span class="name">z.tooltip</span><span class="val">600 · sopra modali</span></div></div>
+          <div class="swatch"><div class="meta"><span class="name">z.palette</span><span class="val">700 · Command Palette globale</span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>PromptVault · Design System v0.1 · GPL-2.0</span>
+    <span>tokens.css · tokens.json · Design System.html</span>
+  </footer>
+
+</div>
+
+<script>
+  // Tone switcher: aggiorna [data-tone] su tutti i frame e le label
+  const buttons = document.querySelectorAll('.tone-switcher [data-tone]');
+  const frames  = document.querySelectorAll('[data-tone-target]');
+  const labels  = document.querySelectorAll('[data-tone-label]');
+  function setTone(t) {
+    buttons.forEach(b => b.setAttribute('aria-pressed', b.dataset.tone === t ? 'true' : 'false'));
+    frames.forEach(f => f.setAttribute('data-tone', t));
+    labels.forEach(l => l.textContent = t);
+    // Aggiorna anche i valori dei token mostrati in fondo agli swatch
+    document.querySelectorAll('[data-token-val]').forEach(el => {
+      const frame = el.closest('[data-tone-target]');
+      if (!frame) return;
+      const val = getComputedStyle(frame).getPropertyValue(el.dataset.tokenVal).trim();
+      el.textContent = val;
+    });
+  }
+  buttons.forEach(b => b.addEventListener('click', () => setTone(b.dataset.tone)));
+  // init
+  requestAnimationFrame(() => setTone('slate'));
+</script>
+
+</body>
+</html>

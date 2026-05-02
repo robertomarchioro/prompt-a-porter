@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="it" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<title>PromptVault — Indice deliverable</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="tokens.css" />
+<link rel="stylesheet" href="app.css" />
+<style>
+  body { background: var(--bg-canvas); }
+  .page {
+    max-width: 1080px; margin: 0 auto;
+    padding: var(--sp-7) var(--sp-6) var(--sp-8);
+    display: flex; flex-direction: column; gap: var(--sp-6);
+  }
+  .hero { display: flex; flex-direction: column; gap: var(--sp-3); padding-bottom: var(--sp-5); border-bottom: 1px solid var(--border-subtle); }
+  .hero .crumb { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-subtle); letter-spacing: var(--tracking-caps); text-transform: uppercase; }
+  .hero h1 { margin: 0; font-size: var(--fs-3xl); color: var(--text-strong); font-weight: var(--fw-semibold); letter-spacing: var(--tracking-tight); line-height: var(--lh-tight); }
+  .hero p { margin: 0; color: var(--text-muted); max-width: 70ch; }
+  .hero .meta-row { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-muted); margin-top: var(--sp-2); }
+  .hero .meta-row .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); display: inline-block; margin-right: 6px; }
+
+  .section { display: flex; flex-direction: column; gap: var(--sp-3); }
+  .section h2 {
+    margin: 0; font-size: var(--fs-xs); color: var(--text-subtle);
+    text-transform: uppercase; letter-spacing: var(--tracking-caps);
+    font-family: var(--font-mono); font-weight: var(--fw-medium);
+    padding-bottom: var(--sp-2); border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-3); }
+
+  .card {
+    display: grid; grid-template-columns: 56px 1fr auto; gap: var(--sp-4); align-items: start;
+    padding: var(--sp-4) var(--sp-5);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    transition: border-color var(--motion-fast), background var(--motion-fast), transform var(--motion-fast);
+  }
+  .card:hover { border-color: var(--border-strong); background: var(--bg-overlay); transform: translateY(-1px); }
+  .card .num {
+    width: 40px; height: 40px; border-radius: var(--radius-sm);
+    display: grid; place-items: center;
+    font-family: var(--font-mono); font-weight: var(--fw-bold); font-size: var(--fs-sm);
+    background: var(--bg-overlay); color: var(--text-strong);
+    letter-spacing: var(--tracking-caps);
+  }
+  .card[data-tier="ds"] .num { background: var(--accent-team-soft); color: var(--accent-team); }
+  .card[data-tier="surface"] .num { background: var(--accent-private-soft); color: var(--accent-private); }
+  .card[data-tier="asset"] .num { background: var(--bg-input); color: var(--text-default); }
+  .card .body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .card .body strong { color: var(--text-strong); font-size: var(--fs-base); font-weight: var(--fw-semibold); }
+  .card .body p { margin: 0; color: var(--text-muted); font-size: var(--fs-xs); line-height: var(--lh-snug); }
+  .card .body .tags { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+  .card .arrow { color: var(--text-subtle); align-self: center; }
+  .card:hover .arrow { color: var(--text-strong); }
+
+  .keymap {
+    background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+    padding: var(--sp-4) var(--sp-5);
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-2) var(--sp-5);
+  }
+  .keymap .row {
+    display: flex; align-items: center; gap: var(--sp-3);
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--border-subtle);
+  }
+  .keymap .row:nth-last-child(-n+2) { border-bottom: 0; }
+  .keymap .row .keys { display: flex; gap: 2px; min-width: 90px; }
+  .keymap .row .desc { color: var(--text-default); font-size: var(--fs-sm); flex: 1; }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: var(--sp-4);
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--bg-overlay); border-radius: var(--radius-md);
+    font-size: var(--fs-xs); color: var(--text-muted);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  .principles { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-3); }
+  .principle {
+    padding: var(--sp-4);
+    background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  }
+  .principle .label {
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle);
+    text-transform: uppercase; letter-spacing: var(--tracking-caps);
+    margin-bottom: 6px; display: block;
+  }
+  .principle strong { display: block; color: var(--text-strong); font-size: var(--fs-sm); margin-bottom: 4px; }
+  .principle p { margin: 0; color: var(--text-muted); font-size: var(--fs-xs); line-height: var(--lh-normal); }
+</style>
+</head>
+<body>
+<div class="theme-toggle"><button data-theme-set="light">Light</button><button data-theme-set="dark" aria-pressed="true">Dark</button></div>
+
+<div class="page">
+
+  <header class="hero">
+    <span class="crumb">PromptVault · Fase 1</span>
+    <h1>Design system + 8 superfici principali</h1>
+    <p>App macOS desktop per gestire una libreria personale e di team di prompt riutilizzabili. Glifo del vault con notch a destra, accent ambra per privato e viola per team, layout a tre pannelli ispirato a Linear/Raycast con densità da pro tool.</p>
+    <div class="meta-row">
+      <span><span class="dot"></span> 11 file · 8 superfici · 1 design system</span>
+      <span>·</span>
+      <span>Tone: zinc (neutro caldo)</span>
+      <span>·</span>
+      <span>Mono: JetBrains Mono · UI: Inter</span>
+    </div>
+  </header>
+
+  <section class="section">
+    <h2>Fondamenta</h2>
+    <div class="grid">
+      <a class="card" data-tier="ds" href="Design System.html">
+        <span class="num">DS</span>
+        <div class="body">
+          <strong>Design System</strong>
+          <p>Tokens (CSS + JSON), scale tipografica, palette dark/light, button/input/textarea, 3 varianti di highlighting per i segnaposti.</p>
+          <div class="tags"><span class="tag">tokens</span><span class="tag">componenti</span><span class="tag">razionali</span></div>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+      <a class="card" data-tier="ds" href="tokens.css">
+        <span class="num">.css</span>
+        <div class="body">
+          <strong>tokens.css · tokens.json</strong>
+          <p>Variabili CSS (un solo file, dark + light + 3 toni) e mirror JSON pronto per essere consumato da Tailwind / Style Dictionary / Tokens Studio.</p>
+          <div class="tags"><span class="tag">oklch</span><span class="tag">json</span></div>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Superfici · 8</h2>
+    <div class="grid">
+
+      <a class="card" data-tier="surface" href="01 Command Palette.html">
+        <span class="num">01</span>
+        <div class="body">
+          <strong>Command Palette</strong>
+          <p>3 varianti per scelta direzione: Linear-severo · Raycast-prosumer · Warp-terminal. Hotkey globale ⌃⇧P, fuzzy search, azioni inline.</p>
+          <div class="tags"><span class="tag">3 varianti</span><span class="tag">⌘K</span></div>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+
+      <a class="card" data-tier="surface" href="02 Libreria.html">
+        <span class="num">02</span>
+        <div class="body">
+          <strong>Libreria</strong>
+          <p>Finestra principale a 3 pannelli — sidebar con viste/tag, lista filtrabile, dettaglio con body + segnaposti + cronologia.</p>
+          <div class="tags"><span class="tag">3 pannelli</span><span class="tag">tag</span><span class="tag">cronologia</span></div>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+
+      <a class="card" data-tier="surface" href="03 Editor Prompt.html">
+        <span class="num">03</span>
+        <div class="body">
+          <strong>Editor prompt</strong>
+          <p>Modale con body editabile, parsing live dei <code class="mono" style="color: var(--accent-private);">{{segnaposti}}</code>, tipo + default + obbligatorietà, picker tag, visibilità privato/team.</p>
+          <div class="tags"><span class="tag">live parsing</span><span class="tag">autosave</span></div>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+
+      <a class="card" data-tier="surface" href="04 Renderer.html">
+        <span class="num">04</span>
+        <div class="body">
+          <strong>Renderer / Compilatore</strong>
+          <p>Form a sinistra, anteprima live a destra. Tab per avanzare, ⌘↵ per copiare, send-to per integrazioni future (Claude, Cursor, ecc.).</p>
+          <div class="tags"><span class="tag">live preview</span><span class="tag">⌘↵</span></div>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+
+      <a class="card" data-tier="surface" href="05 Impostazioni.html">
+        <span class="num">05</span>
+        <div class="body">
+          <strong>Impostazioni</strong>
+          <p>Sync server, hotkey globale, aspetto (tema/densità), vault (path · cifratura · esporta · elimina).</p>
+          <div class="tags"><span class="tag">sync</span><span class="tag">hotkey</span><span class="tag">vault</span></div>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+
+      <a class="card" data-tier="surface" href="06 Onboarding.html">
+        <span class="num">06</span>
+        <div class="body">
+          <strong>Onboarding</strong>
+          <p>Wizard 3 step: scegli profilo (personale / team) · cifra il vault · imposta hotkey. Switcher in basso per rivedere ogni step.</p>
+          <div class="tags"><span class="tag">3 step</span><span class="tag">primo run</span></div>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+
+      <a class="card" data-tier="surface" href="07 Auth.html">
+        <span class="num">07</span>
+        <div class="body">
+          <strong>Auth</strong>
+          <p>Solo per workspace team: login con email/password, reset password, recupera workspace (lista organizzazioni associate alla mail).</p>
+          <div class="tags"><span class="tag">3 stati</span><span class="tag">SSO</span></div>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+
+      <a class="card" data-tier="surface" href="08 Tray.html">
+        <span class="num">08</span>
+        <div class="body">
+          <strong>Tray icon + menu</strong>
+          <p>Glifo monocromatico 16/32 pixel-perfect con dot di stato, menu macOS nativo (vibrancy) con switch workspace inline.</p>
+          <div class="tags"><span class="tag">menubar</span><span class="tag">SVG</span></div>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+
+    </div>
+
+    <div class="legend">
+      <span><i style="background: var(--accent-private);"></i> privato — solo locale, cifrato</span>
+      <span><i style="background: var(--accent-team);"></i> team — sync workspace</span>
+      <span><i style="background: var(--bg-overlay); border: 1px solid var(--border-default);"></i> sistema — neutrale</span>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Principi che ho seguito</h2>
+    <div class="principles">
+      <div class="principle">
+        <span class="label">01 · Densità</span>
+        <strong>Da pro tool, non da SaaS</strong>
+        <p>Liste a 32-40px, mai 56. Padding tight ma respiro nelle hero/detail. Il prompt è il contenuto, l'UI scompare.</p>
+      </div>
+      <div class="principle">
+        <span class="label">02 · Mono ovunque conta</span>
+        <strong>JetBrains Mono per ogni cosa parsing-sensitive</strong>
+        <p>Body prompt, codice, stati di sync, paths, scorciatoie. Senza ligature per leggere bene <code class="mono">{{</code> e <code class="mono">==</code>.</p>
+      </div>
+      <div class="principle">
+        <span class="label">03 · Privato ≠ Team</span>
+        <strong>Due accent per due mondi</strong>
+        <p>Ambra calda per privato (intimità, vault), viola freddo per team (condivisione). Mai confonderli con CTA generico.</p>
+      </div>
+      <div class="principle">
+        <span class="label">04 · Tastiera-first</span>
+        <strong>Ogni azione ha una hotkey visibile</strong>
+        <p>I <kbd>⌘</kbd><kbd>K</kbd> sono nei pulsanti, non nascosti. Il footer ricorda le shortcut. La palette è il punto di ingresso.</p>
+      </div>
+      <div class="principle">
+        <span class="label">05 · Stato sempre on-screen</span>
+        <strong>Sync, autosave, conteggi, tutto visibile</strong>
+        <p>Status bar in fondo alla libreria. Pillola "3 modifiche non salvate" nell'editor. Nessuna sorpresa silenziosa.</p>
+      </div>
+      <div class="principle">
+        <span class="label">06 · Dark first, light parità</span>
+        <strong>Toggle in alto a destra in ogni file</strong>
+        <p>Stessi tokens, due mappature. Tutti i contrasti rispettano AA in entrambi i temi.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Hotkey globali · sintesi</h2>
+    <div class="keymap">
+      <div class="row"><span class="keys"><kbd>⌃</kbd><kbd>⇧</kbd><kbd>P</kbd></span><span class="desc">Apri Command Palette (globale)</span></div>
+      <div class="row"><span class="keys"><kbd>⌘</kbd><kbd>N</kbd></span><span class="desc">Nuovo prompt</span></div>
+      <div class="row"><span class="keys"><kbd>⌘</kbd><kbd>K</kbd></span><span class="desc">Apri palette dentro l'app</span></div>
+      <div class="row"><span class="keys"><kbd>⌘</kbd><kbd>L</kbd></span><span class="desc">Mostra libreria</span></div>
+      <div class="row"><span class="keys"><kbd>⌘</kbd><kbd>S</kbd></span><span class="desc">Salva (editor)</span></div>
+      <div class="row"><span class="keys"><kbd>⌘</kbd><kbd>↵</kbd></span><span class="desc">Compila & copia</span></div>
+      <div class="row"><span class="keys"><kbd>⌘</kbd><kbd>R</kbd></span><span class="desc">Reset form / sync ora</span></div>
+      <div class="row"><span class="keys"><kbd>⌘</kbd><kbd>,</kbd></span><span class="desc">Impostazioni</span></div>
+      <div class="row"><span class="keys"><kbd>esc</kbd></span><span class="desc">Chiudi modale / annulla</span></div>
+      <div class="row"><span class="keys"><kbd>⇥</kbd></span><span class="desc">Avanza segnaposto / autocompleta</span></div>
+    </div>
+  </section>
+
+  <footer style="margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; color: var(--text-subtle); font-family: var(--font-mono); font-size: var(--fs-xs);">
+    <span>PromptVault · v0.1.0 · fase 1 design</span>
+    <span>11 file · zinc · ambra+viola · JetBrains Mono</span>
+  </footer>
+</div>
+<script>
+  document.querySelectorAll('.theme-toggle button').forEach(b => b.addEventListener('click', () => {
+    document.documentElement.setAttribute('data-theme', b.dataset.themeSet);
+    document.querySelectorAll('.theme-toggle button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+  }));
+</script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="it" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<title>PromptVault — Accedi al workspace</title>
+<link rel="stylesheet" href="tokens.css" />
+<link rel="stylesheet" href="app.css" />
+<style>
+  body { background: var(--bg-canvas); }
+  .auth-shell {
+    width: min(440px, 96vw);
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+  .auth-head { padding: var(--sp-6) var(--sp-6) var(--sp-4); display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); text-align: center; }
+  .logo {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent-private) 0%, oklch(from var(--accent-private) calc(l - 0.2) c calc(h - 20)) 100%);
+    color: var(--accent-private-on);
+    display: grid; place-items: center;
+    font-family: var(--font-mono); font-weight: var(--fw-bold); font-size: 18px;
+    box-shadow: var(--shadow-sm);
+  }
+  .auth-head h1 { margin: 4px 0 0; font-size: var(--fs-xl); color: var(--text-strong); font-weight: var(--fw-semibold); letter-spacing: var(--tracking-tight); }
+  .auth-head .sub { color: var(--text-muted); font-size: var(--fs-sm); }
+  .auth-body { padding: var(--sp-3) var(--sp-6) var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-3); }
+  .auth-foot { padding: var(--sp-3) var(--sp-6); border-top: 1px solid var(--border-subtle); background: var(--bg-surface); display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); color: var(--text-muted); }
+  .ws-pill {
+    display: flex; align-items: center; gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    background: var(--accent-team-soft); color: var(--accent-team);
+    border-radius: var(--radius-md);
+    font-family: var(--font-mono); font-size: var(--fs-xs);
+  }
+  .divider { display: flex; align-items: center; gap: var(--sp-3); color: var(--text-subtle); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: var(--tracking-caps); margin: var(--sp-2) 0; }
+  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border-subtle); }
+  .link { color: var(--accent-team); text-decoration: none; font-size: var(--fs-xs); }
+  .link:hover { text-decoration: underline; }
+  .form-error {
+    background: var(--danger-soft); color: var(--danger);
+    padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-md);
+    font-size: var(--fs-xs); display: flex; gap: 6px; align-items: center;
+  }
+  .variant-switcher {
+    position: fixed; bottom: var(--sp-4); left: 50%; transform: translateX(-50%); z-index: var(--z-toast);
+    display: flex; gap: 2px; background: var(--bg-surface);
+    border: 1px solid var(--border-default); border-radius: var(--radius-md);
+    padding: 4px; box-shadow: var(--shadow-md);
+  }
+  .variant-switcher .label { padding: 8px 8px 8px 12px; color: var(--text-subtle); font-family: var(--font-mono); font-size: var(--fs-xs); }
+  .variant-switcher button {
+    appearance: none; border: 0; background: transparent; color: var(--text-muted);
+    font-family: var(--font-mono); font-size: var(--fs-xs);
+    padding: 8px 14px; border-radius: 6px; cursor: pointer;
+  }
+  .variant-switcher button[aria-pressed="true"] { background: var(--bg-overlay); color: var(--text-strong); }
+</style>
+</head>
+<body>
+<div class="scene">
+  <a class="back-link" href="index.html">← index</a>
+  <div class="theme-toggle"><button data-theme-set="light">Light</button><button data-theme-set="dark" aria-pressed="true">Dark</button></div>
+
+  <div class="auth-shell" id="auth">
+    <div class="auth-head">
+      <div class="logo">PV</div>
+      <h1>Accedi al tuo workspace</h1>
+      <span class="sub">Solo per workspace team. Per uso personale, salta direttamente all'app.</span>
+    </div>
+
+    <div class="auth-body">
+      <div class="ws-pill">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+        sync.acme.io · Acme · IT Ops
+        <span class="spacer"></span>
+        <a href="#" class="link" style="color: currentColor;">cambia</a>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="email">Email</label>
+        <input id="email" class="input" type="email" value="luca@acme.io" />
+      </div>
+
+      <div class="field">
+        <div class="row" style="justify-content: space-between;">
+          <label class="field-label" for="pw">Password</label>
+          <a href="#" class="link" data-screen="reset">Password dimenticata?</a>
+        </div>
+        <input id="pw" class="input" type="password" value="••••••••••••" />
+      </div>
+
+      <label style="display: flex; align-items: center; gap: var(--sp-2); color: var(--text-muted); font-size: var(--fs-xs);">
+        <input type="checkbox" checked /> Ricorda questo dispositivo per 30 giorni
+      </label>
+
+      <button class="btn btn--primary btn--lg" style="width: 100%; justify-content: center;">Accedi <kbd>↵</kbd></button>
+
+      <div class="divider">oppure</div>
+
+      <button class="btn btn--lg" style="width: 100%; justify-content: center;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+        Continua con SSO
+      </button>
+    </div>
+
+    <div class="auth-foot">
+      <span>Non hai un workspace? <a href="#" class="link" data-screen="recover">Recupera</a></span>
+      <span class="mono">v0.1.0</span>
+    </div>
+  </div>
+
+  <div class="variant-switcher">
+    <span class="label">Schermata</span>
+    <button data-screen="login" aria-pressed="true">Login</button>
+    <button data-screen="reset">Reset password</button>
+    <button data-screen="recover">Recupera workspace</button>
+  </div>
+</div>
+
+<template id="screen-reset">
+  <div class="auth-head">
+    <div class="logo">PV</div>
+    <h1>Reimposta la password</h1>
+    <span class="sub">Ti invieremo un link via email valido per 30 minuti.</span>
+  </div>
+  <div class="auth-body">
+    <div class="ws-pill">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+      sync.acme.io · Acme · IT Ops
+    </div>
+    <div class="field">
+      <label class="field-label" for="r-email">Email del workspace</label>
+      <input id="r-email" class="input" type="email" value="luca@acme.io" />
+      <span class="field-hint">Riceverai un'email solo se questo indirizzo è registrato in Acme · IT Ops.</span>
+    </div>
+    <div class="form-error">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v5M12 16h.01"/></svg>
+      Attenzione: i prompt cifrati con la vecchia password andranno persi.
+    </div>
+    <button class="btn btn--primary btn--lg" style="width: 100%; justify-content: center;">Invia link di reset</button>
+  </div>
+  <div class="auth-foot">
+    <a href="#" class="link" data-screen="login">← Torna al login</a>
+    <span class="mono">v0.1.0</span>
+  </div>
+</template>
+
+<template id="screen-recover">
+  <div class="auth-head">
+    <div class="logo">PV</div>
+    <h1>Recupera workspace</h1>
+    <span class="sub">Cerca un workspace esistente con la tua email.</span>
+  </div>
+  <div class="auth-body">
+    <div class="field">
+      <label class="field-label" for="rw-email">Email aziendale</label>
+      <input id="rw-email" class="input" type="email" value="luca@acme.io" />
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px; padding: var(--sp-2) 0;">
+      <span class="muted mono" style="font-size: 11px; text-transform: uppercase; letter-spacing: var(--tracking-caps);">2 workspace trovati</span>
+
+      <div style="padding: var(--sp-3); background: var(--bg-input); border: 1px solid var(--border-default); border-radius: var(--radius-md); display: flex; align-items: center; gap: var(--sp-3); cursor: pointer;">
+        <div style="width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, var(--accent-team), oklch(from var(--accent-team) calc(l - 0.15) c calc(h + 30))); color: var(--accent-team-on); display: grid; place-items: center; font-weight: var(--fw-bold); font-size: var(--fs-sm);">A</div>
+        <div style="flex: 1;">
+          <strong style="display: block; font-size: var(--fs-sm); color: var(--text-strong);">Acme · IT Ops</strong>
+          <span class="mono" style="font-size: 11px; color: var(--text-subtle);">sync.acme.io · 12 membri</span>
+        </div>
+        <button class="btn btn--sm">Apri</button>
+      </div>
+
+      <div style="padding: var(--sp-3); background: var(--bg-input); border: 1px solid var(--border-default); border-radius: var(--radius-md); display: flex; align-items: center; gap: var(--sp-3); cursor: pointer;">
+        <div style="width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, oklch(0.65 0.13 200), oklch(0.55 0.15 220)); color: white; display: grid; place-items: center; font-weight: var(--fw-bold); font-size: var(--fs-sm);">F</div>
+        <div style="flex: 1;">
+          <strong style="display: block; font-size: var(--fs-sm); color: var(--text-strong);">Acme · Finance</strong>
+          <span class="mono" style="font-size: 11px; color: var(--text-subtle);">sync.acme.io · 4 membri</span>
+        </div>
+        <button class="btn btn--sm">Apri</button>
+      </div>
+    </div>
+
+    <div class="divider">oppure</div>
+
+    <button class="btn btn--lg" style="width: 100%; justify-content: center;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      Crea un nuovo workspace
+    </button>
+  </div>
+  <div class="auth-foot">
+    <a href="#" class="link" data-screen="login">← Torna al login</a>
+    <span class="mono">v0.1.0</span>
+  </div>
+</template>
+
+<template id="screen-login"></template>
+<script>
+  document.querySelectorAll('.theme-toggle button').forEach(b => b.addEventListener('click', () => {
+    document.documentElement.setAttribute('data-theme', b.dataset.themeSet);
+    document.querySelectorAll('.theme-toggle button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+  }));
+  const auth = document.getElementById('auth');
+  const original = auth.innerHTML;
+  function go(name) {
+    document.querySelectorAll('.variant-switcher [data-screen]').forEach(b => b.setAttribute('aria-pressed', b.dataset.screen === name ? 'true' : 'false'));
+    if (name === 'login') auth.innerHTML = original;
+    else auth.innerHTML = document.getElementById('screen-' + name).innerHTML;
+    auth.querySelectorAll('[data-screen]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.screen); }));
+  }
+  document.querySelectorAll('.variant-switcher [data-screen]').forEach(b => b.addEventListener('click', () => go(b.dataset.screen)));
+  document.querySelectorAll('#auth [data-screen]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.screen); }));
+</script>
+</body>
+</html>

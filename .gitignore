@@ -1,0 +1,55 @@
+# === Dipendenze ===
+node_modules/
+.pnpm-store/
+
+# === Build output ===
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# === Tauri / Rust ===
+apps/client/src-tauri/target/
+apps/client/src-tauri/gen/
+*.rs.bk
+
+# === Go ===
+apps/server/papsync
+apps/server/papsync.exe
+apps/server/vendor/
+
+# === Ambiente ===
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# === OS ===
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# === IDE ===
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# === Log ===
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# === Test / Coverage ===
+coverage/
+.nyc_output/
+
+# === Vault (mai committare DB cifrati) ===
+*.db
+*.sqlite
+*.sqlite3
+!apps/server/testdata/*.db

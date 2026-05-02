@@ -1,0 +1,302 @@
+/* =========================================================================
+   PromptVault — Design Tokens
+   Local-first prompt library · Tauri 2 + Svelte 5
+   -------------------------------------------------------------------------
+   Tutti i token sono CSS Custom Properties. Il file è autocontenuto e si
+   aggancia a [data-theme="dark|light"] e [data-tone="slate|stone|zinc"].
+   - Il tone è la temperatura della palette neutra (esplorazione brief).
+   - Il theme è dark/light (default dark, switch da prefers-color-scheme).
+   - Gli accent (privato=ambra, team=viola) sono indipendenti dal tone.
+   ========================================================================= */
+
+:root {
+  /* ---------- Type ---------- */
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI",
+             Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", "Roboto Mono",
+               Consolas, "Liberation Mono", monospace;
+
+  /* Scale tipografica — passi compatti per UI densa
+     (12 hint · 13 meta · 14 body UI · 16 input/title · 18 lg · 22 2xl · 28 3xl) */
+  --fs-xs:   12px;
+  --fs-sm:   13px;
+  --fs-base: 14px;
+  --fs-md:   15px;
+  --fs-lg:   16px;
+  --fs-xl:   18px;
+  --fs-2xl:  22px;
+  --fs-3xl:  28px;
+
+  --lh-tight:  1.2;
+  --lh-snug:   1.35;
+  --lh-normal: 1.5;
+  --lh-loose:  1.65;
+
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+
+  --tracking-tight:  -0.01em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.02em;
+  --tracking-caps:    0.06em;
+
+  /* ---------- Spacing (4px base) ---------- */
+  --sp-0:  0;
+  --sp-1:  4px;
+  --sp-2:  8px;
+  --sp-3:  12px;
+  --sp-4:  16px;
+  --sp-5:  24px;
+  --sp-6:  32px;
+  --sp-7:  48px;
+  --sp-8:  64px;
+
+  /* ---------- Radii (linguaggio Raycast-like, morbido) ---------- */
+  --radius-sm:   6px;
+  --radius-md:  10px;
+  --radius-lg:  14px;
+  --radius-full: 999px;
+
+  /* ---------- Stroke / borders ---------- */
+  --border-thin:    1px;
+  --border-regular: 1.5px;
+  --border-thick:   2px;
+
+  /* ---------- Z-index ---------- */
+  --z-base:        0;
+  --z-sticky:    100;
+  --z-dropdown:  200;
+  --z-overlay:   300;
+  --z-modal:     400;
+  --z-toast:     500;
+  --z-tooltip:   600;
+  --z-palette:   700;  /* Command palette sopra tutto */
+
+  /* ---------- Motion ----------
+     Solo transform + opacity, 100–200ms (vincolo Tauri / GPU). */
+  --motion-fast:    100ms;
+  --motion-normal:  150ms;
+  --motion-slow:    200ms;
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --easing-emphasis: cubic-bezier(0.3, 0, 0, 1);
+
+  /* ---------- Accent privato (ambra) — indipendente da theme/tone ----------
+     Leggibile su sfondi dark e light grazie a doppia coppia. */
+  --accent-private:           oklch(0.78 0.14 78);   /* dark BG */
+  --accent-private-strong:    oklch(0.85 0.15 80);   /* hover dark */
+  --accent-private-soft:      oklch(0.78 0.14 78 / 0.18);
+  --accent-private-on:        oklch(0.18 0.04 78);   /* testo su accent */
+
+  /* ---------- Accent team (viola) ---------- */
+  --accent-team:           oklch(0.70 0.18 290);
+  --accent-team-strong:    oklch(0.78 0.18 292);
+  --accent-team-soft:      oklch(0.70 0.18 290 / 0.18);
+  --accent-team-on:        oklch(0.18 0.04 290);
+
+  /* ---------- Semantici ---------- */
+  --success:        oklch(0.72 0.16 155);
+  --success-soft:   oklch(0.72 0.16 155 / 0.16);
+  --warning:        oklch(0.80 0.15 75);
+  --warning-soft:   oklch(0.80 0.15 75 / 0.16);
+  --danger:         oklch(0.65 0.21 25);
+  --danger-soft:    oklch(0.65 0.21 25 / 0.16);
+  --info:           oklch(0.72 0.13 235);
+  --info-soft:      oklch(0.72 0.13 235 / 0.16);
+
+  /* ---------- Focus ring ---------- */
+  --focus-ring:        0 0 0 2px var(--bg-canvas), 0 0 0 4px var(--accent-team);
+  --focus-ring-private: 0 0 0 2px var(--bg-canvas), 0 0 0 4px var(--accent-private);
+}
+
+/* =========================================================================
+   TONE: SLATE — freddo bluastro (Linear-like). Default.
+   ========================================================================= */
+[data-tone="slate"][data-theme="dark"] {
+  --bg-canvas:     oklch(0.18 0.012 250);  /* finestra principale */
+  --bg-surface:    oklch(0.21 0.014 250);  /* card / panel */
+  --bg-raised:     oklch(0.245 0.014 250); /* sopra surface (palette, modal) */
+  --bg-overlay:    oklch(0.30 0.014 250);  /* row hover / selezionata */
+  --bg-input:      oklch(0.16 0.012 250);
+  --bg-scrim:      oklch(0.10 0.01 250 / 0.55);
+
+  --border-subtle: oklch(0.30 0.014 250);
+  --border-default: oklch(0.36 0.016 250);
+  --border-strong: oklch(0.46 0.018 250);
+
+  --text-strong:   oklch(0.97 0.01 250);
+  --text-default:  oklch(0.88 0.012 250);
+  --text-muted:    oklch(0.66 0.014 250);
+  --text-subtle:   oklch(0.50 0.014 250);
+  --text-disabled: oklch(0.40 0.012 250);
+
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.30);
+  --shadow-md: 0 4px 12px oklch(0 0 0 / 0.35), 0 1px 2px oklch(0 0 0 / 0.30);
+  --shadow-lg: 0 16px 40px oklch(0 0 0 / 0.45), 0 4px 8px oklch(0 0 0 / 0.30);
+}
+
+[data-tone="slate"][data-theme="light"] {
+  --bg-canvas:     oklch(0.985 0.003 250);
+  --bg-surface:    oklch(1.000 0 0);
+  --bg-raised:     oklch(1.000 0 0);
+  --bg-overlay:    oklch(0.945 0.008 250);
+  --bg-input:      oklch(0.975 0.005 250);
+  --bg-scrim:      oklch(0.20 0.012 250 / 0.30);
+
+  --border-subtle: oklch(0.92 0.008 250);
+  --border-default: oklch(0.86 0.010 250);
+  --border-strong: oklch(0.74 0.012 250);
+
+  --text-strong:   oklch(0.18 0.012 250);
+  --text-default:  oklch(0.28 0.012 250);
+  --text-muted:    oklch(0.48 0.012 250);
+  --text-subtle:   oklch(0.62 0.012 250);
+  --text-disabled: oklch(0.74 0.010 250);
+
+  /* Su light l'ambra è troppo chiara: scuriamo l'accent privato */
+  --accent-private:        oklch(0.62 0.14 70);
+  --accent-private-strong: oklch(0.55 0.15 68);
+  --accent-private-soft:   oklch(0.62 0.14 70 / 0.16);
+  --accent-private-on:     oklch(0.99 0.005 70);
+
+  --accent-team:           oklch(0.55 0.20 290);
+  --accent-team-strong:    oklch(0.48 0.21 290);
+  --accent-team-soft:      oklch(0.55 0.20 290 / 0.14);
+  --accent-team-on:        oklch(0.99 0.005 290);
+
+  --shadow-sm: 0 1px 2px oklch(0.20 0.01 250 / 0.06);
+  --shadow-md: 0 4px 12px oklch(0.20 0.01 250 / 0.10), 0 1px 2px oklch(0.20 0.01 250 / 0.05);
+  --shadow-lg: 0 16px 40px oklch(0.20 0.01 250 / 0.16), 0 4px 8px oklch(0.20 0.01 250 / 0.08);
+}
+
+/* =========================================================================
+   TONE: STONE — caldo grigio-bruno (Warp-like)
+   ========================================================================= */
+[data-tone="stone"][data-theme="dark"] {
+  --bg-canvas:     oklch(0.185 0.007 60);
+  --bg-surface:    oklch(0.215 0.008 60);
+  --bg-raised:     oklch(0.250 0.009 60);
+  --bg-overlay:    oklch(0.305 0.010 60);
+  --bg-input:      oklch(0.165 0.007 60);
+  --bg-scrim:      oklch(0.10 0.005 60 / 0.55);
+
+  --border-subtle: oklch(0.305 0.010 60);
+  --border-default: oklch(0.365 0.012 60);
+  --border-strong: oklch(0.465 0.014 60);
+
+  --text-strong:   oklch(0.97 0.006 60);
+  --text-default:  oklch(0.88 0.008 60);
+  --text-muted:    oklch(0.66 0.010 60);
+  --text-subtle:   oklch(0.50 0.010 60);
+  --text-disabled: oklch(0.40 0.008 60);
+
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.30);
+  --shadow-md: 0 4px 12px oklch(0 0 0 / 0.35), 0 1px 2px oklch(0 0 0 / 0.30);
+  --shadow-lg: 0 16px 40px oklch(0 0 0 / 0.45), 0 4px 8px oklch(0 0 0 / 0.30);
+}
+
+[data-tone="stone"][data-theme="light"] {
+  --bg-canvas:     oklch(0.985 0.004 60);
+  --bg-surface:    oklch(1.000 0 0);
+  --bg-raised:     oklch(1.000 0 0);
+  --bg-overlay:    oklch(0.945 0.008 60);
+  --bg-input:      oklch(0.975 0.005 60);
+  --bg-scrim:      oklch(0.20 0.008 60 / 0.30);
+
+  --border-subtle: oklch(0.92 0.008 60);
+  --border-default: oklch(0.86 0.010 60);
+  --border-strong: oklch(0.74 0.012 60);
+
+  --text-strong:   oklch(0.18 0.010 60);
+  --text-default:  oklch(0.28 0.010 60);
+  --text-muted:    oklch(0.48 0.010 60);
+  --text-subtle:   oklch(0.62 0.010 60);
+  --text-disabled: oklch(0.74 0.008 60);
+
+  --accent-private:        oklch(0.62 0.14 70);
+  --accent-private-strong: oklch(0.55 0.15 68);
+  --accent-private-soft:   oklch(0.62 0.14 70 / 0.16);
+  --accent-private-on:     oklch(0.99 0.005 70);
+
+  --accent-team:           oklch(0.55 0.20 290);
+  --accent-team-strong:    oklch(0.48 0.21 290);
+  --accent-team-soft:      oklch(0.55 0.20 290 / 0.14);
+  --accent-team-on:        oklch(0.99 0.005 290);
+
+  --shadow-sm: 0 1px 2px oklch(0.20 0.01 60 / 0.06);
+  --shadow-md: 0 4px 12px oklch(0.20 0.01 60 / 0.10), 0 1px 2px oklch(0.20 0.01 60 / 0.05);
+  --shadow-lg: 0 16px 40px oklch(0.20 0.01 60 / 0.16), 0 4px 8px oklch(0.20 0.01 60 / 0.08);
+}
+
+/* =========================================================================
+   TONE: ZINC — neutro puro
+   ========================================================================= */
+[data-tone="zinc"][data-theme="dark"],
+[data-theme="dark"]:not([data-tone]) {
+  --bg-canvas:     oklch(0.185 0.002 270);
+  --bg-surface:    oklch(0.215 0.002 270);
+  --bg-raised:     oklch(0.250 0.002 270);
+  --bg-overlay:    oklch(0.305 0.003 270);
+  --bg-input:      oklch(0.165 0.002 270);
+  --bg-scrim:      oklch(0.10 0.001 270 / 0.55);
+
+  --border-subtle: oklch(0.305 0.003 270);
+  --border-default: oklch(0.365 0.003 270);
+  --border-strong: oklch(0.465 0.004 270);
+
+  --text-strong:   oklch(0.97 0.001 270);
+  --text-default:  oklch(0.88 0.002 270);
+  --text-muted:    oklch(0.66 0.003 270);
+  --text-subtle:   oklch(0.50 0.003 270);
+  --text-disabled: oklch(0.40 0.002 270);
+
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.30);
+  --shadow-md: 0 4px 12px oklch(0 0 0 / 0.35), 0 1px 2px oklch(0 0 0 / 0.30);
+  --shadow-lg: 0 16px 40px oklch(0 0 0 / 0.45), 0 4px 8px oklch(0 0 0 / 0.30);
+}
+
+[data-tone="zinc"][data-theme="light"],
+[data-theme="light"]:not([data-tone]) {
+  --bg-canvas:     oklch(0.985 0.001 270);
+  --bg-surface:    oklch(1.000 0 0);
+  --bg-raised:     oklch(1.000 0 0);
+  --bg-overlay:    oklch(0.945 0.002 270);
+  --bg-input:      oklch(0.975 0.001 270);
+  --bg-scrim:      oklch(0.20 0.002 270 / 0.30);
+
+  --border-subtle: oklch(0.92 0.002 270);
+  --border-default: oklch(0.86 0.003 270);
+  --border-strong: oklch(0.74 0.003 270);
+
+  --text-strong:   oklch(0.18 0.002 270);
+  --text-default:  oklch(0.28 0.002 270);
+  --text-muted:    oklch(0.48 0.003 270);
+  --text-subtle:   oklch(0.62 0.003 270);
+  --text-disabled: oklch(0.74 0.002 270);
+
+  --accent-private:        oklch(0.62 0.14 70);
+  --accent-private-strong: oklch(0.55 0.15 68);
+  --accent-private-soft:   oklch(0.62 0.14 70 / 0.16);
+  --accent-private-on:     oklch(0.99 0.005 70);
+
+  --accent-team:           oklch(0.55 0.20 290);
+  --accent-team-strong:    oklch(0.48 0.21 290);
+  --accent-team-soft:      oklch(0.55 0.20 290 / 0.14);
+  --accent-team-on:        oklch(0.99 0.005 290);
+
+  --shadow-sm: 0 1px 2px oklch(0.20 0.001 270 / 0.06);
+  --shadow-md: 0 4px 12px oklch(0.20 0.001 270 / 0.10), 0 1px 2px oklch(0.20 0.001 270 / 0.05);
+  --shadow-lg: 0 16px 40px oklch(0.20 0.001 270 / 0.16), 0 4px 8px oklch(0.20 0.001 270 / 0.08);
+}
+
+/* =========================================================================
+   Reduced motion
+   ========================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 1ms;
+    --motion-normal: 1ms;
+    --motion-slow: 1ms;
+  }
+}
