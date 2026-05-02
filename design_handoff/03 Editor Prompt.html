@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="it" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<title>PromptVault — Editor</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="tokens.css" />
+<link rel="stylesheet" href="app.css" />
+<style>
+  body { background: var(--bg-canvas); }
+  .scrim {
+    position: fixed; inset: 0;
+    background: var(--bg-scrim);
+    display: grid; place-items: center;
+    padding: var(--sp-5);
+  }
+  .modal {
+    width: min(960px, 96vw);
+    max-height: min(720px, 92vh);
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .modal__head {
+    display: flex; align-items: center; gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+  }
+  .modal__head h1 { margin: 0; font-size: var(--fs-base); color: var(--text-strong); font-weight: var(--fw-semibold); }
+  .modal__head .crumbs { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-subtle); }
+  .modal__body { flex: 1; overflow: auto; display: grid; grid-template-columns: 1.3fr 1fr; min-height: 0; }
+  .modal__footer {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    border-top: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+  }
+
+  .col-left  { padding: var(--sp-4); border-right: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: var(--sp-4); min-height: 0; overflow-y: auto; }
+  .col-right { padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4); min-height: 0; overflow-y: auto; background: var(--bg-canvas); }
+
+  .editor-area {
+    flex: 1;
+    display: flex; flex-direction: column;
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    min-height: 280px;
+  }
+  .editor-area:focus-within { border-color: var(--accent-team); box-shadow: 0 0 0 3px var(--accent-team-soft); }
+  .editor-toolbar {
+    display: flex; align-items: center; gap: var(--sp-2);
+    padding: 6px var(--sp-2);
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+    font-family: var(--font-mono); font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+  .editor-toolbar .pill { padding: 2px 8px; border-radius: var(--radius-sm); background: var(--bg-overlay); }
+  .editor-pre {
+    margin: 0; padding: var(--sp-3) var(--sp-4);
+    font-family: var(--font-mono); font-size: var(--fs-sm); line-height: var(--lh-loose);
+    color: var(--text-default);
+    flex: 1;
+    white-space: pre-wrap;
+    outline: none;
+    overflow: auto;
+  }
+  .editor-pre:focus { outline: none; }
+  .editor-pre[contenteditable]:empty::before { content: attr(data-placeholder); color: var(--text-subtle); }
+
+  .ph-row {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr 1fr 0.8fr 36px;
+    gap: var(--sp-2);
+    align-items: center;
+    padding: var(--sp-2) 0;
+    border-bottom: 1px dashed var(--border-subtle);
+  }
+  .ph-row:last-child { border-bottom: 0; }
+  .ph-name { display: inline-flex; align-items: center; gap: 6px; }
+  .ph-name code {
+    font-family: var(--font-mono); font-size: var(--fs-xs);
+    color: var(--accent-private);
+    background: var(--accent-private-soft);
+    padding: 3px 8px; border-radius: var(--radius-sm);
+  }
+  .ph-row .input, .ph-row .select { height: 28px; font-size: var(--fs-xs); padding: 4px 8px; }
+  .ph-row .select { padding-right: 22px; }
+  .ph-row .icon-btn {
+    width: 28px; height: 28px; display: grid; place-items: center;
+    background: transparent; border: 0; cursor: pointer; color: var(--text-muted);
+    border-radius: var(--radius-sm);
+  }
+  .ph-row .icon-btn:hover { background: var(--bg-overlay); color: var(--danger); }
+  .ph-row-head {
+    display: grid; grid-template-columns: 1.3fr 1fr 1fr 0.8fr 36px; gap: var(--sp-2);
+    font-family: var(--font-mono); font-size: 11px;
+    text-transform: uppercase; letter-spacing: var(--tracking-caps);
+    color: var(--text-subtle);
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .tag-picker {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    padding: 6px;
+    min-height: 38px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+  }
+  .tag-picker input {
+    flex: 1; min-width: 100px; appearance: none; background: transparent; border: 0; outline: none;
+    color: var(--text-strong); font-family: var(--font-ui); font-size: var(--fs-sm);
+    padding: 0 6px;
+  }
+  .tag-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    height: 22px; padding: 0 4px 0 8px;
+    background: var(--bg-overlay); border-radius: var(--radius-full);
+    color: var(--text-default); font-size: var(--fs-xs);
+  }
+  .tag-pill button { appearance: none; background: transparent; border: 0; color: var(--text-muted); cursor: pointer; padding: 0 4px; border-radius: 50%; line-height: 1; }
+  .tag-pill button:hover { background: var(--border-default); color: var(--text-strong); }
+
+  .visibility {
+    display: flex; align-items: center; gap: var(--sp-3);
+    padding: var(--sp-3);
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+  }
+  .visibility .vis-ico { width: 32px; height: 32px; border-radius: var(--radius-sm); display: grid; place-items: center; flex-shrink: 0; }
+  .visibility[data-vis="private"] .vis-ico { background: var(--accent-private-soft); color: var(--accent-private); }
+  .visibility[data-vis="team"]    .vis-ico { background: var(--accent-team-soft); color: var(--accent-team); }
+  .visibility .vis-meta { flex: 1; }
+  .visibility .vis-meta strong { display: block; font-size: var(--fs-sm); color: var(--text-strong); }
+  .visibility .vis-meta span { font-size: var(--fs-xs); color: var(--text-muted); }
+
+  .preview-frame {
+    flex: 1;
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: var(--sp-4);
+    font-family: var(--font-mono); font-size: var(--fs-sm); line-height: var(--lh-loose);
+    color: var(--text-default);
+    white-space: pre-wrap;
+    overflow: auto;
+    min-height: 200px;
+  }
+
+</style>
+</head>
+<body>
+<div class="scene scene--desktop" style="padding: 0;">
+  <a class="back-link" href="index.html">← index</a>
+  <div class="theme-toggle" role="group" aria-label="Tema">
+    <button data-theme-set="light" aria-pressed="false">Light</button>
+    <button data-theme-set="dark"  aria-pressed="true">Dark</button>
+  </div>
+
+  <div class="scrim">
+    <div class="modal" role="dialog" aria-labelledby="ed-title">
+      <div class="modal__head">
+        <span class="crumbs">Acme · IT Ops / Modifica</span>
+        <h1 id="ed-title">Riassunto bug report → JIRA</h1>
+        <div class="spacer"></div>
+        <span class="badge badge--warning">3 modifiche non salvate</span>
+        <button class="btn btn--ghost btn--sm btn--icon" data-tip="Chiudi (Esc)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M6 18L18 6"/></svg>
+        </button>
+      </div>
+
+      <div class="modal__body">
+
+        <!-- COL LEFT — body editor -->
+        <div class="col-left">
+          <div class="field">
+            <label class="field-label" for="ed-title-i">Titolo</label>
+            <input id="ed-title-i" class="input" value="Riassunto bug report → JIRA" />
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="ed-desc">Descrizione</label>
+            <input id="ed-desc" class="input" value="Trasforma un bug report grezzo in un ticket Jira ben strutturato." />
+            <span class="field-hint">1 riga · mostrata nel Command Palette.</span>
+          </div>
+
+          <div class="field" style="flex: 1; display: flex; flex-direction: column;">
+            <label class="field-label">Body</label>
+            <div class="editor-area">
+              <div class="editor-toolbar">
+                <span class="pill">monospace</span>
+                <span>line wrap</span>
+                <span class="spacer"></span>
+                <span>4 segnaposti rilevati</span>
+                <span>·</span>
+                <span>184 char</span>
+              </div>
+              <div class="editor-pre" contenteditable="true" spellcheck="false">Sei un Senior <span class="ph"><span class="br">{{</span>ruolo<span class="br">}}</span></span> e devi trasformare un bug report grezzo in un ticket Jira ben strutturato.
+
+Prodotto: <span class="ph"><span class="br">{{</span>prodotto<span class="br">}}</span></span>
+Severità: <span class="ph"><span class="br">{{</span>severita<span class="br">}}</span></span>
+
+Estratto log:
+<span class="ph"><span class="br">{{</span>log_excerpt<span class="br">}}</span></span>
+
+Restituisci una risposta in markdown con summary, steps to reproduce, expected vs actual, severity giustificata e suggested labels.</div>
+            </div>
+            <span class="field-hint">Usa <code class="mono" style="color: var(--accent-private); background: var(--accent-private-soft); padding: 1px 4px; border-radius: 3px;">{{nome}}</code> per inserire un segnaposto. Tab autocompleta tra quelli già usati.</span>
+          </div>
+        </div>
+
+        <!-- COL RIGHT — meta + segnaposti rilevati -->
+        <div class="col-right">
+
+          <div>
+            <div class="row" style="justify-content: space-between; margin-bottom: var(--sp-2);">
+              <span class="eyebrow">Segnaposti rilevati</span>
+              <span class="muted mono" style="font-size: var(--fs-xs);">4 trovati</span>
+            </div>
+            <div class="ph-row-head">
+              <span>nome</span><span>tipo</span><span>default</span><span>obbl.</span><span></span>
+            </div>
+            <div class="ph-row">
+              <span class="ph-name"><code>{{ruolo}}</code></span>
+              <select class="select"><option>testo</option><option>multilinea</option><option>enum</option></select>
+              <input class="input" value="QA Engineer" />
+              <span class="switch" role="switch" aria-checked="false"></span>
+              <button class="icon-btn" data-tip="Rimuovi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+            </div>
+            <div class="ph-row">
+              <span class="ph-name"><code>{{prodotto}}</code></span>
+              <select class="select"><option>testo</option><option>multilinea</option><option selected>enum</option></select>
+              <input class="input" value="Desktop, Mobile, API…" placeholder="6 valori" />
+              <span class="switch" role="switch" aria-checked="true" data-private></span>
+              <button class="icon-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+            </div>
+            <div class="ph-row">
+              <span class="ph-name"><code>{{severita}}</code></span>
+              <select class="select"><option>testo</option><option>multilinea</option><option selected>enum</option></select>
+              <input class="input" value="P1, P2, P3, P4" />
+              <span class="switch" role="switch" aria-checked="true" data-private></span>
+              <button class="icon-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+            </div>
+            <div class="ph-row">
+              <span class="ph-name"><code>{{log_excerpt}}</code></span>
+              <select class="select"><option>testo</option><option selected>multilinea</option><option>enum</option></select>
+              <input class="input" placeholder="(nessuno)" />
+              <span class="switch" role="switch" aria-checked="true" data-private></span>
+              <button class="icon-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Tag</label>
+            <div class="tag-picker">
+              <span class="tag-pill">jira <button>×</button></span>
+              <span class="tag-pill">riassunto <button>×</button></span>
+              <input placeholder="Aggiungi tag…" />
+            </div>
+            <span class="field-hint">Invio per creare. Tab per scegliere dalle proposte.</span>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Visibilità</label>
+            <div class="visibility" data-vis="private">
+              <div class="vis-ico">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+              </div>
+              <div class="vis-meta">
+                <strong>Privato</strong>
+                <span>Solo tu lo vedi. Cifrato nel vault locale.</span>
+              </div>
+              <span class="switch" role="switch" aria-checked="false" data-tip="Passa a team"></span>
+            </div>
+          </div>
+
+          <div>
+            <div class="row" style="justify-content: space-between; margin-bottom: var(--sp-2);">
+              <span class="eyebrow">Anteprima rendering</span>
+              <span class="muted mono" style="font-size: var(--fs-xs);">con default</span>
+            </div>
+            <div class="preview-frame">Sei un Senior QA Engineer e devi trasformare un bug report grezzo in un ticket Jira ben strutturato.
+
+Prodotto: <span class="strong">PromptVault Desktop</span>
+Severità: <span class="strong">P2</span>
+
+Estratto log:
+<span class="muted">(vuoto — verrà compilato all'uso)</span>
+
+Restituisci una risposta in markdown…</div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="modal__footer">
+        <span class="muted mono" style="font-size: var(--fs-xs);">Autosave ogni 2s · ultima 12s fa</span>
+        <div class="row-tight">
+          <button class="btn btn--ghost btn--sm">Anteprima full <kbd>P</kbd></button>
+          <button class="btn btn--sm">Annulla <kbd>esc</kbd></button>
+          <button class="btn btn--primary btn--sm">Salva <kbd>⌘</kbd><kbd>S</kbd></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  document.querySelectorAll('.theme-toggle [data-theme-set]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.documentElement.setAttribute('data-theme', btn.dataset.themeSet);
+      document.querySelectorAll('.theme-toggle [data-theme-set]').forEach(b => b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'));
+    });
+  });
+  document.querySelectorAll('.switch').forEach(s => s.addEventListener('click', () => {
+    s.setAttribute('aria-checked', s.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+  }));
+</script>
+</body>
+</html>

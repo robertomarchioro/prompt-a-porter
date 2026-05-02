@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="it" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<title>PromptVault — Renderer</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="tokens.css" />
+<link rel="stylesheet" href="app.css" />
+<style>
+  body { background: var(--bg-canvas); }
+  .renderer-window {
+    width: min(1080px, 96vw);
+    height: min(700px, 92vh);
+    margin: var(--sp-5) auto;
+    display: flex; flex-direction: column;
+  }
+  .renderer-window .titlebar { padding: 0 var(--sp-3); }
+
+  .rwbody { flex: 1; display: grid; grid-template-columns: 380px 1fr; min-height: 0; }
+
+  /* Form col */
+  .form-col {
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border-subtle);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .form-col__head {
+    padding: var(--sp-4); border-bottom: 1px solid var(--border-subtle);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .form-col__head h1 {
+    margin: 0; font-size: var(--fs-lg); font-weight: var(--fw-semibold); color: var(--text-strong);
+    line-height: var(--lh-tight);
+  }
+  .form-col__head .row { gap: var(--sp-2); }
+
+  .form-col__body { flex: 1; overflow-y: auto; padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4); }
+  .progress {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+    margin-bottom: var(--sp-2);
+  }
+  .progress > span { height: 3px; border-radius: 999px; background: var(--border-default); }
+  .progress > span.done { background: var(--accent-private); }
+  .progress > span.curr { background: var(--accent-private); }
+
+  .field-row { display: flex; flex-direction: column; gap: 6px; }
+  .field-row .pname {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--font-mono); font-size: var(--fs-xs);
+    color: var(--accent-private);
+  }
+  .field-row .pname code {
+    background: var(--accent-private-soft);
+    padding: 2px 8px; border-radius: var(--radius-sm);
+  }
+  .field-row .req { color: var(--danger); margin-left: 4px; }
+  .field-row .hint { font-size: var(--fs-xs); color: var(--text-subtle); }
+  .field-row[data-active="true"] .pname code {
+    /* segnala il campo attivo solo dal nome del segnaposto, niente bordi extra */
+    box-shadow: 0 0 0 1px var(--accent-private);
+  }
+  .form-col__footer {
+    padding: var(--sp-3) var(--sp-4);
+    border-top: 1px solid var(--border-subtle);
+    display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+    background: var(--bg-canvas);
+  }
+
+  /* Preview col */
+  .preview-col {
+    display: flex; flex-direction: column; min-height: 0;
+    background: var(--bg-canvas);
+  }
+  .preview-col__head {
+    padding: var(--sp-3) var(--sp-4);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex; align-items: center; gap: var(--sp-3);
+  }
+  .preview-col__head .toggle {
+    display: flex; gap: 2px; padding: 3px;
+    background: var(--bg-overlay); border-radius: var(--radius-md);
+  }
+  .preview-col__head .toggle button {
+    appearance: none; border: 0; background: transparent;
+    color: var(--text-muted); padding: 4px 10px; border-radius: 6px;
+    font-family: var(--font-mono); font-size: var(--fs-xs); cursor: pointer;
+  }
+  .preview-col__head .toggle button[aria-pressed="true"] { background: var(--bg-raised); color: var(--text-strong); }
+
+  .preview-out {
+    flex: 1; overflow-y: auto;
+    padding: var(--sp-5);
+    font-family: var(--font-mono); font-size: var(--fs-sm); line-height: var(--lh-loose);
+    color: var(--text-default);
+    white-space: pre-wrap;
+  }
+  .preview-out .filled { color: var(--text-strong); background: var(--accent-private-soft); padding: 1px 4px; border-radius: 3px; transition: background var(--motion-normal); }
+  .preview-out .empty  { color: var(--text-subtle); background: var(--bg-overlay); padding: 1px 6px; border-radius: 3px; font-style: italic; }
+
+  .preview-col__footer {
+    padding: var(--sp-3) var(--sp-4);
+    border-top: 1px solid var(--border-subtle);
+    background: var(--bg-canvas);
+    display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  }
+  .preview-col__footer .stats {
+    display: flex; gap: var(--sp-3);
+    font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-muted);
+  }
+
+  /* Send-to dropdown styling */
+  .send-to {
+    display: inline-flex; align-items: stretch; gap: 0;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .send-to .btn { border-radius: 0; }
+  .send-to .btn:first-child { border-top-left-radius: var(--radius-md); border-bottom-left-radius: var(--radius-md); }
+  .send-to .btn:last-child  { border-top-right-radius: var(--radius-md); border-bottom-right-radius: var(--radius-md); padding-left: 8px; padding-right: 8px; border-left: 1px solid oklch(from var(--accent-team-on) l c h / 0.2); }
+
+</style>
+</head>
+<body>
+<div class="scene scene--desktop" style="padding: 0;">
+  <a class="back-link" href="index.html">← index</a>
+  <div class="theme-toggle" role="group" aria-label="Tema">
+    <button data-theme-set="light" aria-pressed="false">Light</button>
+    <button data-theme-set="dark"  aria-pressed="true">Dark</button>
+  </div>
+
+  <div class="renderer-window window">
+    <div class="titlebar">
+      <div class="traffic"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+      <div class="title">Compila — Riassunto bug report → JIRA</div>
+      <div class="spacer"></div>
+      <span class="tag tag--private">privato</span>
+      <button class="btn btn--ghost btn--sm">Apri editor <kbd>E</kbd></button>
+    </div>
+
+    <div class="rwbody">
+
+      <!-- LEFT: form -->
+      <section class="form-col">
+        <div class="form-col__head">
+          <h1>Compila i segnaposti</h1>
+          <div class="row" style="justify-content: space-between;">
+            <span class="muted mono" style="font-size: var(--fs-xs);">3 di 4 compilati</span>
+            <span class="muted mono" style="font-size: var(--fs-xs);">Tab per avanzare</span>
+          </div>
+          <div class="progress" aria-label="Progresso">
+            <span class="done"></span><span class="done"></span><span class="done"></span><span class="curr"></span>
+          </div>
+        </div>
+
+        <div class="form-col__body">
+          <div class="field-row">
+            <span class="pname"><code>{{ruolo}}</code><span class="muted">testo</span></span>
+            <input class="input" value="QA Engineer Senior" />
+            <span class="hint">Default: QA Engineer</span>
+          </div>
+
+          <div class="field-row">
+            <span class="pname"><code>{{prodotto}}</code><span class="muted">enum</span></span>
+            <select class="select">
+              <option>PromptVault Desktop</option>
+              <option>PromptVault Mobile</option>
+              <option>API server</option>
+              <option>Sync server</option>
+            </select>
+          </div>
+
+          <div class="field-row">
+            <span class="pname"><code>{{severita}}</code><span class="muted">enum</span></span>
+            <select class="select">
+              <option>P1 · critica</option>
+              <option selected>P2 · alta</option>
+              <option>P3 · media</option>
+              <option>P4 · bassa</option>
+            </select>
+          </div>
+
+          <div class="field-row" data-active="true">
+            <span class="pname"><code>{{log_excerpt}}</code><span class="muted">multilinea</span><span class="req">obbligatorio</span></span>
+            <textarea class="textarea" autofocus placeholder="Incolla l'estratto del log…">[2026-04-29 14:02:11] ERROR sync: timeout dopo 30s
+[2026-04-29 14:02:11] WARN  retry attempt 3/3
+[2026-04-29 14:02:12] FATAL connection refused 127.0.0.1:8443</textarea>
+            <span class="hint">Cmd+Enter per copiare il prompt finale.</span>
+          </div>
+        </div>
+
+        <div class="form-col__footer">
+          <button class="btn btn--ghost btn--sm">Reset <kbd>⌘</kbd><kbd>R</kbd></button>
+          <span class="muted mono" style="font-size: var(--fs-xs);">~847 token stimati</span>
+        </div>
+      </section>
+
+      <!-- RIGHT: preview -->
+      <section class="preview-col">
+        <div class="preview-col__head">
+          <span class="eyebrow">Anteprima live</span>
+          <div class="spacer"></div>
+          <div class="toggle" role="group">
+            <button aria-pressed="true">Markdown</button>
+            <button>Plain</button>
+            <button>JSON</button>
+          </div>
+        </div>
+
+        <div class="preview-out">Sei un Senior <span class="filled">QA Engineer Senior</span> e devi trasformare un bug report grezzo in un ticket Jira ben strutturato.
+
+Prodotto: <span class="filled">PromptVault Desktop</span>
+Severità: <span class="filled">P2 · alta</span>
+
+Estratto log:
+<span class="filled">[2026-04-29 14:02:11] ERROR sync: timeout dopo 30s
+[2026-04-29 14:02:11] WARN  retry attempt 3/3
+[2026-04-29 14:02:12] FATAL connection refused 127.0.0.1:8443</span>
+
+Restituisci una risposta in markdown con:
+- Summary (1 riga)
+- Steps to reproduce
+- Expected vs Actual
+- Severity giustificata
+- Suggested labels</div>
+
+        <div class="preview-col__footer">
+          <div class="stats">
+            <span><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--success);"></span> Pronto</span>
+            <span>847 token · 2.4 KB</span>
+          </div>
+          <div class="row-tight">
+            <button class="btn btn--ghost btn--sm" data-tip="Salva come nuovo prompt">Salva variante</button>
+            <button class="btn btn--lg btn--primary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+              Copia
+              <kbd>⌘</kbd><kbd>↵</kbd>
+            </button>
+            <div class="send-to">
+              <button class="btn btn--lg" data-tip="Fase 2 — invia a Claude">→ Claude</button>
+              <button class="btn btn--lg btn--icon" data-tip="Altri">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+<script>
+  document.querySelectorAll('.theme-toggle [data-theme-set]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.documentElement.setAttribute('data-theme', btn.dataset.themeSet);
+      document.querySelectorAll('.theme-toggle [data-theme-set]').forEach(b => b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'));
+    });
+  });
+</script>
+</body>
+</html>

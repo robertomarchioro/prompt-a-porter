@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="it" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<title>PromptVault — Benvenuto</title>
+<link rel="stylesheet" href="tokens.css" />
+<link rel="stylesheet" href="app.css" />
+<style>
+  body { background: var(--bg-canvas); }
+  .ob {
+    width: min(720px, 96vw);
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .ob__progress { display: flex; padding: 0; height: 4px; background: var(--bg-surface); }
+  .ob__progress span { flex: 1; background: transparent; }
+  .ob__progress span.done { background: var(--accent-private); }
+  .ob__progress span.curr { background: var(--accent-private); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .ob__head { padding: var(--sp-6) var(--sp-7) 0; }
+  .step-num { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-subtle); letter-spacing: var(--tracking-wide); }
+  .ob__head h1 { margin: 4px 0 6px; font-size: var(--fs-2xl); font-weight: var(--fw-semibold); color: var(--text-strong); letter-spacing: var(--tracking-tight); }
+  .ob__head p  { margin: 0; color: var(--text-muted); max-width: 56ch; }
+  .ob__body { padding: var(--sp-5) var(--sp-7); display: flex; flex-direction: column; gap: var(--sp-4); min-height: 280px; }
+  .ob__footer { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-3) var(--sp-7); border-top: 1px solid var(--border-subtle); background: var(--bg-surface); }
+
+  .profile-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
+  .profile-card {
+    padding: var(--sp-5);
+    background: var(--bg-input);
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    display: flex; flex-direction: column; gap: var(--sp-2);
+    transition: border-color var(--motion-fast), background var(--motion-fast);
+  }
+  .profile-card:hover { border-color: var(--border-strong); }
+  .profile-card[aria-pressed="true"] { border-color: var(--accent-private); background: var(--accent-private-soft); }
+  .profile-card[data-vis="team"][aria-pressed="true"] { border-color: var(--accent-team); background: var(--accent-team-soft); }
+  .profile-card .ico {
+    width: 36px; height: 36px; border-radius: var(--radius-md);
+    background: var(--bg-overlay); color: var(--text-muted);
+    display: grid; place-items: center;
+  }
+  .profile-card[data-vis="private"][aria-pressed="true"] .ico { background: var(--accent-private); color: var(--accent-private-on); }
+  .profile-card[data-vis="team"][aria-pressed="true"] .ico { background: var(--accent-team); color: var(--accent-team-on); }
+  .profile-card strong { font-size: var(--fs-base); color: var(--text-strong); font-weight: var(--fw-semibold); }
+  .profile-card span { font-size: var(--fs-xs); color: var(--text-muted); }
+  .profile-card ul { margin: var(--sp-2) 0 0; padding-left: 16px; color: var(--text-muted); font-size: var(--fs-xs); line-height: var(--lh-loose); }
+
+  .strength {
+    display: flex; gap: 4px; height: 4px; margin-top: 6px;
+  }
+  .strength span { flex: 1; background: var(--border-default); border-radius: 999px; }
+  .strength[data-level="1"] span:nth-child(-n+1) { background: var(--danger); }
+  .strength[data-level="2"] span:nth-child(-n+2) { background: var(--warning); }
+  .strength[data-level="3"] span:nth-child(-n+3) { background: var(--success); }
+  .strength[data-level="4"] span { background: var(--success); }
+  .strength-label { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-subtle); margin-top: 4px; display: block; }
+</style>
+</head>
+<body>
+<div class="scene">
+  <a class="back-link" href="index.html">← index</a>
+  <div class="theme-toggle"><button data-theme-set="light">Light</button><button data-theme-set="dark" aria-pressed="true">Dark</button></div>
+
+  <div class="ob" id="ob">
+    <div class="ob__progress"><span class="curr"></span><span></span><span></span></div>
+
+    <div class="ob__head">
+      <span class="step-num">PASSO 1 DI 3</span>
+      <h1>Benvenuto in PromptVault</h1>
+      <p>Una libreria locale per i prompt che usi ogni giorno. Scegli come vuoi iniziare — potrai cambiare in qualsiasi momento.</p>
+    </div>
+
+    <div class="ob__body">
+      <div class="profile-row">
+        <button class="profile-card" data-vis="private" aria-pressed="true">
+          <span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+          <strong>Personale</strong>
+          <span>Vault locale, zero configurazione.</span>
+          <ul>
+            <li>I prompt vivono solo sul tuo Mac</li>
+            <li>Nessun account, nessun server</li>
+            <li>Cifratura locale opzionale</li>
+          </ul>
+        </button>
+        <button class="profile-card" data-vis="team" aria-pressed="false">
+          <span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg></span>
+          <strong>Team</strong>
+          <span>Sync con il server del tuo workspace.</span>
+          <ul>
+            <li>Condividi prompt con ruoli e permessi</li>
+            <li>I prompt privati restano locali</li>
+            <li>Server self-hosted o gestito</li>
+          </ul>
+        </button>
+      </div>
+    </div>
+
+    <div class="ob__footer">
+      <button class="btn btn--ghost btn--sm">Salta tour</button>
+      <div class="row-tight">
+        <span class="muted mono" style="font-size: var(--fs-xs);">⏎ continua</span>
+        <button class="btn btn--primary">Continua →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step preview switcher (per la review) -->
+  <div class="variant-switcher" style="position: fixed; bottom: var(--sp-4); left: 50%; transform: translateX(-50%); z-index: var(--z-toast); display: flex; gap: 2px; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-md); padding: 4px; box-shadow: var(--shadow-md);">
+    <span style="padding: 8px 8px 8px 12px; color: var(--text-subtle); font-family: var(--font-mono); font-size: var(--fs-xs);">Step</span>
+    <button data-step="1" aria-pressed="true" style="appearance:none; border:0; background: var(--bg-overlay); color: var(--text-strong); font-family: var(--font-mono); font-size: var(--fs-xs); padding: 8px 14px; border-radius: 6px; cursor: pointer;">1 · Profilo</button>
+    <button data-step="2" style="appearance:none; border:0; background: transparent; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); padding: 8px 14px; border-radius: 6px; cursor: pointer;">2 · Password</button>
+    <button data-step="3" style="appearance:none; border:0; background: transparent; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); padding: 8px 14px; border-radius: 6px; cursor: pointer;">3 · Hotkey</button>
+  </div>
+</div>
+
+<template id="step-2">
+  <div class="ob__progress"><span class="done"></span><span class="curr"></span><span></span></div>
+  <div class="ob__head">
+    <span class="step-num">PASSO 2 DI 3</span>
+    <h1>Cifra il tuo vault</h1>
+    <p>I tuoi prompt privati saranno cifrati con AES-256. La password non viene mai trasmessa né recuperabile — annotala in un password manager.</p>
+  </div>
+  <div class="ob__body">
+    <div class="field"><label class="field-label">Password</label><input class="input" type="password" value="••••••••••••••" /></div>
+    <div>
+      <div class="strength" data-level="3"><span></span><span></span><span></span><span></span></div>
+      <span class="strength-label">Forza: <strong style="color: var(--success);">buona</strong> · ~58 bit di entropia</span>
+    </div>
+    <div class="field"><label class="field-label">Conferma password</label><input class="input" type="password" value="••••••••••••••" /></div>
+    <label style="display: flex; align-items: center; gap: var(--sp-2); color: var(--text-muted); font-size: var(--fs-xs);"><input type="checkbox" /> Salta cifratura — il vault sarà in chiaro sul disco. <span style="color: var(--warning);">Sconsigliato.</span></label>
+  </div>
+  <div class="ob__footer">
+    <button class="btn btn--ghost btn--sm">← Indietro</button>
+    <button class="btn btn--primary">Continua →</button>
+  </div>
+</template>
+
+<template id="step-3">
+  <div class="ob__progress"><span class="done"></span><span class="done"></span><span class="curr"></span></div>
+  <div class="ob__head">
+    <span class="step-num">PASSO 3 DI 3</span>
+    <h1>Imposta la tua hotkey globale</h1>
+    <p>La scorciatoia per evocare il Command Palette da qualunque app. Premi una combinazione per registrarla.</p>
+  </div>
+  <div class="ob__body">
+    <div style="display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); padding: var(--sp-6) 0;">
+      <span class="hotkey-input" style="display: inline-flex; gap: 4px; align-items: center; padding: 12px 20px; background: var(--bg-input); border: 2px solid var(--accent-team); box-shadow: 0 0 0 4px var(--accent-team-soft); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: var(--fs-xl); color: var(--text-strong);">
+        <kbd style="height: 28px; font-size: var(--fs-base);">⌃</kbd>+<kbd style="height: 28px; font-size: var(--fs-base);">⇧</kbd>+<kbd style="height: 28px; font-size: var(--fs-base);">P</kbd>
+      </span>
+      <span class="muted" style="font-size: var(--fs-xs); font-family: var(--font-mono);">Premi Esc per resettare · Default: Ctrl+Shift+P</span>
+    </div>
+    <div style="background: var(--accent-private-soft); border-radius: var(--radius-md); padding: var(--sp-4); display: flex; gap: var(--sp-3); align-items: flex-start;">
+      <span style="color: var(--accent-private); flex-shrink: 0; margin-top: 2px;">★</span>
+      <div>
+        <strong style="display:block; color: var(--accent-private); font-size: var(--fs-sm); margin-bottom: 2px;">Crea un primo prompt di esempio</strong>
+        <span style="color: var(--text-muted); font-size: var(--fs-xs);">Aggiungiamo "Riassunto bug report" alla tua libreria — puoi cancellarlo subito se vuoi.</span>
+      </div>
+      <span class="switch" role="switch" aria-checked="true" data-private style="flex-shrink: 0;"></span>
+    </div>
+  </div>
+  <div class="ob__footer">
+    <button class="btn btn--ghost btn--sm">← Indietro</button>
+    <button class="btn btn--primary btn--lg">Inizia ad usare PromptVault</button>
+  </div>
+</template>
+
+<script>
+  document.querySelectorAll('.theme-toggle button').forEach(b => b.addEventListener('click', () => {
+    document.documentElement.setAttribute('data-theme', b.dataset.themeSet);
+    document.querySelectorAll('.theme-toggle button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+  }));
+  // Profile selection
+  document.querySelectorAll('.profile-card').forEach(c => c.addEventListener('click', () => {
+    document.querySelectorAll('.profile-card').forEach(x => x.setAttribute('aria-pressed', 'false'));
+    c.setAttribute('aria-pressed', 'true');
+  }));
+  // Step switcher
+  const ob = document.getElementById('ob');
+  const original = ob.innerHTML;
+  document.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('[data-step]').forEach(x => {
+      x.style.background = 'transparent'; x.style.color = 'var(--text-muted)';
+      x.setAttribute('aria-pressed', 'false');
+    });
+    b.style.background = 'var(--bg-overlay)'; b.style.color = 'var(--text-strong)';
+    b.setAttribute('aria-pressed', 'true');
+    if (b.dataset.step === '1') { ob.innerHTML = original; }
+    else { ob.innerHTML = document.getElementById('step-' + b.dataset.step).innerHTML; }
+  }));
+</script>
+</body>
+</html>
