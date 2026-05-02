@@ -1,4 +1,5 @@
 mod errore;
+mod libreria;
 mod migrazione;
 mod preferenze;
 mod prompt;
@@ -208,6 +209,11 @@ pub fn run() {
             preferenze::preferenze_carica,
             preferenze::preferenze_salva,
             prompt::prompt_cerca,
+            libreria::libreria_conteggi,
+            libreria::libreria_lista,
+            libreria::libreria_dettaglio,
+            libreria::libreria_toggle_preferito,
+            libreria::libreria_tag_lista,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())
