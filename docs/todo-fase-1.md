@@ -9,11 +9,15 @@
 - [x] Setup GitHub Actions baseline (lint check)
 
 ## Step 1 — Setup client Tauri + Svelte
-- [ ] `pnpm create tauri-app` con template Svelte + TypeScript
-- [ ] Aggiungi dipendenze: CodeMirror 6, Lucide Svelte, vitest
-- [ ] Importa `tokens.css` in entry point
-- [ ] Verifica build su Win, macOS, Linux
-- [ ] Setup `tauri.conf.json` per: tray icon, global shortcut, multiple windows
+- [x] Scaffolding manuale Tauri 2 + Svelte 5 + TypeScript (più preciso di create-tauri-app)
+- [x] Aggiungi dipendenze: CodeMirror 6, Lucide Svelte, vitest
+- [x] Importa `tokens.css` in entry point (index.html + src/styles/)
+- [ ] Verifica build su Win, macOS, Linux ⚠️ richiede `pnpm install` + toolchain locale
+- [x] Setup `tauri.conf.json` per: tray icon, global shortcut, multiple windows (libreria + palette)
+- [x] Struttura directory Svelte: components, superfici, stores, lib_template, lib_vault, lib_sync, i18n
+- [x] File i18n: it.json + en.json con tutte le stringhe delle 8 superfici
+- [x] Rust: Cargo.toml, lib.rs con tray + menu contestuale, capabilities ACL
+- [ ] Genera icone app con `pnpm tauri icon` ⚠️ richiede PNG sorgente 1024×1024
 
 ## Step 2 — Setup vault SQLite + SQLCipher
 - [ ] Integra SQLCipher (tauri-plugin-sql o rusqlite bundled-sqlcipher)

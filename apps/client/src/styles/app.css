@@ -1,0 +1,84 @@
+/* =========================================================================
+   Prompt a Porter — Stili globali dell'app
+   Importato dopo tokens.css, usa esclusivamente CSS custom properties.
+   ========================================================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  color: var(--text-default);
+  background: var(--bg-canvas);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Testo selezionabile solo dove serve */
+[data-selectable],
+pre,
+code,
+textarea,
+input,
+.selectable {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Focus globale — usa il ring dal design system */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Scrollbar sottile per dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-default);
+}
+
+/* Mono ovunque conti il parsing */
+code,
+pre,
+kbd,
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* Link base */
+a {
+  color: var(--accent-team);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--accent-team-strong);
+}

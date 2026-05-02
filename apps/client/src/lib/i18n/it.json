@@ -1,0 +1,123 @@
+{
+  "app": {
+    "nome": "Prompt a Porter",
+    "sottotitolo": "Libreria locale per prompt AI",
+    "versione": "0.1.0"
+  },
+  "palette": {
+    "placeholder": "Cerca prompt, tag o azione…",
+    "recenti": "Recenti",
+    "risultati": "Risultati",
+    "azioni": "Azioni",
+    "nessun_risultato": "Nessun risultato",
+    "compila_e_copia": "Compila e copia"
+  },
+  "libreria": {
+    "titolo": "Libreria",
+    "recenti": "Recenti",
+    "preferiti": "Preferiti",
+    "tutti": "Tutti i prompt",
+    "privati": "Privati",
+    "team": "Team",
+    "tag": "Tag",
+    "cerca": "Cerca…",
+    "nessun_prompt": "Nessun prompt ancora",
+    "crea_primo": "Crea il tuo primo prompt"
+  },
+  "editor": {
+    "titolo_placeholder": "Titolo del prompt",
+    "descrizione_placeholder": "Descrizione breve (opzionale)",
+    "body_placeholder": "Scrivi il tuo prompt qui…\nUsa {{segnaposto}} per i parametri",
+    "segnaposti": "Segnaposti",
+    "nome": "Nome",
+    "tipo": "Tipo",
+    "default": "Default",
+    "obbligatorio": "Obbl.",
+    "anteprima": "Anteprima",
+    "salva": "Salva",
+    "annulla": "Annulla",
+    "salvato": "Salvato",
+    "modifiche_non_salvate": "Modifiche non salvate",
+    "privato": "Privato",
+    "workspace": "Workspace"
+  },
+  "renderer": {
+    "titolo": "Compila prompt",
+    "compilati": "{n} di {total} compilati",
+    "copia": "Copia",
+    "copiato": "Copiato!",
+    "formato_markdown": "Markdown",
+    "formato_plain": "Testo",
+    "formato_json": "JSON",
+    "token_stima": "~{count} token"
+  },
+  "impostazioni": {
+    "titolo": "Impostazioni",
+    "account": "Account",
+    "sync": "Sincronizzazione",
+    "hotkey": "Scorciatoie",
+    "aspetto": "Aspetto",
+    "vault": "Vault",
+    "lingua": "Lingua",
+    "info": "Informazioni",
+    "tema": "Tema",
+    "tema_auto": "Automatico",
+    "tema_chiaro": "Chiaro",
+    "tema_scuro": "Scuro",
+    "tono": "Tono",
+    "tono_zinc": "Zinc (neutro)",
+    "tono_slate": "Slate (freddo)",
+    "tono_stone": "Stone (caldo)",
+    "vault_path": "Percorso vault",
+    "vault_mostra": "Mostra nel file manager",
+    "vault_cambia_password": "Cambia password",
+    "vault_esporta": "Esporta",
+    "vault_importa": "Importa",
+    "vault_elimina": "Elimina vault",
+    "vault_elimina_conferma": "Questa azione è irreversibile. Tutti i prompt verranno eliminati."
+  },
+  "onboarding": {
+    "benvenuto": "Benvenuto in Prompt a Porter",
+    "step_profilo": "Scegli il tuo profilo",
+    "profilo_personale": "Personale",
+    "profilo_personale_desc": "Solo per te. Vault locale, nessun server.",
+    "profilo_team": "Team",
+    "profilo_team_desc": "Condividi prompt con il tuo team via server sync.",
+    "step_password": "Proteggi il tuo vault",
+    "password_placeholder": "Password del vault",
+    "password_conferma": "Conferma password",
+    "step_hotkey": "Scorciatoia globale",
+    "hotkey_desc": "Premi questa combinazione per aprire la palette da qualsiasi app",
+    "completato": "Tutto pronto!",
+    "inizia": "Inizia"
+  },
+  "auth": {
+    "login": "Accedi",
+    "email": "Email",
+    "password": "Password",
+    "accedi": "Accedi",
+    "password_dimenticata": "Password dimenticata?",
+    "server_url": "URL del server"
+  },
+  "tray": {
+    "apri_palette": "Apri palette",
+    "nuovo_prompt": "Nuovo prompt",
+    "mostra_libreria": "Mostra libreria",
+    "sync_ora": "Sincronizza ora",
+    "impostazioni": "Impostazioni",
+    "esci": "Esci"
+  },
+  "comune": {
+    "salva": "Salva",
+    "annulla": "Annulla",
+    "elimina": "Elimina",
+    "conferma": "Conferma",
+    "avanti": "Avanti",
+    "indietro": "Indietro",
+    "chiudi": "Chiudi",
+    "cerca": "Cerca",
+    "caricamento": "Caricamento…",
+    "errore": "Errore",
+    "successo": "Operazione completata"
+  }
+}
