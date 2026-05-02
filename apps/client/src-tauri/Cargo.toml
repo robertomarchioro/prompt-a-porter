@@ -17,10 +17,15 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-global-shortcut = "2"
-tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
+rusqlite = { version = "0.32", features = ["bundled-sqlcipher"] }
+argon2 = "0.5"
+rand = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
 
 [profile.release]
 panic = "abort"

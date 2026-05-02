@@ -12,11 +12,6 @@
     "core:window:allow-center",
     "global-shortcut:default",
     "global-shortcut:allow-register",
-    "global-shortcut:allow-unregister",
-    "sql:default",
-    "sql:allow-load",
-    "sql:allow-execute",
-    "sql:allow-select",
-    "sql:allow-close"
+    "global-shortcut:allow-unregister"
   ]
 }
