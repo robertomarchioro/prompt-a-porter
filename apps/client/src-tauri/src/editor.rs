@@ -79,7 +79,7 @@ fn sincronizza_tags(
 }
 
 pub(crate) fn ricostruisci_fts(conn: &Connection) -> Result<(), PapErrore> {
-    conn.execute_batch("INSERT INTO PromptsFts(PromptsFts) VALUES('delete-all')")?;
+    conn.execute_batch("DELETE FROM PromptsFts")?;
     conn.execute_batch(
         "INSERT INTO PromptsFts(PromptId, Title, Description, Body, Tags)
          SELECT p.Id, p.Title, COALESCE(p.Description, ''), p.Body,
