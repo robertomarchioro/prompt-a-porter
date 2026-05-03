@@ -59,7 +59,7 @@ prompt-a-porter/
 ### Quick start
 
 ```bash
-git clone https://github.com/<org>/prompt-a-porter.git
+git clone https://github.com/robertomarchioro/prompt-a-porter.git
 cd prompt-a-porter
 pnpm install
 pnpm --filter @pap/client dev
