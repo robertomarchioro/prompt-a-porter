@@ -82,3 +82,95 @@ pub fn prompt_cerca(
         Ok(risultati)
     })
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn sanitizza_stringa_vuota() {
+        assert_eq!(sanitizza_fts(""), "");
+    }
+
+    #[test]
+    fn sanitizza_spazi() {
+        assert_eq!(sanitizza_fts("   "), "");
+    }
+
+    #[test]
+    fn sanitizza_parola_singola() {
+        assert_eq!(sanitizza_fts("hello"), "hello*");
+    }
+
+    #[test]
+    fn sanitizza_parole_multiple() {
+        assert_eq!(sanitizza_fts("hello world"), "hello* world*");
+    }
+
+    #[test]
+    fn sanitizza_caratteri_speciali() {
+        assert_eq!(sanitizza_fts("hello! @world#"), "hello* world*");
+    }
+
+    #[test]
+    fn sanitizza_solo_speciali() {
+        assert_eq!(sanitizza_fts("@#$%"), "");
+    }
+
+    #[test]
+    fn sanitizza_underscore_preservato() {
+        assert_eq!(sanitizza_fts("hello_world"), "hello_world*");
+    }
+
+    #[test]
+    fn cerca_su_db_vuoto() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        crate::migrazione::esegui_migrazioni(&conn).unwrap();
+        crate::libreria::assicura_dati_base(&conn).unwrap();
+        crate::editor::ricostruisci_fts(&conn).unwrap();
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT Id, Title, Description, Body, Visibility, IsFavorite, UseCount
+                 FROM Prompts WHERE DeletedAt IS NULL ORDER BY UpdatedAt DESC LIMIT 20",
+            )
+            .unwrap();
+        let risultati: Vec<PromptRisultato> = stmt
+            .query_map([], riga_a_prompt)
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        assert_eq!(risultati.len(), 0);
+    }
+
+    #[test]
+    fn cerca_fts_trova_prompt() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        crate::migrazione::esegui_migrazioni(&conn).unwrap();
+        crate::libreria::assicura_dati_base(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version, CreatedAt, UpdatedAt)
+             VALUES ('prm-1', 'ws-personale', 'usr-locale', 'Email marketing', 'Scrivi una email', 'private', 1, datetime('now'), datetime('now'))",
+            [],
+        ).unwrap();
+        crate::editor::ricostruisci_fts(&conn).unwrap();
+
+        let fts = sanitizza_fts("email");
+        let mut stmt = conn
+            .prepare(
+                "SELECT f.PromptId, p.Title, p.Description, p.Body,
+                        p.Visibility, p.IsFavorite, p.UseCount
+                 FROM PromptsFts f JOIN Prompts p ON f.PromptId = p.Id
+                 WHERE PromptsFts MATCH ?1 AND p.DeletedAt IS NULL LIMIT 20",
+            )
+            .unwrap();
+        let risultati: Vec<PromptRisultato> = stmt
+            .query_map([&fts], riga_a_prompt)
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        assert_eq!(risultati.len(), 1);
+        assert_eq!(risultati[0].titolo, "Email marketing");
+    }
+}

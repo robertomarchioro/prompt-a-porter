@@ -257,3 +257,172 @@ pub fn libreria_tag_lista(state: State<'_, VaultState>) -> Result<Vec<TagInfo>, 
         Ok(tags)
     })
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn db_test() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::migrazione::esegui_migrazioni(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn assicura_dati_base_crea_workspace_e_utente() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+
+        let ws: i64 =
+            conn.query_row("SELECT COUNT(*) FROM Workspaces", [], |r| r.get(0)).unwrap();
+        let usr: i64 = conn.query_row("SELECT COUNT(*) FROM Users", [], |r| r.get(0)).unwrap();
+        assert_eq!(ws, 1);
+        assert_eq!(usr, 1);
+    }
+
+    #[test]
+    fn assicura_dati_base_idempotente() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        assicura_dati_base(&conn).unwrap();
+
+        let ws: i64 =
+            conn.query_row("SELECT COUNT(*) FROM Workspaces", [], |r| r.get(0)).unwrap();
+        assert_eq!(ws, 1);
+    }
+
+    #[test]
+    fn conteggi_vuoti() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Prompts WHERE DeletedAt IS NULL",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn carica_tags_vuoto() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+
+        let tags = carica_tags(&conn, "prm-inesistente").unwrap();
+        assert!(tags.is_empty());
+    }
+
+    #[test]
+    fn carica_tags_con_associazione() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version,
+             CreatedAt, UpdatedAt)
+             VALUES ('prm-1', 'ws-personale', 'usr-locale', 'Test', 'b', 'private', 1,
+             datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO Tags (Id, WorkspaceId, Name, CreatedAt, UpdatedAt)
+             VALUES ('tag-1', 'ws-personale', 'rust', datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO PromptTags (PromptId, TagId) VALUES ('prm-1', 'tag-1')",
+            [],
+        )
+        .unwrap();
+
+        let tags = carica_tags(&conn, "prm-1").unwrap();
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].nome, "rust");
+    }
+
+    #[test]
+    fn toggle_preferito() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version,
+             IsFavorite, CreatedAt, UpdatedAt)
+             VALUES ('prm-1', 'ws-personale', 'usr-locale', 'Test', 'b', 'private', 1, 0,
+             datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let fav: i64 = conn
+            .query_row(
+                "SELECT IsFavorite FROM Prompts WHERE Id = 'prm-1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(fav, 0);
+
+        conn.execute(
+            "UPDATE Prompts SET IsFavorite = 1 WHERE Id = 'prm-1'",
+            [],
+        )
+        .unwrap();
+        let fav: i64 = conn
+            .query_row(
+                "SELECT IsFavorite FROM Prompts WHERE Id = 'prm-1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(fav, 1);
+
+        conn.execute(
+            "UPDATE Prompts SET IsFavorite = 0 WHERE Id = 'prm-1'",
+            [],
+        )
+        .unwrap();
+        let fav: i64 = conn
+            .query_row(
+                "SELECT IsFavorite FROM Prompts WHERE Id = 'prm-1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(fav, 0);
+    }
+
+    #[test]
+    fn lista_filtra_eliminati() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version,
+             CreatedAt, UpdatedAt)
+             VALUES ('prm-att', 'ws-personale', 'usr-locale', 'Attivo', 'b', 'private', 1,
+             datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version,
+             CreatedAt, UpdatedAt, DeletedAt)
+             VALUES ('prm-del', 'ws-personale', 'usr-locale', 'Eliminato', 'b', 'private', 1,
+             datetime('now'), datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Prompts WHERE DeletedAt IS NULL",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+}
