@@ -4,6 +4,7 @@
   import { estraiSegnaposti } from "$lib/template";
   import CompilatorePrompt from "./CompilatorePrompt.svelte";
   import EditorPrompt from "./EditorPrompt.svelte";
+  import Impostazioni from "./Impostazioni.svelte";
 
   interface PromptCard {
     id: string;
@@ -68,6 +69,7 @@
   let promptPerEditor = $state<PromptDettaglio | null>(null);
   let mostraCompilatore = $state(false);
   let compilatoreKey = $state(0);
+  let mostraImpostazioni = $state(false);
 
   const titoloVista = $derived(
     vistaCorrente === "recenti"
@@ -142,8 +144,14 @@
 
   async function caricaDati() {
     try {
-      const prefs = await invoke<{ hotkey: string }>("preferenze_carica");
+      const prefs = await invoke<{
+        hotkey: string;
+        tema: string;
+        tono: string;
+      }>("preferenze_carica");
       hotkeyCombo = prefs.hotkey;
+      document.documentElement.setAttribute("data-theme", prefs.tema);
+      document.documentElement.setAttribute("data-tone", prefs.tono);
     } catch {
       /* preferenze non ancora salvate */
     }
@@ -435,7 +443,7 @@
       <div class="sb-spacer"></div>
 
       <div class="sb-gruppo">
-        <NavItem>
+        <NavItem onclick={() => (mostraImpostazioni = true)}>
           {#snippet icona()}
             <svg
               width="16"
@@ -726,6 +734,15 @@
           }}
         />
       {/key}
+    {/if}
+
+    {#if mostraImpostazioni}
+      <Impostazioni
+        onchiudi={() => {
+          mostraImpostazioni = false;
+          caricaDati();
+        }}
+      />
     {/if}
   </div>
 {/if}
