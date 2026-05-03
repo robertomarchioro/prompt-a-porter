@@ -7,22 +7,20 @@ on:
       - "apps/client/**"
       - "packages/**"
       - "pnpm-workspace.yaml"
-    paths-ignore:
-      - "apps/client/**/*.md"
-      - "apps/client/**/CHANGELOG.md"
-      - "apps/client/**/LICENSE"
-      - "packages/**/*.md"
+      - "!apps/client/**/*.md"
+      - "!apps/client/**/CHANGELOG.md"
+      - "!apps/client/**/LICENSE"
+      - "!packages/**/*.md"
   pull_request:
     branches: [main]
     paths:
       - "apps/client/**"
       - "packages/**"
       - "pnpm-workspace.yaml"
-    paths-ignore:
-      - "apps/client/**/*.md"
-      - "apps/client/**/CHANGELOG.md"
-      - "apps/client/**/LICENSE"
-      - "packages/**/*.md"
+      - "!apps/client/**/*.md"
+      - "!apps/client/**/CHANGELOG.md"
+      - "!apps/client/**/LICENSE"
+      - "!packages/**/*.md"
 
 jobs:
   lint-and-test:
