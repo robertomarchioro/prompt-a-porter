@@ -1,0 +1,58 @@
+name: Feature request
+description: Proponi una nuova funzionalità o miglioramento
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Grazie per la proposta. Aiutaci a capire il valore della feature spiegando il problema, la soluzione e le alternative considerate.
+        Per discussioni più ampie sulla roadmap usa [Discussions](https://github.com/robertomarchioro/prompt-a-porter/discussions).
+
+  - type: textarea
+    id: problema
+    attributes:
+      label: Quale problema risolve?
+      description: Descrivi il problema o l'opportunità che la feature affronta. Senza un problema chiaro è difficile valutare la soluzione.
+    validations:
+      required: true
+
+  - type: textarea
+    id: soluzione
+    attributes:
+      label: Soluzione proposta
+      description: Come immagini la feature funzionante? UI, API, comportamento, esempi.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternative
+    attributes:
+      label: Alternative considerate
+      description: Hai pensato ad altri approcci? Perché non vanno bene? (Anche "nessuna alternativa considerata" è una risposta valida.)
+
+  - type: textarea
+    id: contesto
+    attributes:
+      label: Contesto aggiuntivo
+      description: Schermate, link, esempi simili in altri tool, riferimenti a documenti.
+
+  - type: dropdown
+    id: target_phase
+    attributes:
+      label: A quale fase del progetto pensi sia adatta?
+      description: Vedi `docs/todo-fase-*.md` per la roadmap.
+      options:
+        - Non lo so
+        - Fase 2 (Foundations & Distribuzione)
+        - Fase 3 (Intelligenza & Authoring)
+        - Fase 4 (Workflow Avanzati & QA)
+        - Fase 5 (Ecosistema Enterprise)
+        - Fuori roadmap
+
+  - type: checkboxes
+    id: dichiarazioni
+    attributes:
+      label: Dichiarazioni
+      options:
+        - label: Ho cercato negli issue esistenti e questa proposta non è già stata fatta
+          required: true

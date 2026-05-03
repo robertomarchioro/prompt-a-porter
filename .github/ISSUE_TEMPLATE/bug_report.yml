@@ -1,0 +1,67 @@
+name: Bug report
+description: Segnala un bug riproducibile
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Grazie per la segnalazione. Compila i campi sotto per aiutarci a riprodurre e correggere.
+        Per domande generiche usa invece [Discussions](https://github.com/robertomarchioro/prompt-a-porter/discussions).
+
+  - type: textarea
+    id: descrizione
+    attributes:
+      label: Descrizione
+      description: Cosa è successo? Cosa ti aspettavi?
+    validations:
+      required: true
+
+  - type: textarea
+    id: riproduzione
+    attributes:
+      label: Passi per riprodurre
+      placeholder: |
+        1. Apri Prompt a Porter
+        2. Clicca su ...
+        3. Osserva ...
+    validations:
+      required: true
+
+  - type: input
+    id: versione
+    attributes:
+      label: Versione di Prompt a Porter
+      placeholder: v0.1.0-fase1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Sistema operativo
+      options:
+        - Windows 10
+        - Windows 11
+        - macOS Apple Silicon (arm64)
+        - macOS Intel (x64)
+        - Linux Debian/Ubuntu
+        - Linux Fedora/Arch
+        - Altro (specificare nella descrizione)
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log o screenshot rilevanti
+      description: Allegare log, screenshot o video se utile. Niente dati sensibili reali.
+
+  - type: checkboxes
+    id: dichiarazioni
+    attributes:
+      label: Dichiarazioni
+      options:
+        - label: Ho cercato negli issue esistenti e questo bug non è già stato segnalato
+          required: true
+        - label: Sto usando l'ultima versione disponibile o ho indicato la versione esatta sopra
+          required: true

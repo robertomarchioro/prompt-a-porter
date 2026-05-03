@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Domanda generica o discussione
+    url: https://github.com/robertomarchioro/prompt-a-porter/discussions
+    about: Per domande, idee, supporto generico, usa GitHub Discussions invece di aprire un issue.
+  - name: Vulnerabilità di sicurezza
+    url: https://github.com/robertomarchioro/prompt-a-porter/security/advisories/new
+    about: Per segnalare vulnerabilità usa il GitHub Security Advisory privato (vedi SECURITY.md).
