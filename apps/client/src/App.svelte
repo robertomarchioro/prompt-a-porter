@@ -18,8 +18,15 @@
 
   async function caricaPreferenze() {
     try {
-      const prefs = await invoke<Preferenze>("preferenze_carica");
-      onboardingCompletato = prefs.onboarding_completato;
+      const [prefs, vaultEsiste] = await Promise.all([
+        invoke<Preferenze>("preferenze_carica"),
+        invoke<boolean>("vault_esiste"),
+      ]);
+      // Se il vault esiste su disco, l'onboarding è già stato eseguito
+      // almeno una volta. vault_esiste serve da fallback robusto per i
+      // casi in cui preferenze.json non si è persistito (es. EDR che
+      // blocca la scrittura selettivamente). Vedi issue #4.
+      onboardingCompletato = prefs.onboarding_completato || vaultEsiste;
     } catch {
       onboardingCompletato = false;
     }
