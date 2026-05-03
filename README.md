@@ -65,6 +65,11 @@ pnpm install
 pnpm --filter @pap/client dev
 ```
 
+## Stato del progetto
+
+**Fase 1 (MVP) completata** — 15 step, 71 test (37 Rust + 22 TypeScript + 12 Go).
+Vedi [`CHANGELOG.md`](CHANGELOG.md) per i dettagli e [`docs/todo-fase-1.md`](docs/todo-fase-1.md) per la checklist.
+
 ## Licenza
 
 **GPL 2.0** con clausola di attribuzione all'autore originale.

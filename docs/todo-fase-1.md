@@ -1,6 +1,6 @@
 # Todo — Fase 1 (MVP)
 
-> Aggiornato al: 2026-05-03 (Step 13)
+> Aggiornato al: 2026-05-03 (Step 15 — Fase 1 completata)
 
 ## Step 0 — Bootstrap repo
 - [x] Inizializza repo con `LICENSE` GPL 2.0, `README.md`, `.gitignore`
@@ -159,6 +159,10 @@
 - [ ] Test accessibilità screen reader ⚠️ richiede tooling locale (axe-core, NVDA/VoiceOver)
 
 ## Step 15 — Documentazione
-- [ ] Aggiorna docs/
-- [ ] Genera changelog
-- [ ] Tag release v0.1.0-fase1
+- [x] Architettura completa con diagramma componenti, tabelle moduli e decisioni
+- [x] Setup sviluppo con prerequisiti, comandi, struttura directory e copertura test
+- [x] Setup repo GitHub con dettaglio CI jobs e dipendenze
+- [x] Deploy produzione con Docker, Docker Compose e variabili d'ambiente
+- [x] Prompt ricostruzione con lezioni apprese e gotcha
+- [x] CHANGELOG.md con tutti i 15 step
+- [ ] Tag release v0.1.0-fase1 ⚠️ da creare quando pronto per release
