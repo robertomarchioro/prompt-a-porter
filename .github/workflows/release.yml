@@ -75,6 +75,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: apps/client
+          tauriScript: pnpm tauri
           tagName: ${{ github.ref_name }}
           releaseName: "Prompt a Porter ${{ github.ref_name }}"
           releaseBody: |
