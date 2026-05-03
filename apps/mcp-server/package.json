@@ -1,0 +1,29 @@
+{
+  "name": "@pap/mcp-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Prompt a Porter — MCP server (Model Context Protocol) per esporre il vault prompt a Claude Desktop, Cursor e altri agenti AI",
+  "license": "AGPL-3.0-only",
+  "bin": {
+    "pap-mcp-server": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "lint": "tsc --noEmit",
+    "test": "echo \"No tests yet\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "better-sqlite3": "^11.5.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
