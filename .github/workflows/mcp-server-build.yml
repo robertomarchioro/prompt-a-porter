@@ -1,0 +1,46 @@
+name: MCP Server Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/mcp-server/**"
+      - "pnpm-workspace.yaml"
+      - "!apps/mcp-server/**/*.md"
+      - "!apps/mcp-server/**/CHANGELOG.md"
+      - "!apps/mcp-server/**/LICENSE"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/mcp-server/**"
+      - "pnpm-workspace.yaml"
+      - "!apps/mcp-server/**/*.md"
+      - "!apps/mcp-server/**/CHANGELOG.md"
+      - "!apps/mcp-server/**/LICENSE"
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Installa dipendenze
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check (lint)
+        run: pnpm --filter @pap/mcp-server lint
+
+      - name: Build TypeScript
+        run: pnpm --filter @pap/mcp-server build
+
+      - name: Verifica output
+        run: |
+          test -f apps/mcp-server/dist/index.js
+          echo "Build artifact OK"
