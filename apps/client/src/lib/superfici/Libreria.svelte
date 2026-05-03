@@ -2,9 +2,19 @@
   import { invoke } from "@tauri-apps/api/core";
   import { Button, EmptyState, NavItem, Tag } from "$lib/components";
   import { estraiSegnaposti } from "$lib/template";
+  import {
+    syncAvvia,
+    syncGetState,
+    syncOnChange,
+    type SyncState,
+    type SyncConfig,
+  } from "$lib/sync";
   import CompilatorePrompt from "./CompilatorePrompt.svelte";
   import EditorPrompt from "./EditorPrompt.svelte";
   import Impostazioni from "./Impostazioni.svelte";
+  import AuthLogin from "./AuthLogin.svelte";
+  import AuthResetPassword from "./AuthResetPassword.svelte";
+  import AuthRecuperaWorkspace from "./AuthRecuperaWorkspace.svelte";
 
   interface PromptCard {
     id: string;
@@ -70,6 +80,10 @@
   let mostraCompilatore = $state(false);
   let compilatoreKey = $state(0);
   let mostraImpostazioni = $state(false);
+  let mostraLogin = $state(false);
+  let mostraResetPassword = $state(false);
+  let mostraRecuperaWorkspace = $state(false);
+  let syncState = $state<SyncState>(syncGetState());
 
   const titoloVista = $derived(
     vistaCorrente === "recenti"
@@ -148,10 +162,30 @@
         hotkey: string;
         tema: string;
         tono: string;
+        sync_server_url: string;
+        sync_email: string;
+        sync_token: string;
+        sync_intervallo_sec: number;
+        sync_abilitato: boolean;
       }>("preferenze_carica");
       hotkeyCombo = prefs.hotkey;
       document.documentElement.setAttribute("data-theme", prefs.tema);
       document.documentElement.setAttribute("data-tone", prefs.tono);
+
+      if (prefs.sync_abilitato && prefs.sync_token) {
+        syncAvvia({
+          serverUrl: prefs.sync_server_url,
+          email: prefs.sync_email,
+          token: prefs.sync_token,
+          intervalloSec: prefs.sync_intervallo_sec,
+          abilitato: true,
+        });
+      }
+
+      syncOnChange(() => {
+        syncState = syncGetState();
+        caricaLista();
+      });
     } catch {
       /* preferenze non ancora salvate */
     }
@@ -702,8 +736,19 @@
     <!-- ── Status bar ── -->
     <footer class="statusbar">
       <div class="statusbar-lato">
-        <span class="dot dot-ok"></span>
-        <span>Locale</span>
+        {#if syncState.stato === "idle"}
+          <span class="dot dot-ok"></span>
+          <span>Sincronizzato</span>
+        {:else if syncState.stato === "syncing"}
+          <span class="dot dot-sync"></span>
+          <span>Sync…</span>
+        {:else if syncState.stato === "error"}
+          <span class="dot dot-err"></span>
+          <span>Errore sync</span>
+        {:else}
+          <span class="dot dot-ok"></span>
+          <span>Locale</span>
+        {/if}
       </div>
       <div class="statusbar-lato">
         <span>v0.1.0</span>
@@ -741,6 +786,48 @@
         onchiudi={() => {
           mostraImpostazioni = false;
           caricaDati();
+        }}
+        onapriLogin={() => {
+          mostraImpostazioni = false;
+          mostraLogin = true;
+        }}
+      />
+    {/if}
+
+    {#if mostraLogin}
+      <AuthLogin
+        onchiudi={() => (mostraLogin = false)}
+        onconnesso={() => {
+          mostraLogin = false;
+          caricaDati();
+        }}
+        onresetpassword={() => {
+          mostraLogin = false;
+          mostraResetPassword = true;
+        }}
+      />
+    {/if}
+
+    {#if mostraResetPassword}
+      <AuthResetPassword
+        onchiudi={() => (mostraResetPassword = false)}
+        ontornaLogin={() => {
+          mostraResetPassword = false;
+          mostraLogin = true;
+        }}
+      />
+    {/if}
+
+    {#if mostraRecuperaWorkspace}
+      <AuthRecuperaWorkspace
+        onchiudi={() => (mostraRecuperaWorkspace = false)}
+        ontornaLogin={() => {
+          mostraRecuperaWorkspace = false;
+          mostraLogin = true;
+        }}
+        onseleziona={() => {
+          mostraRecuperaWorkspace = false;
+          mostraLogin = true;
         }}
       />
     {/if}
@@ -1299,6 +1386,12 @@
   }
   .dot-ok {
     background: var(--success);
+  }
+  .dot-sync {
+    background: var(--warning);
+  }
+  .dot-err {
+    background: var(--danger);
   }
 
   .statusbar-kbd {

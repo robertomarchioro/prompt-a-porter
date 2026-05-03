@@ -97,7 +97,22 @@
     "password": "Password",
     "accedi": "Log in",
     "password_dimenticata": "Forgot password?",
-    "server_url": "Server URL"
+    "server_url": "Server URL",
+    "ricordami": "Remember me for 30 days",
+    "reset_titolo": "Reset password",
+    "reset_desc": "Enter your email to receive a reset link",
+    "reset_avviso": "Prompts encrypted with the old password will be lost",
+    "reset_invia": "Send reset link",
+    "reset_inviato": "Link sent! Check your email.",
+    "recupera_titolo": "Recover workspace",
+    "recupera_desc": "Enter your email to find associated workspaces",
+    "recupera_cerca": "Find workspaces",
+    "recupera_nessuno": "No workspaces found for this email",
+    "crea_workspace": "Create new workspace",
+    "connesso": "Connected",
+    "disconnetti": "Disconnect",
+    "connessione_riuscita": "Successfully connected to server",
+    "errore_connessione": "Unable to connect to server"
   },
   "tray": {
     "apri_palette": "Open palette",

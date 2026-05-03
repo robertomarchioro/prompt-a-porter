@@ -2,6 +2,13 @@
   import { invoke } from "@tauri-apps/api/core";
   import { Button, Toast } from "$lib/components";
   import HotkeyInput from "$lib/components/HotkeyInput.svelte";
+  import {
+    syncGetState,
+    syncOnChange,
+    syncOra,
+    syncLogout,
+    type SyncState,
+  } from "$lib/sync";
 
   interface Preferenze {
     profilo: string;
@@ -11,13 +18,19 @@
     lingua: string;
     onboarding_completato: boolean;
     crea_prompt_esempio: boolean;
+    sync_server_url: string;
+    sync_email: string;
+    sync_token: string;
+    sync_intervallo_sec: number;
+    sync_abilitato: boolean;
   }
 
   interface Props {
     onchiudi: () => void;
+    onapriLogin: () => void;
   }
 
-  let { onchiudi }: Props = $props();
+  let { onchiudi, onapriLogin }: Props = $props();
 
   type Sezione =
     | "account"
@@ -60,9 +73,13 @@
   let confermaElimina = $state(false);
   let toastVisibile = $state(false);
   let toastTesto = $state("");
+  let syncState = $state<SyncState>(syncGetState());
 
   $effect(() => {
     caricaDati();
+    syncOnChange(() => {
+      syncState = syncGetState();
+    });
   });
 
   async function caricaDati() {
@@ -232,31 +249,96 @@
             <p class="sez-desc">
               Condividi prompt con il team tramite server
             </p>
-            <div class="sez-placeholder">
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path
-                  d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
-                />
-                <path d="M3 3v5h5" />
-                <path
-                  d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"
-                />
-                <path d="M16 16h5v5" />
-              </svg>
-              <p>
-                La sincronizzazione sarà disponibile nella prossima
-                versione.
-              </p>
-            </div>
+
+            {#if prefs.sync_abilitato && prefs.sync_token}
+              <div class="sync-stato">
+                <div class="sync-stato-row">
+                  <span
+                    class="dot"
+                    class:dot-ok={syncState.stato === "idle"}
+                    class:dot-sync={syncState.stato === "syncing"}
+                    class:dot-err={syncState.stato === "error"}
+                  ></span>
+                  <span class="sync-stato-testo">
+                    {#if syncState.stato === "idle"}
+                      Connesso
+                    {:else if syncState.stato === "syncing"}
+                      Sincronizzazione…
+                    {:else if syncState.stato === "error"}
+                      Errore
+                    {:else}
+                      Offline
+                    {/if}
+                  </span>
+                </div>
+                {#if syncState.ultimoSync}
+                  <span class="sync-meta">
+                    Ultimo sync: {syncState.ultimoSync}
+                  </span>
+                {/if}
+                {#if syncState.errore}
+                  <p class="sez-errore">{syncState.errore}</p>
+                {/if}
+              </div>
+
+              <div class="sez-riga">
+                <label class="sez-label">Server</label>
+                <code class="sync-url">{prefs.sync_server_url}</code>
+              </div>
+              <div class="sez-riga">
+                <label class="sez-label">Account</label>
+                <span class="sez-valore">{prefs.sync_email}</span>
+              </div>
+
+              <div class="sync-btns">
+                <Button
+                  dimensione="sm"
+                  onclick={() => syncOra()}
+                >
+                  Sincronizza ora
+                </Button>
+                <Button
+                  variante="ghost"
+                  dimensione="sm"
+                  onclick={async () => {
+                    await syncLogout();
+                    await caricaDati();
+                    toast("Disconnesso dal server");
+                  }}
+                >
+                  Disconnetti
+                </Button>
+              </div>
+            {:else}
+              <div class="sync-non-connesso">
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+                  />
+                  <path d="M3 3v5h5" />
+                  <path
+                    d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"
+                  />
+                  <path d="M16 16h5v5" />
+                </svg>
+                <p>Non connesso a nessun server sync</p>
+                <Button
+                  dimensione="sm"
+                  onclick={onapriLogin}
+                >
+                  Connetti server
+                </Button>
+              </div>
+            {/if}
           </div>
         {:else if sezione === "hotkey"}
           <div class="sez">
@@ -781,9 +863,66 @@
     gap: var(--sp-2);
   }
 
-  /* ── Placeholder sync ── */
+  /* ── Sync ── */
 
-  .sez-placeholder {
+  .sync-stato {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    padding: var(--sp-3);
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+  }
+
+  .sync-stato-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-ok { background: var(--success); }
+  .dot-sync { background: var(--warning); }
+  .dot-err { background: var(--danger); }
+
+  .sync-stato-testo {
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    color: var(--text-strong);
+  }
+
+  .sync-meta {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+
+  .sync-url {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-default);
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 2px 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 260px;
+  }
+
+  .sync-btns {
+    display: flex;
+    gap: var(--sp-2);
+  }
+
+  .sync-non-connesso {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -793,7 +932,7 @@
     color: var(--text-subtle);
   }
 
-  .sez-placeholder p {
+  .sync-non-connesso p {
     margin: 0;
     font-size: var(--fs-sm);
     max-width: 30ch;

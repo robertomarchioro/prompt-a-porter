@@ -1,6 +1,6 @@
 # Todo — Fase 1 (MVP)
 
-> Aggiornato al: 2026-05-03 (Step 11)
+> Aggiornato al: 2026-05-03 (Step 12)
 
 ## Step 0 — Bootstrap repo
 - [x] Inizializza repo con `LICENSE` GPL 2.0, `README.md`, `.gitignore`
@@ -134,10 +134,14 @@
 - [ ] Test con `go test ./...` ⚠️ richiede toolchain Go locale
 
 ## Step 12 — Auth e Sync client
-- [ ] Schermate Login / Reset password / Recupera workspace
-- [ ] Store sync con stato
-- [ ] Polling sync + WS push
-- [ ] Conflict UI
+- [x] Schermate Login / Reset password / Recupera workspace (3 modali auth Svelte 5)
+- [x] Store sync con stato (lib/sync.ts: idle/syncing/error/offline, JWT, config persistente)
+- [x] Polling sync + WS push (timer periodico + WebSocket reconnect, sync_applica_delta Rust)
+- [x] Conflict UI (ConflittoSync.svelte con scelta locale/server per ogni entità)
+- [x] Preferenze estese con campi sync (serde default per backward compat)
+- [x] Sezione Sync in Impostazioni (stato live, server info, disconnetti)
+- [x] Status bar Libreria con stato sync (dot + label: Sincronizzato/Sync…/Errore/Locale)
+- [x] Stringhe i18n auth complete (it.json + en.json)
 
 ## Step 13 — Audit log
 - [ ] Hook su operazioni di scrittura → AuditLog

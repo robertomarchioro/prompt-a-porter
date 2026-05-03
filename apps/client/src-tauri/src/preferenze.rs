@@ -15,6 +15,20 @@ pub struct Preferenze {
     pub lingua: String,
     pub onboarding_completato: bool,
     pub crea_prompt_esempio: bool,
+    #[serde(default)]
+    pub sync_server_url: String,
+    #[serde(default)]
+    pub sync_email: String,
+    #[serde(default)]
+    pub sync_token: String,
+    #[serde(default = "default_sync_intervallo")]
+    pub sync_intervallo_sec: u32,
+    #[serde(default)]
+    pub sync_abilitato: bool,
+}
+
+fn default_sync_intervallo() -> u32 {
+    60
 }
 
 impl Default for Preferenze {
@@ -27,6 +41,11 @@ impl Default for Preferenze {
             lingua: "it".to_string(),
             onboarding_completato: false,
             crea_prompt_esempio: true,
+            sync_server_url: String::new(),
+            sync_email: String::new(),
+            sync_token: String::new(),
+            sync_intervallo_sec: 60,
+            sync_abilitato: false,
         }
     }
 }
@@ -92,6 +111,11 @@ mod test {
             lingua: "en".to_string(),
             onboarding_completato: true,
             crea_prompt_esempio: false,
+            sync_server_url: "https://sync.example.com".to_string(),
+            sync_email: "test@example.com".to_string(),
+            sync_token: String::new(),
+            sync_intervallo_sec: 120,
+            sync_abilitato: true,
         };
 
         let json = serde_json::to_string_pretty(&prefs).unwrap();
