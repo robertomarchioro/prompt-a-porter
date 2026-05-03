@@ -1,6 +1,7 @@
 mod audit;
 mod editor;
 mod errore;
+mod import_export;
 mod libreria;
 mod migrazione;
 mod preferenze;
@@ -250,6 +251,8 @@ pub fn run() {
             audit::audit_query,
             audit::audit_export_csv,
             audit::audit_cleanup_oltre_giorni,
+            import_export::vault_export_json,
+            import_export::vault_import_json,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())

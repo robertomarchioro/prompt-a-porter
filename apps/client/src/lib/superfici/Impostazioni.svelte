@@ -110,6 +110,13 @@
   let auditMostraConfermaCleanup = $state(false);
   let auditEsportazioneInCorso = $state(false);
 
+  // Import/export vault (Fase 2 Step 4)
+  let importModalita = $state<"skip" | "overwrite" | "rename">("skip");
+  let importInCorso = $state(false);
+  let importReport = $state<{ nuovi: number; aggiornati: number; conflitti: number; errori: string[] } | null>(null);
+  let importErrore = $state("");
+  let exportInCorso = $state(false);
+
   $effect(() => {
     caricaDati();
     syncOnChange(() => {
@@ -295,6 +302,58 @@
     } finally {
       auditEsportazioneInCorso = false;
     }
+  }
+
+  async function esportaVaultJson() {
+    exportInCorso = true;
+    try {
+      const json = await invoke<string>("vault_export_json");
+      const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      a.download = `pap-vault-${ts}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toastTesto = "Vault esportato in JSON";
+      toastVisibile = true;
+      setTimeout(() => (toastVisibile = false), 3000);
+    } catch (e) {
+      toastTesto = `Errore esportazione: ${String(e)}`;
+      toastVisibile = true;
+      setTimeout(() => (toastVisibile = false), 4000);
+    } finally {
+      exportInCorso = false;
+    }
+  }
+
+  function apriImport() {
+    importReport = null;
+    importErrore = "";
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      importInCorso = true;
+      try {
+        const text = await file.text();
+        importReport = await invoke("vault_import_json", {
+          json: text,
+          modalita: importModalita,
+        });
+        toastTesto = `Import completato: ${importReport!.nuovi} nuovi, ${importReport!.aggiornati} aggiornati`;
+        toastVisibile = true;
+        setTimeout(() => (toastVisibile = false), 4000);
+      } catch (e) {
+        importErrore = String(e);
+      } finally {
+        importInCorso = false;
+      }
+    };
+    input.click();
   }
 
   async function eseguiCleanup() {
@@ -643,6 +702,70 @@
               <label class="sez-label sez-label--danger"
                 >Zona pericolosa</label
               >
+              <div class="export-import">
+                <h4 class="sez-sub-titolo">Esporta / Importa</h4>
+                <p class="sez-sub-desc">
+                  Backup completo del vault in formato JSON portabile (vedi
+                  <a href="https://github.com/robertomarchioro/prompt-a-porter/blob/main/docs/formato-export-json.md" target="_blank" rel="noopener">schema export</a>).
+                </p>
+                <div class="export-import-azioni">
+                  <Button
+                    variante="ghost"
+                    dimensione="sm"
+                    onclick={esportaVaultJson}
+                    disabled={exportInCorso}
+                  >
+                    {exportInCorso ? "Esportazione…" : "Esporta JSON"}
+                  </Button>
+                  <Button
+                    variante="ghost"
+                    dimensione="sm"
+                    onclick={apriImport}
+                    disabled={importInCorso}
+                  >
+                    {importInCorso ? "Import in corso…" : "Importa JSON…"}
+                  </Button>
+                </div>
+
+                <div class="import-modalita">
+                  <span class="import-modalita-label">Modalità conflitti:</span>
+                  <div class="seg-control seg-control--small">
+                    <button
+                      type="button"
+                      class="seg-btn"
+                      class:seg-btn--attivo={importModalita === "skip"}
+                      onclick={() => (importModalita = "skip")}
+                    >Skip</button>
+                    <button
+                      type="button"
+                      class="seg-btn"
+                      class:seg-btn--attivo={importModalita === "overwrite"}
+                      onclick={() => (importModalita = "overwrite")}
+                    >Sovrascrivi</button>
+                    <button
+                      type="button"
+                      class="seg-btn"
+                      class:seg-btn--attivo={importModalita === "rename"}
+                      onclick={() => (importModalita = "rename")}
+                    >Rinomina</button>
+                  </div>
+                </div>
+
+                {#if importReport}
+                  <div class="import-report">
+                    <strong>Risultato:</strong>
+                    {importReport.nuovi} nuovi · {importReport.aggiornati} aggiornati ·
+                    {importReport.conflitti} conflitti
+                    {#if importReport.errori.length > 0}
+                      · {importReport.errori.length} errori
+                    {/if}
+                  </div>
+                {/if}
+                {#if importErrore}
+                  <div class="import-errore">{importErrore}</div>
+                {/if}
+              </div>
+
               {#if !confermaElimina}
                 <Button
                   variante="danger"
@@ -1465,6 +1588,79 @@
   .audit-cleanup-suffix {
     font-size: var(--fs-sm);
     color: var(--text-muted);
+  }
+
+  .export-import {
+    margin-top: var(--sp-4);
+    padding: var(--sp-3);
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--sp-4);
+  }
+
+  .sez-sub-titolo {
+    margin: 0 0 var(--sp-1);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+    color: var(--text-strong);
+  }
+
+  .sez-sub-desc {
+    margin: 0 0 var(--sp-3);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    line-height: var(--lh-relaxed);
+  }
+
+  .sez-sub-desc a {
+    color: var(--accent-team);
+    text-decoration: none;
+  }
+
+  .sez-sub-desc a:hover {
+    text-decoration: underline;
+  }
+
+  .export-import-azioni {
+    display: flex;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-3);
+  }
+
+  .import-modalita {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-2);
+  }
+
+  .import-modalita-label {
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+
+  .seg-control--small .seg-btn {
+    padding: 2px 8px;
+    font-size: var(--fs-xs);
+  }
+
+  .import-report {
+    padding: var(--sp-2);
+    background: var(--accent-team-soft);
+    border: 1px solid var(--accent-team);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-xs);
+    color: var(--text-default);
+  }
+
+  .import-errore {
+    padding: var(--sp-2);
+    background: color-mix(in oklch, var(--danger) 15%, transparent);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-xs);
+    color: var(--text-strong);
   }
 
   /* ── Info ── */
