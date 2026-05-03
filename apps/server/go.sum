@@ -1,0 +1,14 @@
+github.com/go-chi/chi/v5 v5.2.1 h1:KOIHODQj5PZMapdnjNMD2VMkDT8MOkNIBdSVTSeojSQ=
+github.com/go-chi/chi/v5 v5.2.1/go.mod h1:L2yAIGWB3H+phAw1NxKwWM+7eUH/lU8pVzS4BRmtk/U=
+github.com/go-chi/cors v1.2.1 h1:xEC8UT3Rlp2QuWNEr4Fs/c2EAGVKBwy/1vHx3bppil4=
+github.com/go-chi/cors v1.2.1/go.mod h1:sSbTewc+6wYHBBCW7IS+xRpHvOXjQDOdfVSmPEAYMbk=
+github.com/golang-jwt/jwt/v5 v5.2.2 h1:muRkrgR1stY0hw7gPSFU37KRNkFl3AxMhKCyOD/gVJU=
+github.com/golang-jwt/jwt/v5 v5.2.2/go.mod h1:pqrtFR0X4osieyHYxtmOUWsAWrfe1Q5UVIyoH402zdk=
+github.com/gorilla/websocket v1.5.3 h1:saDtZ6Pbx/0U+bgYQ3q96pZgCzfhKXGPqt7kZ72aNNg=
+github.com/gorilla/websocket v1.5.3/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55Og36ber9Pcx6YoM=
+github.com/mattn/go-sqlite3 v1.14.24 h1:tpSp2G2KyMnn4poi1ITJjJ2PU2GN/EeExZBKov9A1jo=
+github.com/mattn/go-sqlite3 v1.14.24/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
+golang.org/x/crypto v0.32.0 h1:euUpcYgM8WcP71gNpTqQCn6rC2t6ULUPiOzfWaXVVfc=
+golang.org/x/crypto v0.32.0/go.mod h1:PxZ1SVS1Q7+I+MjL/P+SDpPfO/CUjVP3cTpHqfiiRI4=
+golang.org/x/sys v0.29.0 h1:TPYlXGxvx1MGTn2GiZDhg7ASiki/9thUPBMPnCujdrE=
+golang.org/x/sys v0.29.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
