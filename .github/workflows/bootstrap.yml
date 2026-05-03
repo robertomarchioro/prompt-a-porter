@@ -1,0 +1,67 @@
+name: Bootstrap (lockfile + icone)
+
+# Workflow one-shot da eseguire manualmente per generare in CI gli artefatti
+# che richiederebbero Node/pnpm/Tauri CLI sulla macchina locale:
+#   - pnpm-lock.yaml  (root)
+#   - icone PNG/ICO/ICNS in apps/client/src-tauri/icons/
+#
+# Esecuzione: GitHub → Actions → "Bootstrap (lockfile + icone)" → Run workflow.
+# Il job committa il risultato direttamente sul branch da cui è partito.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installa rsvg-convert (SVG → PNG)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Genera pnpm-lock.yaml
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Rasterizza app-icon.svg → icon.png 1024×1024
+        run: |
+          rsvg-convert -w 1024 -h 1024 \
+            apps/client/src-tauri/icons/app-icon.svg \
+            -o apps/client/src-tauri/icons/icon.png
+
+      - name: Genera suite icone Tauri (PNG + ICO + ICNS)
+        working-directory: apps/client
+        run: pnpm exec tauri icon src-tauri/icons/icon.png
+
+      - name: Verifica file generati
+        run: |
+          echo "--- pnpm-lock.yaml ---"
+          ls -la pnpm-lock.yaml
+          echo "--- icone ---"
+          ls -la apps/client/src-tauri/icons/
+
+      - name: Commit & push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml apps/client/src-tauri/icons/
+          if git diff --cached --quiet; then
+            echo "Nessuna modifica da committare."
+            exit 0
+          fi
+          git commit -m "chore: genera pnpm-lock.yaml e icone Tauri (bootstrap)"
+          git push

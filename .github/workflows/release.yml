@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-14
+            args: --target aarch64-apple-darwin
+            rust-target: aarch64-apple-darwin
+          - platform: macos-13
+            args: --target x86_64-apple-darwin
+            rust-target: x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ""
+            rust-target: x86_64-unknown-linux-gnu
+          - platform: windows-latest
+            args: ""
+            rust-target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installa dipendenze sistema (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            build-essential \
+            file \
+            wget
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/client/src-tauri
+
+      - name: Installa dipendenze pnpm
+        run: pnpm install --frozen-lockfile
+
+      - name: Build & release Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/client
+          tagName: ${{ github.ref_name }}
+          releaseName: "Prompt a Porter ${{ github.ref_name }}"
+          releaseBody: |
+            Build automatica dal tag `${{ github.ref_name }}`.
+
+            Vedi [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) per il dettaglio.
+
+            **Nota**: i binari non sono firmati.
+            - **Windows**: SmartScreen mostrerà un avviso, scegli "Maggiori informazioni" → "Esegui comunque".
+            - **macOS**: alla prima apertura, tasto destro sull'app → "Apri" (necessario perché non notarizzato).
+            - **Linux**: nessun avviso, `.deb` / `.AppImage` installabili direttamente.
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          args: ${{ matrix.args }}
