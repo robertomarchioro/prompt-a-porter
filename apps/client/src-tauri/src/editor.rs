@@ -115,6 +115,8 @@ pub fn prompt_crea(
             ],
         )?;
         sincronizza_tags(conn, &id, &dati.tag_nomi)?;
+        // Snapshot v1 in PromptVersions (Fase 2 versioning).
+        crate::versioning::snapshot_versione(conn, &id, "usr-locale")?;
         ricostruisci_fts(conn)?;
         crate::audit::registra(conn, "prompt.creato", "Prompt", &id, Some(dati.titolo.trim()));
         log::info!("Prompt creato: {id}");
@@ -143,6 +145,8 @@ pub fn prompt_aggiorna(
             ],
         )?;
         sincronizza_tags(conn, &dati.id, &dati.tag_nomi)?;
+        // Snapshot della nuova versione (Version e' gia' stata incrementata dall'UPDATE).
+        crate::versioning::snapshot_versione(conn, &dati.id, "usr-locale")?;
         ricostruisci_fts(conn)?;
         crate::audit::registra(conn, "prompt.aggiornato", "Prompt", &dati.id, Some(dati.titolo.trim()));
         log::info!("Prompt aggiornato: {}", dati.id);

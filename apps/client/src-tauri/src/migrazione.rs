@@ -10,11 +10,18 @@ struct Migrazione {
 }
 
 /// Elenco migrazioni embedded nel binario. Aggiungere qui le future migrazioni.
-static MIGRAZIONI: &[Migrazione] = &[Migrazione {
-    versione: 1,
-    nome: "schema_iniziale",
-    sql: include_str!("../migrations/V001__schema_iniziale.sql"),
-}];
+static MIGRAZIONI: &[Migrazione] = &[
+    Migrazione {
+        versione: 1,
+        nome: "schema_iniziale",
+        sql: include_str!("../migrations/V001__schema_iniziale.sql"),
+    },
+    Migrazione {
+        versione: 2,
+        nome: "versioning_completo",
+        sql: include_str!("../migrations/V002__versioning_completo.sql"),
+    },
+];
 
 /// Crea la tabella di tracking se non esiste.
 fn crea_tabella_migrazioni(conn: &Connection) -> Result<(), PapErrore> {
@@ -84,8 +91,8 @@ mod test {
     fn migrazioni_su_db_nuovo() {
         let conn = Connection::open_in_memory().unwrap();
         let n = esegui_migrazioni(&conn).unwrap();
-        assert!(n > 0, "Almeno una migrazione deve essere applicata");
-        assert_eq!(versione_corrente(&conn).unwrap(), 1);
+        assert!(n >= 2, "Tutte le migrazioni devono essere applicate (almeno 2)");
+        assert_eq!(versione_corrente(&conn).unwrap(), 2);
     }
 
     #[test]

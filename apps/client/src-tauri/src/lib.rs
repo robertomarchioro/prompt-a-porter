@@ -7,6 +7,7 @@ mod preferenze;
 mod prompt;
 mod sync;
 mod vault;
+mod versioning;
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -242,6 +243,8 @@ pub fn run() {
             editor::prompt_aggiorna,
             editor::prompt_registra_uso,
             editor::prompt_elimina,
+            versioning::prompt_get_history,
+            versioning::prompt_rollback,
             sync::sync_applica_delta,
             audit::audit_lista,
             registra_hotkey,
