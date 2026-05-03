@@ -116,6 +116,7 @@ pub fn prompt_crea(
         )?;
         sincronizza_tags(conn, &id, &dati.tag_nomi)?;
         ricostruisci_fts(conn)?;
+        crate::audit::registra(conn, "prompt.creato", "Prompt", &id, Some(dati.titolo.trim()));
         log::info!("Prompt creato: {id}");
         Ok(id)
     })
@@ -143,6 +144,7 @@ pub fn prompt_aggiorna(
         )?;
         sincronizza_tags(conn, &dati.id, &dati.tag_nomi)?;
         ricostruisci_fts(conn)?;
+        crate::audit::registra(conn, "prompt.aggiornato", "Prompt", &dati.id, Some(dati.titolo.trim()));
         log::info!("Prompt aggiornato: {}", dati.id);
         Ok(())
     })
@@ -169,6 +171,7 @@ pub fn prompt_elimina(id: String, state: State<'_, VaultState>) -> Result<(), Pa
         )?;
         conn.execute("DELETE FROM PromptTags WHERE PromptId = ?1", [&id])?;
         ricostruisci_fts(conn)?;
+        crate::audit::registra(conn, "prompt.eliminato", "Prompt", &id, None);
         log::info!("Prompt eliminato: {id}");
         Ok(())
     })

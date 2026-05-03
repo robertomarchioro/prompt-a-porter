@@ -1,6 +1,6 @@
 # Todo — Fase 1 (MVP)
 
-> Aggiornato al: 2026-05-03 (Step 12)
+> Aggiornato al: 2026-05-03 (Step 13)
 
 ## Step 0 — Bootstrap repo
 - [x] Inizializza repo con `LICENSE` GPL 2.0, `README.md`, `.gitignore`
@@ -144,8 +144,10 @@
 - [x] Stringhe i18n auth complete (it.json + en.json)
 
 ## Step 13 — Audit log
-- [ ] Hook su operazioni di scrittura → AuditLog
-- [ ] Vista admin in Impostazioni
+- [x] Modulo Rust `audit.rs` con `registra()` fire-and-forget e `audit_lista` Tauri command
+- [x] Hook su operazioni di scrittura → AuditLog (editor, libreria, vault, sync)
+- [x] Vista admin in Impostazioni con filtro per tipo entità e lista scrollabile
+- [x] Stringhe i18n audit (it.json + en.json)
 
 ## Step 14 — Quality gate
 - [ ] Test coverage ≥ 70% moduli core

@@ -114,6 +114,22 @@
     "connessione_riuscita": "Connessione al server riuscita",
     "errore_connessione": "Impossibile connettersi al server"
   },
+  "audit": {
+    "titolo": "Registro attività",
+    "desc": "Cronologia delle operazioni eseguite nel vault",
+    "tutte": "Tutte",
+    "aggiorna": "Aggiorna",
+    "nessuna": "Nessuna attività registrata",
+    "prompt_creato": "Prompt creato",
+    "prompt_aggiornato": "Prompt aggiornato",
+    "prompt_eliminato": "Prompt eliminato",
+    "prompt_preferito": "Preferito",
+    "vault_creato": "Vault creato",
+    "vault_sbloccato": "Vault sbloccato",
+    "vault_bloccato": "Vault bloccato",
+    "vault_password_cambiata": "Password cambiata",
+    "sync_delta_applicato": "Sync applicato"
+  },
   "tray": {
     "apri_palette": "Apri palette",
     "nuovo_prompt": "Nuovo prompt",

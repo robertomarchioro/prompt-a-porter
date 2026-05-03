@@ -230,6 +230,8 @@ pub fn libreria_toggle_preferito(
             "UPDATE Prompts SET IsFavorite = ?1, UpdatedAt = datetime('now') WHERE Id = ?2",
             rusqlite::params![nuovo, id],
         )?;
+        let meta = if nuovo != 0 { "aggiunto" } else { "rimosso" };
+        crate::audit::registra(conn, "prompt.preferito", "Prompt", &id, Some(meta));
         Ok(nuovo != 0)
     })
 }

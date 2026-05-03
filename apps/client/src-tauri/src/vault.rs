@@ -221,6 +221,8 @@ pub fn vault_crea(password: String, state: State<'_, VaultState>) -> Result<(), 
     };
     salva_meta(&state.meta_path(), &meta)?;
 
+    crate::audit::registra(&conn, "vault.creato", "Vault", "", Some("cifrato"));
+
     // Metti la connessione nello stato globale
     let mut guard = state.conn.lock().unwrap();
     *guard = Some(conn);
@@ -254,6 +256,8 @@ pub fn vault_crea_aperto(state: State<'_, VaultState>) -> Result<(), PapErrore> 
         cifrato: false,
     };
     salva_meta(&state.meta_path(), &meta)?;
+
+    crate::audit::registra(&conn, "vault.creato", "Vault", "", Some("non_cifrato"));
 
     let mut guard = state.conn.lock().unwrap();
     *guard = Some(conn);
@@ -301,6 +305,7 @@ pub fn vault_unlock(password: String, state: State<'_, VaultState>) -> Result<()
 
     migrazione::esegui_migrazioni(&conn)?;
     crate::libreria::assicura_dati_base(&conn)?;
+    crate::audit::registra(&conn, "vault.sbloccato", "Vault", "", None);
 
     let mut guard = state.conn.lock().unwrap();
     *guard = Some(conn);
@@ -313,7 +318,9 @@ pub fn vault_unlock(password: String, state: State<'_, VaultState>) -> Result<()
 #[tauri::command]
 pub fn vault_lock(state: State<'_, VaultState>) -> Result<(), PapErrore> {
     let mut guard = state.conn.lock().unwrap();
-    if guard.is_none() {
+    if let Some(conn) = guard.as_ref() {
+        crate::audit::registra(conn, "vault.bloccato", "Vault", "", None);
+    } else {
         return Err(PapErrore::VaultChiuso);
     }
     *guard = None;
@@ -371,6 +378,7 @@ pub fn vault_cambia_password(
     // Re-key del database
     let hex_nuova = bytes_a_hex(&chiave_nuova);
     conn.execute_batch(&format!("PRAGMA rekey = \"x'{hex_nuova}'\";"))?;
+    crate::audit::registra(conn, "vault.password_cambiata", "Vault", "", None);
 
     // Aggiorna metadata con nuovo salt
     let meta_nuova = VaultMeta {

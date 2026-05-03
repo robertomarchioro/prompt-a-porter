@@ -25,6 +25,15 @@
     sync_abilitato: boolean;
   }
 
+  interface VoceAudit {
+    id: string;
+    azione: string;
+    tipo_entita: string;
+    id_entita: string;
+    metadati: string;
+    avvenuto_a: string;
+  }
+
   interface Props {
     onchiudi: () => void;
     onapriLogin: () => void;
@@ -38,6 +47,7 @@
     | "hotkey"
     | "aspetto"
     | "vault"
+    | "audit"
     | "lingua"
     | "info";
 
@@ -47,6 +57,7 @@
     { id: "hotkey", etichetta: "Scorciatoie", icona: "⌨" },
     { id: "aspetto", etichetta: "Aspetto", icona: "🎨" },
     { id: "vault", etichetta: "Vault", icona: "🔒" },
+    { id: "audit", etichetta: "Registro attività", icona: "📋" },
     { id: "lingua", etichetta: "Lingua", icona: "🌐" },
     { id: "info", etichetta: "Informazioni", icona: "ℹ" },
   ];
@@ -74,12 +85,20 @@
   let toastVisibile = $state(false);
   let toastTesto = $state("");
   let syncState = $state<SyncState>(syncGetState());
+  let auditVoci = $state<VoceAudit[]>([]);
+  let auditFiltro = $state<string | undefined>(undefined);
 
   $effect(() => {
     caricaDati();
     syncOnChange(() => {
       syncState = syncGetState();
     });
+  });
+
+  $effect(() => {
+    if (sezione === "audit") {
+      caricaAudit();
+    }
   });
 
   async function caricaDati() {
@@ -174,6 +193,29 @@
     await navigator.clipboard.writeText(vaultPercorso);
     toast("Percorso copiato");
   }
+
+  async function caricaAudit() {
+    try {
+      auditVoci = await invoke<VoceAudit[]>("audit_lista", {
+        limite: 200,
+        tipoEntita: auditFiltro ?? null,
+      });
+    } catch {
+      auditVoci = [];
+    }
+  }
+
+  const azioneLabel: Record<string, string> = {
+    "prompt.creato": "Prompt creato",
+    "prompt.aggiornato": "Prompt aggiornato",
+    "prompt.eliminato": "Prompt eliminato",
+    "prompt.preferito": "Preferito",
+    "vault.creato": "Vault creato",
+    "vault.sbloccato": "Vault sbloccato",
+    "vault.bloccato": "Vault bloccato",
+    "vault.password_cambiata": "Password cambiata",
+    "sync.delta_applicato": "Sync applicato",
+  };
 
   function toast(testo: string) {
     toastTesto = testo;
@@ -523,6 +565,73 @@
                 </div>
               {/if}
             </div>
+          </div>
+        {:else if sezione === "audit"}
+          <div class="sez">
+            <h3 class="sez-titolo">Registro attività</h3>
+            <p class="sez-desc">
+              Cronologia delle operazioni eseguite nel vault
+            </p>
+            <div class="audit-toolbar">
+              <div class="seg-control">
+                <button
+                  class="seg-btn"
+                  class:seg-btn--attivo={auditFiltro === undefined}
+                  onclick={() => { auditFiltro = undefined; caricaAudit(); }}
+                  type="button">Tutte</button
+                >
+                <button
+                  class="seg-btn"
+                  class:seg-btn--attivo={auditFiltro === "Prompt"}
+                  onclick={() => { auditFiltro = "Prompt"; caricaAudit(); }}
+                  type="button">Prompt</button
+                >
+                <button
+                  class="seg-btn"
+                  class:seg-btn--attivo={auditFiltro === "Vault"}
+                  onclick={() => { auditFiltro = "Vault"; caricaAudit(); }}
+                  type="button">Vault</button
+                >
+                <button
+                  class="seg-btn"
+                  class:seg-btn--attivo={auditFiltro === "Sync"}
+                  onclick={() => { auditFiltro = "Sync"; caricaAudit(); }}
+                  type="button">Sync</button
+                >
+              </div>
+              <Button
+                variante="ghost"
+                dimensione="sm"
+                onclick={caricaAudit}
+              >
+                Aggiorna
+              </Button>
+            </div>
+
+            {#if auditVoci.length === 0}
+              <div class="audit-vuoto">
+                <p>Nessuna attività registrata</p>
+              </div>
+            {:else}
+              <div class="audit-lista">
+                {#each auditVoci as voce}
+                  <div class="audit-riga">
+                    <div class="audit-info">
+                      <span class="audit-azione">
+                        {azioneLabel[voce.azione] ?? voce.azione}
+                      </span>
+                      {#if voce.metadati}
+                        <span class="audit-meta">{voce.metadati}</span>
+                      {/if}
+                    </div>
+                    <div class="audit-dx">
+                      <span class="audit-tipo">{voce.tipo_entita}</span>
+                      <span class="audit-data">{voce.avvenuto_a}</span>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
           </div>
         {:else if sezione === "lingua"}
           <div class="sez">
@@ -936,6 +1045,94 @@
     margin: 0;
     font-size: var(--fs-sm);
     max-width: 30ch;
+  }
+
+  /* ── Audit ── */
+
+  .audit-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+  }
+
+  .audit-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--border-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    max-height: 360px;
+    overflow-y: auto;
+  }
+
+  .audit-riga {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    padding: var(--sp-2) var(--sp-3);
+    background: var(--bg-surface);
+  }
+
+  .audit-info {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-width: 0;
+    flex: 1;
+  }
+
+  .audit-azione {
+    font-size: var(--fs-sm);
+    color: var(--text-strong);
+    font-weight: var(--fw-medium);
+    white-space: nowrap;
+  }
+
+  .audit-meta {
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .audit-dx {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    flex-shrink: 0;
+  }
+
+  .audit-tipo {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-subtle);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+  }
+
+  .audit-data {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .audit-vuoto {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--sp-6);
+    color: var(--text-subtle);
+    font-size: var(--fs-sm);
+  }
+
+  .audit-vuoto p {
+    margin: 0;
   }
 
   /* ── Info ── */
