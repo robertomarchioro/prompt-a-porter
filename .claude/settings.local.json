@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rtk git *)",
+      "Bash(pnpm --version)",
+      "Bash(rustc --version)",
+      "Bash(cargo --version)",
+      "PowerShell(pnpm *)",
+      "PowerShell(Get-Command *)",
+      "Bash(del \"apps\\\\client\\\\.gitkeep\")",
+      "PowerShell(Remove-Item *)",
+      "WebSearch",
+      "WebFetch(domain:lucide.dev)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:tabler.io)",
+      "Bash(Get-ChildItem -Path . -Recurse -Directory -Filter \"design_handoff\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\roberto.marchioro\\\\OneDrive - BLUENERGY GROUP SPA\\\\Documenti\\\\GitHub\\\\prompt-a-porter\" -Recurse -Directory -ErrorAction SilentlyContinue)",
+      "Bash(Get-ChildItem -Path \"design_handoff\" -Recurse)",
+      "Bash(xargs grep *)"
+    ]
+  }
+}
