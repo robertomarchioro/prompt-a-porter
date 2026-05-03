@@ -10,7 +10,7 @@ mod vault;
 
 use tauri::{
     menu::{Menu, MenuItem},
-    tray::TrayIconBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
@@ -173,7 +173,26 @@ pub fn run() {
 
             let _tray = TrayIconBuilder::new()
                 .menu(&menu)
+                .show_menu_on_left_click(false)
                 .tooltip("Prompt a Porter")
+                .on_tray_icon_event(|tray, event| {
+                    // Click sinistro su tray → mostra/focus libreria.
+                    // Click destro → menù contestuale (default Tauri 2 con
+                    // show_menu_on_left_click(false)). Vedi issue #3.
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        if let Some(finestra) =
+                            tray.app_handle().get_webview_window("libreria")
+                        {
+                            let _ = finestra.show();
+                            let _ = finestra.set_focus();
+                        }
+                    }
+                })
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "apri_palette" => {
                         toggle_palette(app);
