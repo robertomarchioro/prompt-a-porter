@@ -111,7 +111,6 @@
   let auditEsportazioneInCorso = $state(false);
 
   // Import/export vault (Fase 2 Step 4)
-  let importMostra = $state(false);
   let importModalita = $state<"skip" | "overwrite" | "rename">("skip");
   let importInCorso = $state(false);
   let importReport = $state<{ nuovi: number; aggiornati: number; conflitti: number; errori: string[] } | null>(null);
@@ -332,7 +331,6 @@
   function apriImport() {
     importReport = null;
     importErrore = "";
-    importMostra = true;
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "application/json,.json";
