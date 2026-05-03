@@ -1,12 +1,24 @@
-# Todo Fase 3 — Intelligenza
+# Todo Fase 3 — Intelligenza & Authoring
 
-> **Obiettivo**: rendere il vault navigabile in modo "umano" — l'utente cerca per significato, non per parole esatte. Aggiungere intelligenza assistiva sui prompt (qualità, target, tag) senza creare lock-in cloud: tutto deve girare **client-side** o sul server self-hosted.
->
-> **Deliverable finale**: tag release `v0.3.0-fase3`.
+> **Deliverable finale**: tag release `v0.3.0`.
 
----
+## Direzione generale del progetto
 
-## Filosofia di Fase
+Prompt a Porter è una libreria locale-first per prompt AI. Tutte le scelte tecniche seguono tre vincoli non negoziabili:
+
+1. **I dati restano sull'utente.** Vault cifrato locale, feature cloud opt-in, niente telemetria.
+2. **Niente lock-in.** Formati aperti (Markdown, JSON), licenza AGPL 3.0, export sempre disponibile, schema dati documentato.
+3. **Integrazione via standard.** MCP, OIDC, OpenAPI 3.1, Native Messaging — niente API proprietarie chiuse.
+
+Il progetto attraversa 5 fasi: dall'app standalone (Fase 1, chiusa) alle fondamenta solide e integrabili (Fase 2), all'intelligenza assistiva tutta locale (Fase 3, questa), ai workflow avanzati con qualità misurabile (Fase 4), all'ecosistema enterprise opt-in (Fase 5 → v1.0.0).
+
+## Direzione di Fase 3
+
+Fase 3 trasforma PaP da **biblioteca passiva a sistema attivo**. Tutto deve girare client-side senza dipendenze cloud, essere opt-in, mantenere il dato in chiaro locale, e degradare con grazia se i modelli non sono disponibili.
+
+Il valore distintivo di questa fase è l'allineamento con la filosofia **AI-native ma local-first**: ricerca semantica via embeddings ONNX locali, prompt componibili come moduli software, linting proattivo, organizzazione in cartelle. Quello che altri prompt manager fanno via cloud, PaP lo fa offline sul tuo laptop.
+
+### Filosofia di Fase
 
 > "Pegaso è bellissimo da vedere, ma vola solo se Bellerofonte sa cavalcarlo."
 
@@ -19,25 +31,28 @@ L'AI in PaP è uno strumento di scoperta e qualità, non di sostituzione. Ogni f
 
 ---
 
-## Prerequisiti (Step 0)
+## Step 0 — Prerequisiti
 
-- [ ] Fase 2 chiusa: `v0.2.0-fase2` taggata, web app + extension funzionanti
-- [ ] Modello dati supporta `TargetModel` (anticipato in Fase 1 o Fase 2)
-- [ ] Decidere strategia embeddings: **client-side puro** (consigliato) o **server-side opzionale** (per workspace team)
+- [ ] Fase 2 chiusa: `v0.2.0` taggata, AGPL 3.0 attiva, MCP+CLI funzionanti, auto-update sperimentato
+- [ ] Modello dati supporta `TargetModel` (anticipato in Fase 2 dentro lo schema export)
+- [ ] Decisione strategica embeddings: **client-side puro** (consigliato) o **server-side opzionale** per workspace team
 - [ ] Crea branch `fase-3` da `main`
 
 ---
 
 ## Scope Feature Fase 3
 
-| # | Feature | Modulo |
-|---|---------|--------|
-| 1 | Ricerca semantica via embeddings | client (server opzionale) |
-| 2 | Ricerca ibrida FTS5 + vettoriale | client |
-| 3 | Auto-suggerimento tag su nuovo prompt | client |
-| 4 | Linting prompt (lunghezza, segnaposti, PII) | client |
-| 5 | Modello-target dichiarato + filtri | client + server |
-| 6 | Statistiche di qualità prompt | client |
+| # | Step | Modulo |
+|---|------|--------|
+| 1 | ONNX Runtime + modello embeddings | client (server opzionale) |
+| 2 | sqlite-vec integration + tabella embeddings | client |
+| 3 | Ricerca ibrida FTS5 + vettoriale | client |
+| 4 | Auto-suggerimento tag su nuovo prompt | client |
+| 5 | Linting prompt (lunghezza, segnaposti, PII, stile) | client |
+| 6 | Modello-target dichiarato + filtri | client + server |
+| 7 | Cartelle (organizzazione gerarchica, no ACL) | client + server |
+| 8 | Prompt componibili `{{import "..."}}` | client |
+| 9 | Statistiche di qualità prompt | client |
 
 ---
 
@@ -47,7 +62,7 @@ L'AI in PaP è uno strumento di scoperta e qualità, non di sostituzione. Ogni f
 - [ ] Modello scelto: **`bge-small-en-v1.5`** (~33 MB, 384 dim, multilingue accettabile) o **`all-MiniLM-L6-v2`** (~80 MB, 384 dim, classico)
 - [ ] **Bundling vs download**:
   - Bundle nel binario: +30-80 MB. Pro: zero setup. Contro: ogni upgrade modello richiede re-release.
-  - Download al primo uso: scarica da repo HuggingFace o mirror Anthropic-friendly. Pro: binario snello. Contro: serve connessione iniziale.
+  - Download al primo uso: scarica da repo HuggingFace o mirror. Pro: binario snello. Contro: serve connessione iniziale.
   - **Decisione consigliata**: download on-demand con cache in `~/.local/share/prompt-a-porter/models/`
 - [ ] Comando Tauri `embeddings_init()` → carica modello in memoria (lazy, primo uso)
 - [ ] Comando Tauri `embeddings_compute(text: String)` → returns `Vec<f32>` (384 dim)
@@ -77,7 +92,7 @@ L'AI in PaP è uno strumento di scoperta e qualità, non di sostituzione. Ogni f
 - [ ] Default `alpha = 0.5` (bilanciato), configurabile in Impostazioni > Ricerca (slider con preset Lessicale/Bilanciato/Semantico)
 - [ ] **Fallback automatico**: se embedding model non caricato → solo FTS5 senza errore
 - [ ] **UI**: nessun cambio visibile per l'utente nella libreria. La ricerca è la stessa, ma trova "fratelli concettuali"
-- [ ] **UI Command Palette**: badge "🧠 ricerca semantica attiva" piccolino se la query usa embeddings
+- [ ] **UI Command Palette**: badge "ricerca semantica attiva" piccolino se la query usa embeddings
 - [ ] Highlight nei risultati: per FTS5 match testuale, per semantico nessun highlight (non c'è una keyword da evidenziare)
 - [ ] Test qualitativi: dataset di 50 prompt, query "riscrivi email in tono formale" deve trovare anche prompt "trasforma messaggio in business style"
 
@@ -105,6 +120,9 @@ Avvisi proattivi che aiutano a scrivere prompt migliori, senza essere paternalis
 | `PH001` | Segnaposto malformato (`{nome}` invece di `{{nome}}`) | error |
 | `PH002` | Segnaposto definito ma non usato nel body | warning |
 | `PH003` | Nome segnaposto contiene caratteri speciali | warning |
+| `IMP001` | Import non risolto (`{{import "missing/path"}}`) | error |
+| `IMP002` | Ciclo di import rilevato | error |
+| `IMP003` | Profondità import > 5 livelli | warning |
 | `PII001` | Possibile email rilevata nel body (regex) | warning |
 | `PII002` | Possibile codice fiscale/SSN rilevato | warning |
 | `PII003` | Possibile numero di carta di credito (Luhn check) | error |
@@ -131,44 +149,137 @@ Ogni prompt può dichiarare per quale modello AI è ottimizzato.
 - [ ] **UI Renderer**: badge che mostra il modello target del prompt corrente, warning se l'utente sta per copiarlo per un modello diverso (eventually)
 - [ ] **Server**: filtro `?target=claude-opus` su endpoint search
 
-## Step 7 — Statistiche qualità prompt
+## Step 7 — Cartelle (organizzazione gerarchica)
+
+Tag e cartelle coesistono ma servono scopi diversi: i **tag** sono etichette trasversali (un prompt può averne 5), le **cartelle** sono ubicazione canonica (un prompt sta in 1 sola cartella). Modelli ortogonali.
+
+In Fase 3 le cartelle sono **solo organizzative**, senza ACL. I permessi per cartella arrivano in Fase 4 con il workflow di approvazione.
+
+**Schema**:
+
+```sql
+CREATE TABLE Folders (
+    Id              TEXT PRIMARY KEY,
+    WorkspaceId     TEXT NOT NULL REFERENCES Workspaces(Id),
+    ParentFolderId  TEXT REFERENCES Folders(Id),  -- NULL = root del workspace
+    Name            TEXT NOT NULL,
+    Path            TEXT NOT NULL,                -- denormalizzato: "/marketing/email/cold"
+    CreatedAt       TEXT NOT NULL,
+    UpdatedAt       TEXT NOT NULL,
+    DeletedAt       TEXT
+);
+CREATE INDEX idx_folders_workspace_path ON Folders(WorkspaceId, Path);
+
+ALTER TABLE Prompts ADD COLUMN FolderId TEXT REFERENCES Folders(Id);  -- NULL = root del workspace
+```
+
+- [ ] Migration v4 con schema sopra
+- [ ] Comando Tauri `folder_crea(parentId, name)`, `folder_rinomina(id, name)`, `folder_sposta(id, newParentId)`, `folder_elimina(id, cascade)`
+- [ ] Comando Tauri `prompt_sposta(promptId, folderId | null)`
+- [ ] Path denormalizzato: query "tutti i prompt sotto `/marketing`" usa `WHERE Path LIKE '/marketing/%'` indicizzato
+- [ ] Rinomina cartella → recompute Path dei discendenti (UPDATE ricorsivo, transazione)
+- [ ] **UI Sidebar Libreria**: tree view "Cartelle" sotto le viste esistenti (Recenti/Preferiti/Tutti). Espandi/collassa ramo, contatore prompt per cartella
+- [ ] **UI**: drag & drop prompt tra cartelle, drag & drop cartelle in altre cartelle
+- [ ] **Click destro su cartella**: nuovo, rinomina, elimina, esporta
+- [ ] **Sync server**: endpoint `/sync/folders` per workspace team (delta sync coerente con prompt sync)
+- [ ] **Filtri Libreria**: filter chip "Cartella corrente" per ricerca limitata al ramo
+- [ ] Test: creazione/rinomina/spostamento/cancellazione, path denormalizzato coerente in tutti gli scenari
+
+## Step 8 — Prompt componibili `{{import "..."}}`
+
+Trasforma il vault da "lista di prompt" a **sistema modulare di prompt componibili**. Power user e team che gestiscono famiglie di prompt evitano duplicazione, manutenibili come codice software.
+
+**Sintassi** (coerente con segnaposti `{{...}}` esistenti):
+
+```
+{{import "sistema/ruolo-esperto" with ambito="finanza"}}
+
+Analizza il bilancio fornito e identifica anomalie.
+
+{{import "comune/output-json-strict" with schema=`
+  {
+    "anomalie": [{ "campo": "string", "severita": "low|med|high" }]
+  }
+`}}
+
+Bilancio: {{bilancio}}
+```
+
+Dove `sistema/ruolo-esperto` è un altro prompt nella libreria (lookup per `Path` cartella + `Title` slug, o per `Id` se path ambiguo). Le variabili dell'import (`with`) si combinano con i segnaposti del prompt importato.
+
+**Schema** (no nuove tabelle, tabella di indice per dependency graph):
+
+```sql
+CREATE TABLE PromptImports (
+    ParentPromptId  TEXT NOT NULL REFERENCES Prompts(Id),
+    ImportedPath    TEXT NOT NULL,                 -- "sistema/ruolo-esperto"
+    ImportedPromptId TEXT REFERENCES Prompts(Id),  -- risolto, NULL se non risolvibile
+    PinnedVersion   INTEGER,                       -- NULL = follow latest
+    Position        INTEGER NOT NULL,              -- ordine nel body
+    PRIMARY KEY (ParentPromptId, Position)
+);
+CREATE INDEX idx_imports_imported ON PromptImports(ImportedPromptId);  -- per "chi importa X"
+```
+
+- [ ] Parser nel modulo template: estendi `estraiSegnaposti` per riconoscere `{{import "..." [with k=v ...]}}` e ritornare struttura ricca
+- [ ] Comando Tauri `prompt_compila(promptId, vars)` — risolve import ricorsivamente, restituisce testo finale + dependency tree
+- [ ] **Resolver**:
+  1. Path lookup per cartella+slug, fallback su Title match
+  2. Risoluzione versione: pin esplicito (`{{import "..." version=12}}`) o latest
+  3. Depth-limit 5 per evitare cicli accidentali
+  4. Errore esplicito su import non risolto con `IMP001` (vedi linting Step 5)
+  5. Errore su ciclo con `IMP002`
+- [ ] **Editor UI**: doppia vista "Sorgente" (con `{{import}}`) e "Compilato" (testo finale espanso). Toggle in alto.
+- [ ] **Editor UI**: hover su un import mostra preview del prompt importato
+- [ ] **Editor UI**: navigazione "Vai al prompt importato" (ctrl+click)
+- [ ] **Cross-prompt linting**: quando si modifica un prompt, mostra "Questo prompt è importato da N altri prompt. Vedi lista?". Click apre vista delle dipendenze inverse.
+- [ ] **Versioning interaction**: pin esplicito a una versione = stabilità (l'import non cambia se il prompt referenced viene modificato). Default = follow latest = aggiornamenti propaganti.
+- [ ] **Indicizzazione embeddings**: il body del prompt importatore è indicizzato sul testo *non compilato* (mantiene riferimento ai blocchi importati come metadati semantici)
+- [ ] **Export**: il formato JSON include la struttura import. Markdown export ha una direttiva front-matter `imports: [...]` per riproducibilità.
+- [ ] Test: prompt che importa altri 3 prompt → cambia uno → verifica propagazione. Cycle detection. Pin version stability.
+
+## Step 9 — Statistiche qualità prompt
 
 Aggregazione passiva dei dati d'uso (già raccolti da `UseCount`, `LastUsedAt`).
 
-- [ ] Vista "Insight" in Libreria (icona 📊 nella sidebar)
+- [ ] Vista "Insight" in Libreria (icona dedicata nella sidebar)
 - [ ] **Top prompt usati** ultimi 30 giorni
 - [ ] **Prompt non usati** da > 90 giorni (candidati a cleanup)
-- [ ] **Prompt più commentati**
-- [ ] **Distribuzione per tag**, **per modello target**, **per autore** (per workspace team)
+- [ ] **Prompt più importati** (anticipa il valore di Step 8)
+- [ ] **Distribuzione per tag**, **per cartella**, **per modello target**, **per autore** (per workspace team)
 - [ ] **Lint health**: % prompt senza issues, top 10 categorie issue più frequenti
-- [ ] Charts: usa SVG inline + librerie minimal (es. `chart.js` solo se proprio necessario, preferire SVG custom)
+- [ ] Charts: usa SVG inline + librerie minimal (preferire SVG custom su `chart.js`)
 - [ ] **Privacy**: nessun dato esce dal vault. Statistiche aggregate locali.
 
-## Step 8 — Quality gate Fase 3
+## Step 10 — Quality gate Fase 3
 
-- [ ] Test coverage ≥ 70% su moduli `lib_lint`, `lib_embeddings`, ricerca ibrida
-- [ ] Benchmark: ricerca su 10k prompt < 100ms (P95)
+- [ ] Test coverage ≥ 70% su moduli `lib_lint`, `lib_embeddings`, ricerca ibrida, parser import, gestione cartelle
+- [ ] Benchmark: ricerca ibrida su 10k prompt < 100ms (P95)
 - [ ] Memory profiling: embedding model unload dopo 5 min idle (configurabile)
 - [ ] Test su workspace con dataset realistico (1000+ prompt, generabile con script)
 - [ ] Verifica grace degradation: app funzionante anche senza modello scaricato (toggle off temporaneo)
+- [ ] Test cartelle: 100 cartelle, profondità 5, sposta/rinomina/cancella senza inconsistenze su Path
 
-## Step 9 — Documentazione e release
+## Step 11 — Documentazione e release
 
 - [ ] Nuovo `docs/ricerca-semantica.md` con razionali, modello scelto, performance attese
 - [ ] Nuovo `docs/linting-regole.md` con catalogo completo regole
-- [ ] Aggiorna `docs/schema-dati.md` con `PromptsEmbeddings`
-- [ ] Aggiorna `docs/architettura.md` con flusso embeddings
-- [ ] Changelog v0.3.0
-- [ ] Crea `docs/todo-fase-4.md`
-- [ ] Tag `v0.3.0-fase3`
+- [ ] Nuovo `docs/cartelle.md` con modello dati e UX (anticipa permessi Fase 4)
+- [ ] Nuovo `docs/prompt-componibili.md` con sintassi, esempi, anti-pattern
+- [ ] Aggiorna `docs/schema-dati.md` con `PromptsEmbeddings`, `Folders`, `PromptImports`
+- [ ] Aggiorna `docs/architettura.md` con flusso embeddings + import resolver
+- [ ] CHANGELOG `v0.3.0`
+- [ ] Aggiorna `docs/todo-fase-4.md` (già esistente, già rivisto in linea con questa nuova roadmap)
+- [ ] Tag `v0.3.0`
 
 ---
 
 ## Decisioni discrezionali
 
-1. **Modello embedding**: `bge-small-en-v1.5` (33 MB, multilingue passabile) o **`bge-small-it`** (italiano-specifico se esiste alternativa equivalente) o **`paraphrase-multilingual-MiniLM-L12-v2`** (118 MB, multilingue forte). Considera che l'utenza è italofona ma i prompt sono spesso in inglese.
-2. **Cache embeddings server-side per workspace team**: il server ricalcola gli embedding per condividerli? Pro: zero ricalcolo per ogni client. Contro: il server vede testo prompt in chiaro (necessario per il calcolo). Trade-off di privacy.
-3. **Linting PII è block-by-default o warn-only?** Per workspace ad alta sensibilità (Fase 5 E2E) sarà block; per ora warn-by-default sembra ragionevole.
+1. **Modello embedding**: `bge-small-en-v1.5` (33 MB, multilingue passabile) o **`paraphrase-multilingual-MiniLM-L12-v2`** (118 MB, multilingue forte). L'utenza è italofona ma i prompt sono spesso in inglese.
+2. **Cache embeddings server-side per workspace team**: il server ricalcola gli embedding per condividerli? Pro: zero ricalcolo per ogni client. Contro: il server vede testo prompt in chiaro (necessario per il calcolo). Trade-off di privacy che entra in conflitto con E2E in Fase 5.
+3. **Linting PII è block-by-default o warn-only?** Per workspace ad alta sensibilità (Fase 5 E2E) sarà block; per ora **warn-by-default** sembra ragionevole.
+4. **Sintassi import**: decisione presa — `{{import "..."}}` coerente con segnaposti.
 
 ---
 
@@ -178,3 +289,4 @@ Aggregazione passiva dei dati d'uso (già raccolti da `UseCount`, `LastUsedAt`).
 - Fase 4 (prossima): `docs/todo-fase-4.md`
 - Modelli embedding: https://huggingface.co/BAAI/bge-small-en-v1.5
 - sqlite-vec: https://github.com/asg017/sqlite-vec
+- ONNX Runtime Rust: https://github.com/pykeio/ort

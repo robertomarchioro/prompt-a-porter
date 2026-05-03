@@ -1,217 +1,268 @@
-# Todo Fase 2 — Distribuzione e Collaborazione
+# Todo Fase 2 — Foundations & Distribuzione
 
-> **Obiettivo**: portare Prompt a Porter da app desktop standalone a piattaforma collaborativa multi-superficie. L'utente ha già il client desktop funzionante (Fase 1); ora aggiungiamo le superfici per consumare i prompt **dove servono** (browser, web) e gli strumenti per **lavorare insieme** (commenti, versioning, import/export).
->
-> **Deliverable finale**: tag release `v0.2.0-fase2`.
+> **Deliverable finale**: tag release `v0.2.0`.
+
+## Direzione generale del progetto
+
+Prompt a Porter è una libreria locale-first per prompt AI. Tutte le scelte tecniche seguono tre vincoli non negoziabili:
+
+1. **I dati restano sull'utente.** Vault cifrato locale, feature cloud opt-in, niente telemetria.
+2. **Niente lock-in.** Formati aperti (Markdown, JSON), licenza AGPL 3.0, export sempre disponibile, schema dati documentato.
+3. **Integrazione via standard.** MCP, OIDC, OpenAPI 3.1, Native Messaging — niente API proprietarie chiuse.
+
+Il progetto attraversa 5 fasi: dall'app standalone (Fase 1, chiusa) alle fondamenta solide e integrabili (Fase 2, questa), all'intelligenza assistiva tutta locale (Fase 3), ai workflow avanzati con qualità misurabile (Fase 4), all'ecosistema enterprise opt-in (Fase 5 → v1.0.0).
+
+## Direzione di Fase 2
+
+Fase 2 fissa le **fondamenta** prima di costruire feature. Senza di esse ogni iterazione successiva è penalizzata:
+
+- **Licenza solida** (AGPL 3.0) che riflette la posizione del progetto e chiude il loophole SaaS.
+- **Auto-update silenzioso** che permette di pubblicare miglioramenti senza che l'utente debba ri-installare niente, niente UAC, niente popup setup.
+- **Server cross-platform single-binary**, niente Docker obbligatorio, deployabile come servizio Win/Linux nativo.
+- **Versioning + import/export** per portabilità e tracciabilità storica dei prompt.
+- **MCP server + CLI** per portare PaP fuori dal client desktop, dentro le workflow agentiche e da terminale.
+
+Strategicamente la priorità è: **integrazioni standard prima di superfici proprietarie**. La browser extension e la web app sono spostate in Fase 5, condizionate a domanda reale. MCP + CLI coprono l'80% del valore con il 10% del costo di manutenzione.
 
 ---
 
-## Prerequisiti (Step 0)
+## Step 0 — Prerequisiti
 
-- [ ] Fase 1 chiusa: `v0.1.0-fase1` taggata, CI green su tutti gli OS, smoke test passato
-- [ ] Repo clean, branch `main` allineato
-- [ ] Schema dati Fase 1 conferma supporto Versioning (`PromptVersions` tabella già presente)
-- [ ] Server Go di sync deployato e funzionante in ambiente di test
-- [ ] Nessun bug bloccante aperto in `docs/todo-fase-1.md` o issue GitHub critici
-- [ ] Crea branch `fase-2` da `main`, lavoro su feature branch da lì
+- [x] Fase 1 chiusa: `v0.1.0-fase1` taggata, CI green, release pubblicata
+- [x] Bug critici Windows risolti (issue #2, #3, #4 chiuse)
+- [x] Repo clean, branch `main` allineato
+- [x] Schema dati Fase 1 supporta versioning (`PromptVersions` già presente)
+- [ ] Server Go di sync deployato e funzionante in ambiente di test (da confermare)
+- [ ] Crea branch `fase-2` da `main`
 
 ---
 
 ## Scope Feature Fase 2
 
-| # | Feature | Modulo principale |
-|---|---------|-------------------|
-| 1 | Versioning completo prompt + rollback | client + server |
-| 2 | Audit log query-able dall'admin | client + server |
-| 3 | Import/export Markdown e JSON | client |
-| 4 | Commenti thread + reazioni 👍👎 | client + server |
-| 5 | Web app (subset funzionalità client) | nuovo modulo `apps/web` |
-| 6 | Browser extension Manifest V3 | nuovo modulo `apps/extension` |
-| 7 | Native Messaging Host extension ↔ desktop | bridge in `src-tauri` |
+| # | Step | Modulo principale |
+|---|------|-------------------|
+| 1 | Cambio licenza GPL 2.0 → AGPL 3.0 | repo-wide |
+| 2 | Versioning completo prompt + rollback | client + server |
+| 3 | Audit log query-able dall'admin | client + server |
+| 4 | Import/export Markdown e JSON | client |
+| 5 | Auto-update silenzioso (NSIS per-user + Tauri Updater) | client |
+| 6 | Server Go cross-platform senza Docker | server |
+| 7 | MCP server (stdio + HTTP/SSE) | nuovo modulo `apps/mcp-server` |
+| 8 | CLI `pap` | nuovo modulo `apps/cli` |
 
 ---
 
-## Step 1 — Versioning completo dei prompt
+## Step 1 — Cambio licenza GPL 2.0 → AGPL 3.0
 
-Lo schema `PromptVersions` è già presente da Fase 1, ma non veniva popolato. Ora ogni save crea una nuova versione, e va aggiunto rollback.
+Da fare per primo, prima di qualsiasi altra modifica. Chiude il loophole SaaS (chi ospita il codice come servizio è obbligato a pubblicare modifiche) e segnala posizione del progetto.
 
-- [ ] Hook su update prompt: insert in `PromptVersions` con snapshot completo (Title, Description, Body, Visibility, TargetModel)
+- [ ] Sostituisci file `LICENSE` con testo ufficiale AGPL 3.0 (https://www.gnu.org/licenses/agpl-3.0.txt)
+- [ ] Aggiorna `package.json` root e `apps/client/package.json`: `"license": "AGPL-3.0-only"`
+- [ ] Aggiorna `apps/client/src-tauri/Cargo.toml`: `license = "AGPL-3.0-only"`
+- [ ] Aggiorna `apps/server/go.mod` e `LICENSE` server-side se separato
+- [ ] Header AGPL ai file sorgente principali (script `scripts/license-header.sh` per inserimento automatico, ortodosso ma opzionale)
+- [ ] Aggiorna `README.md`: badge license + sezione "Licenza" con razionale del cambio
+- [ ] Crea `docs/licenza.md` con razionale, impatto pratico (cosa cambia per chi usa, chi forka, chi ospita), confronto vs GPL 2.0
+- [ ] Aggiorna `CONTRIBUTING.md` con DCO (Developer Certificate of Origin) — meno burocratico di CLA
+- [ ] CHANGELOG: voce dedicata in v0.2.0 con highlight del cambio licenza
+- [ ] Annuncio nelle release notes v0.2.0
+
+## Step 2 — Versioning completo dei prompt
+
+Lo schema `PromptVersions` è già presente da Fase 1, ma non viene popolato. Ora ogni save crea una nuova versione, e si aggiunge rollback.
+
+- [ ] Hook su update prompt: insert in `PromptVersions` con snapshot completo (`Title, Description, Body, Visibility, TargetModel, FolderId`)
 - [ ] Indice composito `(PromptId, Version DESC)` per recupero veloce storia
 - [ ] Comando Tauri `prompt_get_history(promptId)` → lista versioni con metadati (autore, timestamp, diff summary)
-- [ ] Comando Tauri `prompt_rollback(promptId, targetVersion)` → applica versione storica come nuova testa (mantiene audit trail)
+- [ ] Comando Tauri `prompt_rollback(promptId, targetVersion)` → applica versione storica come nuova testa, mantiene audit trail
 - [ ] **UI**: pannello "Cronologia" nel dettaglio prompt (Libreria) con lista versioni cliccabili
-- [ ] **UI**: modale "Versione X — anteprima" con confronto fianco a fianco (preview only, diff visivo arriva in Fase 4)
+- [ ] **UI**: modale "Versione X — anteprima" con preview testuale (diff visivo arriva in Fase 4)
 - [ ] **UI**: pulsante "Ripristina questa versione" con doppia conferma
 - [ ] Limite versioni mantenute: ultime 100 per prompt, oltre cui rolling delete (configurabile in Impostazioni > Vault)
 - [ ] **Sync server**: endpoint `/sync/prompt-versions/{promptId}` per allineare storia tra client team
 - [ ] Test: scrittura → 5 versioni → rollback alla v3 → verifica testa = v3 + nuova v6 generata
 
-## Step 2 — Audit log query-able
+## Step 3 — Audit log query-able
 
 Il log esiste già da Fase 1, ma è "scrivi e dimentica". Ora va reso consultabile.
 
-- [ ] **UI**: nuova sezione "Audit log" in Impostazioni (visibile solo a Admin)
+- [ ] **UI**: nuova sezione "Audit log" in Impostazioni (Admin per workspace team; sempre visibile per personale come strumento debug)
 - [ ] Filtri: range date, utente, tipo azione, tipo entità, testo libero
 - [ ] Tabella virtualizzata (per gestire 10k+ righe senza lag)
 - [ ] Export CSV del filtro corrente
-- [ ] **Server**: endpoint `/audit/query` con filtri lato server (per workspace team)
-- [ ] Performance: aggiungere indici su `(WorkspaceId, OccurredAt DESC)`, `(UserId, OccurredAt DESC)`, `(EntityType, EntityId)`
+- [ ] **Server**: endpoint `/audit/query` con filtri lato server
+- [ ] Performance: indici su `(WorkspaceId, OccurredAt DESC)`, `(UserId, OccurredAt DESC)`, `(EntityType, EntityId)`
 - [ ] Retention policy: configurabile in Impostazioni, default 365 giorni, cleanup nightly
-- [ ] **Privacy**: in modalità personale l'audit log resta locale e ha senso più tecnico (debug); per team è strumento di compliance
 
-## Step 3 — Import/export Markdown e JSON
+## Step 4 — Import/export Markdown e JSON
 
-La portabilità è non-negoziabile (stai usando GPL 2.0, niente lock-in).
+Portabilità non-negoziabile. Con AGPL 3.0 il diritto di portare via i propri dati è ancora più centrale.
 
-- [ ] **Export JSON**: schema documentato `docs/formato-export-json.md`, versionato (`schemaVersion: 1`), include prompts, versioni, tag, metadati workspace
-- [ ] **Export Markdown**: un file `.md` per prompt con front-matter YAML (title, description, tags, visibility, target-model), body con segnaposti `{{...}}` preservati, oppure un singolo `.md` aggregato
+- [ ] **Export JSON**: schema documentato `docs/formato-export-json.md`, versionato (`schemaVersion: 1`), include prompts, versioni, tag, cartelle (anticipate Fase 3 nello schema), metadati workspace
+- [ ] **Export Markdown**: un file `.md` per prompt con front-matter YAML (title, description, tags, visibility, target-model, folder), body con segnaposti `{{...}}` preservati, oppure singolo `.md` aggregato con sezioni
 - [ ] **Import JSON**: validazione schema, dry-run con report (N prompt nuovi, M aggiornati, K conflitti), modalità "skip / overwrite / rinomina"
 - [ ] **Import Markdown**: parser front-matter (YAML), creazione tag mancanti automatica, fallback per file senza front-matter (titolo = filename)
 - [ ] **Bulk operations**: zip di multipli `.md` accettato in import
 - [ ] **UI**: pulsanti dedicati in Impostazioni > Vault, drag-and-drop su Libreria
-- [ ] **CLI helper opzionale**: piccolo script Node/Deno in `scripts/` per import batch fuori dall'app (utile per migrazioni da altri tool)
+- [ ] **CLI helper**: il nuovo CLI `pap` (Step 8) avrà comandi `pap export` / `pap import` per scripting fuori dall'app
 - [ ] Test: round-trip completo (export → wipe vault → import → verifica equivalenza)
 
-## Step 4 — Commenti sui prompt (server)
+## Step 5 — Auto-update silenzioso
 
-Estensione del server di sync. Sviluppare prima il backend, poi UI.
+Obiettivo: ogni aggiornamento di PaP avviene **senza UAC, senza popup di setup, senza interazione utente**. Modello Chrome / VSCode.
 
-- [ ] Nuova tabella server `Comments`: `Id, PromptId, AuthorUserId, ParentCommentId (NULL per root), Body, Reactions (JSON), CreatedAt, UpdatedAt, DeletedAt`
-- [ ] Endpoint `POST /prompts/{id}/comments` (crea), `GET /prompts/{id}/comments` (lista thread), `PATCH /comments/{id}` (edit), `DELETE /comments/{id}` (soft delete), `POST /comments/{id}/reactions` (toggle reaction)
-- [ ] WebSocket: nuovo channel `comments:{promptId}` per push real-time
-- [ ] **Permessi**: tutti i ruoli (Admin/Editor/User) possono commentare e reagire; solo l'autore o Admin possono editare/cancellare
-- [ ] **Mention**: parser `@nomeutente` nel body, notifica via WebSocket all'utente menzionato
-- [ ] Rate limit: max 10 commenti/min per utente per evitare flood
-- [ ] **Solo per workspace team** (i commenti su prompt privati non hanno senso)
+**Installer**:
+- [ ] Switch da MSI machine-wide a NSIS per-user su Windows
+- [ ] `tauri.conf.json` bundle config: NSIS con `installerMode: "perUser"`, install path `%LOCALAPPDATA%\Programs\Prompt a Porter\`
+- [ ] Niente UAC mai più richiesto né per install né per update
+- [ ] MSI rimosso dalla matrice di build (niente più `.msi` come asset di release per Windows)
 
-## Step 5 — Commenti sui prompt (client UI)
+**Update mechanism**:
+- [ ] Aggiungi crate `tauri-plugin-updater` al client
+- [ ] Genera coppia chiavi Ed25519 con `tauri signer generate`. Private key in GitHub Secrets (`TAURI_SIGNING_PRIVATE_KEY`), public key embedded nel binario via `tauri.conf.json`
+- [ ] Endpoint `latest.json` ospitato come asset della release GitHub (`https://github.com/.../releases/latest/download/latest.json`)
+- [ ] Manifest format JSON con `version, notes, pub_date, platforms.{platform-arch}.{url, signature}` per ciascun bundle (NSIS exe, dmg, AppImage)
+- [ ] Workflow GitHub Actions: a ogni tag `v*`, oltre a buildare i bundle, genera `latest.json` firmato e lo carica come asset
 
-- [ ] Nuovo componente `CommentThread.svelte` nel pannello dettaglio Libreria
-- [ ] Editor commento con supporto Markdown base (bold, italic, code inline, code block, link) — riusa CodeMirror 6 in modalità minimal
-- [ ] Mention picker con autocomplete utenti workspace (`@`)
-- [ ] Reazioni rapide (👍 funziona, 👎 no, 💡 idea, ❓ domanda) — emoji minimalista, non eccessiva
-- [ ] Indicatore "N commenti" nella card della lista
-- [ ] Notifica in-app per mention (toast) + dot rosso su tray icon
-- [ ] **Sync**: WebSocket subscription a `comments:{promptId}` quando il prompt è aperto
-- [ ] **i18n**: tutte le stringhe in `it.json` e `en.json`
-- [ ] Test: round-trip commento, edit, delete, reazione, mention con notifica
+**UX**:
+- [ ] Background download silenzioso al boot, dopo 30s di idle, max 1 check ogni 4h
+- [ ] Toast non bloccante "Aggiornamento disponibile (vX.Y.Z) — Riavvia per installare" con bottone "Riavvia ora" e "Più tardi"
+- [ ] Apply automatico al prossimo restart se "Più tardi" è stato cliccato
+- [ ] Setting in Impostazioni > Avanzate: "Aggiornamenti automatici" (default on), "Canale" (stable / beta — beta arriva più tardi), "Verifica ora"
 
-## Step 6 — Web app (Fase 2)
+**Linux**:
+- [ ] AppImage usa AppImageUpdate (delta updates via zsync) — best path per Linux
+- [ ] `.deb` e `.rpm` resta install una-tantum, no auto-update (gestiti da apt/dnf su repo apposito, rimandato a 1.x)
 
-Nuovo modulo `apps/web/`. Subset di funzionalità del client desktop, **read-heavy** (consultare e usare prompt). Editing pesante resta su desktop.
+**macOS**:
+- [ ] Stesso flusso Tauri Updater, sostituzione `.app` bundle al restart
+- [ ] **Solo arm64 ufficialmente** (coerente con scelta release Fase 1)
 
-**Stack**:
-- **SvelteKit** (server-side rendering opzionale, ma in pratica useremo solo SPA mode)
-- **Tailwind v4** (questa volta sì, perché siamo in SPA pubblica e i tokens vivono in CSS variables comunque)
-- Oppure: **stesse CSS variables del client** + componenti Svelte 5 condivisi via package `packages/ui-shared`
-- Hosting: SPA buildata + servita dallo stesso binario Go (embed con `embed.FS`)
+**Authenticode signing**: rimandato. Senza signing l'auto-update funziona, ma il primo run post-install/post-update mostra SmartScreen warning. Vedi `docs/decisioni/authenticode-signing.md` per la valutazione attuale (Certum Open Source come prima opzione gratuita per progetti AGPL).
 
-**Funzionalità incluse**:
-- [ ] Login (riusa stessi endpoint `/auth/login`)
-- [ ] Libreria read-only con tutte le viste (sidebar + lista + dettaglio)
-- [ ] Renderer/Compilatore funzionante (form + copy)
-- [ ] Commenti (read + write)
-- [ ] Ricerca full-text via API server (`/search?q=`)
-- [ ] **Differenza chiave**: niente vault locale, niente cifratura at-rest sul client web — la web app è **read-only sui prompt cifrati** che il server custodisce in chiaro per i workspace team
+**Test**:
+- [ ] Build dev → bump version locale → host fake updater (`npx http-server` con `latest.json`) → verifica scarica + applica
+- [ ] Test downgrade rifiutato (release con version inferiore non viene applicata)
+- [ ] Test signature mismatch rifiutato (latest.json modificato senza re-firma → updater rifiuta)
 
-**Funzionalità escluse dalla web app**:
-- ❌ Creazione/modifica prompt (rimando a desktop con CTA "Apri in Prompt a Porter")
-- ❌ Impostazioni vault, hotkey, tema avanzato
-- ❌ Tray icon, command palette globale (è un'app web, non un'app desktop)
+## Step 6 — Server Go cross-platform senza Docker
 
-- [ ] Embedding statico nel server: `go:embed dist/web/*` → servito da `/`
-- [ ] CSP stretta, nessuna risorsa esterna
-- [ ] Build CI: `pnpm -F @pap/web build` → output in `apps/server/internal/web/dist/`
-- [ ] Test E2E con Playwright sui flussi principali
+Obiettivo: il server `papsync` è un **single static binary**, deployabile come servizio nativo su Windows e Linux. Docker resta un'opzione, non un requisito.
 
-## Step 7 — Browser extension (Manifest V3)
+**Refactor SQLite**:
+- [ ] Switch driver SQLite: `mattn/go-sqlite3` → `modernc.org/sqlite` (porting Go puro di SQLite, zero CGO)
+- [ ] Rimuovere `CGO_ENABLED=1` da Dockerfile e workflow CI
+- [ ] Verificare compatibilità SQL: nessuna query usa estensioni CGO-only (SQLCipher è solo client-side, non lato server)
 
-Nuovo modulo `apps/extension/`. Compatibilità: **Chrome 120+, Edge 120+, Firefox 121+**.
+**Cross-compile**:
+- [ ] Matrix CI: Linux x64+arm64+arm7, Windows x64+arm64, macOS x64+arm64
+- [ ] Single static binary ~25 MB
+- [ ] Workflow GitHub Actions: cross-compile da Linux runner verso tutti i target (con pure Go, niente cross-toolchain)
 
-**Stack**:
-- Manifest V3 puro (TS compilato in JS)
-- UI popup in **Svelte 5** compilato standalone (bundle separato dal client desktop)
-- Stessi CSS variables/tokens
-- Lucide Icons
-- Niente framework UI esterni
+**Service integration**:
+- [ ] Pacchetto `golang.org/x/sys/windows/svc` per registrazione come Windows Service nativo
+- [ ] Linux systemd unit file `papsync.service` shippato in `.deb` / `.rpm` / tarball
+- [ ] Comandi:
+  - `papsync run` — foreground (dev/test, default)
+  - `papsync install [--listen :8080] [--data-dir ...]` — registra come service
+  - `papsync start` / `stop` / `restart` / `uninstall`
+  - `papsync status` — stato corrente
+  - `papsync version` — info build
 
-**Architettura**:
-- **Service worker**: gestisce messaging, storage, fetch verso desktop client (Native Messaging) o server (fallback)
-- **Popup**: command palette compatta (~360×480), variante mobile-friendly del design Fase 1
-- **Content script**: iniettato sui domini AI (claude.ai, chatgpt.com, gemini.google.com, copilot.microsoft.com), rileva textarea attiva e abilita injection
-- **Storage**: nessun dato cifrato sensibile in `chrome.storage` — solo cache leggera dei prompt più usati per uso offline (con TTL)
+**Distribuzione**:
+- [ ] Tarball multipiattaforma: `papsync-{version}-{os}-{arch}.tar.gz`
+- [ ] `.deb` + `.rpm` per Linux (post-install: `systemctl daemon-reload`, copia unit file)
+- [ ] Installer NSIS per Windows (per-machine; per il server tipicamente serve service di sistema, non per-user)
+- [ ] Dockerfile aggiornato pure Go (build più veloce, niente alpine vs glibc) come opzione
+- [ ] Compose file di esempio in `examples/docker-compose.yml` per chi preferisce container
 
-- [ ] Scaffolding Manifest V3 con build Vite multi-target (Chrome/Firefox build separate per piccole differenze)
-- [ ] UI popup minimal: search → lista risultati → seleziona prompt → form segnaposti → "Inietta nella chat" o "Copia"
-- [ ] Permission minime: `activeTab`, `nativeMessaging`, host permissions per i domini AI
-- [ ] Logo + icone (16/32/48/128) — derivati dal glifo tray
-- [ ] Settings UI minimal: server URL (per fallback), preferenze visualizzazione
-- [ ] **Privacy**: nessuna telemetria, nessun analytics, nessun fetch di terze parti
-- [ ] Pubblicazione store **rimandata a fine Fase 2** (prima validazione interna)
+**Documentazione**:
+- [ ] `docs/server-deploy.md` con esempi setup-as-service per Win + Linux + macOS + Docker
+- [ ] `docs/server-config.md` con tutte le env vars / flags disponibili
 
-## Step 8 — Native Messaging Host
+**Test**:
+- [ ] Smoke deploy su Win10, Win11, Ubuntu 22.04, Debian 12, Alpine, macOS arm64
+- [ ] Sanity check service start/stop su tutti i target
+- [ ] Test integrazione client ↔ server con binari nativi (no container)
 
-Bridge tra extension browser e client desktop. Quando il client desktop è in running, l'extension parla con lui (zero latenza, accesso al vault locale cifrato). Se non c'è, fallback su API server.
+## Step 7 — MCP server
 
-- [ ] **Lato client desktop (Rust)**: nuovo binario companion `pap-native-host` (oppure subcommand di `pap` con flag `--native-host`)
-- [ ] Protocollo Native Messaging standard: stdin/stdout con messaggi JSON length-prefixed
-- [ ] Manifest registrato sul SO: file JSON in path specifico per browser e OS:
-  - Chrome/Edge Linux: `~/.config/google-chrome/NativeMessagingHosts/it.promptaporter.host.json`
-  - Chrome/Edge macOS: `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`
-  - Chrome/Edge Windows: registry `HKEY_CURRENT_USER\Software\Google\Chrome\NativeMessagingHosts\`
-  - Firefox: path simili
-- [ ] Installer/uninstaller del manifest gestito dall'app desktop al primo avvio (con consenso utente)
-- [ ] **Sicurezza**: solo extension con `extension_id` allowlistato (incluso nel manifest) può connettersi
-- [ ] Comandi supportati: `list_prompts`, `search`, `render`, `get_recent`, `health`
-- [ ] Fallback HTTP locale (es. `localhost:11811` con token random rigenerato a ogni avvio) come piano B se Native Messaging fallisce
-- [ ] Test integrazione: extension → host → vault → response, su tutti e tre gli OS
+Esporre la libreria PaP a Claude e altri agenti AI via Model Context Protocol. Anticipato da Fase 5 perché è il moltiplicatore di valore più importante nel breve termine.
 
-## Step 9 — Injection nei siti AI
+- [ ] Nuovo modulo `apps/mcp-server/` in **TypeScript** (SDK ufficiale `@modelcontextprotocol/sdk`)
+- [ ] Trasporti: **stdio** (Claude Desktop, Cursor, agenti locali) + **HTTP/SSE** (agenti remoti)
+- [ ] **Tools esposti**:
+  - `pap_search(query, limit?, target_model?, tags?, folder?)` → ricerca prompt (FTS5 in Fase 2, ibrida in Fase 3)
+  - `pap_get(prompt_id)` → dettaglio prompt
+  - `pap_list_recent(limit?)` → ultimi usati
+  - `pap_render(prompt_id, vars)` → compila template con valori
+  - `pap_create_draft(title, body, tags?, folder?)` → crea bozza (Status='draft', richiede approval manuale via UI desktop in Fase 4)
+- [ ] **Resources**:
+  - `pap://prompt/{id}` → resource del singolo prompt
+  - `pap://workspace/{id}/recent` → lista recenti
+- [ ] **Prompts MCP** (sì, prompt-of-prompts):
+  - `pap_help_write_prompt` → guida l'AI a scrivere un prompt seguendo regole linting Fase 3
+- [ ] **Auth**:
+  - stdio: vault locale via stdin/stdout (MCP server come child di Claude Desktop, accede al vault via Tauri sidecar)
+  - HTTP/SSE: token Bearer scopato a workspace
+- [ ] **Permission gate**: ogni tool call mostra notifica desktop "Claude vuole leggere prompt 'X', consenti?" (auto-allow per workspace personali, ask per team)
+- [ ] **Limiti hard**: nessun MCP tool che modifica/cancella senza approval esplicita umana
+- [ ] **Documentazione**: `docs/mcp-integration.md` con esempi concreti per Claude Desktop, Cursor, custom MCP clients
+- [ ] Test: integrazione end-to-end con Claude Desktop locale + agente HTTP custom
 
-Content script che integra Prompt a Porter dentro le interfacce AI.
+## Step 8 — CLI `pap`
 
-- [ ] **Site adapters** specifici per ogni dominio:
-  - `claude.ai`: detect textarea principale, inject button "📝 PaP" accanto
-  - `chatgpt.com`: idem
-  - `gemini.google.com`: idem
-  - `copilot.microsoft.com`: idem
-- [ ] Adapter pattern: ogni adapter implementa `detectInputElement()`, `insertText(text)`, `attachUI()`
-- [ ] Fallback generico: hotkey configurable (default `Ctrl+Shift+/`) apre il popup ovunque, copia output
-- [ ] Floating action button discreto, posizionato dove l'utente l'aspetta (vicino al composer)
-- [ ] Animazione di iniezione minimal (typing effect opzionale, off di default)
-- [ ] Resilienza ai cambi DOM: ogni adapter ha selectors fallback multipli, e si auto-disabilita pulito se rileva struttura cambiata
-- [ ] **Test manuale obbligatorio**: provare su tutti e 4 i siti, verificare zero break del sito host
+Strumento da terminale per power user e automazioni. Anticipato da Fase 5 perché si appoggia naturalmente sullo stack server (Go) appena cross-platform-izzato.
 
-## Step 10 — Quality gate Fase 2
+- [ ] Modulo `apps/cli/` in **Go** (single binary multipiattaforma, riusa stack server)
+- [ ] Comandi:
+  - `pap login` — autentica contro server o usa fallback locale
+  - `pap search "query" [--target=claude-sonnet] [--folder=marketing] [--tag=email]` — output table o JSON
+  - `pap get <id>` — mostra prompt dettaglio
+  - `pap render <id> --var key=value ...` — compila e stampa
+  - `pap render <id> --var-file vars.yaml | xclip` — pipe-friendly
+  - `pap new <file.md>` — crea prompt da file Markdown con front-matter
+  - `pap export --format=json [--workspace=team] [--folder=...]` — bulk export
+  - `pap import file.json` — bulk import con dry-run support
+  - `pap version` — info build + server connesso
+- [ ] **Output formats**: `--format=table` (default) | `json` | `yaml` | `plain`
+- [ ] Config in `~/.config/pap/config.toml` (Linux/macOS) / `%APPDATA%\pap\config.toml` (Windows): server URL, token attivo, workspace default, output preferito
+- [ ] Distribuito come binario singolo: `pap-{version}-{os}-{arch}` accanto a `papsync` server
+- [ ] Possibilmente `cargo install pap` o `brew install pap` o repo apt/dnf — rimandato a 1.x
+- [ ] **Test**: ogni comando ha test E2E contro server in container o binario nativo
 
-- [ ] Test coverage ≥ 70% su moduli core (versioning, comments, import/export, native-messaging)
-- [ ] Test E2E Playwright: flusso completo desktop ↔ web ↔ extension
-- [ ] Manual smoke test su tutte le 8 superfici Fase 1 + nuove di Fase 2
-- [ ] Audit di sicurezza: dipendenze (`pnpm audit`, `cargo audit`, `govulncheck`), CSP, permessi extension
-- [ ] Performance: ricerca full-text su 5000 prompt < 50ms, sync delta su 1000 modifiche < 5s
-- [ ] CI green su Win/macOS/Linux per client; Linux/Docker per server; build extension Chrome+Firefox
+## Step 9 — Quality gate Fase 2
 
-## Step 11 — Documentazione e release
+- [ ] Test coverage ≥ 70% sui nuovi moduli (auto-update, MCP server, CLI, modernc.org/sqlite path)
+- [ ] Test E2E Tauri Updater: build dev → fake update server → verifica download + apply
+- [ ] Server cross-compile CI green su Win+Linux+macOS, smoke install su almeno 3 distribuzioni Linux
+- [ ] Smoke test installer NSIS per-user su Win10 e Win11 (verifica nessun UAC)
+- [ ] Audit deps: `pnpm audit`, `cargo audit`, `govulncheck` clean
+- [ ] Verifica licenza: `licensee` o `reuse lint` confermano AGPL 3.0 ovunque
+- [ ] Build release v0.2.0 testata su 3 sistemi diversi (almeno Win + Linux + macOS arm64)
 
-- [ ] Aggiorna `docs/architettura.md` con i nuovi moduli (web, extension, native host)
-- [ ] Nuovo `docs/extension-distribuzione.md`: come installare extension dev mode, come pubblicare in store (rimandato)
-- [ ] Nuovo `docs/native-messaging.md`: protocollo, troubleshooting per OS
-- [ ] Nuovo `docs/web-app-deploy.md`: come deployare la web app (è embedded nel server, ma documentare cache control, ecc.)
-- [ ] Aggiorna `docs/api-server.md` con endpoint commenti, versioni, audit
-- [ ] Aggiorna `docs/formato-export-json.md`
-- [ ] Changelog v0.2.0
-- [ ] Crea `docs/todo-fase-3.md` (parti dal file di Fase 3 di questo documento)
-- [ ] Tag `v0.2.0-fase2`, release notes con highlights
-- [ ] Merge `fase-2` → `main` con squash o merge commit (a scelta)
+## Step 10 — Documentazione e release
+
+- [ ] Aggiorna `docs/architettura.md` con MCP, CLI, auto-update, server cross-platform, AGPL 3.0
+- [ ] Nuovo `docs/auto-update.md`: meccanica, troubleshooting, recovery in caso di update corrotto
+- [ ] Nuovo `docs/server-deploy.md`: setup as service Win/Linux + opzionale Docker
+- [ ] Nuovo `docs/mcp-integration.md`: esempi Claude Desktop, Cursor, custom client
+- [ ] Nuovo `docs/cli-reference.md`: tutti i comandi con esempi
+- [ ] Nuovo `docs/licenza.md`: razionale AGPL 3.0
+- [ ] Nuovo `docs/formato-export-json.md`: schema export
+- [ ] Nuovo `docs/decisioni/authenticode-signing.md`: stato attuale (rimandato), provider considerati, criteri per attivarlo
+- [ ] Aggiorna `docs/api-server.md` con nuovi endpoint (audit/query, prompt-versions, sync update manifest)
+- [ ] CHANGELOG `v0.2.0` con highlight (AGPL, auto-update, MCP, CLI, cross-platform server)
+- [ ] Aggiorna `docs/todo-fase-3.md` (già esistente, già rivisto in linea con questa nuova roadmap)
+- [ ] Tag `v0.2.0`, release notes con highlights e breaking changes (cambio licenza)
+- [ ] Merge `fase-2` → `main`
 
 ---
 
-## Decisioni discrezionali da prendere prima di iniziare
+## Decisioni discrezionali residue
 
-1. **Web app SvelteKit o pure SPA Svelte 5?** SvelteKit dà SSR/route più strutturate, pure SPA è più snella. Preferenza mia: **pure SPA** se non servono SSR e SEO.
-2. **Tailwind v4 o solo CSS variables?** Tailwind aiuta sulla velocità ma aggiunge una dipendenza. Coerente con l'app desktop sarebbe **solo CSS variables**.
-3. **Embed extension popup nel monorepo o repo separato?** Monorepo è più ordinato per coerenza versioni; repo separato facilita pubblicazione store. Preferenza: **monorepo per ora**, eventuale split successivo.
-4. **Modello-target del prompt arriva qui o in Fase 3?** È utile averlo già dalla web/extension per filtrare. Valuta se anticiparlo.
+1. **Endpoint `latest.json`** per auto-update: GitHub Releases (gratis, semplice) o server di sync (controllo rollout %)? Default raccomandato: **GitHub Releases** finché non c'è bisogno di canary/staged rollout.
+2. **Authenticode signing**: applicare a Certum Open Source (gratis se PaP qualifica come AGPL OSS). Vedi `docs/decisioni/authenticode-signing.md`.
 
 ---
 
@@ -219,5 +270,10 @@ Content script che integra Prompt a Porter dentro le interfacce AI.
 
 - Fase 1: `docs/todo-fase-1.md` (chiusa)
 - Fase 3 (prossima): `docs/todo-fase-3.md`
-- Schema dati base: `docs/schema-dati.md`
+- Schema dati: `docs/schema-dati.md`
 - API server: `docs/api-server.md`
+- AGPL 3.0: https://www.gnu.org/licenses/agpl-3.0.html
+- Tauri Updater: https://v2.tauri.app/plugin/updater/
+- modernc.org/sqlite: https://gitlab.com/cznic/sqlite
+- MCP SDK TypeScript: https://github.com/modelcontextprotocol/typescript-sdk
+- Tauri Windows signing: https://v2.tauri.app/distribute/sign/windows/
