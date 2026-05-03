@@ -21,6 +21,11 @@ static MIGRAZIONI: &[Migrazione] = &[
         nome: "versioning_completo",
         sql: include_str!("../migrations/V002__versioning_completo.sql"),
     },
+    Migrazione {
+        versione: 3,
+        nome: "indici_audit",
+        sql: include_str!("../migrations/V003__indici_audit.sql"),
+    },
 ];
 
 /// Crea la tabella di tracking se non esiste.
@@ -91,8 +96,8 @@ mod test {
     fn migrazioni_su_db_nuovo() {
         let conn = Connection::open_in_memory().unwrap();
         let n = esegui_migrazioni(&conn).unwrap();
-        assert!(n >= 2, "Tutte le migrazioni devono essere applicate (almeno 2)");
-        assert_eq!(versione_corrente(&conn).unwrap(), 2);
+        assert!(n >= 3, "Tutte le migrazioni devono essere applicate (almeno 3)");
+        assert_eq!(versione_corrente(&conn).unwrap(), 3);
     }
 
     #[test]

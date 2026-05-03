@@ -247,6 +247,9 @@ pub fn run() {
             versioning::prompt_rollback,
             sync::sync_applica_delta,
             audit::audit_lista,
+            audit::audit_query,
+            audit::audit_export_csv,
+            audit::audit_cleanup_oltre_giorni,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())

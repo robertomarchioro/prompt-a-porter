@@ -90,8 +90,25 @@
   let toastVisibile = $state(false);
   let toastTesto = $state("");
   let syncState = $state<SyncState>(syncGetState());
+  interface AuditPaginato {
+    voci: VoceAudit[];
+    totale: number;
+    limite: number;
+    offset: number;
+  }
+
   let auditVoci = $state<VoceAudit[]>([]);
   let auditFiltro = $state<string | undefined>(undefined);
+  let auditAzione = $state("");
+  let auditTesto = $state("");
+  let auditDa = $state("");
+  let auditA = $state("");
+  let auditOffset = $state(0);
+  let auditTotale = $state(0);
+  const auditLimite = 50;
+  let auditCleanupGiorni = $state(365);
+  let auditMostraConfermaCleanup = $state(false);
+  let auditEsportazioneInCorso = $state(false);
 
   $effect(() => {
     caricaDati();
@@ -199,14 +216,102 @@
     toast("Percorso copiato");
   }
 
+  function buildAuditFiltro() {
+    return {
+      da: auditDa ? `${auditDa}T00:00:00Z` : null,
+      a: auditA ? `${auditA}T23:59:59Z` : null,
+      user_id: null,
+      azione_like: auditAzione || null,
+      tipo_entita: auditFiltro ?? null,
+      testo: auditTesto || null,
+      limite: auditLimite,
+      offset: auditOffset,
+    };
+  }
+
   async function caricaAudit() {
     try {
-      auditVoci = await invoke<VoceAudit[]>("audit_lista", {
-        limite: 200,
-        tipoEntita: auditFiltro ?? null,
+      const res = await invoke<AuditPaginato>("audit_query", {
+        filtro: buildAuditFiltro(),
       });
+      auditVoci = res.voci;
+      auditTotale = res.totale;
     } catch {
       auditVoci = [];
+      auditTotale = 0;
+    }
+  }
+
+  function applicaFiltri() {
+    auditOffset = 0;
+    caricaAudit();
+  }
+
+  function resetFiltri() {
+    auditFiltro = undefined;
+    auditAzione = "";
+    auditTesto = "";
+    auditDa = "";
+    auditA = "";
+    auditOffset = 0;
+    caricaAudit();
+  }
+
+  function paginaPrev() {
+    if (auditOffset >= auditLimite) {
+      auditOffset -= auditLimite;
+      caricaAudit();
+    }
+  }
+
+  function paginaNext() {
+    if (auditOffset + auditLimite < auditTotale) {
+      auditOffset += auditLimite;
+      caricaAudit();
+    }
+  }
+
+  async function esportaAudit() {
+    auditEsportazioneInCorso = true;
+    try {
+      const csv = await invoke<string>("audit_export_csv", {
+        filtro: { ...buildAuditFiltro(), limite: 50000, offset: 0 },
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      a.download = `audit-export-${ts}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toastTesto = "Audit log esportato";
+      toastVisibile = true;
+      setTimeout(() => (toastVisibile = false), 3000);
+    } catch (e) {
+      toastTesto = `Errore esportazione: ${String(e)}`;
+      toastVisibile = true;
+      setTimeout(() => (toastVisibile = false), 4000);
+    } finally {
+      auditEsportazioneInCorso = false;
+    }
+  }
+
+  async function eseguiCleanup() {
+    try {
+      const eliminate = await invoke<number>("audit_cleanup_oltre_giorni", {
+        giorni: auditCleanupGiorni,
+      });
+      toastTesto = `${eliminate} righe eliminate`;
+      toastVisibile = true;
+      setTimeout(() => (toastVisibile = false), 3000);
+      auditMostraConfermaCleanup = false;
+      auditOffset = 0;
+      await caricaAudit();
+    } catch (e) {
+      toastTesto = `Errore cleanup: ${String(e)}`;
+      toastVisibile = true;
+      setTimeout(() => (toastVisibile = false), 4000);
     }
   }
 
@@ -577,49 +682,121 @@
             <p class="sez-desc">
               Cronologia delle operazioni eseguite nel vault
             </p>
-            <div class="audit-toolbar">
-              <div class="seg-control">
-                <button
-                  class="seg-btn"
-                  class:seg-btn--attivo={auditFiltro === undefined}
-                  onclick={() => { auditFiltro = undefined; caricaAudit(); }}
-                  type="button">Tutte</button
-                >
-                <button
-                  class="seg-btn"
-                  class:seg-btn--attivo={auditFiltro === "Prompt"}
-                  onclick={() => { auditFiltro = "Prompt"; caricaAudit(); }}
-                  type="button">Prompt</button
-                >
-                <button
-                  class="seg-btn"
-                  class:seg-btn--attivo={auditFiltro === "Vault"}
-                  onclick={() => { auditFiltro = "Vault"; caricaAudit(); }}
-                  type="button">Vault</button
-                >
-                <button
-                  class="seg-btn"
-                  class:seg-btn--attivo={auditFiltro === "Sync"}
-                  onclick={() => { auditFiltro = "Sync"; caricaAudit(); }}
-                  type="button">Sync</button
-                >
+
+            <div class="audit-filtri">
+              <div class="audit-filtri-riga">
+                <div class="seg-control">
+                  <button
+                    class="seg-btn"
+                    class:seg-btn--attivo={auditFiltro === undefined}
+                    onclick={() => { auditFiltro = undefined; applicaFiltri(); }}
+                    type="button">Tutte</button
+                  >
+                  <button
+                    class="seg-btn"
+                    class:seg-btn--attivo={auditFiltro === "Prompt"}
+                    onclick={() => { auditFiltro = "Prompt"; applicaFiltri(); }}
+                    type="button">Prompt</button
+                  >
+                  <button
+                    class="seg-btn"
+                    class:seg-btn--attivo={auditFiltro === "Vault"}
+                    onclick={() => { auditFiltro = "Vault"; applicaFiltri(); }}
+                    type="button">Vault</button
+                  >
+                  <button
+                    class="seg-btn"
+                    class:seg-btn--attivo={auditFiltro === "Sync"}
+                    onclick={() => { auditFiltro = "Sync"; applicaFiltri(); }}
+                    type="button">Sync</button
+                  >
+                </div>
               </div>
-              <Button
-                variante="ghost"
-                dimensione="sm"
-                onclick={caricaAudit}
-              >
-                Aggiorna
-              </Button>
+
+              <div class="audit-filtri-riga">
+                <input
+                  type="text"
+                  class="audit-input"
+                  placeholder="Filtra per azione (es. creato, eliminato)"
+                  bind:value={auditAzione}
+                  onkeydown={(e) => e.key === "Enter" && applicaFiltri()}
+                />
+                <input
+                  type="text"
+                  class="audit-input"
+                  placeholder="Cerca testo libero"
+                  bind:value={auditTesto}
+                  onkeydown={(e) => e.key === "Enter" && applicaFiltri()}
+                />
+              </div>
+
+              <div class="audit-filtri-riga">
+                <label class="audit-data-label">
+                  <span>Da</span>
+                  <input
+                    type="date"
+                    class="audit-input audit-input--data"
+                    bind:value={auditDa}
+                  />
+                </label>
+                <label class="audit-data-label">
+                  <span>A</span>
+                  <input
+                    type="date"
+                    class="audit-input audit-input--data"
+                    bind:value={auditA}
+                  />
+                </label>
+                <Button variante="primary" dimensione="sm" onclick={applicaFiltri}>
+                  Applica filtri
+                </Button>
+                <Button variante="ghost" dimensione="sm" onclick={resetFiltri}>
+                  Reset
+                </Button>
+                <Button
+                  variante="ghost"
+                  dimensione="sm"
+                  onclick={esportaAudit}
+                  disabled={auditEsportazioneInCorso}
+                >
+                  {auditEsportazioneInCorso ? "Esportazione…" : "Esporta CSV"}
+                </Button>
+              </div>
             </div>
+
+            {#if auditTotale > 0}
+              <div class="audit-paginazione">
+                <span class="audit-paginazione-info">
+                  {auditOffset + 1}–{Math.min(auditOffset + auditLimite, auditTotale)} di {auditTotale}
+                </span>
+                <div class="audit-paginazione-azioni">
+                  <Button
+                    variante="ghost"
+                    dimensione="sm"
+                    onclick={paginaPrev}
+                    disabled={auditOffset === 0}
+                  >
+                    ← Precedente
+                  </Button>
+                  <Button
+                    variante="ghost"
+                    dimensione="sm"
+                    onclick={paginaNext}
+                    disabled={auditOffset + auditLimite >= auditTotale}
+                  >
+                    Successiva →
+                  </Button>
+                </div>
+              </div>
+            {/if}
 
             {#if auditVoci.length === 0}
               <div class="audit-vuoto">
-                <p>Nessuna attività registrata</p>
+                <p>Nessuna attività trovata</p>
               </div>
             {:else}
               <div class="audit-lista">
-                {#each auditVoci as voce}
+                {#each auditVoci as voce (voce.id)}
                   <div class="audit-riga">
                     <div class="audit-info">
                       <span class="audit-azione">
@@ -637,6 +814,54 @@
                 {/each}
               </div>
             {/if}
+
+            <div class="audit-cleanup">
+              <h4 class="audit-cleanup-titolo">Pulizia periodica</h4>
+              <p class="audit-cleanup-desc">
+                Cancella le voci più vecchie di N giorni. Operazione manuale, non recuperabile.
+              </p>
+              {#if !auditMostraConfermaCleanup}
+                <div class="audit-cleanup-form">
+                  <input
+                    type="number"
+                    min="30"
+                    max="3650"
+                    step="30"
+                    class="audit-input audit-input--num"
+                    bind:value={auditCleanupGiorni}
+                  />
+                  <span class="audit-cleanup-suffix">giorni</span>
+                  <Button
+                    variante="ghost"
+                    dimensione="sm"
+                    onclick={() => (auditMostraConfermaCleanup = true)}
+                  >
+                    Pulisci ora
+                  </Button>
+                </div>
+              {:else}
+                <div class="danger-confirm">
+                  <p class="danger-warn">
+                    Stai per eliminare tutte le voci più vecchie di {auditCleanupGiorni} giorni.
+                    L'operazione è irreversibile.
+                  </p>
+                  <div class="danger-btns">
+                    <Button
+                      variante="ghost"
+                      dimensione="sm"
+                      onclick={() => (auditMostraConfermaCleanup = false)}
+                    >Annulla</Button>
+                    <Button
+                      variante="danger"
+                      dimensione="sm"
+                      onclick={eseguiCleanup}
+                    >
+                      Conferma pulizia
+                    </Button>
+                  </div>
+                </div>
+              {/if}
+            </div>
           </div>
         {:else if sezione === "lingua"}
           <div class="sez">
@@ -1138,6 +1363,108 @@
 
   .audit-vuoto p {
     margin: 0;
+  }
+
+  .audit-filtri {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-3);
+  }
+
+  .audit-filtri-riga {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    flex-wrap: wrap;
+  }
+
+  .audit-input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 10px;
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    color: var(--text-default);
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+  }
+
+  .audit-input:focus-visible {
+    outline: 2px solid var(--accent-team);
+    outline-offset: 1px;
+  }
+
+  .audit-input--data {
+    flex: 0 0 auto;
+    width: 160px;
+  }
+
+  .audit-input--num {
+    flex: 0 0 auto;
+    width: 100px;
+  }
+
+  .audit-data-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+
+  .audit-paginazione {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--sp-2) 0;
+    border-bottom: 1px solid var(--border-subtle);
+    margin-bottom: var(--sp-2);
+  }
+
+  .audit-paginazione-info {
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  .audit-paginazione-azioni {
+    display: flex;
+    gap: var(--sp-1);
+  }
+
+  .audit-cleanup {
+    margin-top: var(--sp-5);
+    padding: var(--sp-3);
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+  }
+
+  .audit-cleanup-titolo {
+    margin: 0 0 var(--sp-1);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+    color: var(--text-strong);
+  }
+
+  .audit-cleanup-desc {
+    margin: 0 0 var(--sp-3);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    line-height: var(--lh-relaxed);
+  }
+
+  .audit-cleanup-form {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+
+  .audit-cleanup-suffix {
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
   }
 
   /* ── Info ── */
