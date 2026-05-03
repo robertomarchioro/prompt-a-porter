@@ -72,8 +72,9 @@ Vedi [`CHANGELOG.md`](CHANGELOG.md) per i dettagli e [`docs/todo-fase-1.md`](doc
 
 ## Licenza
 
-**GPL 2.0** con clausola di attribuzione all'autore originale.
-Vedi [`LICENSE`](LICENSE) per i dettagli.
+**[GNU AGPL 3.0](LICENSE)** (Affero General Public License). Chiude il loophole SaaS — chi ospita il codice come servizio ha l'obbligo di pubblicare modifiche. Tutto il codice del progetto è libero, ispezionabile e portabile.
+
+Per dettagli sulle implicazioni pratiche del cambio licenza vedi `docs/licenza.md` (in arrivo).
 
 ## Autore
 
