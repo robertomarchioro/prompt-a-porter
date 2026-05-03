@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { Badge, Button, Field, Input, Toast } from "$lib/components";
+  import { Badge, Toast } from "$lib/components";
   import { estraiSegnaposti, compila, contaCompilati } from "$lib/template";
 
   interface PromptRisultato {

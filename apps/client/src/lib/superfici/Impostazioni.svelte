@@ -71,6 +71,11 @@
     lingua: "it",
     onboarding_completato: true,
     crea_prompt_esempio: true,
+    sync_server_url: "",
+    sync_email: "",
+    sync_token: "",
+    sync_intervallo_sec: 60,
+    sync_abilitato: false,
   });
 
   let vaultPercorso = $state("");

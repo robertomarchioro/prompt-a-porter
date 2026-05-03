@@ -49,7 +49,7 @@ pub fn prompt_cerca(
     state: State<'_, VaultState>,
 ) -> Result<Vec<PromptRisultato>, PapErrore> {
     state.with_conn(|conn| {
-        let risultati = if query.trim().is_empty() {
+        if query.trim().is_empty() {
             let mut stmt = conn.prepare(
                 "SELECT Id, Title, Description, Body, Visibility, IsFavorite, UseCount
                  FROM Prompts
@@ -57,9 +57,11 @@ pub fn prompt_cerca(
                  ORDER BY COALESCE(LastUsedAt, UpdatedAt) DESC
                  LIMIT 20",
             )?;
-            stmt.query_map([], riga_a_prompt)?
+            let risultati: Vec<PromptRisultato> = stmt
+                .query_map([], riga_a_prompt)?
                 .filter_map(|r| r.ok())
-                .collect()
+                .collect();
+            Ok(risultati)
         } else {
             let fts = sanitizza_fts(&query);
             if fts.is_empty() {
@@ -75,11 +77,12 @@ pub fn prompt_cerca(
                  ORDER BY rank
                  LIMIT 20",
             )?;
-            stmt.query_map([&fts], riga_a_prompt)?
+            let risultati: Vec<PromptRisultato> = stmt
+                .query_map([&fts], riga_a_prompt)?
                 .filter_map(|r| r.ok())
-                .collect()
-        };
-        Ok(risultati)
+                .collect();
+            Ok(risultati)
+        }
     })
 }
 

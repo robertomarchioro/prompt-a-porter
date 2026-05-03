@@ -7,7 +7,6 @@
     syncGetState,
     syncOnChange,
     type SyncState,
-    type SyncConfig,
   } from "$lib/sync";
   import CompilatorePrompt from "./CompilatorePrompt.svelte";
   import EditorPrompt from "./EditorPrompt.svelte";

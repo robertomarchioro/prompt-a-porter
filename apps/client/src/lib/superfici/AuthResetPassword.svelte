@@ -24,7 +24,7 @@
     caricamento = true;
     try {
       const url = serverUrl.replace(/\/+$/, "");
-      const res = await fetch(`${url}/auth/reset-password`, {
+      await fetch(`${url}/auth/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),

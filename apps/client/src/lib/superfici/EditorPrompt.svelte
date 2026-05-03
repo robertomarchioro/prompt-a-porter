@@ -47,7 +47,6 @@
   let statoSalvataggio = $state<"" | "salvataggio" | "salvato">("");
 
   let editorEl = $state<HTMLDivElement | null>(null);
-  let editorView: EditorView | null = null;
 
   let tuttiITag = $state<string[]>([]);
   let timerAutosave: ReturnType<typeof setTimeout>;
@@ -103,10 +102,8 @@
       ],
       parent: editorEl,
     });
-    editorView = view;
     return () => {
       view.destroy();
-      editorView = null;
     };
   });
 

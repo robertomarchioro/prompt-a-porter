@@ -27,7 +27,7 @@
 
     caricamento = true;
     try {
-      const { token, user } = await syncLogin(serverUrl, email, password);
+      const { token } = await syncLogin(serverUrl, email, password);
 
       await syncConfigura({
         serverUrl,
