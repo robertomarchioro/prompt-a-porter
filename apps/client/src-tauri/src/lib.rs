@@ -217,6 +217,7 @@ pub fn run() {
             libreria::libreria_tag_lista,
             editor::prompt_crea,
             editor::prompt_aggiorna,
+            editor::prompt_registra_uso,
             editor::prompt_elimina,
             registra_hotkey,
         ])
