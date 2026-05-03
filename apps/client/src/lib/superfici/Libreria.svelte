@@ -9,6 +9,7 @@
     type SyncState,
   } from "$lib/sync";
   import CompilatorePrompt from "./CompilatorePrompt.svelte";
+  import CronologiaPrompt from "./CronologiaPrompt.svelte";
   import EditorPrompt from "./EditorPrompt.svelte";
   import Impostazioni from "./Impostazioni.svelte";
   import AuthLogin from "./AuthLogin.svelte";
@@ -78,6 +79,8 @@
   let promptPerEditor = $state<PromptDettaglio | null>(null);
   let mostraCompilatore = $state(false);
   let compilatoreKey = $state(0);
+  let mostraCronologia = $state(false);
+  let cronologiaKey = $state(0);
   let mostraImpostazioni = $state(false);
   let mostraLogin = $state(false);
   let mostraResetPassword = $state(false);
@@ -662,6 +665,14 @@
                 }}>Modifica</Button
               >
               <Button
+                variante="ghost"
+                dimensione="sm"
+                onclick={() => {
+                  cronologiaKey++;
+                  mostraCronologia = true;
+                }}>Cronologia</Button
+              >
+              <Button
                 variante="primary"
                 dimensione="sm"
                 onclick={() => {
@@ -774,6 +785,21 @@
           prompt={promptDet}
           onchiudi={() => {
             mostraCompilatore = false;
+            caricaDati();
+          }}
+        />
+      {/key}
+    {/if}
+
+    {#if mostraCronologia && promptDet}
+      {#key cronologiaKey}
+        <CronologiaPrompt
+          promptId={promptDet.id}
+          onchiudi={() => {
+            mostraCronologia = false;
+            caricaDati();
+          }}
+          onrollback={() => {
             caricaDati();
           }}
         />
