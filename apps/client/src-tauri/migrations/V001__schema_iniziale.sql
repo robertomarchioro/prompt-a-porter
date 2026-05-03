@@ -109,8 +109,7 @@ CREATE VIRTUAL TABLE PromptsFts USING fts5(
     Title,
     Description,
     Body,
-    Tags,
-    content=''
+    Tags
 );
 
 -- ──────────────────────── Indici ─────────────────────────────

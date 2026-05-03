@@ -200,7 +200,7 @@ mod test {
         conn.execute(
             "INSERT OR IGNORE INTO Prompts
              (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version, CreatedAt, UpdatedAt)
-             VALUES ('prm-s1','ws-personale','usr-sync','Synced','body','workspace',1,
+             VALUES ('prm-s1','ws-personale','usr-locale','Synced','body','workspace',1,
              '2024-01-01','2024-01-01')",
             [],
         )
