@@ -4,6 +4,7 @@ mod libreria;
 mod migrazione;
 mod preferenze;
 mod prompt;
+mod sync;
 mod vault;
 
 use tauri::{
@@ -221,6 +222,7 @@ pub fn run() {
             editor::prompt_aggiorna,
             editor::prompt_registra_uso,
             editor::prompt_elimina,
+            sync::sync_applica_delta,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())
