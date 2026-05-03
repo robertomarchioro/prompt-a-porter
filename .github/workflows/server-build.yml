@@ -5,10 +5,18 @@ on:
     branches: [main]
     paths:
       - "apps/server/**"
+    paths-ignore:
+      - "apps/server/**/*.md"
+      - "apps/server/**/CHANGELOG.md"
+      - "apps/server/**/LICENSE"
   pull_request:
     branches: [main]
     paths:
       - "apps/server/**"
+    paths-ignore:
+      - "apps/server/**/*.md"
+      - "apps/server/**/CHANGELOG.md"
+      - "apps/server/**/LICENSE"
 
 jobs:
   lint-and-test:

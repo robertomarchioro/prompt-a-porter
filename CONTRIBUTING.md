@@ -49,6 +49,16 @@ ci: vendoriza OpenSSL per build SQLCipher su Windows
 
 Niente emoji nei messaggi. Lingua italiana per commenti e descrizioni di dominio. Inglese tollerato solo per termini tecnici già consolidati (es. "borrow checker", "FTS5").
 
+### `[skip ci]` per cambi triviali
+
+I workflow CI hanno già `paths-ignore` per file `*.md`/`LICENSE` dentro `apps/*`, ma per altri cambi triviali (es. bump version metadata, typo in package.json, refactor commento Rust) puoi saltare la build aggiungendo `[skip ci]` al messaggio di commit:
+
+```
+chore(deps): bump dipendenza X da 1.0 a 1.0.1 [skip ci]
+```
+
+GitHub Actions skippa tutti i workflow per questo commit. Usalo con parsimonia — se il cambio tocca codice, lascia che la CI giri.
+
 ## DCO (Developer Certificate of Origin)
 
 Tutti i commit devono essere firmati con il DCO. Aggiungi il flag `-s` quando committi:
