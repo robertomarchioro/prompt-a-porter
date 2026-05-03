@@ -1,6 +1,6 @@
 # Todo — Fase 1 (MVP)
 
-> Aggiornato al: 2026-05-03 (Step 10)
+> Aggiornato al: 2026-05-03 (Step 11)
 
 ## Step 0 — Bootstrap repo
 - [x] Inizializza repo con `LICENSE` GPL 2.0, `README.md`, `.gitignore`
@@ -124,13 +124,14 @@
 - [x] Libreria: NavItem Impostazioni collegato, inizializzazione tema da preferenze
 
 ## Step 11 — Setup server Go
-- [ ] Scaffolding cmd/papsync con chi router
-- [ ] Schema SQLite server
-- [ ] Endpoint /auth/login con Argon2id + JWT
-- [ ] Endpoint /sync/pull e /sync/push
-- [ ] WebSocket /ws
-- [ ] Dockerfile multistage
-- [ ] Test integrazione sync
+- [x] Scaffolding cmd/papsync con chi router (go.mod, main.go, chi + middleware)
+- [x] Schema SQLite server (compatibile con client + SyncChangelog per delta tracking)
+- [x] Endpoint /auth/login con Argon2id + JWT (+ /auth/refresh)
+- [x] Endpoint /sync/pull e /sync/push (delta query, last-write-wins conflict detection)
+- [x] WebSocket /ws (auth via query param token, broadcast per workspace)
+- [x] Dockerfile multistage (golang:1.23-alpine → alpine:3.20, CGO_ENABLED=1)
+- [x] Test integrazione sync (12 test: auth, sync push/pull, conflict, idempotenza, password hash)
+- [ ] Test con `go test ./...` ⚠️ richiede toolchain Go locale
 
 ## Step 12 — Auth e Sync client
 - [ ] Schermate Login / Reset password / Recupera workspace
