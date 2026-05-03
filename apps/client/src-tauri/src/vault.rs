@@ -389,6 +389,31 @@ pub fn vault_cambia_password(
     Ok(())
 }
 
+/// Restituisce il percorso della directory dati del vault.
+#[tauri::command]
+pub fn vault_percorso(state: State<'_, VaultState>) -> String {
+    state.data_dir.to_string_lossy().to_string()
+}
+
+/// Elimina il vault: chiude la connessione e cancella i file.
+#[tauri::command]
+pub fn vault_elimina(state: State<'_, VaultState>) -> Result<(), PapErrore> {
+    let mut guard = state.conn.lock().unwrap();
+    *guard = None;
+
+    let db = state.db_path();
+    let meta = state.meta_path();
+    if db.exists() {
+        fs::remove_file(&db)?;
+    }
+    if meta.exists() {
+        fs::remove_file(&meta)?;
+    }
+
+    log::info!("Vault eliminato.");
+    Ok(())
+}
+
 // ────────────────────── Test ────────────────────
 
 #[cfg(test)]

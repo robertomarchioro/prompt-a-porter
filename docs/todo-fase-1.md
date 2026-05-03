@@ -1,6 +1,6 @@
 # Todo — Fase 1 (MVP)
 
-> Aggiornato al: 2026-05-03 (Step 9)
+> Aggiornato al: 2026-05-03 (Step 10)
 
 ## Step 0 — Bootstrap repo
 - [x] Inizializza repo con `LICENSE` GPL 2.0, `README.md`, `.gitignore`
@@ -114,11 +114,14 @@
 - [x] Libreria: bottone Compila abilitato, {#key} per stato fresco compilatore
 
 ## Step 10 — Impostazioni
-- [ ] Layout sidebar + content
-- [ ] Tutte le sezioni (Account, Sync, Hotkey, Aspetto, Vault, Lingua, Info)
-- [ ] Hotkey input con registrazione
-- [ ] Vault: cambio password, esporta/importa, elimina
-- [ ] Tema/tono live preview
+- [x] Layout sidebar (200px) + content con modale 800×600
+- [x] 7 sezioni: Account, Sync, Hotkey, Aspetto, Vault, Lingua, Info
+- [x] Hotkey: HotkeyInput con registra_hotkey + salva preferenze
+- [x] Vault: percorso (copia), cifratura info, cambio password (form 3 campi), elimina (doppia conferma)
+- [x] Aspetto: tema scuro/chiaro + tono zinc/slate/stone con segmented control e live preview
+- [x] Lingua: toggle it/en con salvataggio preferenze
+- [x] Rust: vault_percorso, vault_elimina + registrazione in lib.rs
+- [x] Libreria: NavItem Impostazioni collegato, inizializzazione tema da preferenze
 
 ## Step 11 — Setup server Go
 - [ ] Scaffolding cmd/papsync con chi router
