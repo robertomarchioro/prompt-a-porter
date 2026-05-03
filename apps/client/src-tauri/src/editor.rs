@@ -176,3 +176,136 @@ pub fn prompt_elimina(id: String, state: State<'_, VaultState>) -> Result<(), Pa
         Ok(())
     })
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn db_test() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::migrazione::esegui_migrazioni(&conn).unwrap();
+        crate::libreria::assicura_dati_base(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn genera_id_formato() {
+        let id = genera_id();
+        assert_eq!(id.len(), 20);
+        assert!(id.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn genera_id_univoco() {
+        let id1 = genera_id();
+        let id2 = genera_id();
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn crea_prompt_e_ricostruisci_fts() {
+        let conn = db_test();
+        let id = format!("prm-{}", genera_id());
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
+             Visibility, Version, CreatedAt, UpdatedAt)
+             VALUES (?1, 'ws-personale', 'usr-locale', 'Test Prompt', 'desc', 'corpo', 'private', 1,
+             datetime('now'), datetime('now'))",
+            rusqlite::params![id],
+        )
+        .unwrap();
+        ricostruisci_fts(&conn).unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM PromptsFts WHERE PromptsFts MATCH 'Test*'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn sincronizza_tags_crea_e_associa() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version,
+             CreatedAt, UpdatedAt)
+             VALUES ('prm-t1', 'ws-personale', 'usr-locale', 'T', 'b', 'private', 1,
+             datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let tags = vec!["rust".to_string(), "test".to_string()];
+        sincronizza_tags(&conn, "prm-t1", &tags).unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM PromptTags WHERE PromptId = 'prm-t1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn sincronizza_tags_ignora_vuoti() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version,
+             CreatedAt, UpdatedAt)
+             VALUES ('prm-t2', 'ws-personale', 'usr-locale', 'T', 'b', 'private', 1,
+             datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let tags = vec!["rust".to_string(), "".to_string(), "  ".to_string()];
+        sincronizza_tags(&conn, "prm-t2", &tags).unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM PromptTags WHERE PromptId = 'prm-t2'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn sincronizza_tags_riuso_esistenti() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO Tags (Id, WorkspaceId, Name, CreatedAt, UpdatedAt)
+             VALUES ('tag-pre', 'ws-personale', 'esistente', datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version,
+             CreatedAt, UpdatedAt)
+             VALUES ('prm-t3', 'ws-personale', 'usr-locale', 'T', 'b', 'private', 1,
+             datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let tags = vec!["esistente".to_string()];
+        sincronizza_tags(&conn, "prm-t3", &tags).unwrap();
+
+        let tag_count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM Tags", [], |r| r.get(0)).unwrap();
+        assert_eq!(tag_count, 1, "Non deve creare duplicati");
+    }
+
+    #[test]
+    fn ricostruisci_fts_idempotente() {
+        let conn = db_test();
+        ricostruisci_fts(&conn).unwrap();
+        ricostruisci_fts(&conn).unwrap();
+    }
+}

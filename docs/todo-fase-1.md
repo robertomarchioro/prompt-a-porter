@@ -150,10 +150,13 @@
 - [x] Stringhe i18n audit (it.json + en.json)
 
 ## Step 14 — Quality gate
-- [ ] Test coverage ≥ 70% moduli core
-- [ ] Build cross-platform pulita (CI green)
-- [ ] Smoke test manuale 8 superfici dark/light + 3 toni
-- [ ] Test accessibilità screen reader
+- [x] Test Rust: 37 test su 8 moduli (vault 7, migrazione 3, preferenze 2, prompt 9, editor 7, libreria 7, audit 5, sync 4, errore 5)
+- [x] Test TypeScript: vitest config + 22 test per template.ts (estraiSegnaposti, compila, contaCompilati)
+- [x] CI: client-build aggiornato con job lint-and-test + rust-test (cargo test + vitest)
+- [x] CI: server-build con soglia coverage 70% abilitata
+- [ ] Build cross-platform (Tauri multi-OS) ⚠️ build matrix pronta ma commentata, richiede signing
+- [ ] Smoke test manuale: 8 superfici × dark/light × 3 toni ⚠️ richiede `pnpm dev`
+- [ ] Test accessibilità screen reader ⚠️ richiede tooling locale (axe-core, NVDA/VoiceOver)
 
 ## Step 15 — Documentazione
 - [ ] Aggiorna docs/

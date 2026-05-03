@@ -162,3 +162,125 @@ pub fn sync_applica_delta(delta: SyncDelta, state: State<'_, VaultState>) -> Res
         Ok(applicati)
     })
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn db_test() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        crate::migrazione::esegui_migrazioni(&conn).unwrap();
+        crate::libreria::assicura_dati_base(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn inserisci_tag_nuovo() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT OR IGNORE INTO Tags (Id, WorkspaceId, Name, Color, CreatedAt, UpdatedAt)
+             VALUES ('tag-s1', 'ws-personale', 'synced', '#ff0000', '2024-01-01', '2024-01-01')",
+            [],
+        )
+        .unwrap();
+
+        let name: String = conn
+            .query_row(
+                "SELECT Name FROM Tags WHERE Id = 'tag-s1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(name, "synced");
+    }
+
+    #[test]
+    fn inserisci_prompt_nuovo() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT OR IGNORE INTO Prompts
+             (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version, CreatedAt, UpdatedAt)
+             VALUES ('prm-s1','ws-personale','usr-sync','Synced','body','workspace',1,
+             '2024-01-01','2024-01-01')",
+            [],
+        )
+        .unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM Prompts", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn aggiorna_solo_se_piu_recente() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO Tags (Id, WorkspaceId, Name, CreatedAt, UpdatedAt)
+             VALUES ('tag-1', 'ws-personale', 'originale', '2024-01-01', '2024-01-01 12:00:00')",
+            [],
+        )
+        .unwrap();
+
+        let changed = conn
+            .execute(
+                "UPDATE Tags SET Name = 'vecchio' WHERE Id = 'tag-1' AND UpdatedAt < '2024-01-01 10:00:00'",
+                [],
+            )
+            .unwrap();
+        assert_eq!(changed, 0);
+
+        let name: String = conn
+            .query_row("SELECT Name FROM Tags WHERE Id = 'tag-1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(name, "originale");
+
+        let changed = conn
+            .execute(
+                "UPDATE Tags SET Name = 'nuovo' WHERE Id = 'tag-1' AND UpdatedAt < '2024-01-02 00:00:00'",
+                [],
+            )
+            .unwrap();
+        assert_eq!(changed, 1);
+
+        let name: String = conn
+            .query_row("SELECT Name FROM Tags WHERE Id = 'tag-1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(name, "nuovo");
+    }
+
+    #[test]
+    fn prompt_tag_insert_or_ignore() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version,
+             CreatedAt, UpdatedAt)
+             VALUES ('prm-1','ws-personale','usr-locale','T','b','private',1,
+             datetime('now'),datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO Tags (Id, WorkspaceId, Name, CreatedAt, UpdatedAt)
+             VALUES ('tag-1','ws-personale','t',datetime('now'),datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        conn.execute(
+            "INSERT OR IGNORE INTO PromptTags (PromptId, TagId) VALUES ('prm-1', 'tag-1')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT OR IGNORE INTO PromptTags (PromptId, TagId) VALUES ('prm-1', 'tag-1')",
+            [],
+        )
+        .unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM PromptTags", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1, "INSERT OR IGNORE non deve duplicare");
+    }
+}

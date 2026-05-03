@@ -88,3 +88,87 @@ pub fn audit_lista(
         Ok(voci)
     })
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn db_test() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::migrazione::esegui_migrazioni(&conn).unwrap();
+        crate::libreria::assicura_dati_base(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn formato_id_prefisso_e_lunghezza() {
+        let id = formato_id_audit();
+        assert!(id.starts_with("aud-"));
+        assert_eq!(id.len(), 24);
+    }
+
+    #[test]
+    fn formato_id_univoco() {
+        let id1 = formato_id_audit();
+        let id2 = formato_id_audit();
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn registra_scrive_in_db() {
+        let conn = db_test();
+        registra(&conn, "test.azione", "TestEntity", "ent-123", Some("meta"));
+
+        let count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM AuditLog", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn registra_senza_metadati() {
+        let conn = db_test();
+        registra(&conn, "test.azione", "TestEntity", "ent-123", None);
+
+        let meta: Option<String> = conn
+            .query_row("SELECT Metadata FROM AuditLog LIMIT 1", [], |r| r.get(0))
+            .unwrap();
+        assert!(meta.is_none());
+    }
+
+    #[test]
+    fn registra_multiple_e_filtra_per_tipo() {
+        let conn = db_test();
+        registra(&conn, "a1", "Prompt", "p1", Some("m1"));
+        registra(&conn, "a2", "Vault", "v1", None);
+        registra(&conn, "a3", "Prompt", "p2", Some("m3"));
+
+        let totale: i64 =
+            conn.query_row("SELECT COUNT(*) FROM AuditLog", [], |r| r.get(0)).unwrap();
+        assert_eq!(totale, 3);
+
+        let prompt_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM AuditLog WHERE EntityType = 'Prompt'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(prompt_count, 2);
+    }
+
+    #[test]
+    fn registra_ordine_cronologico() {
+        let conn = db_test();
+        registra(&conn, "primo", "T", "", None);
+        registra(&conn, "secondo", "T", "", None);
+
+        let azione: String = conn
+            .query_row(
+                "SELECT Action FROM AuditLog ORDER BY OccurredAt DESC LIMIT 1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(azione, "secondo");
+    }
+}

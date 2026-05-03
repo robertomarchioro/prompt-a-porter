@@ -61,3 +61,46 @@ impl serde::Serialize for PapErrore {
         serializer.serialize_str(&self.to_string())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn display_varianti() {
+        assert_eq!(PapErrore::VaultChiuso.to_string(), "Il vault è chiuso");
+        assert_eq!(PapErrore::VaultGiaAperto.to_string(), "Il vault è già aperto");
+        assert_eq!(PapErrore::VaultNonEsiste.to_string(), "Il vault non esiste");
+        assert_eq!(PapErrore::PasswordErrata.to_string(), "Password errata");
+        assert_eq!(
+            PapErrore::PasswordTroppoCorta.to_string(),
+            "La password deve avere almeno 8 caratteri"
+        );
+    }
+
+    #[test]
+    fn serialize_a_stringa_json() {
+        let json = serde_json::to_string(&PapErrore::VaultChiuso).unwrap();
+        assert_eq!(json, r#""Il vault è chiuso""#);
+    }
+
+    #[test]
+    fn from_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file non trovato");
+        let pap_err = PapErrore::from(io_err);
+        assert!(pap_err.to_string().contains("file non trovato"));
+    }
+
+    #[test]
+    fn from_json_error() {
+        let json_err = serde_json::from_str::<String>("non_json").unwrap_err();
+        let pap_err = PapErrore::from(json_err);
+        assert!(pap_err.to_string().starts_with("Errore JSON"));
+    }
+
+    #[test]
+    fn migrazione_con_messaggio() {
+        let err = PapErrore::Migrazione("V002 fallita".to_string());
+        assert!(err.to_string().contains("V002 fallita"));
+    }
+}

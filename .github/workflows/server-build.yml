@@ -35,13 +35,12 @@ jobs:
         run: |
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
           echo "Coverage: ${COVERAGE}%"
-          # Soglia 70% — da abilitare quando ci sono test reali
-          # if (( $(echo "$COVERAGE < 70" | bc -l) )); then
-          #   echo "::error::Coverage ${COVERAGE}% sotto la soglia del 70%"
-          #   exit 1
-          # fi
+          if (( $(echo "$COVERAGE < 70" | bc -l) )); then
+            echo "::error::Coverage ${COVERAGE}% sotto la soglia del 70%"
+            exit 1
+          fi
 
-  # Build multi-OS — da abilitare quando il server è scaffoldato
+  # Build multi-OS — da abilitare per release
   # build:
   #   needs: lint-and-test
   #   strategy:
