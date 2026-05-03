@@ -2,6 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { Button, EmptyState, NavItem, Tag } from "$lib/components";
   import { estraiSegnaposti } from "$lib/template";
+  import CompilatorePrompt from "./CompilatorePrompt.svelte";
   import EditorPrompt from "./EditorPrompt.svelte";
 
   interface PromptCard {
@@ -65,6 +66,8 @@
   let mostraEditor = $state(false);
   let editorKey = $state(0);
   let promptPerEditor = $state<PromptDettaglio | null>(null);
+  let mostraCompilatore = $state(false);
+  let compilatoreKey = $state(0);
 
   const titoloVista = $derived(
     vistaCorrente === "recenti"
@@ -617,8 +620,13 @@
                   mostraEditor = true;
                 }}>Modifica</Button
               >
-              <Button variante="primary" dimensione="sm" disabled
-                >Compila</Button
+              <Button
+                variante="primary"
+                dimensione="sm"
+                onclick={() => {
+                  compilatoreKey++;
+                  mostraCompilatore = true;
+                }}>Compila</Button
               >
             </div>
           </div>
@@ -702,6 +710,18 @@
           onchiudi={() => (mostraEditor = false)}
           onsalvato={() => {
             mostraEditor = false;
+            caricaDati();
+          }}
+        />
+      {/key}
+    {/if}
+
+    {#if mostraCompilatore && promptDet}
+      {#key compilatoreKey}
+        <CompilatorePrompt
+          prompt={promptDet}
+          onchiudi={() => {
+            mostraCompilatore = false;
             caricaDati();
           }}
         />

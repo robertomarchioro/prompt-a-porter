@@ -1,6 +1,6 @@
 # Todo — Fase 1 (MVP)
 
-> Aggiornato al: 2026-05-02 (Step 8)
+> Aggiornato al: 2026-05-03 (Step 9)
 
 ## Step 0 — Bootstrap repo
 - [x] Inizializza repo con `LICENSE` GPL 2.0, `README.md`, `.gitignore`
@@ -103,13 +103,15 @@
 - [x] Libreria: bottone "+ Nuovo", Modifica abilitato, {#key} per stato fresco editor
 
 ## Step 9 — Renderer / Compilatore
-- [ ] Vista 2 colonne (form + preview)
-- [ ] Form auto-generato dai segnaposti
-- [ ] Progress bar compilazione
-- [ ] Highlight valori sostituiti
-- [ ] Toggle output Markdown / Plain / JSON
-- [ ] Copy to clipboard + toast
-- [ ] Conteggio token approssimativo
+- [x] Vista 2 colonne (form 1fr + preview 1.2fr, modale 880×640)
+- [x] Form auto-generato dai segnaposti (input per ciascun placeholder, label uppercase mono)
+- [x] Progress bar compilazione (barra orizzontale animata, contatore X/Y)
+- [x] Highlight valori sostituiti (span .val-inserito verde, .ph viola per non compilati)
+- [x] Toggle output Testo / Markdown / JSON (segmented control, JSON con model e parameters)
+- [x] Copy to clipboard + toast (navigator.clipboard + Toast component success)
+- [x] Conteggio token approssimativo (~chars/4, font-mono in basso a destra)
+- [x] Rust: prompt_registra_uso (incrementa UseCount + LastUsedAt)
+- [x] Libreria: bottone Compila abilitato, {#key} per stato fresco compilatore
 
 ## Step 10 — Impostazioni
 - [ ] Layout sidebar + content

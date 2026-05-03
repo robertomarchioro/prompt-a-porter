@@ -149,6 +149,18 @@ pub fn prompt_aggiorna(
 }
 
 #[tauri::command]
+pub fn prompt_registra_uso(id: String, state: State<'_, VaultState>) -> Result<(), PapErrore> {
+    state.with_conn(|conn| {
+        conn.execute(
+            "UPDATE Prompts SET UseCount = UseCount + 1, LastUsedAt = datetime('now')
+             WHERE Id = ?1 AND DeletedAt IS NULL",
+            [&id],
+        )?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
 pub fn prompt_elimina(id: String, state: State<'_, VaultState>) -> Result<(), PapErrore> {
     state.with_conn(|conn| {
         conn.execute(
