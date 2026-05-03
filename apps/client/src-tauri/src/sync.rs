@@ -157,6 +157,7 @@ pub fn sync_applica_delta(delta: SyncDelta, state: State<'_, VaultState>) -> Res
         }
 
         crate::editor::ricostruisci_fts(conn)?;
+        crate::audit::registra(conn, "sync.delta_applicato", "Sync", "", Some(&format!("{applicati} entità")));
 
         Ok(applicati)
     })

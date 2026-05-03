@@ -114,6 +114,22 @@
     "connessione_riuscita": "Successfully connected to server",
     "errore_connessione": "Unable to connect to server"
   },
+  "audit": {
+    "titolo": "Activity log",
+    "desc": "History of operations performed in the vault",
+    "tutte": "All",
+    "aggiorna": "Refresh",
+    "nessuna": "No activity recorded",
+    "prompt_creato": "Prompt created",
+    "prompt_aggiornato": "Prompt updated",
+    "prompt_eliminato": "Prompt deleted",
+    "prompt_preferito": "Favorite toggled",
+    "vault_creato": "Vault created",
+    "vault_sbloccato": "Vault unlocked",
+    "vault_bloccato": "Vault locked",
+    "vault_password_cambiata": "Password changed",
+    "sync_delta_applicato": "Sync applied"
+  },
   "tray": {
     "apri_palette": "Open palette",
     "nuovo_prompt": "New prompt",

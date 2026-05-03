@@ -1,3 +1,4 @@
+mod audit;
 mod editor;
 mod errore;
 mod libreria;
@@ -223,6 +224,7 @@ pub fn run() {
             editor::prompt_registra_uso,
             editor::prompt_elimina,
             sync::sync_applica_delta,
+            audit::audit_lista,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())
