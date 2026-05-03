@@ -29,6 +29,15 @@
   let errore = $state("");
   let confermaRollback = $state<number | null>(null);
   let messaggioToast = $state("");
+  let toastVisibile = $state(false);
+
+  function mostraToast(testo: string) {
+    messaggioToast = testo;
+    toastVisibile = true;
+    setTimeout(() => {
+      toastVisibile = false;
+    }, 3000);
+  }
 
   $effect(() => {
     carica();
@@ -56,7 +65,7 @@
         promptId,
         targetVersion: target,
       });
-      messaggioToast = `Ripristinata versione v${target}`;
+      mostraToast(`Ripristinata versione v${target}`);
       confermaRollback = null;
       onrollback?.();
       versioneSelezionata = null;
@@ -132,7 +141,7 @@
         <div class="empty-wrap">
           <EmptyState
             titolo="Nessuna versione"
-            descrizione="Questo prompt non ha ancora una storia di modifiche."
+            hint="Questo prompt non ha ancora una storia di modifiche."
           />
         </div>
       {:else}
@@ -209,13 +218,9 @@
   {/if}
 </div>
 
-{#if messaggioToast}
-  <Toast
-    messaggio={messaggioToast}
-    variante="success"
-    onchiudi={() => (messaggioToast = "")}
-  />
-{/if}
+<Toast variante="success" visibile={toastVisibile}>
+  {messaggioToast}
+</Toast>
 
 <style>
   .overlay {
