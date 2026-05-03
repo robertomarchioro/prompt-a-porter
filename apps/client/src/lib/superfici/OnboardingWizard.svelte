@@ -24,9 +24,16 @@
   let saltaCifratura = $state(false);
   let hotkey = $state("Ctrl+Shift+P");
   let creaPromptEsempio = $state(true);
+  let tema = $state<"dark" | "light">("dark");
 
   let errore = $state("");
   let caricamento = $state(false);
+
+  // Applica il tema al root document così l'utente vede subito
+  // l'effetto del toggle, anche prima di completare l'onboarding.
+  $effect(() => {
+    document.documentElement.setAttribute("data-theme", tema);
+  });
 
   const passwordValida = $derived(
     saltaCifratura || (password.length >= 8 && password === passwordConferma),
@@ -63,7 +70,7 @@
         preferenze: {
           profilo: "personale",
           hotkey: "Ctrl+Shift+P",
-          tema: "dark",
+          tema,
           tono: "zinc",
           lingua: "it",
           onboarding_completato: true,
@@ -92,7 +99,7 @@
         preferenze: {
           profilo,
           hotkey,
-          tema: "dark",
+          tema,
           tono: "zinc",
           lingua: "it",
           onboarding_completato: true,
@@ -128,14 +135,32 @@
 
 <div class="wizard-overlay">
   <div class="wizard">
-    <div class="progress">
-      {#each [1, 2, 3] as s}
-        <div
-          class="progress-step"
-          class:progress-step--completato={s < step}
-          class:progress-step--attivo={s === step}
-        ></div>
-      {/each}
+    <div class="wizard-top">
+      <div class="progress">
+        {#each [1, 2, 3] as s}
+          <div
+            class="progress-step"
+            class:progress-step--completato={s < step}
+            class:progress-step--attivo={s === step}
+          ></div>
+        {/each}
+      </div>
+      <div class="tema-toggle" role="group" aria-label="Tema">
+        <button
+          type="button"
+          class="tema-opzione"
+          class:tema-opzione--attivo={tema === "dark"}
+          aria-pressed={tema === "dark"}
+          onclick={() => (tema = "dark")}
+        >Scuro</button>
+        <button
+          type="button"
+          class="tema-opzione"
+          class:tema-opzione--attivo={tema === "light"}
+          aria-pressed={tema === "light"}
+          onclick={() => (tema = "light")}
+        >Chiaro</button>
+      </div>
     </div>
 
     <div class="wizard-content">
@@ -327,9 +352,49 @@
     gap: var(--sp-5);
   }
 
+  .wizard-top {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+  }
+
   .progress {
     display: flex;
     gap: 3px;
+    flex: 1;
+  }
+
+  .tema-toggle {
+    display: inline-flex;
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-full);
+    padding: 2px;
+    flex-shrink: 0;
+  }
+
+  .tema-opzione {
+    appearance: none;
+    background: transparent;
+    border: none;
+    padding: 4px 12px;
+    font-family: var(--font-ui);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: var(--radius-full);
+    transition: background var(--motion-fast) var(--easing-standard),
+      color var(--motion-fast) var(--easing-standard);
+  }
+
+  .tema-opzione:hover {
+    color: var(--text-default);
+  }
+
+  .tema-opzione--attivo {
+    background: var(--bg-canvas);
+    color: var(--text-strong);
+    box-shadow: var(--shadow-1);
   }
 
   .progress-step {
