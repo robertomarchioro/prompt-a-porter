@@ -13,6 +13,7 @@
   import CronologiaPrompt from "./CronologiaPrompt.svelte";
   import EditorPrompt from "./EditorPrompt.svelte";
   import Impostazioni from "./Impostazioni.svelte";
+  import Insight from "./Insight.svelte";
   import AuthLogin from "./AuthLogin.svelte";
   import AuthResetPassword from "./AuthResetPassword.svelte";
   import AuthRecuperaWorkspace from "./AuthRecuperaWorkspace.svelte";
@@ -84,6 +85,7 @@
   let mostraCronologia = $state(false);
   let cronologiaKey = $state(0);
   let mostraImpostazioni = $state(false);
+  let mostraInsight = $state(false);
   let mostraLogin = $state(false);
   let mostraResetPassword = $state(false);
   let mostraRecuperaWorkspace = $state(false);
@@ -506,6 +508,22 @@
       <div class="sb-spacer"></div>
 
       <div class="sb-gruppo">
+        <NavItem onclick={() => (mostraInsight = true)}>
+          {#snippet icona()}
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><path d="M3 3v18h18" /><path d="M7 14l4-4 4 3 6-6" /></svg
+            >
+          {/snippet}
+          Insight
+        </NavItem>
         <NavItem onclick={() => (mostraImpostazioni = true)}>
           {#snippet icona()}
             <svg
@@ -849,6 +867,10 @@
           mostraLogin = true;
         }}
       />
+    {/if}
+
+    {#if mostraInsight}
+      <Insight onchiudi={() => (mostraInsight = false)} />
     {/if}
 
     {#if mostraLogin}
