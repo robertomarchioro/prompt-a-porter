@@ -14,6 +14,9 @@ pub enum PapErrore {
     Json(serde_json::Error),
     Migrazione(String),
     Argon2(String),
+    /// Errore di validazione/dominio business (es. nome cartella vuoto,
+    /// destinazione non valida, etc.).
+    Generico(String),
 }
 
 impl fmt::Display for PapErrore {
@@ -29,6 +32,7 @@ impl fmt::Display for PapErrore {
             Self::Json(e) => write!(f, "Errore JSON: {e}"),
             Self::Migrazione(msg) => write!(f, "Errore migrazione: {msg}"),
             Self::Argon2(msg) => write!(f, "Errore derivazione chiave: {msg}"),
+            Self::Generico(msg) => write!(f, "{msg}"),
         }
     }
 }

@@ -26,6 +26,11 @@ static MIGRAZIONI: &[Migrazione] = &[
         nome: "indici_audit",
         sql: include_str!("../migrations/V003__indici_audit.sql"),
     },
+    Migrazione {
+        versione: 4,
+        nome: "cartelle",
+        sql: include_str!("../migrations/V004__cartelle.sql"),
+    },
 ];
 
 /// Crea la tabella di tracking se non esiste.
@@ -96,8 +101,8 @@ mod test {
     fn migrazioni_su_db_nuovo() {
         let conn = Connection::open_in_memory().unwrap();
         let n = esegui_migrazioni(&conn).unwrap();
-        assert!(n >= 3, "Tutte le migrazioni devono essere applicate (almeno 3)");
-        assert_eq!(versione_corrente(&conn).unwrap(), 3);
+        assert!(n >= 4, "Tutte le migrazioni devono essere applicate (almeno 4)");
+        assert_eq!(versione_corrente(&conn).unwrap(), 4);
     }
 
     #[test]
@@ -123,6 +128,7 @@ mod test {
 
         let attese = [
             "AuditLog",
+            "Folders",
             "PromptTags",
             "PromptVersions",
             "Prompts",
