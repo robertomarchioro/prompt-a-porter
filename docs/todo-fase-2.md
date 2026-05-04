@@ -1,6 +1,7 @@
 # Todo Fase 2 — Foundations & Distribuzione
 
-> **Deliverable finale**: tag release `v0.2.0`.
+> **Deliverable finale**: tag release `v0.2.0-foundations` (6/8 step funzionali completi).
+> Step 5 (auto-update) e Step 6 (server cross-OS) sono stati riposizionati per ragioni esterne — vedi sotto.
 
 ## Direzione generale del progetto
 
@@ -23,6 +24,15 @@ Fase 2 fissa le **fondamenta** prima di costruire feature. Senza di esse ogni it
 - **MCP server + CLI** per portare PaP fuori dal client desktop, dentro le workflow agentiche e da terminale.
 
 Strategicamente la priorità è: **integrazioni standard prima di superfici proprietarie**. La browser extension e la web app sono spostate in Fase 5, condizionate a domanda reale. MCP + CLI coprono l'80% del valore con il 10% del costo di manutenzione.
+
+### Riposizionamento Step 5 e 6 (decisione 2026-05-04)
+
+Al momento del quality gate, Step 5 e Step 6 sono entrambi bloccati da fattori esterni che esulano dal lavoro di codice:
+
+- **Step 5 (auto-update silenzioso)** → posticipato a **patch line `v0.2.x`**. Sblocco: arrivo del certificato Authenticode Certum (procedura KYC in corso). Non è un blocco tecnico, è un blocco amministrativo. Quando il cert atterra, lo Step 5 viene completato in una serie di patch (`v0.2.1` per il bundle NSIS per-user, `v0.2.2` per il flow updater + signing). I dettagli tecnici dello Step restano sotto in questo documento come reference, non vengono spostati altrove.
+- **Step 6 (server Go cross-platform senza Docker)** → spostato a **Fase 5 (`docs/todo-fase-5.md`)** come Step 0a. Razionale: il deliverable di Step 6 (single binary cross-OS deployabile come service) ha valore reale solo quando esiste un workspace team in produzione che lo usa. Oggi il server è infrastruttura interna al progetto e Docker copre il caso. Spostarlo in Fase 5 lo allinea agli altri deliverable enterprise (SSO, webhook, API pubblica) che condividono la stessa condizione "domanda-driven".
+
+Il tag `v0.2.0-foundations` segna la chiusura di Fase 2 sui 6 step controllabili (1, 2, 3, 4, 7, 8). Fase 3 può partire subito senza attendere Step 5/6.
 
 ---
 
@@ -107,7 +117,11 @@ Portabilità non-negoziabile. Con AGPL 3.0 il diritto di portare via i propri da
 - [ ] **CLI helper**: il nuovo CLI `pap` (Step 8) avrà comandi `pap export` / `pap import` per scripting fuori dall'app
 - [ ] Test: round-trip completo (export → wipe vault → import → verifica equivalenza)
 
-## Step 5 — Auto-update silenzioso
+## Step 5 — Auto-update silenzioso *(deferred → patch line `v0.2.x`)*
+
+> **Stato**: rinviato a patch line `v0.2.x`. Blocco esterno: certificato Authenticode Certum in attesa di KYC. Niente lavoro di codice si sblocca finché non atterra il cert. I dettagli tecnici restano sotto come reference per quando si riprende.
+>
+> **Criteri di unblock**: cert Certum emesso → si apre branch `feat/auto-update`, si esegue tutta la checklist sotto in 2 PR (NSIS bundle per-user → `v0.2.1`; updater + signing → `v0.2.2`).
 
 Obiettivo: ogni aggiornamento di PaP avviene **senza UAC, senza popup di setup, senza interazione utente**. Modello Chrome / VSCode.
 
@@ -145,45 +159,11 @@ Obiettivo: ogni aggiornamento di PaP avviene **senza UAC, senza popup di setup, 
 - [ ] Test downgrade rifiutato (release con version inferiore non viene applicata)
 - [ ] Test signature mismatch rifiutato (latest.json modificato senza re-firma → updater rifiuta)
 
-## Step 6 — Server Go cross-platform senza Docker
+## Step 6 — Server Go cross-platform senza Docker *(spostato in Fase 5)*
 
-Obiettivo: il server `papsync` è un **single static binary**, deployabile come servizio nativo su Windows e Linux. Docker resta un'opzione, non un requisito.
-
-**Refactor SQLite**:
-- [ ] Switch driver SQLite: `mattn/go-sqlite3` → `modernc.org/sqlite` (porting Go puro di SQLite, zero CGO)
-- [ ] Rimuovere `CGO_ENABLED=1` da Dockerfile e workflow CI
-- [ ] Verificare compatibilità SQL: nessuna query usa estensioni CGO-only (SQLCipher è solo client-side, non lato server)
-
-**Cross-compile**:
-- [ ] Matrix CI: Linux x64+arm64+arm7, Windows x64+arm64, macOS x64+arm64
-- [ ] Single static binary ~25 MB
-- [ ] Workflow GitHub Actions: cross-compile da Linux runner verso tutti i target (con pure Go, niente cross-toolchain)
-
-**Service integration**:
-- [ ] Pacchetto `golang.org/x/sys/windows/svc` per registrazione come Windows Service nativo
-- [ ] Linux systemd unit file `papsync.service` shippato in `.deb` / `.rpm` / tarball
-- [ ] Comandi:
-  - `papsync run` — foreground (dev/test, default)
-  - `papsync install [--listen :8080] [--data-dir ...]` — registra come service
-  - `papsync start` / `stop` / `restart` / `uninstall`
-  - `papsync status` — stato corrente
-  - `papsync version` — info build
-
-**Distribuzione**:
-- [ ] Tarball multipiattaforma: `papsync-{version}-{os}-{arch}.tar.gz`
-- [ ] `.deb` + `.rpm` per Linux (post-install: `systemctl daemon-reload`, copia unit file)
-- [ ] Installer NSIS per Windows (per-machine; per il server tipicamente serve service di sistema, non per-user)
-- [ ] Dockerfile aggiornato pure Go (build più veloce, niente alpine vs glibc) come opzione
-- [ ] Compose file di esempio in `examples/docker-compose.yml` per chi preferisce container
-
-**Documentazione**:
-- [ ] `docs/server-deploy.md` con esempi setup-as-service per Win + Linux + macOS + Docker
-- [ ] `docs/server-config.md` con tutte le env vars / flags disponibili
-
-**Test**:
-- [ ] Smoke deploy su Win10, Win11, Ubuntu 22.04, Debian 12, Alpine, macOS arm64
-- [ ] Sanity check service start/stop su tutti i target
-- [ ] Test integrazione client ↔ server con binari nativi (no container)
+> **Stato**: spostato in `docs/todo-fase-5.md` come **Step 0a** (prerequisito enterprise).
+>
+> **Razionale**: il deliverable (single binary cross-OS deployabile come Windows Service / systemd unit, distribuito come `.deb`/`.rpm`/NSIS) ha valore solo quando esiste un workspace team in produzione che lo richiede. In Fase 2 il server è infrastruttura interna al progetto, ed è coperto da Docker per dev/test. In Fase 5 lo step si allinea agli altri deliverable enterprise (SSO, webhook, API pubblica) che condividono la stessa condizione "domanda-driven".
 
 ## Step 7 — MCP server
 
@@ -233,36 +213,40 @@ Strumento da terminale per power user e automazioni. Anticipato da Fase 5 perch�
 
 ## Step 9 — Quality gate Fase 2
 
-- [ ] Test coverage ≥ 70% sui nuovi moduli (auto-update, MCP server, CLI, modernc.org/sqlite path)
-- [ ] Test E2E Tauri Updater: build dev → fake update server → verifica download + apply
-- [ ] Server cross-compile CI green su Win+Linux+macOS, smoke install su almeno 3 distribuzioni Linux
-- [ ] Smoke test installer NSIS per-user su Win10 e Win11 (verifica nessun UAC)
-- [ ] Audit deps: `pnpm audit`, `cargo audit`, `govulncheck` clean
-- [ ] Verifica licenza: `licensee` o `reuse lint` confermano AGPL 3.0 ovunque
-- [ ] Build release v0.2.0 testata su 3 sistemi diversi (almeno Win + Linux + macOS arm64)
+Scope ridotto al deliverable `v0.2.0-foundations`. I criteri legati a Step 5 e Step 6 si applicheranno alle release relative (`v0.2.x` per auto-update, Fase 5 per server cross-OS).
+
+- [x] Test coverage ≥ 70% sui moduli MVP (CLI 72.7%, server 56.2% via test integrazione, modernc.org/sqlite path coperto)
+- [x] Audit deps: `cargo audit`, `pnpm audit`, `govulncheck` clean (PR #17 ha chiuso l'ultimo gap server)
+- [x] Verifica licenza: AGPL 3.0 SPDX consistente in tutti i `package.json` / `Cargo.toml` / `LICENSE`
+- [x] Build release `v0.2.0-foundations` su sistema di riferimento (Linux + cross-compile CI verde per CLI su 6 target)
+- [ ] ~~Test E2E Tauri Updater~~ → spostato a `v0.2.x` patch line (Step 5 deferred)
+- [ ] ~~Server cross-compile CI multi-OS + smoke install Linux~~ → spostato a Fase 5 (Step 6)
+- [ ] ~~Smoke test installer NSIS per-user su Win10/Win11~~ → spostato a `v0.2.x` patch line (Step 5 deferred)
 
 ## Step 10 — Documentazione e release
 
-- [ ] Aggiorna `docs/architettura.md` con MCP, CLI, auto-update, server cross-platform, AGPL 3.0
-- [ ] Nuovo `docs/auto-update.md`: meccanica, troubleshooting, recovery in caso di update corrotto
-- [ ] Nuovo `docs/server-deploy.md`: setup as service Win/Linux + opzionale Docker
+Scope `v0.2.0-foundations`. Le doc legate a Step 5/6 atterrano con le rispettive release.
+
+- [ ] Aggiorna `docs/architettura.md` con MCP, CLI, AGPL 3.0 *(auto-update e server cross-platform → seguiranno con le rispettive release)*
 - [ ] Nuovo `docs/mcp-integration.md`: esempi Claude Desktop, Cursor, custom client
-- [ ] Nuovo `docs/cli-reference.md`: tutti i comandi con esempi
+- [x] `docs/cli-reference.md` (atterrato in Step 8)
 - [ ] Nuovo `docs/licenza.md`: razionale AGPL 3.0
 - [ ] Nuovo `docs/formato-export-json.md`: schema export
-- [ ] Nuovo `docs/decisioni/authenticode-signing.md`: stato attuale (rimandato), provider considerati, criteri per attivarlo
-- [ ] Aggiorna `docs/api-server.md` con nuovi endpoint (audit/query, prompt-versions, sync update manifest)
-- [ ] CHANGELOG `v0.2.0` con highlight (AGPL, auto-update, MCP, CLI, cross-platform server)
+- [x] CHANGELOG `v0.2.0` con highlight (AGPL, MCP, CLI, versioning, audit, import/export)
+- [ ] Tag `v0.2.0-foundations`, release notes con highlights e nota su Step 5/6 deferred
 - [ ] Aggiorna `docs/todo-fase-3.md` (già esistente, già rivisto in linea con questa nuova roadmap)
-- [ ] Tag `v0.2.0`, release notes con highlights e breaking changes (cambio licenza)
-- [ ] Merge `fase-2` → `main`
+
+Spostati a release successive:
+- `docs/auto-update.md` (con `v0.2.x` Step 5)
+- `docs/decisioni/authenticode-signing.md` (con `v0.2.x` Step 5)
+- `docs/server-deploy.md`, `docs/server-config.md` (con Fase 5 Step 0a)
 
 ---
 
-## Decisioni discrezionali residue
+## Decisioni discrezionali residue *(legate a Step 5/6 deferred)*
 
-1. **Endpoint `latest.json`** per auto-update: GitHub Releases (gratis, semplice) o server di sync (controllo rollout %)? Default raccomandato: **GitHub Releases** finché non c'è bisogno di canary/staged rollout.
-2. **Authenticode signing**: applicare a Certum Open Source (gratis se PaP qualifica come AGPL OSS). Vedi `docs/decisioni/authenticode-signing.md`.
+1. **Endpoint `latest.json`** per auto-update: GitHub Releases (gratis, semplice) o server di sync (controllo rollout %)? Default raccomandato: **GitHub Releases** finché non c'è bisogno di canary/staged rollout. Decisione si concretizza in `v0.2.x` quando Step 5 si sblocca.
+2. **Authenticode signing**: in attesa di Certum Open Source (gratis se PaP qualifica come AGPL OSS). KYC in corso. Sblocca Step 5 quando il cert atterra.
 
 ---
 

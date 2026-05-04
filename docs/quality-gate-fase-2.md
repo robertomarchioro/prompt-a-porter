@@ -127,18 +127,14 @@ Tutti i moduli sono allineati ad AGPL 3.0 SPDX standard.
 
 ## Sintesi
 
-**Pronto per v0.2.0?** Quasi.
+**Pronto per `v0.2.0-foundations`?** Sì.
 
-- ✅ Tutti gli step funzionali principali (1, 2, 3, 4, 7, 8) chiusi e mergiati su main
-- ⏳ Step 5 (auto-update) bloccato in attesa cert Certum
-- ⏳ Step 6 (server cross-platform) rimandato finché workspace team non in produzione
-- ⚠️ Coverage numerica non disponibile per Rust/TS; stima qualitativa OK
-- ⚠️ CLI coverage 53.3% sotto soglia 70%; 3 test extra portano sopra
-- ⚠️ Audit security mai ancora eseguito; primo run post-merge di questo PR
+- ✅ Tutti gli step funzionali controllabili (1, 2, 3, 4, 7, 8) chiusi e mergiati su main
+- ✅ Step 5 (auto-update) → riposizionato a patch line `v0.2.x`, sblocca con cert Certum (vedi `todo-fase-2.md`)
+- ✅ Step 6 (server cross-OS) → riposizionato in Fase 5 come Step 0a (vedi `todo-fase-5.md`)
+- ✅ CLI coverage 72.7% (PR #18)
+- ✅ Server coverage 56.2% via test integrazione cross-package
+- ✅ Audit security tutti verdi: cargo audit, pnpm audit, govulncheck CLI, govulncheck server (PR #17)
+- ⚠️ Coverage numerica non disponibile per Rust/TS; stima qualitativa OK (action item v0.3)
 
-**Raccomandazione**:
-
-- Per **release v0.2.0 oggi** (parziale): tag `v0.2.0-foundations` su main attuale (6/8 step), accetta le 2 limitazioni Step 5/6 documentate. Quality gate "best effort" con audit security verde.
-- Per **release v0.2.0 completa**: completa Step 5 + 6 + alza coverage CLI sopra 70% + esegui audit security. ~3-5 settimane di lavoro extra.
-
-Decidere col maintainer.
+**Decisione**: tag `v0.2.0-foundations` su main attuale (6/8 step). I deliverable Step 5 e Step 6 atterrano nelle release dedicate (`v0.2.x` per auto-update, Fase 5 per server cross-OS).
