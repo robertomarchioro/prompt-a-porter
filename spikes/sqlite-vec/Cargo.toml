@@ -1,0 +1,16 @@
+[package]
+name = "spike-sqlite-vec"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "AGPL-3.0-only"
+
+# Spike: verifica compatibilità sqlite-vec con SQLCipher attraverso
+# rusqlite + bundled-sqlcipher-vendored-openssl (stessa configurazione del
+# client desktop in apps/client/src-tauri).
+#
+# Vedi docs/spike/sqlite-vec-sqlcipher.md per metodologia e risultati.
+
+[dependencies]
+rusqlite = { version = "0.32", features = ["bundled-sqlcipher-vendored-openssl"] }
+sqlite-vec = "0.1"
