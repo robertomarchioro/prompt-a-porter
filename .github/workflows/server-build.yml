@@ -28,11 +28,12 @@ jobs:
           go-version: "1.25"
           cache-dependency-path: apps/server/go.sum
 
-      - name: Lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          working-directory: apps/server
-          version: latest
+      - name: Vet
+        working-directory: apps/server
+        run: go vet ./...
+
+      # TODO: riattivare golangci-lint quando l'action supporta stabilmente v2
+      # (v1.64.8 è build su Go 1.24, incompatibile con Go 1.25 della codebase)
 
       - name: Test
         working-directory: apps/server
