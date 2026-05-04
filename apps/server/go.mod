@@ -1,9 +1,9 @@
 module github.com/anthropics/prompt-a-porter/apps/server
 
-go 1.23
+go 1.25
 
 require (
-	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-chi/cors v1.2.1
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/gorilla/websocket v1.5.3

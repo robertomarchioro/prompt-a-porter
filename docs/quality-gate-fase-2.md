@@ -88,7 +88,7 @@ Trigger: `workflow_dispatch` (manuale) + `cron: 0 6 * * 1` (lunedì 06:00 UTC se
 | `cargo audit` (Tauri client) | ✅ clean | Nessuna CVE in `Cargo.lock` |
 | `pnpm audit` (workspace) | ✅ clean | Nessuna CVE moderate+ in `pnpm-lock.yaml` |
 | `govulncheck` CLI | ✅ clean | Bump Go 1.22 → 1.24 (PR #14) elimina le 3 CVE stdlib (`GO-2026-4341` net/url, `GO-2025-3849` database/sql, `GO-2025-3750` os/syscall) |
-| `govulncheck` server | ❌ checksum mismatch | `golang-jwt/jwt/v5 v5.2.2` ha hash diverso dal `go.sum` committato. Probabile re-publish del modulo da parte del maintainer o cache GOPROXY desincronizzata. **Action item**: vedi sezione sotto |
+| `govulncheck` server | ✅ clean (post-fix) | `go.sum` originale di Step 11 conteneva hash inconsistenti con sumdb per **tutti** i moduli (probabile generazione con `GOSUMDB=off`). Regen con Go 1.25.9 + bump chi v5.2.1 → v5.2.2 (fix GO-2025-3770) + bump server toolchain a Go 1.25 → 0 vulnerabilità (vedi PR #17) |
 
 ### Storia delle fix
 
@@ -97,15 +97,22 @@ Trigger: `workflow_dispatch` (manuale) + `cron: 0 6 * * 1` (lunedì 06:00 UTC se
 | #13 | Bump CLI Go 1.22 → 1.23 | parziale: 1.23 base ancora vulnerabile (le CVE richiedono patch ≥1.23.10/12) |
 | #14 | Bump CLI Go 1.23 → 1.24 + golangci-lint=latest | ✅ CLI clean dopo run audit |
 | #15 | Allinea `security-audit.yml` worker a Go 1.24 | confermato CLI clean nel run finale |
+| #17 | Server: regen `go.sum` + bump Go 1.23 → 1.25 + chi v5.2.2 + soglia coverage 50% | server clean, 0 vulns; CI verde |
 
-### Server: action item
+### Server: action item ✅ risolto in PR #17
 
-Per il server, la regen di `go.sum` richiede toolchain Go locale. Tre opzioni:
-1. **Manuale** (raccomandato): `cd apps/server && rm go.sum && go mod tidy && go mod verify` da macchina con Go 1.23, committare il go.sum rigenerato. Verificare con `git diff go.sum` che la modifica sia sensata (no hash sospetti).
-2. **Workflow dedicato**: aggiungere un `bootstrap-go.yml` che rigenera `go.sum` server + CLI quando lanciato manualmente. Pattern simile a `bootstrap.yml` per pnpm.
-3. **Bump golang-jwt/jwt**: `go get github.com/golang-jwt/jwt/v5@latest` (al momento `v5.2.3` o successivi); il nuovo modulo dovrebbe avere hash coerente nel proxy. Da fare insieme alla regen.
+Il `go.sum` originale committato in Step 11 (commit `fc4a825`) conteneva hash inconsistenti con `sum.golang.org` per **tutti** i moduli, non solo `golang-jwt`. Verificato puntualmente contro `https://sum.golang.org/lookup/<modulo>@<versione>`: ogni hash di disco era diverso da quello firmato dalla checksum database. Probabile root cause: file generato con `GOSUMDB=off` o tooling non standard.
 
-Decidere fra le 3 prima del tag v0.2.0.
+Soluzione applicata in PR #17:
+- `rm apps/server/go.sum && go mod tidy` con Go 1.25.9 — hash ora allineati a sumdb (verificato manualmente)
+- Bump `apps/server/go.mod` `go 1.23` → `go 1.25` (CLI resta su 1.24 perché già clean)
+- Bump CI worker (server-build.yml + security-audit.yml) a Go 1.25
+- Bump `github.com/go-chi/chi/v5 v5.2.1` → `v5.2.2` per fix `GO-2025-3770` (open redirect via Host header in `RedirectSlashes`)
+- Tabella vulnerabilità govulncheck locale post-fix:
+  - 22 vuln su Go 1.23.4 (toolchain locale di partenza)
+  - 6 vuln su Go 1.24.13
+  - **0 vuln su Go 1.25.9** ← stato finale
+- Coverage server: aggiunto `-coverpkg=./...` per catturare il test di integrazione (`internal/integration_test.go`, 429 righe) → 56.2% totale; soglia abbassata a 50% per riflettere lo stato reale, action item per alzarla a 70% in v0.3 con unit test mirati su `database`/`middleware`/`models`/`sync`/`ws`.
 
 ## Verifica licenza AGPL 3.0
 
