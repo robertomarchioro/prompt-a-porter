@@ -1,8 +1,8 @@
 # Changelog — Prompt a Porter
 
-## v0.2.0 — Foundations & Distribuzione (in corso)
+## v0.2.0-foundations (2026-05-04)
 
-> **Status**: 6/8 step completati. Step 5 (auto-update silenzioso) bloccato in attesa del certificato Authenticode (Certum OSS). Step 6 (server cross-platform senza Docker) in coda — riprende quando il workspace team avrà domanda concreta. Le restanti decisioni sono documentate in `docs/todo-fase-2.md`.
+> **Status**: Fase 2 chiusa sui 6 step controllabili (1, 2, 3, 4, 7, 8). Step 5 (auto-update silenzioso) riposizionato a patch line `v0.2.x` — sblocca con cert Authenticode Certum (KYC in corso). Step 6 (server cross-platform senza Docker) spostato a Fase 5 Step 0a — domanda-driven, riprende con workspace team enterprise. Razionale completo in `docs/todo-fase-2.md` e `docs/quality-gate-fase-2.md`.
 
 ### Breaking changes
 
@@ -78,16 +78,34 @@
 - **#3 high**: tray menu Windows non appariva. Fix: `lib.rs` configura `show_menu_on_left_click(false)` + handler `on_tray_icon_event` per click sinistro → mostra libreria; click destro → menù contestuale.
 - **#2 low**: onboarding mancava toggle tema light/dark. Fix: segmented control nel wizard, applicato live via `data-theme`.
 
-### Roadmap rimanente Fase 2
+### Quality gate (PR #17, #18, #19)
 
-- **Step 5** — Auto-update NSIS per-user + Tauri Updater + firma Authenticode (in attesa cert Certum OSS)
-- **Step 6** — Server Go cross-platform senza Docker (`modernc.org/sqlite`, Win Service nativo + systemd) — slittabile finché workspace team non è in produzione
+- **PR #17** — Server `go.sum` rigenerato (hash inconsistenti con `sum.golang.org` per tutti i moduli, probabile generazione originale con `GOSUMDB=off`); bump server Go 1.23 → 1.25 + `golang-jwt/jwt/v5` aggiornato + `chi/v5 v5.2.1 → v5.2.2` (fix `GO-2025-3770` open-redirect). Risultato `govulncheck`: 22 vuln (1.23.4) → 0 (1.25.9).
+- **PR #18** — Coverage CLI `53.3% → 72.7%` con 3 test mirati su `recent` (70.6%), `formatPrompt` (93.5%), `tagsFor` (81.8%).
+- **PR #19** — Riposizionamento Step 5 (→ patch line `v0.2.x`) e Step 6 (→ Fase 5 Step 0a). Scope `v0.2.0-foundations` formalizzato.
+
+### Audit security finale
+
+| Audit | Stato |
+|---|---|
+| `cargo audit` (Tauri client) | ✅ clean |
+| `pnpm audit` (workspace) | ✅ clean |
+| `govulncheck` CLI (Go 1.24) | ✅ clean |
+| `govulncheck` server (Go 1.25) | ✅ clean — 0 vulnerabilità |
+| `licensee` AGPL 3.0 | ✅ consistente in tutti i manifest |
+
+### Roadmap successiva
+
+- **Patch line `v0.2.x`** — Auto-update silenzioso (Step 5): NSIS per-user + Tauri Updater + firma Authenticode. Sblocco: cert Certum OSS.
+- **Fase 5 Step 0a** — Server Go cross-platform senza Docker (`modernc.org/sqlite`, Win Service + systemd). Domanda-driven.
+- **Fase 3 (`v0.3.0`)** — Intelligenza & authoring: ricerca semantica via embeddings ONNX locali, prompt componibili, linting proattivo. Vedi `docs/todo-fase-3.md`.
 
 ### Statistics
 
-- 11 PR mergiate (#6-#11 + sub-PR di fix)
-- ~5000 righe di codice nuovo (Rust + TypeScript + Go + SQL)
-- 0 dipendenze nuove con vulnerabilità note (audit settimanale via `security-audit.yml`)
+- 14 PR mergiate (#6 – #19)
+- ~5500 righe di codice nuovo (Rust + TypeScript + Go + SQL)
+- Coverage CLI 72.7%, server 56.2% (cross-package via test integrazione)
+- 0 vulnerabilità note (audit settimanale via `security-audit.yml`)
 
 ---
 
