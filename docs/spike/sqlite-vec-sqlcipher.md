@@ -1,10 +1,8 @@
 # Spike 1 — sqlite-vec ⊕ SQLCipher
 
-> **Stato**: in attesa di esecuzione (richiede toolchain Rust locale).
+> **Stato**: ✅ **PASSED** (eseguito 2026-05-04 su Ubuntu Linux x86_64, Rust stable, SQLCipher 4.5.7 community, sqlite-vec v0.1.9).
 >
-> **Domanda chiave**: sqlite-vec è utilizzabile dal client desktop, che apre il vault SQLite in modalità SQLCipher cifrata via `rusqlite 0.32 + bundled-sqlcipher-vendored-openssl`?
->
-> **Output atteso**: PASS / FAIL con dettaglio del primo stage che fallisce, e — in caso di FAIL — quale fallback adottare.
+> **Verdict**: sqlite-vec è utilizzabile direttamente dal client desktop con la configurazione di produzione (`rusqlite 0.32 + bundled-sqlcipher-vendored-openssl`) tramite registrazione come auto-extension statico. **Step 2 di Fase 3 può procedere senza fallback architetturali.**
 
 ## Contesto
 
@@ -59,25 +57,57 @@ cargo run --release
 
 Prima esecuzione: ~3-5 min (compila SQLCipher + OpenSSL vendor + sqlite-vec). Successive: <1 s.
 
-## Risultati
-
-> _Da compilare dopo l'esecuzione._
+## Risultati (esecuzione 2026-05-04)
 
 ```
-[output di cargo run qui]
+=== Spike sqlite-vec ⊕ SQLCipher ===
+
+[1/6] Registro sqlite_vec_init come auto-extension...
+    ok
+[2/6] Creo vault SQLCipher cifrato in /tmp/spike-sqlite-vec-vault.db...
+    SQLCipher attivo, versione: 4.5.7 community
+    sanity check tabella standard: ok
+[3/6] Interrogo vec_version()...
+    sqlite-vec versione: v0.1.9
+[4/6] CREATE VIRTUAL TABLE prompts_emb USING vec0(...) su DB cifrato...
+    ok
+[5/6] INSERT di 3 embeddings di dimensione 4...
+    inseriti 3 righe
+[6/6] Query nearest-neighbor con embedding MATCH...
+    risultati (3):
+      prm-2-email-informale → distance 0.0200
+      prm-1-email-formale → distance 0.0200
+      prm-3-recipe-pasta → distance 0.9147
+    ranking semantico coerente: top = prm-2-email-informale
+
+✅ SPIKE PASSED
 ```
 
 ### Diagnosi
 
-> _Verdict + raccomandazione._
+Tutti e 6 gli stage chiusi senza intoppi:
+- L'auto-extension API è **disponibile** in SQLCipher 4.5.7 community (smentisce il timore che fosse compilata via `SQLITE_OMIT_LOAD_EXTENSION`).
+- `sqlite-vec` v0.1.9 vendor-izzato come crate Rust si linka staticamente alla build SQLCipher senza conflitti di simbolo.
+- `vec0` virtual table convive col layout cifrato senza richiedere flag aggiuntivi: la cifratura SQLCipher opera a livello di pagine, e le pagine della vtable vec0 sono cifrate come tutte le altre.
+- INSERT/MATCH/distance funzionano end-to-end. Le distanze L2 ottenute sono semanticamente coerenti col dataset (prm-1 e prm-2, embedding vicini, hanno distance bassa identica; prm-3 lontano in spazio vettoriale ha distance alta).
+
+Nessun fallback necessario.
 
 ## Decisione
 
-> _PASS_ → si procede con Step 2 originale (vec0 dentro vault SQLCipher).
->
-> _FAIL stage 1-3_ → fallback A: vec0 in **file SQLite separato non cifrato** (path `~/.local/share/prompt-a-porter/embeddings.db`). Privacy implication: gli embeddings sono float "rumorosi" da cui non si recupera il prompt originale, ma il path → prompt id è leakabile. Da documentare in `docs/ricerca-semantica.md`.
->
-> _FAIL stage 4-6_ → fallback B: build custom di rusqlite con SQLCipher patched, o switch driver. Costo alto, decidere col maintainer.
+✅ **Step 2 di Fase 3 procede col path originale**: `CREATE VIRTUAL TABLE PromptsEmbeddings USING vec0(PromptId TEXT PRIMARY KEY, Embedding FLOAT[384])` dentro il vault SQLCipher esistente.
+
+Niente file SQLite separato, niente build custom di SQLCipher, niente switch di driver. Le pagine della vtable vengono cifrate insieme al resto del vault — privacy preservata.
+
+### Implementazione di produzione (per Step 2)
+
+Replicare il pattern dello spike nel client desktop:
+
+1. In `apps/client/src-tauri/Cargo.toml`: aggiungere `sqlite-vec = "0.1"` come dependency.
+2. In `apps/client/src-tauri/src/vault.rs` (o equivalente bootstrap): chiamare `sqlite3_auto_extension(sqlite3_vec_init)` **una sola volta**, prima della prima `Connection::open`. Idempotente — se già registrato, ritorna comunque `SQLITE_OK`.
+3. Migration v3 con `CREATE VIRTUAL TABLE PromptsEmbeddings USING vec0(...)` e indici/hooks come da Step 2.
+
+Vedi `spikes/sqlite-vec/src/main.rs` per il pattern esatto del transmute della funzione init (necessario perché il binding Rust di sqlite-vec espone una signature semplificata).
 
 ## Riferimenti
 

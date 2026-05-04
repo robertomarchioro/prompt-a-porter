@@ -37,9 +37,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Stage 1: registra sqlite-vec come auto-extension PRIMA di aprire connessioni.
     println!("[1/6] Registro sqlite_vec_init come auto-extension...");
     unsafe {
-        let init: unsafe extern "C" fn() = std::mem::transmute(
-            sqlite_vec::sqlite3_vec_init as *const (),
-        );
+        // sqlite3_auto_extension vuole una fn pointer con la firma standard di
+        // un init di estensione SQLite. sqlite_vec::sqlite3_vec_init ha quella
+        // firma a livello C ma è esposta come `unsafe extern "C" fn()` per
+        // semplicità del binding — transmute al tipo atteso.
+        let init: unsafe extern "C" fn(
+            *mut ffi::sqlite3,
+            *mut *mut i8,
+            *const ffi::sqlite3_api_routines,
+        ) -> i32 = std::mem::transmute(sqlite_vec::sqlite3_vec_init as *const ());
         let rc = ffi::sqlite3_auto_extension(Some(init));
         if rc != ffi::SQLITE_OK {
             return Err(format!("sqlite3_auto_extension fallito: rc={}", rc).into());
@@ -102,39 +108,41 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     println!("    inseriti {} righe", dataset.len());
 
-    // Stage 6: nearest neighbor query.
+    // Stage 6: nearest neighbor query (scoped per rilasciare il borrow di `stmt`).
     println!("[6/6] Query nearest-neighbor con embedding MATCH...");
-    let query: [f32; EMBEDDING_DIM] = [0.11, 0.19, 0.31, 0.39]; // simile a prm-1/prm-2
-    let mut stmt = conn.prepare(
-        "SELECT prompt_id, distance FROM prompts_emb \
-         WHERE embedding MATCH ? AND k = 3 \
-         ORDER BY distance",
-    )?;
-    let rows: Vec<(String, f64)> = stmt
-        .query_map(params![embedding_bytes(&query)], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, f64>(1)?))
-        })?
-        .collect::<rusqlite::Result<_>>()?;
+    {
+        let query: [f32; EMBEDDING_DIM] = [0.11, 0.19, 0.31, 0.39]; // simile a prm-1/prm-2
+        let mut stmt = conn.prepare(
+            "SELECT prompt_id, distance FROM prompts_emb \
+             WHERE embedding MATCH ? AND k = 3 \
+             ORDER BY distance",
+        )?;
+        let rows: Vec<(String, f64)> = stmt
+            .query_map(params![embedding_bytes(&query)], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, f64>(1)?))
+            })?
+            .collect::<rusqlite::Result<_>>()?;
 
-    println!("    risultati ({}):", rows.len());
-    for (id, dist) in &rows {
-        println!("      {} → distance {:.4}", id, dist);
-    }
+        println!("    risultati ({}):", rows.len());
+        for (id, dist) in &rows {
+            println!("      {} → distance {:.4}", id, dist);
+        }
 
-    // Verifica semantica: prm-1 e prm-2 devono essere primi e secondi (vicini al
-    // query vector); prm-3 (recipe) deve essere terzo o assente.
-    if rows.is_empty() {
-        return Err("nessun risultato dalla query MATCH".into());
+        // Verifica semantica: prm-1 e prm-2 devono essere primi e secondi (vicini al
+        // query vector); prm-3 (recipe) deve essere terzo o assente.
+        if rows.is_empty() {
+            return Err("nessun risultato dalla query MATCH".into());
+        }
+        let top = &rows[0].0;
+        if top != "prm-1-email-formale" && top != "prm-2-email-informale" {
+            return Err(format!(
+                "ranking inatteso: top = {}, attesi prm-1 o prm-2",
+                top
+            )
+            .into());
+        }
+        println!("    ranking semantico coerente: top = {}", top);
     }
-    let top = &rows[0].0;
-    if top != "prm-1-email-formale" && top != "prm-2-email-informale" {
-        return Err(format!(
-            "ranking inatteso: top = {}, attesi prm-1 o prm-2",
-            top
-        )
-        .into());
-    }
-    println!("    ranking semantico coerente: top = {}", top);
 
     // Cleanup
     drop(conn);
