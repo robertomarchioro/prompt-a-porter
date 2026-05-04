@@ -1,0 +1,14 @@
+{
+  "name": "spike-embedding-models",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "description": "Spike 3 — Qualitative test of embedding models for mixed IT/EN prompts",
+  "scripts": {
+    "spike": "node index.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.0.0"
+  }
+}
