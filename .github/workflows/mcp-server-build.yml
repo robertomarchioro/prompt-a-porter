@@ -6,6 +6,7 @@ on:
     paths:
       - "apps/mcp-server/**"
       - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
       - "!apps/mcp-server/**/*.md"
       - "!apps/mcp-server/**/CHANGELOG.md"
       - "!apps/mcp-server/**/LICENSE"
@@ -14,9 +15,11 @@ on:
     paths:
       - "apps/mcp-server/**"
       - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
       - "!apps/mcp-server/**/*.md"
       - "!apps/mcp-server/**/CHANGELOG.md"
       - "!apps/mcp-server/**/LICENSE"
+  workflow_dispatch:
 
 jobs:
   lint-and-build:
