@@ -50,20 +50,15 @@ Workflow `server-build.yml` esegue `go test -race -coverprofile=coverage.out` co
 
 ### Go CLI (`apps/cli`)
 
-CI run **25312252646** del 2026-05-04: **coverage totale 53.3%**.
+CI run del 2026-05-04 post-PR #18: **coverage totale 72.7%** (sopra soglia 70%).
 
-Funzioni con coverage 0%:
-- `vaultPath`, `openVault` — filesystem-dependent, mockare è disproportionato per MVP
-- `recent` — query helper non testato direttamente (testabile)
-- `formatPrompt` — versione singolo prompt (testabile)
-- `main` — entry point cobra (non test-ato per definizione)
+Storia:
+- Run iniziale: 53.3% (sotto soglia)
+- PR #18 ha aggiunto 3 test per `tagsFor` (81.8%), `recent` (70.6%), `formatPrompt` (93.5%) → 72.7%
 
-Funzioni con coverage 100%:
-- `sanitizzaFTS`, `estraiSegnaposti`, `truncate`, `init`
-
-**Sotto soglia 70%**, ma le funzioni 0% sono in larga parte entry point e adapter filesystem. Coverage logica pura: ~80%.
-
-> **Action item raccomandato**: aggiungere 3 test per `recent`, `formatPrompt`, e `tagsFor` per portare il totale sopra 70%. Non bloccante per v0.2.0.
+Funzioni ancora con coverage 0% (intenzionale, fuori scope unit test):
+- `vaultPath`, `openVault` — filesystem-dependent
+- `main` — entry point cobra
 
 ### TypeScript MCP server (`apps/mcp-server`)
 
