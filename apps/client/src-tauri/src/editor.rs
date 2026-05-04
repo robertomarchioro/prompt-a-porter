@@ -13,6 +13,8 @@ pub struct NuovoPrompt {
     pub body: String,
     pub visibilita: String,
     pub tag_nomi: Vec<String>,
+    #[serde(default)]
+    pub target_model: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -23,6 +25,14 @@ pub struct AggiornamentoPrompt {
     pub body: String,
     pub visibilita: String,
     pub tag_nomi: Vec<String>,
+    #[serde(default)]
+    pub target_model: Option<String>,
+}
+
+fn normalizza_target_model(v: &Option<String>) -> Option<String> {
+    v.as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 fn genera_id() -> String {
@@ -100,18 +110,20 @@ pub fn prompt_crea(
 ) -> Result<String, PapErrore> {
     state.with_conn(|conn| {
         let id = format!("prm-{}", genera_id());
+        let target = normalizza_target_model(&dati.target_model);
         conn.execute(
             "INSERT INTO Prompts
                 (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
-                 Visibility, Version, CreatedAt, UpdatedAt)
-             VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, ?4, ?5, 1,
+                 Visibility, TargetModel, Version, CreatedAt, UpdatedAt)
+             VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, ?4, ?5, ?6, 1,
                      datetime('now'), datetime('now'))",
             rusqlite::params![
                 id,
                 dati.titolo.trim(),
                 dati.descrizione.trim(),
                 dati.body.trim(),
-                dati.visibilita
+                dati.visibilita,
+                target,
             ],
         )?;
         sincronizza_tags(conn, &id, &dati.tag_nomi)?;
@@ -130,17 +142,20 @@ pub fn prompt_aggiorna(
     state: State<'_, VaultState>,
 ) -> Result<(), PapErrore> {
     state.with_conn(|conn| {
+        let target = normalizza_target_model(&dati.target_model);
         conn.execute(
             "UPDATE Prompts
              SET Title = ?1, Description = ?2, Body = ?3, Visibility = ?4,
+                 TargetModel = ?5,
                  Version = Version + 1, UpdatedAt = datetime('now'),
                  UpdatedByUserId = 'usr-locale'
-             WHERE Id = ?5 AND DeletedAt IS NULL",
+             WHERE Id = ?6 AND DeletedAt IS NULL",
             rusqlite::params![
                 dati.titolo.trim(),
                 dati.descrizione.trim(),
                 dati.body.trim(),
                 dati.visibilita,
+                target,
                 dati.id
             ],
         )?;
@@ -311,5 +326,20 @@ mod test {
         let conn = db_test();
         ricostruisci_fts(&conn).unwrap();
         ricostruisci_fts(&conn).unwrap();
+    }
+
+    #[test]
+    fn normalizza_target_model_casi() {
+        assert_eq!(normalizza_target_model(&None), None);
+        assert_eq!(normalizza_target_model(&Some("".into())), None);
+        assert_eq!(normalizza_target_model(&Some("   ".into())), None);
+        assert_eq!(
+            normalizza_target_model(&Some("claude-opus".into())),
+            Some("claude-opus".into())
+        );
+        assert_eq!(
+            normalizza_target_model(&Some("  gpt-4  ".into())),
+            Some("gpt-4".into())
+        );
     }
 }
