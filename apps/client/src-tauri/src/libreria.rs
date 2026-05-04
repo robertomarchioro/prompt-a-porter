@@ -54,6 +54,8 @@ pub struct FiltroLista {
     pub tag_id: Option<String>,
     pub cerca: Option<String>,
     pub ordine: String,
+    #[serde(default)]
+    pub target_model: Option<String>,
 }
 
 fn carica_tags(conn: &Connection, prompt_id: &str) -> Result<Vec<TagInfo>, PapErrore> {
@@ -149,6 +151,12 @@ pub fn libreria_lista(
             _ => "COALESCE(p.LastUsedAt, p.UpdatedAt) DESC",
         };
 
+        let target_model_param: Option<String> = filtro
+            .target_model
+            .as_ref()
+            .filter(|s| !s.trim().is_empty())
+            .cloned();
+
         let sql = format!(
             "SELECT p.Id, p.Title, p.Description, p.Visibility,
                     p.IsFavorite, p.UseCount, p.UpdatedAt
@@ -157,6 +165,7 @@ pub fn libreria_lista(
              WHERE p.DeletedAt IS NULL{vista_cond}
                AND (:cerca IS NULL OR p.Title LIKE :cerca OR p.Description LIKE :cerca)
                AND (:tag_id IS NULL OR pt.TagId = :tag_id)
+               AND (:target_model IS NULL OR p.TargetModel = :target_model)
              GROUP BY p.Id
              ORDER BY {ordine}
              LIMIT 100"
@@ -168,6 +177,7 @@ pub fn libreria_lista(
                 rusqlite::named_params! {
                     ":cerca": cerca_param,
                     ":tag_id": filtro.tag_id,
+                    ":target_model": target_model_param,
                 },
                 riga_a_card,
             )?

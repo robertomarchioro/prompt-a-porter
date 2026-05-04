@@ -7,7 +7,8 @@
     segnapostoTheme,
   } from "$lib/codemirror/placeholder-highlight";
   import { estraiSegnaposti } from "$lib/template";
-  import { Button } from "$lib/components";
+  import { Button, Select } from "$lib/components";
+  import { MODELLI_TARGET } from "$lib/modelli-target";
 
   interface TagInfoFE {
     id: string;
@@ -21,6 +22,7 @@
     descrizione: string;
     body: string;
     visibilita: string;
+    target_model?: string | null;
     tags: TagInfoFE[];
   }
 
@@ -40,6 +42,7 @@
   let visibilita = $state<"private" | "workspace">(
     (prompt?.visibilita as "private" | "workspace") ?? "private",
   );
+  let targetModel = $state<string>(prompt?.target_model ?? "");
   let tagNomi = $state<string[]>(prompt?.tags.map((t) => t.nome) ?? []);
   let tagInput = $state("");
   let salvando = $state(false);
@@ -154,6 +157,7 @@
             body: body.trim(),
             visibilita,
             tag_nomi: tagNomi,
+            target_model: targetModel.trim() || null,
           },
         });
       } else {
@@ -164,6 +168,7 @@
             body: body.trim(),
             visibilita,
             tag_nomi: tagNomi,
+            target_model: targetModel.trim() || null,
           },
         });
       }
@@ -188,6 +193,7 @@
             body: body.trim(),
             visibilita,
             tag_nomi: tagNomi,
+            target_model: targetModel.trim() || null,
           },
         });
       } else {
@@ -198,6 +204,7 @@
             body: body.trim(),
             visibilita,
             tag_nomi: tagNomi,
+            target_model: targetModel.trim() || null,
           },
         });
       }
@@ -326,6 +333,19 @@
               </div>
             {/if}
           </div>
+        </div>
+
+        <div class="meta-sezione">
+          <h3>Modello target</h3>
+          <Select
+            bind:valore={targetModel}
+            onchange={() => pianificaAutosave()}
+          >
+            <option value="">Non specificato</option>
+            {#each MODELLI_TARGET as m (m.value)}
+              <option value={m.value}>{m.label}</option>
+            {/each}
+          </Select>
         </div>
 
         <div class="meta-sezione">

@@ -2,6 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { Button, EmptyState, NavItem, Tag } from "$lib/components";
   import { estraiSegnaposti } from "$lib/template";
+  import { etichettaPerValore, MODELLI_TARGET } from "$lib/modelli-target";
   import {
     syncAvvia,
     syncGetState,
@@ -60,6 +61,7 @@
   let tagSelezionato = $state<string | null>(null);
   let ordine = $state("recente");
   let cercaTesto = $state("");
+  let targetModelFiltro = $state<string>("");
   let idSelezionato = $state<string | null>(null);
 
   let prompts = $state<PromptCard[]>([]);
@@ -210,6 +212,7 @@
           tag_id: tagSelezionato,
           cerca: cercaTesto || null,
           ordine,
+          target_model: targetModelFiltro || null,
         },
       });
     } catch {
@@ -476,6 +479,30 @@
         </div>
       {/if}
 
+      <div class="sb-gruppo">
+        <div class="sb-label">Modello target</div>
+        <NavItem
+          attivo={targetModelFiltro === ""}
+          onclick={() => {
+            targetModelFiltro = "";
+            caricaLista();
+          }}
+        >
+          Tutti
+        </NavItem>
+        {#each MODELLI_TARGET as m (m.value)}
+          <NavItem
+            attivo={targetModelFiltro === m.value}
+            onclick={() => {
+              targetModelFiltro = m.value;
+              caricaLista();
+            }}
+          >
+            {m.label}
+          </NavItem>
+        {/each}
+      </div>
+
       <div class="sb-spacer"></div>
 
       <div class="sb-gruppo">
@@ -689,6 +716,11 @@
             <span>
               {#if promptDet.visibilita === "private"}Privato{:else}Team{/if}
             </span>
+            {#if promptDet.target_model}
+              <span class="det-meta-target"
+                >{etichettaPerValore(promptDet.target_model)}</span
+              >
+            {/if}
             {#if promptDet.uso_count > 0}
               <span
                 >Usato {promptDet.uso_count}
