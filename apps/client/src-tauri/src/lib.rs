@@ -6,6 +6,7 @@ mod libreria;
 mod migrazione;
 mod preferenze;
 mod prompt;
+mod statistiche;
 mod sync;
 mod vault;
 mod versioning;
@@ -253,6 +254,7 @@ pub fn run() {
             audit::audit_cleanup_oltre_giorni,
             import_export::vault_export_json,
             import_export::vault_import_json,
+            statistiche::statistiche_query,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())
