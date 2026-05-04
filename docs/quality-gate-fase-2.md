@@ -81,14 +81,27 @@ Workflow `.github/workflows/security-audit.yml` configurato con:
 
 Trigger: `workflow_dispatch` (manuale) + `cron: 0 6 * * 1` (lunedì 06:00 UTC settimanale).
 
-**Run di riferimento per v0.2**: lanciare manualmente la prima run dopo merge di questo PR. I risultati saranno linkati qui:
+**Run di riferimento v0.2** (`gh workflow run security-audit.yml`, run 25312545743 del 2026-05-04):
 
-- `cargo audit`: TBD (run da eseguire)
-- `govulncheck server`: TBD
-- `govulncheck cli`: TBD
-- `pnpm audit`: TBD
+| Audit | Stato | Note |
+|---|---|---|
+| `cargo audit` (Tauri client) | ✅ clean | Nessuna CVE in `Cargo.lock` |
+| `pnpm audit` (workspace) | ✅ clean | Nessuna CVE moderate+ in `pnpm-lock.yaml` |
+| `govulncheck` server | ❌ checksum mismatch | `golang-jwt/jwt/v5 v5.2.2` ha hash diverso dal `go.sum` committato. Probabile re-publish del modulo da parte del maintainer o cache GOPROXY desincronizzata. Richiede `rm go.sum && go mod tidy && go mod verify` lato Go locale per rigenerare. **Action item**: bump dep + regen go.sum in PR dedicato. |
+| `govulncheck` CLI | ❌ 3 CVE stdlib Go 1.22.12 | `GO-2026-4341` (memory exhaustion `net/url`), `GO-2025-3849` (`database/sql.Rows.Scan` incorrect), `GO-2025-3750` (`os`/`syscall` O_CREATE\|O_EXCL Win/Unix divergence). **Fix applicato in PR `fix/audit-cli-go-bump`**: bumpa `apps/cli/go.mod` Go 1.22 → 1.23 + worker CI corrispondente. |
 
-> **Action item**: dopo merge PR quality-gate, eseguire `gh workflow run security-audit.yml` e copiare gli output qui sotto. Se ci sono CVE, decidere fix/dismiss/accept con razionale documentato.
+### Stato post-fix CLI
+
+Bump a Go 1.23 elimina tutte e 3 le CVE (sono fixate in 1.23.10/1.23.12/1.24.12). Re-run di `security-audit.yml` post-merge della PR `fix/audit-cli-go-bump` deve produrre govulncheck CLI ✅.
+
+### Server: action item
+
+Per il server, la regen di `go.sum` richiede toolchain Go locale. Tre opzioni:
+1. **Manuale** (raccomandato): `cd apps/server && rm go.sum && go mod tidy && go mod verify` da macchina con Go 1.23, committare il go.sum rigenerato. Verificare con `git diff go.sum` che la modifica sia sensata (no hash sospetti).
+2. **Workflow dedicato**: aggiungere un `bootstrap-go.yml` che rigenera `go.sum` server + CLI quando lanciato manualmente. Pattern simile a `bootstrap.yml` per pnpm.
+3. **Bump golang-jwt/jwt**: `go get github.com/golang-jwt/jwt/v5@latest` (al momento `v5.2.3` o successivi); il nuovo modulo dovrebbe avere hash coerente nel proxy. Da fare insieme alla regen.
+
+Decidere fra le 3 prima del tag v0.2.0.
 
 ## Verifica licenza AGPL 3.0
 
