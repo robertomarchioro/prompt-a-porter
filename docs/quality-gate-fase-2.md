@@ -81,18 +81,22 @@ Workflow `.github/workflows/security-audit.yml` configurato con:
 
 Trigger: `workflow_dispatch` (manuale) + `cron: 0 6 * * 1` (lunedì 06:00 UTC settimanale).
 
-**Run di riferimento v0.2** (`gh workflow run security-audit.yml`, run 25312545743 del 2026-05-04):
+**Run di riferimento v0.2** (run 25313997733 del 2026-05-04, post-fix Go 1.24):
 
 | Audit | Stato | Note |
 |---|---|---|
 | `cargo audit` (Tauri client) | ✅ clean | Nessuna CVE in `Cargo.lock` |
 | `pnpm audit` (workspace) | ✅ clean | Nessuna CVE moderate+ in `pnpm-lock.yaml` |
-| `govulncheck` server | ❌ checksum mismatch | `golang-jwt/jwt/v5 v5.2.2` ha hash diverso dal `go.sum` committato. Probabile re-publish del modulo da parte del maintainer o cache GOPROXY desincronizzata. Richiede `rm go.sum && go mod tidy && go mod verify` lato Go locale per rigenerare. **Action item**: bump dep + regen go.sum in PR dedicato. |
-| `govulncheck` CLI | ❌ 3 CVE stdlib Go 1.22.12 | `GO-2026-4341` (memory exhaustion `net/url`), `GO-2025-3849` (`database/sql.Rows.Scan` incorrect), `GO-2025-3750` (`os`/`syscall` O_CREATE\|O_EXCL Win/Unix divergence). **Fix applicato in PR `fix/audit-cli-go-bump`**: bumpa `apps/cli/go.mod` Go 1.22 → 1.23 + worker CI corrispondente. |
+| `govulncheck` CLI | ✅ clean | Bump Go 1.22 → 1.24 (PR #14) elimina le 3 CVE stdlib (`GO-2026-4341` net/url, `GO-2025-3849` database/sql, `GO-2025-3750` os/syscall) |
+| `govulncheck` server | ❌ checksum mismatch | `golang-jwt/jwt/v5 v5.2.2` ha hash diverso dal `go.sum` committato. Probabile re-publish del modulo da parte del maintainer o cache GOPROXY desincronizzata. **Action item**: vedi sezione sotto |
 
-### Stato post-fix CLI
+### Storia delle fix
 
-Bump a Go 1.23 elimina tutte e 3 le CVE (sono fixate in 1.23.10/1.23.12/1.24.12). Re-run di `security-audit.yml` post-merge della PR `fix/audit-cli-go-bump` deve produrre govulncheck CLI ✅.
+| PR | Cosa | Risultato |
+|---|---|---|
+| #13 | Bump CLI Go 1.22 → 1.23 | parziale: 1.23 base ancora vulnerabile (le CVE richiedono patch ≥1.23.10/12) |
+| #14 | Bump CLI Go 1.23 → 1.24 + golangci-lint=latest | ✅ CLI clean dopo run audit |
+| #15 | Allinea `security-audit.yml` worker a Go 1.24 | confermato CLI clean nel run finale |
 
 ### Server: action item
 
