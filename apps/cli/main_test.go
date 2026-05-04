@@ -257,3 +257,191 @@ func TestTruncate(t *testing.T) {
 		t.Errorf("truncate dovrebbe finire con ellissi")
 	}
 }
+
+func TestTagsFor(t *testing.T) {
+	db := dbTest(t)
+
+	_, err := db.Exec(`INSERT INTO Prompts (Id, Title, Body, Visibility, CreatedAt, UpdatedAt)
+		VALUES ('prm-1', 'P', 'B', 'private', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`)
+	if err != nil {
+		t.Fatalf("insert prompt: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO Tags (Id, WorkspaceId, Name, CreatedAt, UpdatedAt)
+		VALUES ('tag-bug', 'ws-personale', 'bug', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+		       ('tag-eng', 'ws-personale', 'eng', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+		       ('tag-del', 'ws-personale', 'cancellato', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`)
+	if err != nil {
+		t.Fatalf("insert tags: %v", err)
+	}
+	// Soft-delete del tag "cancellato" — non deve apparire
+	_, err = db.Exec(`UPDATE Tags SET DeletedAt = '2026-01-02T00:00:00Z' WHERE Id = 'tag-del'`)
+	if err != nil {
+		t.Fatalf("soft delete: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO PromptTags (PromptId, TagId) VALUES
+		('prm-1', 'tag-bug'), ('prm-1', 'tag-eng'), ('prm-1', 'tag-del')`)
+	if err != nil {
+		t.Fatalf("insert prompttags: %v", err)
+	}
+
+	tags, err := tagsFor(db, "prm-1")
+	if err != nil {
+		t.Fatalf("tagsFor: %v", err)
+	}
+	// Atteso: ordinato ASC per Name, esclude soft-deleted
+	want := []string{"bug", "eng"}
+	if len(tags) != len(want) {
+		t.Fatalf("tagsFor len = %d, want %d (got %v)", len(tags), len(want), tags)
+	}
+	for i, name := range want {
+		if tags[i] != name {
+			t.Errorf("tagsFor[%d] = %q, want %q", i, tags[i], name)
+		}
+	}
+
+	// Prompt senza tag → slice vuoto, no errore
+	_, err = db.Exec(`INSERT INTO Prompts (Id, Title, Body, Visibility, CreatedAt, UpdatedAt)
+		VALUES ('prm-2', 'P2', 'B2', 'private', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`)
+	if err != nil {
+		t.Fatalf("insert prompt 2: %v", err)
+	}
+	tags, err = tagsFor(db, "prm-2")
+	if err != nil {
+		t.Fatalf("tagsFor vuoto: %v", err)
+	}
+	if len(tags) != 0 {
+		t.Errorf("tagsFor su prompt senza tag = %v, want []", tags)
+	}
+}
+
+func TestRecent(t *testing.T) {
+	db := dbTest(t)
+
+	// 3 prompt con LastUsedAt diversi (uno NULL, fallback a UpdatedAt)
+	_, err := db.Exec(`INSERT INTO Prompts (Id, Title, Body, Visibility, LastUsedAt, CreatedAt, UpdatedAt) VALUES
+		('prm-old',    'Vecchio',    'B', 'private', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+		('prm-recent', 'Recente',    'B', 'private', '2026-03-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+		('prm-fallbk', 'Senza last', 'B', 'private', NULL,                   '2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z')`)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	// Soft-delete: non deve apparire
+	_, err = db.Exec(`INSERT INTO Prompts (Id, Title, Body, Visibility, CreatedAt, UpdatedAt, DeletedAt) VALUES
+		('prm-del', 'Cancellato', 'B', 'private', '2026-01-01T00:00:00Z', '2026-04-01T00:00:00Z', '2026-04-01T00:00:00Z')`)
+	if err != nil {
+		t.Fatalf("insert deleted: %v", err)
+	}
+	// Tag su prm-recent per coprire anche tagsFor
+	_, err = db.Exec(`INSERT INTO Tags (Id, WorkspaceId, Name, CreatedAt, UpdatedAt)
+		VALUES ('tag-1', 'ws-personale', 'urgente', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`)
+	if err != nil {
+		t.Fatalf("insert tag: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO PromptTags (PromptId, TagId) VALUES ('prm-recent', 'tag-1')`)
+	if err != nil {
+		t.Fatalf("insert prompttag: %v", err)
+	}
+
+	prompts, err := recent(db, 10)
+	if err != nil {
+		t.Fatalf("recent: %v", err)
+	}
+	if len(prompts) != 3 {
+		t.Fatalf("recent len = %d, want 3 (esclude soft-deleted)", len(prompts))
+	}
+	// Ordine atteso: prm-recent (LastUsedAt 2026-03), prm-fallbk (UpdatedAt 2026-02), prm-old (LastUsedAt 2026-01)
+	wantOrder := []string{"prm-recent", "prm-fallbk", "prm-old"}
+	for i, id := range wantOrder {
+		if prompts[i].ID != id {
+			t.Errorf("recent[%d].ID = %q, want %q", i, prompts[i].ID, id)
+		}
+	}
+	// Tag deve essere popolato
+	if len(prompts[0].Tags) != 1 || prompts[0].Tags[0] != "urgente" {
+		t.Errorf("recent[0].Tags = %v, want [urgente]", prompts[0].Tags)
+	}
+
+	// Limit clamp: < 1 → 10, > 100 → 100. Test su valore basso.
+	prompts, err = recent(db, 1)
+	if err != nil {
+		t.Fatalf("recent limit=1: %v", err)
+	}
+	if len(prompts) != 1 {
+		t.Errorf("recent con limit=1 deve restituire 1 prompt, got %d", len(prompts))
+	}
+}
+
+func TestFormatPrompt(t *testing.T) {
+	desc := "una descrizione"
+	tm := "claude-sonnet"
+	last := "2026-03-01T00:00:00Z"
+	p := Prompt{
+		ID: "prm-1", Title: "Test", Description: &desc, Body: "Ciao {{nome}}",
+		Visibility: "private", TargetModel: &tm, UseCount: 5, LastUsedAt: &last,
+		Version: 2, Tags: []string{"bug", "eng"},
+	}
+
+	// Table format
+	out, err := formatPrompt(p, "table")
+	if err != nil {
+		t.Fatalf("formatPrompt table: %v", err)
+	}
+	for _, want := range []string{"prm-1", "Test", "una descrizione", "claude-sonnet", "bug, eng", "nome", "Ciao {{nome}}"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("table output mancante %q in: %s", want, out)
+		}
+	}
+
+	// Default (vuoto) = table
+	outDefault, err := formatPrompt(p, "")
+	if err != nil {
+		t.Fatalf("formatPrompt default: %v", err)
+	}
+	if outDefault != out {
+		t.Errorf("formatPrompt(\"\") deve coincidere con \"table\"")
+	}
+
+	// JSON
+	out, err = formatPrompt(p, "json")
+	if err != nil {
+		t.Fatalf("formatPrompt json: %v", err)
+	}
+	if !strings.Contains(out, `"id": "prm-1"`) || !strings.Contains(out, `"title": "Test"`) {
+		t.Errorf("json output sbagliato: %s", out)
+	}
+
+	// YAML
+	out, err = formatPrompt(p, "yaml")
+	if err != nil {
+		t.Fatalf("formatPrompt yaml: %v", err)
+	}
+	if !strings.Contains(out, "id: prm-1") || !strings.Contains(out, "title: Test") {
+		t.Errorf("yaml output sbagliato: %s", out)
+	}
+
+	// Plain → solo body
+	out, err = formatPrompt(p, "plain")
+	if err != nil {
+		t.Fatalf("formatPrompt plain: %v", err)
+	}
+	if out != "Ciao {{nome}}" {
+		t.Errorf("plain output = %q, want body", out)
+	}
+
+	// Formato non supportato → errore
+	_, err = formatPrompt(p, "csv")
+	if err == nil {
+		t.Errorf("formato csv deve dare errore")
+	}
+
+	// Prompt minimo (no description, no target, no last used, no tags) — coverage rami else
+	pMin := Prompt{ID: "prm-2", Title: "Min", Body: "body", Visibility: "private", Version: 1}
+	out, err = formatPrompt(pMin, "table")
+	if err != nil {
+		t.Fatalf("formatPrompt minimo: %v", err)
+	}
+	if !strings.Contains(out, "prm-2") || strings.Contains(out, "Descrizione:") ||
+		strings.Contains(out, "Target:") || strings.Contains(out, "Tag:") {
+		t.Errorf("table minimo non dovrebbe avere campi opzionali: %s", out)
+	}
+}
