@@ -46,6 +46,7 @@ In Fase 5 PaP smette di essere "la mia libreria di prompt" e inizia a essere "il
 
 | # | Step | Modulo | Condizione di esecuzione |
 |---|------|--------|--------------------------|
+| 0a | Server Go cross-platform senza Docker *(originato Fase 2 Step 6)* | server | Prerequisito agli step 1-8 con deploy non containerizzato |
 | 1 | Commenti + reazioni sui prompt | client + server | Solo se utenti team chiedono |
 | 2 | OIDC + SAML 2.0 (Enterprise SSO) | server | Solo se cliente enterprise lo richiede |
 | 3 | Webhook system | server | Sempre (basso costo, alto valore) |
@@ -54,6 +55,50 @@ In Fase 5 PaP smette di essere "la mia libreria di prompt" e inizia a essere "il
 | 6 | Web app (subset funzionalità client) | nuovo modulo `apps/web` | Solo se domanda concreta |
 | 7 | Browser extension Manifest V3 + Native Messaging | nuovi moduli | Solo se domanda concreta |
 | 8 | Sync Git per prompt CI/CD | server | Sempre (basso costo) |
+
+---
+
+## Step 0a — Server Go cross-platform senza Docker
+
+> **Origine**: spostato da Fase 2 Step 6 il 2026-05-04. Razionale: il deliverable ha valore solo con un workspace team in produzione che lo usa, condizione naturalmente di Fase 5. Da fare prima dei feature step 1-8 quando il deploy non containerizzato diventa requisito (cliente enterprise, ambiente regolato, etc.).
+
+Obiettivo: il server `papsync` è un **single static binary**, deployabile come servizio nativo su Windows e Linux. Docker resta un'opzione, non un requisito.
+
+**Refactor SQLite**:
+- [ ] Switch driver SQLite: `mattn/go-sqlite3` → `modernc.org/sqlite` (porting Go puro di SQLite, zero CGO)
+- [ ] Rimuovere `CGO_ENABLED=1` da Dockerfile e workflow CI
+- [ ] Verificare compatibilità SQL: nessuna query usa estensioni CGO-only (SQLCipher è solo client-side, non lato server)
+
+**Cross-compile**:
+- [ ] Matrix CI: Linux x64+arm64+arm7, Windows x64+arm64, macOS x64+arm64
+- [ ] Single static binary ~25 MB
+- [ ] Workflow GitHub Actions: cross-compile da Linux runner verso tutti i target (con pure Go, niente cross-toolchain)
+
+**Service integration**:
+- [ ] Pacchetto `golang.org/x/sys/windows/svc` per registrazione come Windows Service nativo
+- [ ] Linux systemd unit file `papsync.service` shippato in `.deb` / `.rpm` / tarball
+- [ ] Comandi:
+  - `papsync run` — foreground (dev/test, default)
+  - `papsync install [--listen :8080] [--data-dir ...]` — registra come service
+  - `papsync start` / `stop` / `restart` / `uninstall`
+  - `papsync status` — stato corrente
+  - `papsync version` — info build
+
+**Distribuzione**:
+- [ ] Tarball multipiattaforma: `papsync-{version}-{os}-{arch}.tar.gz`
+- [ ] `.deb` + `.rpm` per Linux (post-install: `systemctl daemon-reload`, copia unit file)
+- [ ] Installer NSIS per Windows (per-machine; per il server tipicamente serve service di sistema, non per-user)
+- [ ] Dockerfile aggiornato pure Go (build più veloce, niente alpine vs glibc) come opzione
+- [ ] Compose file di esempio in `examples/docker-compose.yml` per chi preferisce container
+
+**Documentazione**:
+- [ ] `docs/server-deploy.md` con esempi setup-as-service per Win + Linux + macOS + Docker
+- [ ] `docs/server-config.md` con tutte le env vars / flags disponibili
+
+**Test**:
+- [ ] Smoke deploy su Win10, Win11, Ubuntu 22.04, Debian 12, Alpine, macOS arm64
+- [ ] Sanity check service start/stop su tutti i target
+- [ ] Test integrazione client ↔ server con binari nativi (no container)
 
 ---
 
