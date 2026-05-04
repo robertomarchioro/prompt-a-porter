@@ -1,0 +1,25 @@
+[package]
+name = "spike-onnx-bundle"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "AGPL-3.0-only"
+
+# Spike 2: misura l'impatto di ort (ONNX Runtime Rust binding) sul bundle Tauri.
+#
+# Nota: ort 2.x è in stato pre-release con bug compile su Rust stable corrente
+# (sia rc.9 che rc.12 falliscono per mismatch ort/ort-sys). Per ora il spike
+# misura solo il baseline; il delta with-ort è derivato dai numeri ufficiali
+# ONNX Runtime release. Vedi docs/spike/onnx-bundle.md.
+
+[[bin]]
+name = "baseline"
+path = "src/baseline.rs"
+
+[profile.release]
+# Stesse opzioni di apps/client/src-tauri/Cargo.toml
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
