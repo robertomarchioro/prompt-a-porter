@@ -179,14 +179,41 @@ pub fn vault_aperto(state: State<'_, VaultState>) -> bool {
 
 /// Crea un nuovo vault con la password fornita.
 /// Genera salt, deriva chiave, crea DB cifrato, esegue migrazioni.
+///
+/// Idempotenza:
+/// - Se il vault è già aperto in memoria, ritorna `VaultGiaAperto`.
+/// - Se esiste già un vault su disco (meta-file presente) ma non è aperto,
+///   tenta lo `vault_unlock` con la password fornita (utile quando
+///   `preferenze.onboarding_completato` non si è persistito mentre il vault
+///   sì — caso classico portable + EDR aggressivo).
+/// - Se trova un DB orfano (`pap-vault.db` senza `vault-meta.json`,
+///   probabile creazione precedente fallita a metà), lo rimuove e procede.
 #[tauri::command]
 pub fn vault_crea(password: String, state: State<'_, VaultState>) -> Result<(), PapErrore> {
     if password.len() < PASSWORD_MIN_LEN {
         return Err(PapErrore::PasswordTroppoCorta);
     }
 
-    if state.esiste() {
+    if state.aperto() {
         return Err(PapErrore::VaultGiaAperto);
+    }
+
+    if state.esiste() {
+        log::info!(
+            "vault_crea: vault già esistente in {} → tentativo unlock idempotente",
+            state.data_dir.display()
+        );
+        return vault_unlock(password, state);
+    }
+
+    // DB orfano (pap-vault.db senza vault-meta.json) → cleanup
+    let db_path = state.db_path();
+    if db_path.exists() {
+        log::warn!(
+            "vault_crea: DB orfano trovato (no meta) in {} → rimozione",
+            db_path.display()
+        );
+        let _ = fs::remove_file(&db_path);
     }
 
     // Assicura che la directory dati esista
@@ -232,15 +259,49 @@ pub fn vault_crea(password: String, state: State<'_, VaultState>) -> Result<(), 
 }
 
 /// Crea un nuovo vault senza cifratura (DB in chiaro).
+///
+/// Idempotenza analoga a `vault_crea` ma senza password:
+/// - Se aperto → errore.
+/// - Se esiste su disco non cifrato → apre (no password). Se cifrato →
+///   `PasswordErrata` (l'utente non può bypass del check).
+/// - DB orfano → cleanup.
 #[tauri::command]
 pub fn vault_crea_aperto(state: State<'_, VaultState>) -> Result<(), PapErrore> {
-    if state.esiste() {
+    if state.aperto() {
         return Err(PapErrore::VaultGiaAperto);
+    }
+
+    if state.esiste() {
+        let meta = leggi_meta(&state.meta_path())?;
+        if meta.cifrato {
+            log::warn!(
+                "vault_crea_aperto su vault cifrato esistente: rifiutato (richiesta password)"
+            );
+            return Err(PapErrore::PasswordErrata);
+        }
+        log::info!(
+            "vault_crea_aperto: vault non cifrato esistente in {} → apertura idempotente",
+            state.data_dir.display()
+        );
+        let conn = Connection::open(state.db_path())?;
+        migrazione::esegui_migrazioni(&conn)?;
+        crate::libreria::assicura_dati_base(&conn)?;
+        let mut guard = state.conn.lock().unwrap();
+        *guard = Some(conn);
+        return Ok(());
+    }
+
+    let db_path = state.db_path();
+    if db_path.exists() {
+        log::warn!(
+            "vault_crea_aperto: DB orfano trovato (no meta) in {} → rimozione",
+            db_path.display()
+        );
+        let _ = fs::remove_file(&db_path);
     }
 
     fs::create_dir_all(&state.data_dir)?;
 
-    let db_path = state.db_path();
     let conn = Connection::open(&db_path)?;
 
     migrazione::esegui_migrazioni(&conn)?;
