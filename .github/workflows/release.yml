@@ -97,17 +97,43 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          $exeName = "Prompt a Porter.exe"
-          $exePath = "apps/client/src-tauri/target/release/$exeName"
-          if (-not (Test-Path $exePath)) {
-            Write-Error "Eseguibile non trovato in $exePath"
+          $finalName = "Prompt a Porter.exe"
+          $releaseDir = "apps/client/src-tauri/target/release"
+
+          # Preferisci il binario rinominato dal bundle Tauri (productName);
+          # fallback sul binario Cargo (package.name) e rinomina nel zip.
+          $exePath = $null
+          $candidatesByName = @(
+            "$releaseDir/$finalName",
+            "$releaseDir/pap.exe"
+          )
+          foreach ($c in $candidatesByName) {
+            if (Test-Path $c) {
+              $exePath = $c
+              break
+            }
+          }
+          # Fallback ulteriore: glob su qualsiasi .exe nella radice di release/
+          # (esclude la subdir bundle/ che contiene gli installer NSIS/MSI).
+          if (-not $exePath) {
+            $exePath = Get-ChildItem -Path $releaseDir -Filter *.exe -File `
+              | Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $exePath -or -not (Test-Path $exePath)) {
+            Write-Error "Eseguibile portable non trovato in $releaseDir."
+            Write-Host "Contenuto di $releaseDir :"
+            Get-ChildItem -Path $releaseDir -Filter *.exe -File `
+              | Format-Table Name, Length
             exit 1
           }
+          Write-Host "Eseguibile portable scelto: $exePath"
 
           $tag = "${{ github.ref_name }}"
           $stagingDir = "portable-staging"
           New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
-          Copy-Item $exePath -Destination $stagingDir
+          # Rinomina sempre a "Prompt a Porter.exe" nel zip per coerenza UX
+          # con il bundle installer.
+          Copy-Item $exePath -Destination "$stagingDir/$finalName"
 
           $readmeContent = @"
           Prompt a Porter — versione portable Windows ($tag)
