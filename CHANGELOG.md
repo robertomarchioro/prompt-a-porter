@@ -61,7 +61,7 @@ I 3 spike sotto sono stati eseguiti e mergiati a `v0.2.0-foundations` ma sblocca
 
 ## v0.2.0-foundations (2026-05-04)
 
-> **Status**: Fase 2 chiusa sui 6 step controllabili (1, 2, 3, 4, 7, 8). Step 5 (auto-update silenzioso) riposizionato a patch line `v0.2.x` — sblocca con cert Authenticode Certum (KYC in corso). Step 6 (server cross-platform senza Docker) spostato a Fase 5 Step 0a — domanda-driven, riprende con workspace team enterprise. Razionale completo in `docs/todo-fase-2.md` e `docs/quality-gate-fase-2.md`.
+> **Status**: Fase 2 chiusa sui 6 step controllabili (1, 2, 3, 4, 7, 8). Step 5 (auto-update silenzioso) riposizionato a patch line `v0.2.x` — sblocca con cert Authenticode Certum (KYC in corso). Step 6 (server cross-platform senza Docker) spostato a Fase 5 Step 0a — domanda-driven, riprende con workspace team enterprise. Razionale completo in `docs/roadmap/fase-2-foundations.md` e `docs/roadmap/quality-gate-fase-2.md`.
 
 ### Breaking changes
 
@@ -90,7 +90,7 @@ I 3 spike sotto sono stati eseguiti e mergiati a `v0.2.0-foundations` ma sblocca
 - PR #7, commit `6af4bd9`
 
 ### Step 4 — Import/export JSON con schema v1
-- **Schema documentato**: `docs/formato-export-json.md` — versionato (`schemaVersion: 1`), forward/backward compatible, round-trip lossless
+- **Schema documentato**: `docs/utente/formato-export-json.md` — versionato (`schemaVersion: 1`), forward/backward compatible, round-trip lossless
 - Tauri commands `vault_export_json` (workspace completo), `vault_import_json` con modalità conflitti (`skip`/`overwrite`/`rename`)
 - Helper `ora_iso()` in pure Rust (zero `chrono`, algoritmo Howard Hinnant)
 - UI Impostazioni > Vault: bottoni Esporta/Importa con segmented modalità, report inline post-import (nuovi/aggiornati/conflitti/errori)
@@ -105,7 +105,7 @@ I 3 spike sotto sono stati eseguiti e mergiati a `v0.2.0-foundations` ma sblocca
 - 4 tool read-only: `pap_search`, `pap_get`, `pap_list_recent`, `pap_render`
 - Vault discovery via env `PAP_VAULT_PATH` o default per piattaforma
 - Solo vault non cifrati in MVP (SQLCipher in arrivo)
-- Documentazione completa `docs/mcp-integration.md` (Claude Desktop, Cursor, troubleshooting)
+- Documentazione completa `docs/utente/mcp.md` (Claude Desktop, Cursor, troubleshooting)
 - Workflow CI dedicato `mcp-server-build.yml` (lint + build TS) con `workflow_dispatch` manuale
 - HTTP/SSE transport e `pap_create_draft` rinviati a sub-step
 - PR #9, commit `cfbe546`
@@ -116,7 +116,7 @@ I 3 spike sotto sono stati eseguiti e mergiati a `v0.2.0-foundations` ma sblocca
 - Output formats: `table` (default, tabwriter), `json`, `yaml`, `plain` (id<TAB>title)
 - Vault read-only strict (DSN `?mode=ro`)
 - CI cross-compile matrix 6 build (linux/darwin/windows × amd64/arm64) con `CGO_ENABLED=0`, ldflags `-s -w`, upload-artifact
-- Documentazione `docs/cli-reference.md` con esempi tab-completion per ogni shell
+- Documentazione `docs/utente/cli.md` con esempi tab-completion per ogni shell
 - 10 test unit Go
 - Comandi `login`/`new`/`import`/`export` rinviati (richiedono server API o IPC client desktop)
 - PR #11, commit `12a1214`
@@ -157,7 +157,7 @@ I 3 spike sotto sono stati eseguiti e mergiati a `v0.2.0-foundations` ma sblocca
 
 - **Patch line `v0.2.x`** — Auto-update silenzioso (Step 5): NSIS per-user + Tauri Updater + firma Authenticode. Sblocco: cert Certum OSS.
 - **Fase 5 Step 0a** — Server Go cross-platform senza Docker (`modernc.org/sqlite`, Win Service + systemd). Domanda-driven.
-- **Fase 3 (`v0.3.0`)** — Intelligenza & authoring: ricerca semantica via embeddings ONNX locali, prompt componibili, linting proattivo. Vedi `docs/todo-fase-3.md`.
+- **Fase 3 (`v0.3.0`)** — Intelligenza & authoring: ricerca semantica via embeddings ONNX locali, prompt componibili, linting proattivo. Vedi `docs/roadmap/fase-3-intelligence.md`.
 
 ### Statistics
 

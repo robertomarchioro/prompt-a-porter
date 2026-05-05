@@ -706,7 +706,7 @@
                 <h4 class="sez-sub-titolo">Esporta / Importa</h4>
                 <p class="sez-sub-desc">
                   Backup completo del vault in formato JSON portabile (vedi
-                  <a href="https://github.com/robertomarchioro/prompt-a-porter/blob/main/docs/formato-export-json.md" target="_blank" rel="noopener">schema export</a>).
+                  <a href="https://github.com/robertomarchioro/prompt-a-porter/blob/main/docs/utente/formato-export-json.md" target="_blank" rel="noopener">schema export</a>).
                 </p>
                 <div class="export-import-azioni">
                   <Button

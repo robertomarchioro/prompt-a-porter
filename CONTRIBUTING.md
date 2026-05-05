@@ -6,8 +6,8 @@ Prima di iniziare, leggi anche:
 
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — comportamento atteso nella community
 - [`SECURITY.md`](SECURITY.md) — come segnalare vulnerabilità (NON aprire issue pubblici per problemi di sicurezza)
-- [`docs/architettura.md`](docs/architettura.md) — overview tecnico
-- [`docs/todo-fase-*.md`](docs/) — roadmap per fase
+- [`docs/architettura/overview.md`](docs/architettura/overview.md) — overview tecnico
+- [`docs/roadmap/`](docs/roadmap/) — fasi del progetto, item rinviati, quality gate
 
 ## Prerequisiti
 
@@ -15,7 +15,7 @@ Prima di iniziare, leggi anche:
 - pnpm 9.x+
 - Rust toolchain stable (per il client Tauri)
 - Go 1.22+ (per il server sync)
-- Vedi [`docs/setup-sviluppo.md`](docs/setup-sviluppo.md) per istruzioni dettagliate
+- Vedi [`docs/contribuire/setup-sviluppo.md`](docs/contribuire/setup-sviluppo.md) per istruzioni dettagliate
 
 ## Workflow di sviluppo
 

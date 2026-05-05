@@ -297,15 +297,15 @@ CREATE INDEX idx_observations_model ON PromptRunObservations(Provider, Model, Pa
 
 ## Step 10 — Documentazione e release
 
-- [ ] Aggiorna `docs/schema-dati.md` con nuove tabelle e colonne (varianti, rating, ACL cartelle, golden, observations)
+- [ ] Aggiorna `docs/architettura/schema-dati.md` con nuove tabelle e colonne (varianti, rating, ACL cartelle, golden, observations)
 - [ ] Nuovo `docs/workflow-approvazione.md`
 - [ ] Nuovo `docs/varianti-prompt.md` con esempi pratici
 - [ ] Nuovo `docs/permessi-cartelle.md` con matrice di scenari
 - [ ] Nuovo `docs/regression-testing.md` con guida ai golden examples + provider setup
-- [ ] Aggiorna matrice RBAC in `docs/architettura.md` con permessi nuovi (chi può approvare, chi può forkare, chi può gestire ACL cartelle)
-- [ ] Aggiorna `docs/cli-reference.md` con `pap test` e altri nuovi comandi
+- [ ] Aggiorna matrice RBAC in `docs/architettura/overview.md` con permessi nuovi (chi può approvare, chi può forkare, chi può gestire ACL cartelle)
+- [ ] Aggiorna `docs/utente/cli.md` con `pap test` e altri nuovi comandi
 - [ ] CHANGELOG `v0.4.0`
-- [ ] Aggiorna `docs/todo-fase-5.md` (già esistente, già rivisto in linea con questa nuova roadmap)
+- [ ] Aggiorna `docs/roadmap/fase-5-enterprise.md` (già esistente, già rivisto in linea con questa nuova roadmap)
 - [ ] Tag `v0.4.0`
 
 ---
@@ -323,8 +323,8 @@ CREATE INDEX idx_observations_model ON PromptRunObservations(Provider, Model, Pa
 
 ## Riferimenti
 
-- Fase 3 (precedente): `docs/todo-fase-3.md`
-- Fase 5 (prossima): `docs/todo-fase-5.md`
+- Fase 3 (precedente): `docs/roadmap/fase-3-intelligence.md`
+- Fase 5 (prossima): `docs/roadmap/fase-5-enterprise.md`
 - Algoritmo diff: https://github.com/google/diff-match-patch
 - LLM-as-judge: https://huggingface.co/learn/cookbook/llm_judge
 - Anthropic API: https://docs.anthropic.com/

@@ -37,17 +37,33 @@ Non è un'app cloud. È un'app desktop invocabile via hotkey globale (tipo Rayca
 prompt-a-porter/
 ├── apps/
 │   ├── client/          ← Tauri + Svelte (app desktop)
-│   └── server/          ← Go sync server
+│   ├── server/          ← Go sync server
+│   ├── cli/             ← CLI Go pap
+│   └── mcp-server/      ← MCP server TypeScript
 ├── packages/
 │   └── shared-schema/   ← Tipi TypeScript condivisi
-├── docs/                ← Documentazione tecnica
-├── design_handoff/      ← Asset di design (prototipi HTML + token CSS)
+├── docs/                ← Documentazione tecnica (vedi sotto)
+├── spikes/              ← Crate/script di spike tecnici
 └── .github/workflows/   ← CI/CD
 ```
 
+## Documentazione
+
+La documentazione tecnica è organizzata in 5 cluster sotto [`docs/`](docs/):
+
+| Cluster | Per chi |
+|---|---|
+| [`docs/utente/`](docs/utente/) | Chi usa PaP — CLI, MCP, formato export |
+| [`docs/contribuire/`](docs/contribuire/) | Chi contribuisce codice — setup ambiente |
+| [`docs/architettura/`](docs/architettura/) | Chi studia o estende il sistema — overview, schema dati, design system, ADR |
+| [`docs/roadmap/`](docs/roadmap/) | Maintainer e contributor che pianificano — fasi, rinvii, quality gate |
+| [`docs/operativo/`](docs/operativo/) | Chi deploya — guide di deploy |
+
+Punto di accesso: [`docs/README.md`](docs/README.md).
+
 ## Setup sviluppo
 
-> Documentazione dettagliata in [`docs/setup-sviluppo.md`](docs/setup-sviluppo.md).
+> Documentazione dettagliata in [`docs/contribuire/setup-sviluppo.md`](docs/contribuire/setup-sviluppo.md).
 
 ### Prerequisiti
 
@@ -67,14 +83,15 @@ pnpm --filter @pap/client dev
 
 ## Stato del progetto
 
-**Fase 1 (MVP) completata** — 15 step, 71 test (37 Rust + 22 TypeScript + 12 Go).
-Vedi [`CHANGELOG.md`](CHANGELOG.md) per i dettagli e [`docs/todo-fase-1.md`](docs/todo-fase-1.md) per la checklist.
+- **Fase 1 (MVP)** ✅ completata (`v0.1.0-fase1`).
+- **Fase 2 (Foundations)** ✅ chiusa parziale (`v0.2.0-foundations` + patch line `v0.2.x`).
+- **Fase 3 (Intelligence)** ⏳ in preparazione, con 3 spike tecnici già chiusi.
+
+Vedi [`CHANGELOG.md`](CHANGELOG.md) per i dettagli completi e [`docs/roadmap/`](docs/roadmap/) per la pianificazione.
 
 ## Licenza
 
 **[GNU AGPL 3.0](LICENSE)** (Affero General Public License). Chiude il loophole SaaS — chi ospita il codice come servizio ha l'obbligo di pubblicare modifiche. Tutto il codice del progetto è libero, ispezionabile e portabile.
-
-Per dettagli sulle implicazioni pratiche del cambio licenza vedi `docs/licenza.md` (in arrivo).
 
 ## Autore
 

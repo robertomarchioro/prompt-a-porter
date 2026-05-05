@@ -5,7 +5,7 @@ use tauri::State;
 use crate::errore::PapErrore;
 use crate::vault::VaultState;
 
-/// Versione corrente del formato di export. Vedi docs/formato-export-json.md.
+/// Versione corrente del formato di export. Vedi docs/utente/formato-export-json.md.
 const SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Serialize, Deserialize)]

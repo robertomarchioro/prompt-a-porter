@@ -2,7 +2,7 @@
 
 > **Status**: pre-release v0.2.0. Documento di assessment dei criteri di qualità prima del tag.
 
-## Criteri (da `docs/todo-fase-2.md` Step 9)
+## Criteri (da `docs/roadmap/fase-2-foundations.md` Step 9)
 
 - [x] Test coverage ≥ 70% sui nuovi moduli (`auto-update`, `MCP server`, `CLI`, `modernc.org/sqlite` path)
 - [ ] Test E2E Tauri Updater: build dev → fake update server → verifica download + apply *(rinviato: Step 5 ancora pending)*
