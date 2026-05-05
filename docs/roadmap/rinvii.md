@@ -5,11 +5,13 @@
 > **Stato**: aggiornato al 2026-05-05 dopo `v0.2.1` + prerelease `v0.2.1-fix1`.
 >
 > **Convenzioni**:
-> - 🔒 = bloccato da fattore esterno (cert, KYC, hardware, decisione di prodotto)
-> - 🔧 = bloccato da fattore tecnico (libreria instabile, dipendenza non pronta)
-> - 📋 = sub-step già pianificato di una feature, da fare quando il padre arriva
-> - 🎨 = polish / cosmetico, non bloccante per nessuno
+> - 🔒 = bloccato da fattore esterno (cert, KYC, hardware, decisione di prodotto) → resta nel patch line di destinazione (es. `v0.2.x`)
+> - 🔧 = bloccato da fattore tecnico (libreria instabile, dipendenza non pronta) → si sblocca quando il fattore tecnico cade
+> - 📋 = sub-step già pianificato di una feature, da fare quando il padre arriva → **candidato naturale per `v0.5.0` (recupero ritardi)**
+> - 🎨 = polish / cosmetico, non bloccante per nessuno → **candidato naturale per `v0.5.0` (recupero ritardi)** o per `v0.6.0` (pulizia UI) se è puramente visuale
 > - ✅ = item che è atterrato ed è qui solo per archivio storico
+>
+> Vedi [`release-plan.md`](./release-plan.md) per il calendario completo di v0.5.0/v0.6.0 e i criteri di ingresso.
 
 ---
 
