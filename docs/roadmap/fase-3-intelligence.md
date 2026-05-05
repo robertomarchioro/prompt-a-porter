@@ -59,7 +59,7 @@ L'AI in PaP è uno strumento di scoperta e qualità, non di sostituzione. Ogni f
 ## Step 1 — Setup ONNX Runtime + modello embeddings
 
 - [ ] Aggiungi crate `ort` (ONNX Runtime Rust binding) al client desktop
-- [ ] Modello scelto: **`paraphrase-multilingual-MiniLM-L12-v2`** (~118 MB ONNX, 384 dim, multilingue forte). Decisione presa in Spike 3 (vedi `docs/architettura/decisioni/embedding-model.md`): batte `bge-small-en-v1.5` di 30+ punti recall@5 su query miste IT/EN, essenziale per l'utenza target italofona che scrive prompt anche in inglese.
+- [ ] Modello scelto: **`paraphrase-multilingual-MiniLM-L12-v2`** (~118 MB ONNX, 384 dim, multilingue forte). Decisione presa in Spike 3 v1 (2026-05-04) e **confermata in v2 (2026-05-05)**: recall@5 97.5% sul mix IT/EN. Vedi `docs/architettura/decisioni/embedding-model.md`. EmbeddingGemma-300m (2025) valutato in v2 ma scartato per trade-off non giustificati (+180 MB download, 3.7× tempo per-embedding) per il modesto guadagno di +2.5 pt recall@5.
 - [ ] **Bundling vs download**:
   - Bundle nel binario: +30-80 MB. Pro: zero setup. Contro: ogni upgrade modello richiede re-release.
   - Download al primo uso: scarica da repo HuggingFace o mirror. Pro: binario snello. Contro: serve connessione iniziale.
@@ -276,7 +276,7 @@ Aggregazione passiva dei dati d'uso (già raccolti da `UseCount`, `LastUsedAt`).
 
 ## Decisioni discrezionali
 
-1. **Modello embedding**: ✅ deciso in Spike 3 (2026-05-04) — `paraphrase-multilingual-MiniLM-L12-v2` (118 MB ONNX). Vedi `docs/architettura/decisioni/embedding-model.md`.
+1. **Modello embedding**: ✅ deciso in Spike 3 v1 (2026-05-04), **confermato in v2 (2026-05-05)** dopo valutazione di alternative 2024-2025 — `paraphrase-multilingual-MiniLM-L12-v2` (118 MB ONNX). Vedi `docs/architettura/decisioni/embedding-model.md`. EmbeddingGemma-300m documentato come alternativa futura se vincoli size/perf si rilassano.
 2. **Cache embeddings server-side per workspace team**: il server ricalcola gli embedding per condividerli? Pro: zero ricalcolo per ogni client. Contro: il server vede testo prompt in chiaro (necessario per il calcolo). Trade-off di privacy che entra in conflitto con E2E in Fase 5.
 3. **Linting PII è block-by-default o warn-only?** Per workspace ad alta sensibilità (Fase 5 E2E) sarà block; per ora **warn-by-default** sembra ragionevole.
 4. **Sintassi import**: decisione presa — `{{import "..."}}` coerente con segnaposti.
