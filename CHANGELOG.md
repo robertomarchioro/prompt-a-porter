@@ -1,5 +1,64 @@
 # Changelog — Prompt a Porter
 
+## v0.2.1 (2026-05-05)
+
+> **Status**: patch della linea `v0.2.x` con quick wins anticipati di Fase 3 e infrastruttura release. 4 PR funzionali + 1 CI in un singolo ciclo, niente AI introdotta (foundations rimangono stabili). Spike pre-Fase 3 chiusi con verdict prima dei feature step.
+
+### Quick wins anticipati di Fase 3
+
+#### Step 6 — Modello target dichiarato (PR #23)
+- Backend `editor.rs`: `NuovoPrompt`/`AggiornamentoPrompt` accettano `target_model: Option<String>`, persistito in `Prompts.TargetModel`
+- Backend `libreria.rs`: `FiltroLista` filtra per `target_model`
+- Frontend: nuovo `apps/client/src/lib/modelli-target.ts` con preset (Claude Opus/Sonnet/Haiku, GPT-4/Mini, Gemini Pro/Flash, Llama 3, Generic)
+- UI Editor: dropdown Select sopra Visibilità, autosave-aware
+- UI Libreria: gruppo "Modello target" in sidebar, badge nel detail panel
+- 5 test unit Rust per `normalizza_target_model`
+
+#### Step 9 — Statistiche / Insight (PR #24)
+- Nuovo modulo backend `statistiche.rs` con comando Tauri `statistiche_query`
+- Aggregazioni: totali (prompt attivi/eliminati, tag, creati/aggiornati 30g, versioni), top 10 usati, candidati cleanup (>90g inattivi), distribuzioni per tag/target_model/visibilità
+- Nuova superficie `Insight.svelte`: KPI grid + bar charts SVG inline custom (no librerie esterne)
+- Privacy: tutto calcolato localmente sul vault SQLCipher, disclaimer esplicito
+- 6 test unit Rust per le aggregazioni
+
+#### Step 7 — Cartelle gerarchiche (PR #25 backend + UI base, PR #26 D&D + polish)
+- **Schema V004**: tabella `Folders` (Id, WorkspaceId, ParentFolderId, Name, Path denormalizzato), indice unique sibling-name, `Prompts.FolderId`
+- 6 comandi Tauri: `folder_lista/crea/rinomina/sposta/elimina` + `prompt_sposta`
+- Rinomina/sposta cascade aggiornano `Path` di tutti i discendenti via prefix replace SQL in transazione (helper `atomicamente`, no unsafe transmute)
+- Anti-ciclo: bloccato spostamento dentro sé stessi o discendenti
+- Soft-delete cascade: cartella + sottocartelle marcate, prompt dentro tornano a root
+- 8 test unit Rust per validazione, calcolo path, cascade rinomina/sposta, anti-ciclo, unique sibling
+- UI Libreria sidebar: tree gerarchico con indent, "Senza cartella" come voce speciale, conteggio prompt accanto al nome
+- **Drag & drop** (PR #26): prompt → cartella, cartella → cartella, drop su "Senza cartella" sposta a root, visual feedback dashed-outline durante dragover
+- **Filter chip** "Cartella corrente" nella head lista: pill con path, click rimuove filtro
+- **Rinomina inline**: input field al posto di NavItem, Enter conferma, Escape annulla, blur conferma
+- UI Editor: Select cartella sotto Modello target, autosave-aware
+
+### Infrastruttura release
+
+#### Versione portable Windows (PR #27)
+- Step Windows-only post `tauri-action`: copia `Prompt a Porter.exe` standalone in cartella staging + `README.txt`, zippa, carica come asset extra della draft release
+- Asset risultante: `Prompt-a-Porter-portable-windows-x64-{tag}.zip` accanto a NSIS / MSI installer
+- Pattern Chrome/VSCode portable: estrai e lancia, niente installer, niente registro modificato
+- WebView2 runtime requirement documentato nel README e nel body release
+
+### Spike chiusi pre-Fase 3 (release ciclo precedente, ricapitolati)
+
+I 3 spike sotto sono stati eseguiti e mergiati a `v0.2.0-foundations` ma sbloccano lo sviluppo di Fase 3 e meritano una nota:
+
+- **Spike 1 — sqlite-vec ⊕ SQLCipher** (PR #20): tutti e 6 gli stage chiusi su Linux con SQLCipher 4.5.7 + sqlite-vec v0.1.9. Step 2 di Fase 3 procede col path standard (`vec0` dentro vault SQLCipher), niente fallback architetturali.
+- **Spike 2 — ONNX Runtime bundle size** (PR #21): bundle Tauri cresce da ~3-4 MB a ~19-26 MB con `ort` + `libonnxruntime` (4-8× crescita). Accettabile, decisione presa di andare con bundle inclusivo via `ort 2.x default features (download-binaries + copy-dylibs)`. ⚠️ ort 2.x rc.9/.10/.12 attualmente instabili su Rust stable, da rivalutare all'inizio Step 1 di Fase 3.
+- **Spike 3 — modello embedding IT/EN** (PR #22): qualitative test su 30 prompt + 10 query in `@huggingface/transformers`. `paraphrase-multilingual-MiniLM-L12-v2` (118 MB) batte `bge-small-en-v1.5` (33 MB) di +30 punti recall@5 sul mix linguistico (97.5% vs 65.0%). Decisione: si adotta multilingual-MiniLM-L12-v2 in Step 1, lazy download al primo uso.
+
+### Statistics
+
+- 5 PR mergiate (#23, #24, #25, #26, #27)
+- ~1.500 righe di codice nuovo (Rust + TypeScript + SQL)
+- 19 nuovi test unit Rust (5 target_model + 6 statistiche + 8 cartelle)
+- 0 vulnerabilità note (audit security verde)
+
+---
+
 ## v0.2.0-foundations (2026-05-04)
 
 > **Status**: Fase 2 chiusa sui 6 step controllabili (1, 2, 3, 4, 7, 8). Step 5 (auto-update silenzioso) riposizionato a patch line `v0.2.x` — sblocca con cert Authenticode Certum (KYC in corso). Step 6 (server cross-platform senza Docker) spostato a Fase 5 Step 0a — domanda-driven, riprende con workspace team enterprise. Razionale completo in `docs/todo-fase-2.md` e `docs/quality-gate-fase-2.md`.
