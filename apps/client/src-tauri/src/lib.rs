@@ -162,6 +162,7 @@ pub fn run() {
 
             app.manage(vault::VaultState::new(data_dir.clone()));
             app.manage(preferenze::PreferenzeState::new(data_dir.clone()));
+            app.manage(embeddings::EmbeddingsState::new());
 
             // ── Menu contestuale del tray ──
 
@@ -269,6 +270,8 @@ pub fn run() {
             statistiche::statistiche_query,
             embeddings::embeddings_status,
             embeddings::embeddings_download,
+            embeddings::embeddings_init,
+            embeddings::embeddings_compute,
             cartelle::folder_lista,
             cartelle::folder_crea,
             cartelle::folder_rinomina,
