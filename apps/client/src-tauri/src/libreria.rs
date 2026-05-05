@@ -32,6 +32,7 @@ pub struct PromptDettaglio {
     pub body: String,
     pub visibilita: String,
     pub target_model: String,
+    pub folder_id: Option<String>,
     pub preferito: bool,
     pub uso_count: i64,
     pub creato_a: String,
@@ -56,6 +57,10 @@ pub struct FiltroLista {
     pub ordine: String,
     #[serde(default)]
     pub target_model: Option<String>,
+    /// Filtra per cartella. `Some("__nessuna__")` → solo prompt senza cartella;
+    /// `Some(id)` → prompt nel sottoalbero di quella cartella; `None` → no filtro.
+    #[serde(default)]
+    pub folder_id: Option<String>,
 }
 
 fn carica_tags(conn: &Connection, prompt_id: &str) -> Result<Vec<TagInfo>, PapErrore> {
@@ -157,6 +162,25 @@ pub fn libreria_lista(
             .filter(|s| !s.trim().is_empty())
             .cloned();
 
+        // Filtro cartella:
+        // - None / vuoto / id non trovato → nessun filtro
+        // - "__nessuna__" → solo root (FolderId IS NULL)
+        // - id valido → sottoalbero (id stesso + tutti i discendenti via Path)
+        let folder_solo_root = filtro.folder_id.as_deref() == Some("__nessuna__");
+        let folder_path: Option<String> = match filtro.folder_id.as_deref() {
+            None | Some("") | Some("__nessuna__") => None,
+            Some(id) => conn
+                .query_row(
+                    "SELECT Path FROM Folders WHERE Id = ?1 AND DeletedAt IS NULL",
+                    [id],
+                    |r| r.get(0),
+                )
+                .ok(),
+        };
+        let folder_path_prefix_like = folder_path.as_ref().map(|p| format!("{p}/%"));
+
+        // SQL: tutti i named param sono sempre presenti; le condizioni
+        // controllano l'attivazione via NULL check / boolean flag.
         let sql = format!(
             "SELECT p.Id, p.Title, p.Description, p.Visibility,
                     p.IsFavorite, p.UseCount, p.UpdatedAt
@@ -166,6 +190,15 @@ pub fn libreria_lista(
                AND (:cerca IS NULL OR p.Title LIKE :cerca OR p.Description LIKE :cerca)
                AND (:tag_id IS NULL OR pt.TagId = :tag_id)
                AND (:target_model IS NULL OR p.TargetModel = :target_model)
+               AND (NOT :folder_solo_root OR p.FolderId IS NULL)
+               AND (
+                   :folder_path IS NULL
+                   OR p.FolderId IN (
+                       SELECT Id FROM Folders
+                       WHERE DeletedAt IS NULL
+                         AND (Path = :folder_path OR Path LIKE :folder_prefix)
+                   )
+               )
              GROUP BY p.Id
              ORDER BY {ordine}
              LIMIT 100"
@@ -178,6 +211,9 @@ pub fn libreria_lista(
                     ":cerca": cerca_param,
                     ":tag_id": filtro.tag_id,
                     ":target_model": target_model_param,
+                    ":folder_solo_root": folder_solo_root,
+                    ":folder_path": folder_path,
+                    ":folder_prefix": folder_path_prefix_like,
                 },
                 riga_a_card,
             )?
@@ -199,7 +235,7 @@ pub fn libreria_dettaglio(
     state.with_conn(|conn| {
         let mut det = conn.query_row(
             "SELECT Id, Title, Description, Body, Visibility, TargetModel,
-                    IsFavorite, UseCount, CreatedAt, UpdatedAt, LastUsedAt
+                    FolderId, IsFavorite, UseCount, CreatedAt, UpdatedAt, LastUsedAt
              FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
             [&id],
             |row| {
@@ -210,11 +246,12 @@ pub fn libreria_dettaglio(
                     body: row.get(3)?,
                     visibilita: row.get(4)?,
                     target_model: row.get::<_, Option<String>>(5)?.unwrap_or_default(),
-                    preferito: row.get::<_, i64>(6)? != 0,
-                    uso_count: row.get(7)?,
-                    creato_a: row.get::<_, Option<String>>(8)?.unwrap_or_default(),
-                    aggiornato_a: row.get::<_, Option<String>>(9)?.unwrap_or_default(),
-                    ultimo_uso: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
+                    folder_id: row.get::<_, Option<String>>(6)?,
+                    preferito: row.get::<_, i64>(7)? != 0,
+                    uso_count: row.get(8)?,
+                    creato_a: row.get::<_, Option<String>>(9)?.unwrap_or_default(),
+                    aggiornato_a: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
+                    ultimo_uso: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
                     tags: vec![],
                 })
             },

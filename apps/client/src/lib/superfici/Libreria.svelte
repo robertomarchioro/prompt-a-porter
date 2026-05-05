@@ -50,6 +50,16 @@
     colore: string;
   }
 
+  interface Cartella {
+    id: string;
+    nome: string;
+    path: string;
+    parent_folder_id: string | null;
+    conteggio_prompt: number;
+    creato_a: string;
+    aggiornato_a: string;
+  }
+
   interface ConteggiViste {
     tutti: number;
     preferiti: number;
@@ -74,6 +84,8 @@
     team: 0,
   });
   let tags = $state<TagInfoFE[]>([]);
+  let cartelle = $state<Cartella[]>([]);
+  let folderSelezionato = $state<string | null>(null); // null=nessun filtro, "__nessuna__"=root, id=cartella
   let hotkeyCombo = $state("Ctrl+Shift+P");
   let passwordInput = $state("");
   let erroreUnlock = $state("");
@@ -195,7 +207,12 @@
     } catch {
       /* preferenze non ancora salvate */
     }
-    await Promise.all([caricaConteggi(), caricaLista(), caricaTags()]);
+    await Promise.all([
+      caricaConteggi(),
+      caricaLista(),
+      caricaTags(),
+      caricaCartelle(),
+    ]);
   }
 
   async function caricaConteggi() {
@@ -215,6 +232,7 @@
           cerca: cercaTesto || null,
           ordine,
           target_model: targetModelFiltro || null,
+          folder_id: folderSelezionato,
         },
       });
     } catch {
@@ -227,6 +245,66 @@
       tags = await invoke<TagInfoFE[]>("libreria_tag_lista");
     } catch {
       /* nessun tag */
+    }
+  }
+
+  async function caricaCartelle() {
+    try {
+      cartelle = await invoke<Cartella[]>("folder_lista");
+    } catch {
+      cartelle = [];
+    }
+  }
+
+  function selezionaFolder(id: string | null) {
+    folderSelezionato = folderSelezionato === id ? null : id;
+    idSelezionato = null;
+    promptDet = null;
+    caricaLista();
+  }
+
+  async function nuovaCartella(parentId: string | null) {
+    const nome = window.prompt(
+      parentId
+        ? `Nuova sottocartella in "${cartelle.find((c) => c.id === parentId)?.path ?? ""}"`
+        : "Nome nuova cartella",
+    );
+    if (!nome || !nome.trim()) return;
+    try {
+      await invoke<string>("folder_crea", {
+        dati: { nome: nome.trim(), parent_folder_id: parentId },
+      });
+      await caricaCartelle();
+    } catch (e) {
+      window.alert(`Impossibile creare la cartella: ${e}`);
+    }
+  }
+
+  async function rinominaCartella(c: Cartella) {
+    const nuovo = window.prompt(`Nuovo nome per "${c.nome}"`, c.nome);
+    if (!nuovo || nuovo.trim() === c.nome) return;
+    try {
+      await invoke("folder_rinomina", {
+        dati: { id: c.id, nuovo_nome: nuovo.trim() },
+      });
+      await caricaCartelle();
+    } catch (e) {
+      window.alert(`Impossibile rinominare: ${e}`);
+    }
+  }
+
+  async function eliminaCartella(c: Cartella) {
+    const conferma = window.confirm(
+      `Eliminare la cartella "${c.path}" e le sue sottocartelle?\n` +
+        `I ${c.conteggio_prompt} prompt al suo interno torneranno a root.`,
+    );
+    if (!conferma) return;
+    try {
+      await invoke("folder_elimina", { id: c.id });
+      if (folderSelezionato === c.id) folderSelezionato = null;
+      await Promise.all([caricaCartelle(), caricaLista()]);
+    } catch (e) {
+      window.alert(`Impossibile eliminare: ${e}`);
     }
   }
 
@@ -459,6 +537,81 @@
           {/snippet}
           Team
         </NavItem>
+      </div>
+
+      <div class="sb-gruppo">
+        <div class="sb-label sb-label--with-action">
+          <span>Cartelle</span>
+          <button
+            class="sb-icon-btn"
+            title="Nuova cartella"
+            onclick={() => nuovaCartella(null)}>+</button
+          >
+        </div>
+        <NavItem
+          attivo={folderSelezionato === "__nessuna__"}
+          onclick={() => selezionaFolder("__nessuna__")}
+        >
+          {#snippet icona()}
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><circle cx="12" cy="12" r="10" /><path
+                d="M4.93 4.93l14.14 14.14"
+              /></svg
+            >
+          {/snippet}
+          Senza cartella
+        </NavItem>
+        {#each cartelle as c (c.id)}
+          {@const livello = (c.path.match(/\//g)?.length ?? 1) - 1}
+          <div class="sb-folder-row">
+            <NavItem
+              attivo={folderSelezionato === c.id}
+              onclick={() => selezionaFolder(c.id)}
+            >
+              {#snippet icona()}
+                <span class="sb-folder-indent" style:--lvl={livello}>📁</span>
+              {/snippet}
+              <span class="sb-folder-nome">{c.nome}</span>
+              {#if c.conteggio_prompt > 0}
+                <span class="sb-count">{c.conteggio_prompt}</span>
+              {/if}
+            </NavItem>
+            <div class="sb-folder-actions">
+              <button
+                class="sb-icon-btn"
+                title="Nuova sottocartella"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  nuovaCartella(c.id);
+                }}>+</button
+              >
+              <button
+                class="sb-icon-btn"
+                title="Rinomina"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  rinominaCartella(c);
+                }}>✎</button
+              >
+              <button
+                class="sb-icon-btn sb-icon-btn--danger"
+                title="Elimina"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  eliminaCartella(c);
+                }}>×</button
+              >
+            </div>
+          </div>
+        {/each}
       </div>
 
       {#if tags.length > 0}
@@ -1055,6 +1208,66 @@
     letter-spacing: var(--tracking-caps);
     color: var(--text-subtle);
     padding: var(--sp-2) var(--sp-3) 4px;
+  }
+
+  .sb-label--with-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .sb-icon-btn {
+    background: transparent;
+    border: 0;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    line-height: 1;
+  }
+  .sb-icon-btn:hover {
+    background: var(--bg-input);
+    color: var(--text-strong);
+  }
+  .sb-icon-btn--danger:hover {
+    color: var(--accent-danger, #e53935);
+  }
+
+  .sb-folder-row {
+    position: relative;
+  }
+  .sb-folder-row .sb-folder-actions {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: none;
+    gap: 0;
+    background: var(--bg-canvas);
+    border-radius: var(--radius-sm);
+  }
+  .sb-folder-row:hover .sb-folder-actions {
+    display: inline-flex;
+  }
+
+  .sb-folder-indent {
+    display: inline-block;
+    margin-left: calc(var(--lvl, 0) * 12px);
+    font-size: 13px;
+  }
+
+  .sb-folder-nome {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sb-count {
+    margin-left: auto;
+    color: var(--text-subtle);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
   }
 
   .sb-spacer {

@@ -1,4 +1,5 @@
 mod audit;
+mod cartelle;
 mod editor;
 mod errore;
 mod import_export;
@@ -255,6 +256,12 @@ pub fn run() {
             import_export::vault_export_json,
             import_export::vault_import_json,
             statistiche::statistiche_query,
+            cartelle::folder_lista,
+            cartelle::folder_crea,
+            cartelle::folder_rinomina,
+            cartelle::folder_sposta,
+            cartelle::folder_elimina,
+            cartelle::prompt_sposta,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())

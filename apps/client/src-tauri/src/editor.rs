@@ -15,6 +15,8 @@ pub struct NuovoPrompt {
     pub tag_nomi: Vec<String>,
     #[serde(default)]
     pub target_model: Option<String>,
+    #[serde(default)]
+    pub folder_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -27,6 +29,8 @@ pub struct AggiornamentoPrompt {
     pub tag_nomi: Vec<String>,
     #[serde(default)]
     pub target_model: Option<String>,
+    #[serde(default)]
+    pub folder_id: Option<String>,
 }
 
 fn normalizza_target_model(v: &Option<String>) -> Option<String> {
@@ -111,11 +115,12 @@ pub fn prompt_crea(
     state.with_conn(|conn| {
         let id = format!("prm-{}", genera_id());
         let target = normalizza_target_model(&dati.target_model);
+        let folder = normalizza_target_model(&dati.folder_id);
         conn.execute(
             "INSERT INTO Prompts
                 (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
-                 Visibility, TargetModel, Version, CreatedAt, UpdatedAt)
-             VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, ?4, ?5, ?6, 1,
+                 Visibility, TargetModel, FolderId, Version, CreatedAt, UpdatedAt)
+             VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, ?4, ?5, ?6, ?7, 1,
                      datetime('now'), datetime('now'))",
             rusqlite::params![
                 id,
@@ -124,6 +129,7 @@ pub fn prompt_crea(
                 dati.body.trim(),
                 dati.visibilita,
                 target,
+                folder,
             ],
         )?;
         sincronizza_tags(conn, &id, &dati.tag_nomi)?;
@@ -143,19 +149,21 @@ pub fn prompt_aggiorna(
 ) -> Result<(), PapErrore> {
     state.with_conn(|conn| {
         let target = normalizza_target_model(&dati.target_model);
+        let folder = normalizza_target_model(&dati.folder_id);
         conn.execute(
             "UPDATE Prompts
              SET Title = ?1, Description = ?2, Body = ?3, Visibility = ?4,
-                 TargetModel = ?5,
+                 TargetModel = ?5, FolderId = ?6,
                  Version = Version + 1, UpdatedAt = datetime('now'),
                  UpdatedByUserId = 'usr-locale'
-             WHERE Id = ?6 AND DeletedAt IS NULL",
+             WHERE Id = ?7 AND DeletedAt IS NULL",
             rusqlite::params![
                 dati.titolo.trim(),
                 dati.descrizione.trim(),
                 dati.body.trim(),
                 dati.visibilita,
                 target,
+                folder,
                 dati.id
             ],
         )?;

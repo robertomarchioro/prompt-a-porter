@@ -23,7 +23,13 @@
     body: string;
     visibilita: string;
     target_model?: string | null;
+    folder_id?: string | null;
     tags: TagInfoFE[];
+  }
+
+  interface CartellaSel {
+    id: string;
+    path: string;
   }
 
   interface Props {
@@ -43,6 +49,8 @@
     (prompt?.visibilita as "private" | "workspace") ?? "private",
   );
   let targetModel = $state<string>(prompt?.target_model ?? "");
+  let folderId = $state<string>(prompt?.folder_id ?? "");
+  let cartelleDisponibili = $state<CartellaSel[]>([]);
   let tagNomi = $state<string[]>(prompt?.tags.map((t) => t.nome) ?? []);
   let tagInput = $state("");
   let salvando = $state(false);
@@ -71,6 +79,12 @@
   $effect(() => {
     invoke<TagInfoFE[]>("libreria_tag_lista")
       .then((tags) => (tuttiITag = tags.map((t) => t.nome)))
+      .catch(() => {});
+  });
+
+  $effect(() => {
+    invoke<CartellaSel[]>("folder_lista")
+      .then((cs) => (cartelleDisponibili = cs))
       .catch(() => {});
   });
 
@@ -158,6 +172,7 @@
             visibilita,
             tag_nomi: tagNomi,
             target_model: targetModel.trim() || null,
+            folder_id: folderId || null,
           },
         });
       } else {
@@ -169,6 +184,7 @@
             visibilita,
             tag_nomi: tagNomi,
             target_model: targetModel.trim() || null,
+            folder_id: folderId || null,
           },
         });
       }
@@ -194,6 +210,7 @@
             visibilita,
             tag_nomi: tagNomi,
             target_model: targetModel.trim() || null,
+            folder_id: folderId || null,
           },
         });
       } else {
@@ -205,6 +222,7 @@
             visibilita,
             tag_nomi: tagNomi,
             target_model: targetModel.trim() || null,
+            folder_id: folderId || null,
           },
         });
       }
@@ -344,6 +362,16 @@
             <option value="">Non specificato</option>
             {#each MODELLI_TARGET as m (m.value)}
               <option value={m.value}>{m.label}</option>
+            {/each}
+          </Select>
+        </div>
+
+        <div class="meta-sezione">
+          <h3>Cartella</h3>
+          <Select bind:valore={folderId} onchange={() => pianificaAutosave()}>
+            <option value="">Nessuna (root)</option>
+            {#each cartelleDisponibili as c (c.id)}
+              <option value={c.id}>{c.path}</option>
             {/each}
           </Select>
         </div>
