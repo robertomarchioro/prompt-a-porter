@@ -1,6 +1,6 @@
 # API Server Sync — Prompt a Porter
 
-> Aggiornato allo Step 11.
+> ⚠️ **Documento stale** — fermo a Fase 1 Step 11. Riflette il server come era a fine Fase 1 e non è stato aggiornato per le evoluzioni di Fase 2 (CLI, MCP, schema versionato V004 cartelle, etc.). L'aggiornamento è programmato in Fase 5 quando il server cross-OS senza Docker (Step 0a) sarà implementato. Vedi [`../roadmap/fase-5-enterprise.md`](../roadmap/fase-5-enterprise.md).
 
 ## Panoramica
 

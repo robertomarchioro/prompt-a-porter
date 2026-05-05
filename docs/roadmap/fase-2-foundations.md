@@ -30,7 +30,7 @@ Strategicamente la priorità è: **integrazioni standard prima di superfici prop
 Al momento del quality gate, Step 5 e Step 6 sono entrambi bloccati da fattori esterni che esulano dal lavoro di codice:
 
 - **Step 5 (auto-update silenzioso)** → posticipato a **patch line `v0.2.x`**. Sblocco: arrivo del certificato Authenticode Certum (procedura KYC in corso). Non è un blocco tecnico, è un blocco amministrativo. Quando il cert atterra, lo Step 5 viene completato in una serie di patch (`v0.2.1` per il bundle NSIS per-user, `v0.2.2` per il flow updater + signing). I dettagli tecnici dello Step restano sotto in questo documento come reference, non vengono spostati altrove.
-- **Step 6 (server Go cross-platform senza Docker)** → spostato a **Fase 5 (`docs/todo-fase-5.md`)** come Step 0a. Razionale: il deliverable di Step 6 (single binary cross-OS deployabile come service) ha valore reale solo quando esiste un workspace team in produzione che lo usa. Oggi il server è infrastruttura interna al progetto e Docker copre il caso. Spostarlo in Fase 5 lo allinea agli altri deliverable enterprise (SSO, webhook, API pubblica) che condividono la stessa condizione "domanda-driven".
+- **Step 6 (server Go cross-platform senza Docker)** → spostato a **Fase 5 (`docs/roadmap/fase-5-enterprise.md`)** come Step 0a. Razionale: il deliverable di Step 6 (single binary cross-OS deployabile come service) ha valore reale solo quando esiste un workspace team in produzione che lo usa. Oggi il server è infrastruttura interna al progetto e Docker copre il caso. Spostarlo in Fase 5 lo allinea agli altri deliverable enterprise (SSO, webhook, API pubblica) che condividono la stessa condizione "domanda-driven".
 
 Il tag `v0.2.0-foundations` segna la chiusura di Fase 2 sui 6 step controllabili (1, 2, 3, 4, 7, 8). Fase 3 può partire subito senza attendere Step 5/6.
 
@@ -108,7 +108,7 @@ Il log esiste già da Fase 1, ma è "scrivi e dimentica". Ora va reso consultabi
 
 Portabilità non-negoziabile. Con AGPL 3.0 il diritto di portare via i propri dati è ancora più centrale.
 
-- [ ] **Export JSON**: schema documentato `docs/formato-export-json.md`, versionato (`schemaVersion: 1`), include prompts, versioni, tag, cartelle (anticipate Fase 3 nello schema), metadati workspace
+- [ ] **Export JSON**: schema documentato `docs/utente/formato-export-json.md`, versionato (`schemaVersion: 1`), include prompts, versioni, tag, cartelle (anticipate Fase 3 nello schema), metadati workspace
 - [ ] **Export Markdown**: un file `.md` per prompt con front-matter YAML (title, description, tags, visibility, target-model, folder), body con segnaposti `{{...}}` preservati, oppure singolo `.md` aggregato con sezioni
 - [ ] **Import JSON**: validazione schema, dry-run con report (N prompt nuovi, M aggiornati, K conflitti), modalità "skip / overwrite / rinomina"
 - [ ] **Import Markdown**: parser front-matter (YAML), creazione tag mancanti automatica, fallback per file senza front-matter (titolo = filename)
@@ -161,7 +161,7 @@ Obiettivo: ogni aggiornamento di PaP avviene **senza UAC, senza popup di setup, 
 
 ## Step 6 — Server Go cross-platform senza Docker *(spostato in Fase 5)*
 
-> **Stato**: spostato in `docs/todo-fase-5.md` come **Step 0a** (prerequisito enterprise).
+> **Stato**: spostato in `docs/roadmap/fase-5-enterprise.md` come **Step 0a** (prerequisito enterprise).
 >
 > **Razionale**: il deliverable (single binary cross-OS deployabile come Windows Service / systemd unit, distribuito come `.deb`/`.rpm`/NSIS) ha valore solo quando esiste un workspace team in produzione che lo richiede. In Fase 2 il server è infrastruttura interna al progetto, ed è coperto da Docker per dev/test. In Fase 5 lo step si allinea agli altri deliverable enterprise (SSO, webhook, API pubblica) che condividono la stessa condizione "domanda-driven".
 
@@ -187,7 +187,7 @@ Esporre la libreria PaP a Claude e altri agenti AI via Model Context Protocol. A
   - HTTP/SSE: token Bearer scopato a workspace
 - [ ] **Permission gate**: ogni tool call mostra notifica desktop "Claude vuole leggere prompt 'X', consenti?" (auto-allow per workspace personali, ask per team)
 - [ ] **Limiti hard**: nessun MCP tool che modifica/cancella senza approval esplicita umana
-- [ ] **Documentazione**: `docs/mcp-integration.md` con esempi concreti per Claude Desktop, Cursor, custom MCP clients
+- [ ] **Documentazione**: `docs/utente/mcp.md` con esempi concreti per Claude Desktop, Cursor, custom MCP clients
 - [ ] Test: integrazione end-to-end con Claude Desktop locale + agente HTTP custom
 
 ## Step 8 — CLI `pap`
@@ -227,14 +227,14 @@ Scope ridotto al deliverable `v0.2.0-foundations`. I criteri legati a Step 5 e S
 
 Scope `v0.2.0-foundations`. Le doc legate a Step 5/6 atterrano con le rispettive release.
 
-- [ ] Aggiorna `docs/architettura.md` con MCP, CLI, AGPL 3.0 *(auto-update e server cross-platform → seguiranno con le rispettive release)*
-- [ ] Nuovo `docs/mcp-integration.md`: esempi Claude Desktop, Cursor, custom client
-- [x] `docs/cli-reference.md` (atterrato in Step 8)
+- [ ] Aggiorna `docs/architettura/overview.md` con MCP, CLI, AGPL 3.0 *(auto-update e server cross-platform → seguiranno con le rispettive release)*
+- [ ] Nuovo `docs/utente/mcp.md`: esempi Claude Desktop, Cursor, custom client
+- [x] `docs/utente/cli.md` (atterrato in Step 8)
 - [ ] Nuovo `docs/licenza.md`: razionale AGPL 3.0
-- [ ] Nuovo `docs/formato-export-json.md`: schema export
+- [ ] Nuovo `docs/utente/formato-export-json.md`: schema export
 - [x] CHANGELOG `v0.2.0` con highlight (AGPL, MCP, CLI, versioning, audit, import/export)
 - [ ] Tag `v0.2.0-foundations`, release notes con highlights e nota su Step 5/6 deferred
-- [ ] Aggiorna `docs/todo-fase-3.md` (già esistente, già rivisto in linea con questa nuova roadmap)
+- [ ] Aggiorna `docs/roadmap/fase-3-intelligence.md` (già esistente, già rivisto in linea con questa nuova roadmap)
 
 Spostati a release successive:
 - `docs/auto-update.md` (con `v0.2.x` Step 5)
@@ -252,10 +252,10 @@ Spostati a release successive:
 
 ## Riferimenti
 
-- Fase 1: `docs/todo-fase-1.md` (chiusa)
-- Fase 3 (prossima): `docs/todo-fase-3.md`
-- Schema dati: `docs/schema-dati.md`
-- API server: `docs/api-server.md`
+- Fase 1: `docs/roadmap/fase-1-mvp.md` (chiusa)
+- Fase 3 (prossima): `docs/roadmap/fase-3-intelligence.md`
+- Schema dati: `docs/architettura/schema-dati.md`
+- API server: `docs/architettura/api-server.md`
 - AGPL 3.0: https://www.gnu.org/licenses/agpl-3.0.html
 - Tauri Updater: https://v2.tauri.app/plugin/updater/
 - modernc.org/sqlite: https://gitlab.com/cznic/sqlite

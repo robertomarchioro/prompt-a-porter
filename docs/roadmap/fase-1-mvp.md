@@ -31,7 +31,7 @@
 - [x] Comandi ausiliari: `vault_esiste()`, `vault_aperto()`
 - [x] Tipo errore `PapErrore` serializzabile per Tauri
 - [x] Test: creazione, unlock, password errata, re-key, hex roundtrip, migrazioni idempotenti
-- [x] Documentazione schema in `docs/schema-dati.md` con diagramma ER Mermaid
+- [x] Documentazione schema in `docs/architettura/schema-dati.md` con diagramma ER Mermaid
 - [ ] Test con `cargo test` ⚠️ richiede toolchain Rust locale
 
 ## Step 3 — Componenti UI base (porting design)

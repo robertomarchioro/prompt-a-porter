@@ -70,7 +70,7 @@ Entrambi trovano `p26` al primo posto, recall@3 = 100% per entrambi. Il segnale 
 
 ✅ **Modello scelto: `paraphrase-multilingual-MiniLM-L12-v2`** (Xenova/paraphrase-multilingual-MiniLM-L12-v2 su HuggingFace, distribuzione ONNX quantizzata).
 
-Aggiorna `docs/todo-fase-3.md` Step 1 sostituendo la "decisione consigliata" da `bge-small-en-v1.5` a multilingual-MiniLM. La crescita di download è gestita dalla strategia "**download on-demand al primo uso**" già prevista nel doc — l'utente vede una progress bar durante il primo unlock con feature attivata, dopodiché il modello è cached localmente.
+Aggiorna `docs/roadmap/fase-3-intelligence.md` Step 1 sostituendo la "decisione consigliata" da `bge-small-en-v1.5` a multilingual-MiniLM. La crescita di download è gestita dalla strategia "**download on-demand al primo uso**" già prevista nel doc — l'utente vede una progress bar durante il primo unlock con feature attivata, dopodiché il modello è cached localmente.
 
 ### Implementazione di produzione (per Step 1)
 

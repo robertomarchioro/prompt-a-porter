@@ -1,6 +1,9 @@
 # === Dipendenze ===
 node_modules/
 .pnpm-store/
+# Repo usa pnpm: package-lock.json e yarn.lock vanno esclusi
+package-lock.json
+yarn.lock
 
 # === Build output ===
 dist/
@@ -11,6 +14,8 @@ out/
 # === Tauri / Rust ===
 apps/client/src-tauri/target/
 apps/client/src-tauri/gen/
+# Cargo.lock dell'app Tauri non è committato (decisione del maintainer)
+apps/client/src-tauri/Cargo.lock
 *.rs.bk
 
 # === Go ===

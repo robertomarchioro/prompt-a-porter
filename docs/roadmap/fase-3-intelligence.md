@@ -59,7 +59,7 @@ L'AI in PaP è uno strumento di scoperta e qualità, non di sostituzione. Ogni f
 ## Step 1 — Setup ONNX Runtime + modello embeddings
 
 - [ ] Aggiungi crate `ort` (ONNX Runtime Rust binding) al client desktop
-- [ ] Modello scelto: **`paraphrase-multilingual-MiniLM-L12-v2`** (~118 MB ONNX, 384 dim, multilingue forte). Decisione presa in Spike 3 (vedi `docs/spike/embedding-model.md`): batte `bge-small-en-v1.5` di 30+ punti recall@5 su query miste IT/EN, essenziale per l'utenza target italofona che scrive prompt anche in inglese.
+- [ ] Modello scelto: **`paraphrase-multilingual-MiniLM-L12-v2`** (~118 MB ONNX, 384 dim, multilingue forte). Decisione presa in Spike 3 (vedi `docs/architettura/decisioni/embedding-model.md`): batte `bge-small-en-v1.5` di 30+ punti recall@5 su query miste IT/EN, essenziale per l'utenza target italofona che scrive prompt anche in inglese.
 - [ ] **Bundling vs download**:
   - Bundle nel binario: +30-80 MB. Pro: zero setup. Contro: ogni upgrade modello richiede re-release.
   - Download al primo uso: scarica da repo HuggingFace o mirror. Pro: binario snello. Contro: serve connessione iniziale.
@@ -266,17 +266,17 @@ Aggregazione passiva dei dati d'uso (già raccolti da `UseCount`, `LastUsedAt`).
 - [ ] Nuovo `docs/linting-regole.md` con catalogo completo regole
 - [ ] Nuovo `docs/cartelle.md` con modello dati e UX (anticipa permessi Fase 4)
 - [ ] Nuovo `docs/prompt-componibili.md` con sintassi, esempi, anti-pattern
-- [ ] Aggiorna `docs/schema-dati.md` con `PromptsEmbeddings`, `Folders`, `PromptImports`
-- [ ] Aggiorna `docs/architettura.md` con flusso embeddings + import resolver
+- [ ] Aggiorna `docs/architettura/schema-dati.md` con `PromptsEmbeddings`, `Folders`, `PromptImports`
+- [ ] Aggiorna `docs/architettura/overview.md` con flusso embeddings + import resolver
 - [ ] CHANGELOG `v0.3.0`
-- [ ] Aggiorna `docs/todo-fase-4.md` (già esistente, già rivisto in linea con questa nuova roadmap)
+- [ ] Aggiorna `docs/roadmap/fase-4-workflow.md` (già esistente, già rivisto in linea con questa nuova roadmap)
 - [ ] Tag `v0.3.0`
 
 ---
 
 ## Decisioni discrezionali
 
-1. **Modello embedding**: ✅ deciso in Spike 3 (2026-05-04) — `paraphrase-multilingual-MiniLM-L12-v2` (118 MB ONNX). Vedi `docs/spike/embedding-model.md`.
+1. **Modello embedding**: ✅ deciso in Spike 3 (2026-05-04) — `paraphrase-multilingual-MiniLM-L12-v2` (118 MB ONNX). Vedi `docs/architettura/decisioni/embedding-model.md`.
 2. **Cache embeddings server-side per workspace team**: il server ricalcola gli embedding per condividerli? Pro: zero ricalcolo per ogni client. Contro: il server vede testo prompt in chiaro (necessario per il calcolo). Trade-off di privacy che entra in conflitto con E2E in Fase 5.
 3. **Linting PII è block-by-default o warn-only?** Per workspace ad alta sensibilità (Fase 5 E2E) sarà block; per ora **warn-by-default** sembra ragionevole.
 4. **Sintassi import**: decisione presa — `{{import "..."}}` coerente con segnaposti.
@@ -285,8 +285,8 @@ Aggregazione passiva dei dati d'uso (già raccolti da `UseCount`, `LastUsedAt`).
 
 ## Riferimenti
 
-- Fase 2 (precedente): `docs/todo-fase-2.md`
-- Fase 4 (prossima): `docs/todo-fase-4.md`
+- Fase 2 (precedente): `docs/roadmap/fase-2-foundations.md`
+- Fase 4 (prossima): `docs/roadmap/fase-4-workflow.md`
 - Modelli embedding: https://huggingface.co/BAAI/bge-small-en-v1.5
 - sqlite-vec: https://github.com/asg017/sqlite-vec
 - ONNX Runtime Rust: https://github.com/pykeio/ort

@@ -100,6 +100,9 @@ Obiettivo: il server `papsync` è un **single static binary**, deployabile come 
 - [ ] Sanity check service start/stop su tutti i target
 - [ ] Test integrazione client ↔ server con binari nativi (no container)
 
+**Documentazione collegata**:
+- [ ] **Aggiorna `docs/architettura/api-server.md`** — oggi è marcato stale (fermo a Fase 1 Step 11). Riallineare con lo stato del server post-Step 0a: nuovi endpoint per cartelle (`/sync/folders`), filtro `?target=` su search, schema dati V004+, eventuale RBAC enterprise se atterrato in Step 2.
+
 ---
 
 ## Step 1 — Commenti + reazioni sui prompt
@@ -355,7 +358,7 @@ Sono tutte cose interessanti ma fuori scope per la 1.0.
 
 ## Riferimenti
 
-- Fase 4 (precedente): `docs/todo-fase-4.md`
+- Fase 4 (precedente): `docs/roadmap/fase-4-workflow.md`
 - MCP spec: https://modelcontextprotocol.io/
 - OWASP threat modeling: https://owasp.org/www-community/Threat_Modeling
 - AGPL 3.0: https://www.gnu.org/licenses/agpl-3.0.html

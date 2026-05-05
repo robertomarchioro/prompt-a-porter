@@ -64,7 +64,7 @@ Item che vivono nel branch della release v0.2 ma aspettano qualcosa di non-tecni
 | Item | Stato | Azione |
 |---|---|---|
 | **`ort` 2.x compile fix su Rust stable** | 🔧 | rc.9/.10/.12 tutti rotti (mismatch ort/ort-sys). Verificare crates.io all'inizio di Fase 3 Step 1, scegliere prima rc che compila pulito. |
-| Fallback `candle-core` se `ort` resta instabile a lungo | 🔧 | Piano B documentato in `docs/spike/onnx-bundle.md`. ~2-5 MB bundle invece di 14-22 MB, performance leggermente inferiore. |
+| Fallback `candle-core` se `ort` resta instabile a lungo | 🔧 | Piano B documentato in `docs/architettura/decisioni/onnx-bundle.md`. ~2-5 MB bundle invece di 14-22 MB, performance leggermente inferiore. |
 
 ---
 
@@ -134,7 +134,7 @@ Tutti questi atterrano se e solo se c'è un workspace team in produzione che li 
 | ✅ Spike sqlite-vec ⊕ SQLCipher | PR #20 | Step 2 Fase 3 procede senza fallback |
 | ✅ Spike ONNX bundle size | PR #21 | Crescita 4-8× accettabile, bundle inclusivo |
 | ✅ Spike modello embedding IT/EN | PR #22 | `paraphrase-multilingual-MiniLM-L12-v2` |
-| ✅ Riposizionamento Step 5 (→ patch line) e Step 6 (→ Fase 5) | PR #19 | docs/todo-fase-2.md, docs/todo-fase-5.md |
+| ✅ Riposizionamento Step 5 (→ patch line) e Step 6 (→ Fase 5) | PR #19 | docs/roadmap/fase-2-foundations.md, docs/roadmap/fase-5-enterprise.md |
 | ✅ Tag `v0.2.0-foundations` (parziale 6/8 step) | manual | release stable |
 | ✅ Versione portable Windows agli asset release | PR #27 + #28 | `Prompt-a-Porter-portable-windows-x64-{tag}.zip` |
 | ✅ Step 6 modello target (Fase 3 anticipato in v0.2.1) | PR #23 | dropdown editor, filtro libreria, badge |
