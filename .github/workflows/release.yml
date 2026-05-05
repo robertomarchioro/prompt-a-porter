@@ -84,6 +84,76 @@ jobs:
             - **Windows**: SmartScreen mostrerà un avviso, scegli "Maggiori informazioni" → "Esegui comunque".
             - **macOS**: alla prima apertura, tasto destro sull'app → "Apri" (necessario perché non notarizzato).
             - **Linux**: nessun avviso, `.deb` / `.AppImage` installabili direttamente.
+
+            **Versione portable Windows**: il file `Prompt-a-Porter-portable-windows-x64.zip` contiene l'eseguibile standalone, senza installer. Estrai e lancia `Prompt a Porter.exe`. Richiede WebView2 runtime (incluso in Windows 11, scaricabile [da Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/) per Windows 10).
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
+
+      # Windows portable: zippa il .exe standalone + README e lo carica come
+      # asset extra della release draft. Pattern Chrome/VSCode portable —
+      # utente estrae lo zip e lancia l'eseguibile, niente installer.
+      - name: Pacchettizza versione portable (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $exeName = "Prompt a Porter.exe"
+          $exePath = "apps/client/src-tauri/target/release/$exeName"
+          if (-not (Test-Path $exePath)) {
+            Write-Error "Eseguibile non trovato in $exePath"
+            exit 1
+          }
+
+          $tag = "${{ github.ref_name }}"
+          $stagingDir = "portable-staging"
+          New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
+          Copy-Item $exePath -Destination $stagingDir
+
+          $readmeContent = @"
+          Prompt a Porter — versione portable Windows ($tag)
+          ===================================================
+
+          Questa cartella contiene la versione portable di Prompt a Porter:
+          un singolo eseguibile, niente installer, niente registro modificato.
+
+          Come usare
+          ----------
+          1. Estrai questo zip dove preferisci (pen drive, Documents, etc.)
+          2. Doppio click su "Prompt a Porter.exe"
+          3. Al primo avvio Windows SmartScreen potrebbe avvisarti perché
+             il binario non è firmato Authenticode. Clicca "Maggiori
+             informazioni" -> "Esegui comunque".
+
+          Requisiti
+          ---------
+          - Windows 10 (1803+) o Windows 11
+          - WebView2 Runtime: incluso in Windows 11. Su Windows 10 va
+            installato manualmente da:
+            https://developer.microsoft.com/microsoft-edge/webview2/
+
+          Dati utente
+          -----------
+          Il vault e le preferenze vengono salvati in
+          %APPDATA%\com.pap.app\ (NON nella cartella dell'eseguibile).
+          Per una vera modalita "portable senza traccia" copia anche
+          la cartella %APPDATA%\com.pap.app\ sulla pen drive.
+
+          Disinstallare
+          -------------
+          Cancella la cartella estratta. Per rimuovere anche i dati,
+          cancella %APPDATA%\com.pap.app\.
+
+          Source: https://github.com/${{ github.repository }}
+          Licenza: AGPL-3.0-only
+          "@
+          $readmeContent | Out-File -FilePath "$stagingDir/README.txt" -Encoding utf8
+
+          $zipName = "Prompt-a-Porter-portable-windows-x64-$tag.zip"
+          Compress-Archive -Path "$stagingDir/*" -DestinationPath $zipName -Force
+          Write-Host "Zip portable creato: $zipName"
+          Get-Item $zipName | Format-List Name, Length
+
+          # Upload come asset della release draft creata da tauri-action.
+          gh release upload $tag $zipName --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
