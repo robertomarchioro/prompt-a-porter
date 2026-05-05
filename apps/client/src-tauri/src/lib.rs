@@ -175,7 +175,17 @@ pub fn run() {
 
             let menu = Menu::with_items(app, &[&apri, &nuovo, &libreria, &impostazioni, &esci])?;
 
+            // Icona del tray: usa l'icona di default della finestra (compilata
+            // da tauri.conf.json bundle.icon). Senza questa, su Windows
+            // l'icona del tray appare come spazio vuoto e Windows talvolta
+            // mostra una seconda icona "running app" non hookata al menu.
+            let icona_tray = app
+                .default_window_icon()
+                .cloned()
+                .ok_or("Icona di default non disponibile")?;
+
             let _tray = TrayIconBuilder::new()
+                .icon(icona_tray)
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .tooltip("Prompt a Porter")
