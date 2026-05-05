@@ -19,7 +19,7 @@ Gli ADR servono per:
 |---|---|---|---|
 | [`sqlite-vec-sqlcipher.md`](./sqlite-vec-sqlcipher.md) | ✅ PASSED | 2026-05-04 | sqlite-vec è compatibile con SQLCipher via auto-extension statico — Step 2 di Fase 3 procede col path standard, niente fallback architetturali |
 | [`onnx-bundle.md`](./onnx-bundle.md) | ✅ PARTIAL | 2026-05-04 | ONNX Runtime aggiunge ~14-22 MB al bundle Tauri (4-8× crescita) — accettabile, si procede con bundle inclusivo via `ort` 2.x default |
-| [`embedding-model.md`](./embedding-model.md) | ✅ PASSED | 2026-05-04 | Modello embedding scelto: `paraphrase-multilingual-MiniLM-L12-v2` (118 MB ONNX) — batte `bge-small-en-v1.5` di +30 punti recall@5 sul mix linguistico IT/EN |
+| [`embedding-model.md`](./embedding-model.md) | ✅ PASSED v2 (2026-05-05) | 2026-05-04 → 2026-05-05 | Modello embedding scelto: **`paraphrase-multilingual-MiniLM-L12-v2`** (118 MB ONNX, decisione v1 **confermata** in v2). EmbeddingGemma-300m valutato e scartato per trade-off (+180 MB / 3.7× per-embed) non giustificati su +2.5 pt recall@5 |
 
 ## Aspetti correlati in altri cluster
 

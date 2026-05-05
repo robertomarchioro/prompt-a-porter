@@ -135,7 +135,8 @@ Tutti questi atterrano se e solo se c'è un workspace team in produzione che li 
 | ✅ Server `go.sum` regen + bump Go 1.25 + chi 5.2.2 | PR #17 (`v0.2.0-foundations`) | govulncheck server clean (0 vulns) |
 | ✅ Spike sqlite-vec ⊕ SQLCipher | PR #20 | Step 2 Fase 3 procede senza fallback |
 | ✅ Spike ONNX bundle size | PR #21 | Crescita 4-8× accettabile, bundle inclusivo |
-| ✅ Spike modello embedding IT/EN | PR #22 | `paraphrase-multilingual-MiniLM-L12-v2` |
+| ✅ Spike modello embedding IT/EN (v1) | PR #22 | `paraphrase-multilingual-MiniLM-L12-v2` (97.5% recall@5) |
+| ✅ Spike modello embedding IT/EN (v2, riapertura per valutare alternative 2024-2025) | TBD (PR corrente) | **MiniLM confermato**. EmbeddingGemma-300m valutato e scartato per trade-off non giustificati (+180 MB / 3.7× per-embed) sul +2.5 pt recall@5 |
 | ✅ Riposizionamento Step 5 (→ patch line) e Step 6 (→ Fase 5) | PR #19 | docs/roadmap/fase-2-foundations.md, docs/roadmap/fase-5-enterprise.md |
 | ✅ Tag `v0.2.0-foundations` (parziale 6/8 step) | manual | release stable |
 | ✅ Versione portable Windows agli asset release | PR #27 + #28 | `Prompt-a-Porter-portable-windows-x64-{tag}.zip` |

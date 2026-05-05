@@ -1,16 +1,17 @@
 # Spike 3 — Modello embedding qualitative IT/EN
 
-> **Stato**: ✅ **PASSED** (eseguito 2026-05-04 su Ubuntu Linux x86_64, Node.js 22, `@huggingface/transformers` 3.x).
+> **Stato**: ✅ **PASSED v2** — confermata decisione v1 dopo riapertura 2026-05-05.
 >
-> **Verdict**: vincitore netto è **`paraphrase-multilingual-MiniLM-L12-v2`** (118 MB ONNX). Penalizza il primo download di 85 MB rispetto a `bge-small-en-v1.5`, ma raddoppia il recall@5 medio sul dataset misto IT/EN (97.5% vs 65.0%) ed è essenziale per query crosslingue (IT→EN o viceversa, comune nell'utenza target).
+> **Verdict corrente**: la scelta resta **`paraphrase-multilingual-MiniLM-L12-v2`** (118 MB ONNX). La riapertura 2026-05-05 ha valutato 3 candidati 2024-2025: `multilingual-e5-small` performa **peggio** di MiniLM, `gte-multilingual-base` non ha ONNX ufficiale, `EmbeddingGemma-300m` ottiene 100% recall@5 ma con trade-off non giustificati (+180 MB download, 3.7× tempo per-embedding, 15× tempo load) per un guadagno di soli +2.5 punti recall@5. EmbeddingGemma è documentato come alternativa futura se i vincoli di size/performance si rilassano.
 
 ## Contesto
 
-Fase 3 Step 1 deve scegliere un modello di embedding tra:
-- **`bge-small-en-v1.5`** (~33 MB ONNX): EN-focused, multilingue passabile, raccomandato dal doc originale Fase 3
-- **`paraphrase-multilingual-MiniLM-L12-v2`** (~118 MB ONNX): multilingue forte, 50+ lingue inclusi italiano
+Fase 3 Step 1 deve scegliere un modello di embedding per ricerca semantica locale sul vault PaP. L'utenza target è italofona ma scrive prompt spesso in inglese (modelli AI commerciali, codice, paper tech). Il modello deve gestire IT/EN/mixed senza degradare significativamente.
 
-L'utenza target di PaP è italofona ma scrive prompt spesso in inglese (modelli AI commerciali, codice, paper tech). Il modello deve gestire IT/EN/mixed senza degradare significativamente.
+Vincoli tecnici:
+- Distribuibile via ONNX (Tauri client carica via crate `ort` o equivalente).
+- Caricabile lazy on-demand al primo uso, cached localmente.
+- Footprint accettabile sul disco — **preferenza dichiarata: minimizzare trade-off** (download, RAM, tempi).
 
 ## Strategia testata
 
@@ -18,78 +19,112 @@ Spike Node.js (`spikes/embedding-models/`) che:
 
 1. Definisce **30 prompt** realistici per casi d'uso PaP: email business, code/dev, analysis, summarization, creative writing, technical/structured output, plus rumore (ricette, viaggi, spesa). Bilanciati IT/EN.
 2. Definisce **10 query** di test con `expected_match` ideale, alcune crosslingue (IT query → EN expected) per stressare la capacità multilingue.
-3. Per ogni modello: carica via `@huggingface/transformers` (ONNX runtime in Node), calcola embedding di tutti i prompt, poi per ogni query calcola cosine similarity, ordina top-K.
+3. Per ogni modello: carica via `@huggingface/transformers` (ONNX runtime in Node), calcola embedding di tutti i prompt (con prefissi `query:`/`passage:` o `task:` quando il modello li richiede), poi per ogni query calcola cosine similarity, ordina top-K.
 4. Calcola **recall@3** e **recall@5** medi sul set di query.
 
 Il dataset è piccolo per costruzione (qualitative spike, non benchmark): 30 prompt su un vault reale è realistico per un utente alla prima settimana, e amplifica le differenze fra modelli.
 
-## Risultati
-
-### Esecuzione 2026-05-04
+## Risultati v2 (esecuzione 2026-05-05)
 
 ```
-=== Spike 3 — Embedding models qualitative test (IT/EN mixed) ===
-Dataset: 30 prompt, 10 query
+=== Spike 3 v2 — Embedding models 2026 (IT/EN mixed) ===
+Dataset: 30 prompt, 10 query, 4 modelli
 
-| Modello                     | Size   | Load (ms) | Avg embed (ms) | Recall@3 | Recall@5 |
-|-----------------------------|--------|-----------|----------------|----------|----------|
-| bge-small-en                | 33 MB  |       963 |            6.9 |    65.0% |    65.0% |
-| multilingual-MiniLM         | 118 MB |      2991 |            7.0 |    85.8% |    97.5% |
+| Modello                       | Anno | Size   | Load (ms) | Avg embed (ms) | Recall@3 | Recall@5 |
+|-------------------------------|------|--------|-----------|----------------|----------|----------|
+| multilingual-MiniLM-L12-v2    | 2021 | 118 MB |      1563 |            9.2 |    85.8% |    97.5% |
+| multilingual-e5-small         | 2024 | 118 MB |      4346 |            8.7 |    75.0% |    88.3% |
+| gte-multilingual-base         | 2024 | 305 MB |      FAIL: ONNX non disponibile su HuggingFace ufficiale         |
+| embeddinggemma-300m           | 2025 | 300 MB |     22856 |           33.6 |    89.2% |   100.0% |
 ```
 
-### Esempi qualitativi che mostrano la differenza
+### Sorprese principali
 
-**Q (IT) "rendi questa email più professionale" — expected: p01, p02, p05, p06**
+- **`multilingual-e5-small` perde** contro MiniLM nonostante sia 3 anni più recente e abbia ricevuto i prefissi `query:`/`passage:` richiesti dal paper. Possibili spiegazioni: dataset (30 prompt, 10 query) troppo piccolo per i benefici dei prefissi, o il modello è ottimizzato per retrieval di documenti lunghi più che per prompt brevi. **Non è un drop-in upgrade**, contrariamente all'aspettativa iniziale.
+- **`gte-multilingual-base`** non ha ONNX ufficiale: né `onnx-community/gte-multilingual-base-ONNX` (404) né `Alibaba-NLP/gte-multilingual-base` (no ONNX nel repo). Conversione manuale via `optimum-cli` fuori scope spike.
+- **`EmbeddingGemma-300m` vince in qualità** ma con costi proporzionalmente alti.
 
-bge-small-en non trova `p06` (`"Convert this Slack message into a polished business email"`) perché EN-only nel modello = penalizzazione su query IT.
+## Analisi del trade-off EmbeddingGemma vs MiniLM
 
-multilingual-MiniLM trova `p06` come **primo** risultato (score 0.81), seguito dagli equivalenti IT — il senso "messaggio informale → email business" è trasferito crosslingue.
+| Metrica | MiniLM-L12-v2 | EmbeddingGemma-300m | Δ |
+|---|---|---|---|
+| Recall@5 | 97.5% | 100.0% | +2.5 pt |
+| Recall@3 | 85.8% | 89.2% | +3.4 pt |
+| Size download | 118 MB | 300 MB | **+180 MB (+153%)** |
+| Tempo per-embedding | 9.2 ms | 33.6 ms | **+24.4 ms (3.7×)** |
+| Tempo load iniziale | 1.6 s | 22.8 s | **+21.2 s (15×)** |
+| RAM con modello caricato | ~50 MB | ~250 MB | **+200 MB** |
+| Output dim default | 384 | 768 (truncabile a 256 via MRL) | flessibile |
 
-**Q (IT) "tradurre codice Python in altro linguaggio" — expected: p08, p10, p12**
-
-bge-small-en mette `p12` (IT, "spiega questa funzione Python") al primo posto, ma `p08` (EN, "Convert Python to TypeScript") fuori top-3. Il modello capisce IT-IT ma fallisce IT→EN cross.
-
-multilingual-MiniLM trova `p08` come **primo** (score 0.56), poi `p12` (0.54). Match crosslingue corretto.
-
-**Q (IT) "come si fa la carbonara" — expected: p26 (rumore, deve isolarsi)**
-
-Entrambi trovano `p26` al primo posto, recall@3 = 100% per entrambi. Il segnale di rumore funziona — buon health check.
+Considerazioni:
+- **+2.5 punti recall@5** su un dataset di 10 query significa letteralmente 1 query in più chiusa (passare da "9.75 query con tutti gli expected nei top-5" a "10/10"). La portata pratica è bassa quando MiniLM è già al 97.5%.
+- **+180 MB download** è una barriera reale per utenti con connessioni lente o limitate.
+- **3.7× più lento per embedding**: su un backfill iniziale di 10k prompt = ~6 min vs ~1.5 min. Non un dramma, ma non gratis.
+- **15× più lento al load**: pagato ad ogni unlock del vault con feature attivata. Meno problematico (async, invisibile).
+- **MRL truncation a 256 dim** è un punto a favore di EmbeddingGemma per lo storage in `vec0`, ma non basta a compensare gli altri costi.
 
 ## Diagnosi
 
-`bge-small-en-v1.5` è OK per workspace **anglofoni puri** ma penalizza significativamente le query miste. Il modello vede il prompt IT come "stringa esotica con poca semantica" rispetto al suo training set EN.
+In benchmark MTEB pubblici, EmbeddingGemma supera MiniLM-L12-v2 di margini più ampi (specie su task di retrieval con documenti più lunghi). Sul **nostro caso d'uso** (prompt brevi, dataset utente piccolo), il guadagno reale si schiaccia a ~2.5 punti recall@5.
 
-`paraphrase-multilingual-MiniLM-L12-v2` recupera 30+ punti di recall sul mix IT/EN. Costo:
-- **First download**: +85 MB (118 vs 33 MB) — una sola volta, lazy quando utente attiva la feature
-- **Storage on disk**: +85 MB cache modello in `~/.local/share/prompt-a-porter/models/`
-- **Memory at runtime**: ~50 MB RAM in più con modello caricato (configurabile: scaricamento dopo 5 min idle previsto in Step 1)
-- **Performance per embedding**: trascurabile (7.0 vs 6.9 ms su CPU x86_64)
-- **Performance load iniziale**: 3× lento (3.0 vs 1.0 s) — invisibile all'utente perché async
+Il principio di **"no premature optimization"** applicato qui: MiniLM è già ottimo (97.5%), il prossimo modello deve giustificare i suoi costi con un guadagno proporzionato. EmbeddingGemma non lo fa per il nostro use case.
 
 ## Decisione
 
-✅ **Modello scelto: `paraphrase-multilingual-MiniLM-L12-v2`** (Xenova/paraphrase-multilingual-MiniLM-L12-v2 su HuggingFace, distribuzione ONNX quantizzata).
+✅ **Modello scelto: `paraphrase-multilingual-MiniLM-L12-v2`** (decisione v1 confermata in v2).
 
-Aggiorna `docs/roadmap/fase-3-intelligence.md` Step 1 sostituendo la "decisione consigliata" da `bge-small-en-v1.5` a multilingual-MiniLM. La crescita di download è gestita dalla strategia "**download on-demand al primo uso**" già prevista nel doc — l'utente vede una progress bar durante il primo unlock con feature attivata, dopodiché il modello è cached localmente.
+ID HuggingFace: `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (distribuzione ONNX quantizzata).
 
-### Implementazione di produzione (per Step 1)
+### Implementazione di produzione (per Step 1 di Fase 3)
 
 1. Comando Tauri `embeddings_init()`:
    - Verifica esistenza modello in `${data_dir}/models/multilingual-MiniLM-L12-v2.onnx`
    - Se assente, scarica da `https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/main/onnx/model_quantized.onnx` con progress bar
-   - Carica in memoria via ort
+   - Carica in memoria via `ort`
 2. Comando Tauri `embeddings_compute(text)`: ritorna `Vec<f32>` di 384 dimensioni (output pooled mean + L2-normalized)
 3. Setting in Impostazioni > Ricerca: `[ ] Ricerca semantica (richiede download modello ~118 MB al primo uso)`
+4. Cache modello con eviction dopo 5 min di idle (per liberare ~50 MB RAM quando inutilizzato).
+
+### Migration path se in futuro si vuole cambiare modello
+
+L'embedding store in `vec0` è dipendente dal modello. Se si cambia modello:
+- Marcare la versione del modello in `vault-meta.json` (campo `embedding_model_id` + `embedding_dim`)
+- Al boot, se il modello in meta != modello corrente, mostrare prompt utente per re-indicizzazione (lavoro grosso ma reversibile)
+
+### Quando rivalutare EmbeddingGemma
+
+Documentato qui per non perdere il filo: **EmbeddingGemma-300m diventa la scelta giusta se** uno o più dei seguenti cambiano:
+
+- Connessioni a banda larga diventano lo standard universale per l'utenza target → +180 MB non è più una barriera.
+- Hardware desktop dell'utenza si stabilizza su CPU recenti che riducono il gap di 3.7× → tempo per-embedding torna sotto i 15 ms.
+- Lo use case si sposta su prompt più lunghi (chat history, documenti) dove il vantaggio di EmbeddingGemma diventa più marcato.
+- Si aggiunge ricerca su un corpus esterno (non solo vault utente) dove ogni punto di recall conta.
+
+In quel caso si esegue Spike 3 v3 con le condizioni aggiornate. Il dataset di test e il runner restano disponibili in `spikes/embedding-models/`.
 
 ## Item rinviati (out of scope per spike)
 
-- **Quantizzazione int8/int4** ulteriore per ridurre footprint ([dynamic_int8](https://huggingface.co/docs/transformers/main/en/main_classes/quantization) può portare il modello a ~30-40 MB con perdita ~5% di qualità). Da considerare in Step 1 implementation se il download iniziale è troppo lungo per utenti su connessione lenta.
-- **Confronto con modelli IT-specifici** come `mxbai-embed-large` o variants `e5-multilingual-large`. Probabilmente over-kill (modelli >500 MB), il guadagno marginale non giustifica.
-- **Benchmark P95 latency** su 10k embeddings: rimandato a Step 10 quality gate Fase 3.
+- **Quantizzazione int8/int4** ulteriore di MiniLM per ridurre footprint sotto 80 MB. Considerare se il download iniziale è troppo lungo per utenti su connessione lenta.
+- **Test gte-multilingual-base via conversione manuale ONNX**: skip per ora. Se serve un'opzione 305 MB nel futuro, conversione fattibile via `optimum-cli`.
+- **Benchmark P95 latency** su 10k embeddings reali: rimandato a Step 10 quality gate Fase 3.
+
+## Cronologia decisioni
+
+| Versione | Data | Modello scelto | Recall@5 | Stato |
+|---|---|---|---|---|
+| v1 | 2026-05-04 | `paraphrase-multilingual-MiniLM-L12-v2` | 97.5% | ✅ scelto |
+| **v2 (corrente)** | **2026-05-05** | **`paraphrase-multilingual-MiniLM-L12-v2`** (decisione v1 confermata) | **97.5%** | **✅ confermato dopo valutazione di 3 alternative 2024-2025** |
+
+Razionale del confirm: EmbeddingGemma-300m ottiene 100% recall@5 ma con trade-off non giustificati (+180 MB download, 3.7× tempo per-embedding, 15× tempo load) per un guadagno marginale di +2.5 punti su un dataset piccolo. MiniLM resta il miglior trade-off qualità/costo per il nostro use case (prompt brevi, vault locale).
 
 ## Riferimenti
 
 - Modello scelto: <https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2>
 - ONNX quantizzato (Xenova): <https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2>
-- @huggingface/transformers (transformers.js): <https://github.com/huggingface/transformers.js>
-- Sentence Transformers: <https://www.sbert.net/>
+- Modelli valutati e scartati in v2:
+  - `intfloat/multilingual-e5-small` (2024) — perde contro MiniLM in questo dataset
+  - `Alibaba-NLP/gte-multilingual-base` (2024) — no ONNX ufficiale
+  - `google/embeddinggemma-300m` (2025) — vince qualità ma trade-off non giustificati
+- Google blog EmbeddingGemma: <https://developers.googleblog.com/introducing-embeddinggemma/>
+- HuggingFace blog tecnico EmbeddingGemma: <https://huggingface.co/blog/embeddinggemma>
+- @huggingface/transformers (transformers.js v3): <https://github.com/huggingface/transformers.js>

@@ -1,37 +1,68 @@
 // Spike 3 — qualitative test embedding models su prompt PaP misti IT/EN.
 //
-// Strategia: caricare 2 modelli embedding via @huggingface/transformers (ONNX
-// runtime web, scarica i .onnx e li runna in Node.js). Calcolare embedding di
+// Riapertura 2026-05-05: la decisione originale (Spike 3 v1) cadeva su
+// `paraphrase-multilingual-MiniLM-L12-v2` (2021). Modello vecchio rispetto
+// allo stato dell'arte 2025. Aggiungiamo al confronto 3 candidati moderni:
+//   - intfloat/multilingual-e5-small (2024, 118MB, drop-in size)
+//   - Alibaba-NLP/gte-multilingual-base (2024, 305MB, mid-tier upgrade)
+//   - google/embeddinggemma-300m (2025, 300MB, on-device first, MRL)
+//
+// Strategia: caricare ogni modello via @huggingface/transformers (ONNX
+// runtime, scarica .onnx e li runna in Node.js). Calcolare embedding di
 // 30 prompt + 10 query. Per ogni query: cosine similarity vs tutti i prompt,
 // rank top-5. Confrontare i ranking dei modelli.
 //
-// Esecuzione (prima volta scarica ~150 MB di modelli):
-//   pnpm install
-//   pnpm spike
+// Esecuzione (prima volta scarica ~750 MB di modelli):
+//   npm install
+//   node index.mjs
 
 import { pipeline, env } from '@huggingface/transformers';
 import { prompts, queries } from './dataset.mjs';
 
-// Cache locale per evitare ri-scarico ad ogni esecuzione.
 env.cacheDir = './models';
-// Disabilita la versione browser-native fetch per stabilità su Node 22.
 env.allowLocalModels = true;
 env.useFSCache = true;
 
-// Modelli da confrontare. ONNX quantizzato dove disponibile per dimensione
-// realistica del bundle.
+// Modelli da confrontare. Includono i prefissi specifici richiesti dal
+// modello per separare query da documento (e5 e EmbeddingGemma li usano).
 const MODELS = [
   {
-    id: 'bge-small-en',
-    hf: 'Xenova/bge-small-en-v1.5',
-    size: '33 MB',
-    note: 'EN-focused, multilingue passabile, raccomandato dal doc Fase 3',
-  },
-  {
-    id: 'multilingual-MiniLM',
+    id: 'multilingual-MiniLM-L12-v2',
     hf: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
     size: '118 MB',
-    note: 'Multilingue forte, 50+ lingue inclusi IT',
+    year: '2021',
+    note: 'Baseline storico (vincitore Spike 3 v1)',
+    prepQuery: (q) => q,
+    prepDoc: (d) => d,
+  },
+  {
+    id: 'multilingual-e5-small',
+    hf: 'Xenova/multilingual-e5-small',
+    size: '118 MB',
+    year: '2024',
+    note: 'Microsoft, drop-in stesso budget MiniLM, prefissi query/passage',
+    // e5 family: docs ufficiali raccomandano i prefissi.
+    prepQuery: (q) => `query: ${q}`,
+    prepDoc: (d) => `passage: ${d}`,
+  },
+  {
+    id: 'gte-multilingual-base',
+    hf: 'onnx-community/gte-multilingual-base-ONNX',
+    size: '305 MB',
+    year: '2024',
+    note: 'Alibaba, 70+ lingue, mid-tier upgrade',
+    prepQuery: (q) => q,
+    prepDoc: (d) => d,
+  },
+  {
+    id: 'embeddinggemma-300m',
+    hf: 'onnx-community/embeddinggemma-300m-ONNX',
+    size: '300 MB',
+    year: '2025',
+    note: 'Google DeepMind, on-device first, MRL flessibile (768/512/256/128)',
+    // EmbeddingGemma usa task-specific prompts (vedi model card Google).
+    prepQuery: (q) => `task: search result | query: ${q}`,
+    prepDoc: (d) => `title: none | text: ${d}`,
   },
 ];
 
@@ -53,28 +84,39 @@ async function embed(extractor, text) {
 }
 
 function rankAt(predictions, expected, k) {
-  // Recall@k: frazione degli expected che appaiono nei primi k risultati.
   const topK = predictions.slice(0, k).map((p) => p.id);
   const found = expected.filter((e) => topK.includes(e));
   return { found: found.length, total: expected.length, recall: found.length / expected.length };
 }
 
 async function runModel(model) {
-  console.log(`\n=== Modello: ${model.id} (${model.hf}, ${model.size}) ===`);
+  console.log(`\n=== Modello: ${model.id} (${model.year}, ${model.size}) ===`);
+  console.log(`    HF: ${model.hf}`);
   console.log(`    ${model.note}`);
   console.log('Carico modello...');
   const t0 = Date.now();
-  const extractor = await pipeline('feature-extraction', model.hf, {
-    quantized: true,
-  });
+  let extractor;
+  try {
+    extractor = await pipeline('feature-extraction', model.hf, {
+      quantized: true,
+    });
+  } catch (e) {
+    console.error(`    FAIL load: ${e.message}`);
+    return { model, error: `load: ${e.message}` };
+  }
   const tLoad = Date.now() - t0;
   console.log(`    caricato in ${tLoad} ms`);
 
   console.log(`\nCalcolo embeddings di ${prompts.length} prompt...`);
   const tEmbStart = Date.now();
   const promptEmb = {};
-  for (const p of prompts) {
-    promptEmb[p.id] = await embed(extractor, p.body);
+  try {
+    for (const p of prompts) {
+      promptEmb[p.id] = await embed(extractor, model.prepDoc(p.body));
+    }
+  } catch (e) {
+    console.error(`    FAIL embed prompt: ${e.message}`);
+    return { model, error: `embed: ${e.message}` };
   }
   const tEmb = Date.now() - tEmbStart;
   console.log(`    ${prompts.length} embeddings in ${tEmb} ms (avg ${(tEmb / prompts.length).toFixed(1)} ms/embedding)`);
@@ -84,7 +126,7 @@ async function runModel(model) {
   let recall3sum = 0;
   let recall5sum = 0;
   for (const query of queries) {
-    const qEmb = await embed(extractor, query.q);
+    const qEmb = await embed(extractor, model.prepQuery(query.q));
     const scored = prompts
       .map((p) => ({
         id: p.id,
@@ -118,8 +160,8 @@ async function runModel(model) {
 }
 
 async function main() {
-  console.log('=== Spike 3 — Embedding models qualitative test (IT/EN mixed) ===\n');
-  console.log(`Dataset: ${prompts.length} prompt, ${queries.length} query`);
+  console.log('=== Spike 3 v2 — Embedding models 2026 (IT/EN mixed) ===\n');
+  console.log(`Dataset: ${prompts.length} prompt, ${queries.length} query, ${MODELS.length} modelli`);
 
   const results = [];
   for (const m of MODELS) {
@@ -128,11 +170,17 @@ async function main() {
   }
 
   console.log('\n\n=== Riepilogo confronto ===\n');
-  console.log('| Modello                     | Size  | Load (ms) | Avg embed (ms) | Recall@3 | Recall@5 |');
-  console.log('|-----------------------------|-------|-----------|----------------|----------|----------|');
+  console.log('| Modello                       | Anno | Size   | Load (ms) | Avg embed (ms) | Recall@3 | Recall@5 |');
+  console.log('|-------------------------------|------|--------|-----------|----------------|----------|----------|');
   for (const r of results) {
+    if (r.error) {
+      console.log(
+        `| ${r.model.id.padEnd(29)} | ${r.model.year} | ${r.model.size.padEnd(6)} | FAIL: ${r.error}`
+      );
+      continue;
+    }
     console.log(
-      `| ${r.model.id.padEnd(27)} | ${r.model.size.padEnd(5)} | ${String(r.tLoad).padStart(9)} | ${r.avgPerEmb.toFixed(1).padStart(14)} | ${(r.avgR3 * 100).toFixed(1).padStart(7)}% | ${(r.avgR5 * 100).toFixed(1).padStart(7)}% |`
+      `| ${r.model.id.padEnd(29)} | ${r.model.year} | ${r.model.size.padEnd(6)} | ${String(r.tLoad).padStart(9)} | ${r.avgPerEmb.toFixed(1).padStart(14)} | ${(r.avgR3 * 100).toFixed(1).padStart(7)}% | ${(r.avgR5 * 100).toFixed(1).padStart(7)}% |`
     );
   }
 }
