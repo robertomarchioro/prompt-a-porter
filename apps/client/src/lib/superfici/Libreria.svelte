@@ -263,6 +263,88 @@
     caricaLista();
   }
 
+  // ── Drag & drop ──
+  // MIME types per il payload del drag.
+  const DND_MIME_PROMPT = "application/x-pap-prompt-id";
+  const DND_MIME_FOLDER = "application/x-pap-folder-id";
+
+  let dragoverFolder = $state<string | null>(null); // id cartella highlighted, "__root__" per root
+  let rinominaInline = $state<{ id: string; valore: string } | null>(null);
+
+  function dragStartPrompt(e: DragEvent, promptId: string) {
+    if (!e.dataTransfer) return;
+    e.dataTransfer.setData(DND_MIME_PROMPT, promptId);
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function dragStartFolder(e: DragEvent, folderId: string) {
+    if (!e.dataTransfer) return;
+    e.dataTransfer.setData(DND_MIME_FOLDER, folderId);
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function tipoDraggato(e: DragEvent): "prompt" | "folder" | null {
+    if (!e.dataTransfer) return null;
+    const types = Array.from(e.dataTransfer.types);
+    if (types.includes(DND_MIME_PROMPT)) return "prompt";
+    if (types.includes(DND_MIME_FOLDER)) return "folder";
+    return null;
+  }
+
+  function dragOverDropZone(e: DragEvent, dropTargetId: string) {
+    if (!tipoDraggato(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    dragoverFolder = dropTargetId;
+  }
+
+  function dragLeaveDropZone() {
+    dragoverFolder = null;
+  }
+
+  async function dropSuFolder(e: DragEvent, folderId: string | null) {
+    e.preventDefault();
+    dragoverFolder = null;
+    if (!e.dataTransfer) return;
+    const promptId = e.dataTransfer.getData(DND_MIME_PROMPT);
+    const sourceFolderId = e.dataTransfer.getData(DND_MIME_FOLDER);
+    try {
+      if (promptId) {
+        await invoke("prompt_sposta", {
+          dati: { prompt_id: promptId, folder_id: folderId },
+        });
+        await Promise.all([caricaLista(), caricaCartelle()]);
+      } else if (sourceFolderId && sourceFolderId !== folderId) {
+        await invoke("folder_sposta", {
+          dati: { id: sourceFolderId, nuovo_parent_id: folderId },
+        });
+        await caricaCartelle();
+      }
+    } catch (err) {
+      window.alert(`Spostamento fallito: ${err}`);
+    }
+  }
+
+  function avviaRinomina(c: Cartella) {
+    rinominaInline = { id: c.id, valore: c.nome };
+  }
+
+  async function confermaRinomina() {
+    if (!rinominaInline) return;
+    const { id, valore } = rinominaInline;
+    rinominaInline = null;
+    const cartella = cartelle.find((c) => c.id === id);
+    if (!cartella || valore.trim() === cartella.nome) return;
+    try {
+      await invoke("folder_rinomina", {
+        dati: { id, nuovo_nome: valore.trim() },
+      });
+      await caricaCartelle();
+    } catch (e) {
+      window.alert(`Impossibile rinominare: ${e}`);
+    }
+  }
+
   async function nuovaCartella(parentId: string | null) {
     const nome = window.prompt(
       parentId
@@ -277,19 +359,6 @@
       await caricaCartelle();
     } catch (e) {
       window.alert(`Impossibile creare la cartella: ${e}`);
-    }
-  }
-
-  async function rinominaCartella(c: Cartella) {
-    const nuovo = window.prompt(`Nuovo nome per "${c.nome}"`, c.nome);
-    if (!nuovo || nuovo.trim() === c.nome) return;
-    try {
-      await invoke("folder_rinomina", {
-        dati: { id: c.id, nuovo_nome: nuovo.trim() },
-      });
-      await caricaCartelle();
-    } catch (e) {
-      window.alert(`Impossibile rinominare: ${e}`);
     }
   }
 
@@ -548,68 +617,104 @@
             onclick={() => nuovaCartella(null)}>+</button
           >
         </div>
-        <NavItem
-          attivo={folderSelezionato === "__nessuna__"}
-          onclick={() => selezionaFolder("__nessuna__")}
+        <!-- "Senza cartella" è anche drop zone per spostare un prompt a root
+             o una cartella a root (parent NULL). -->
+        <div
+          class="sb-folder-row"
+          class:sb-dropzone--hover={dragoverFolder === "__root__"}
+          ondragover={(e) => dragOverDropZone(e, "__root__")}
+          ondragleave={dragLeaveDropZone}
+          ondrop={(e) => dropSuFolder(e, null)}
+          role="treeitem"
+          aria-selected={folderSelezionato === "__nessuna__"}
         >
-          {#snippet icona()}
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              ><circle cx="12" cy="12" r="10" /><path
-                d="M4.93 4.93l14.14 14.14"
-              /></svg
-            >
-          {/snippet}
-          Senza cartella
-        </NavItem>
+          <NavItem
+            attivo={folderSelezionato === "__nessuna__"}
+            onclick={() => selezionaFolder("__nessuna__")}
+          >
+            {#snippet icona()}
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><circle cx="12" cy="12" r="10" /><path
+                  d="M4.93 4.93l14.14 14.14"
+                /></svg
+              >
+            {/snippet}
+            Senza cartella
+          </NavItem>
+        </div>
         {#each cartelle as c (c.id)}
           {@const livello = (c.path.match(/\//g)?.length ?? 1) - 1}
-          <div class="sb-folder-row">
-            <NavItem
-              attivo={folderSelezionato === c.id}
-              onclick={() => selezionaFolder(c.id)}
-            >
-              {#snippet icona()}
+          {@const inRinomina = rinominaInline?.id === c.id}
+          <div
+            class="sb-folder-row"
+            class:sb-dropzone--hover={dragoverFolder === c.id}
+            draggable={!inRinomina}
+            ondragstart={(e) => dragStartFolder(e, c.id)}
+            ondragover={(e) => dragOverDropZone(e, c.id)}
+            ondragleave={dragLeaveDropZone}
+            ondrop={(e) => dropSuFolder(e, c.id)}
+          >
+            {#if inRinomina}
+              <div class="sb-rinomina">
                 <span class="sb-folder-indent" style:--lvl={livello}>📁</span>
-              {/snippet}
-              <span class="sb-folder-nome">{c.nome}</span>
-              {#if c.conteggio_prompt > 0}
-                <span class="sb-count">{c.conteggio_prompt}</span>
-              {/if}
-            </NavItem>
-            <div class="sb-folder-actions">
-              <button
-                class="sb-icon-btn"
-                title="Nuova sottocartella"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  nuovaCartella(c.id);
-                }}>+</button
+                <input
+                  class="sb-rinomina-input"
+                  bind:value={rinominaInline!.valore}
+                  onkeydown={(e) => {
+                    if (e.key === "Enter") confermaRinomina();
+                    if (e.key === "Escape") rinominaInline = null;
+                  }}
+                  onblur={() => confermaRinomina()}
+                />
+              </div>
+            {:else}
+              <NavItem
+                attivo={folderSelezionato === c.id}
+                onclick={() => selezionaFolder(c.id)}
               >
-              <button
-                class="sb-icon-btn"
-                title="Rinomina"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  rinominaCartella(c);
-                }}>✎</button
-              >
-              <button
-                class="sb-icon-btn sb-icon-btn--danger"
-                title="Elimina"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  eliminaCartella(c);
-                }}>×</button
-              >
-            </div>
+                {#snippet icona()}
+                  <span class="sb-folder-indent" style:--lvl={livello}>📁</span>
+                {/snippet}
+                <span class="sb-folder-nome">{c.nome}</span>
+                {#if c.conteggio_prompt > 0}
+                  <span class="sb-count">{c.conteggio_prompt}</span>
+                {/if}
+              </NavItem>
+              <div class="sb-folder-actions">
+                <button
+                  class="sb-icon-btn"
+                  title="Nuova sottocartella"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    nuovaCartella(c.id);
+                  }}>+</button
+                >
+                <button
+                  class="sb-icon-btn"
+                  title="Rinomina"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    avviaRinomina(c);
+                  }}>✎</button
+                >
+                <button
+                  class="sb-icon-btn sb-icon-btn--danger"
+                  title="Elimina"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    eliminaCartella(c);
+                  }}>×</button
+                >
+              </div>
+            {/if}
           </div>
         {/each}
       </div>
@@ -703,6 +808,26 @@
     <!-- ── Lista ── -->
     <section class="lista">
       <div class="lista-head">
+        {#if folderSelezionato}
+          {@const cartellaCorrente = cartelle.find(
+            (c) => c.id === folderSelezionato,
+          )}
+          <div class="filter-chips">
+            <button
+              class="filter-chip"
+              onclick={() => selezionaFolder(folderSelezionato)}
+              title="Rimuovi filtro cartella"
+              type="button"
+            >
+              <span class="filter-chip-label">
+                {folderSelezionato === "__nessuna__"
+                  ? "Senza cartella"
+                  : (cartellaCorrente?.path ?? "Cartella")}
+              </span>
+              <span class="filter-chip-x">×</span>
+            </button>
+          </div>
+        {/if}
         <div class="lista-riga1">
           <h2 class="lista-titolo">{titoloVista}</h2>
           <span class="lista-count">{conteggioVista}</span>
@@ -777,6 +902,8 @@
               class:prompt-card--sel={p.id === idSelezionato}
               aria-selected={p.id === idSelezionato}
               onclick={() => selezionaPrompt(p.id)}
+              draggable="true"
+              ondragstart={(e) => dragStartPrompt(e, p.id)}
               type="button"
             >
               <div class="pc-head">
@@ -1237,6 +1364,37 @@
   .sb-folder-row {
     position: relative;
   }
+  .sb-folder-row[draggable="true"] {
+    cursor: grab;
+  }
+  .sb-folder-row[draggable="true"]:active {
+    cursor: grabbing;
+  }
+  .sb-dropzone--hover {
+    background: var(--accent-team-soft, rgba(80, 120, 200, 0.15));
+    outline: 1px dashed var(--accent-team);
+    outline-offset: -1px;
+    border-radius: var(--radius-sm);
+  }
+  .sb-rinomina {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: 4px var(--sp-3);
+    height: 32px;
+  }
+  .sb-rinomina-input {
+    flex: 1;
+    background: var(--bg-input);
+    border: 1px solid var(--accent-team);
+    border-radius: var(--radius-sm);
+    color: var(--text-strong);
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+    padding: 2px 6px;
+    height: 24px;
+    outline: none;
+  }
   .sb-folder-row .sb-folder-actions {
     position: absolute;
     right: 4px;
@@ -1304,6 +1462,40 @@
     gap: var(--sp-3);
     padding: var(--sp-3);
     border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+  }
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px 4px 10px;
+    border-radius: 999px;
+    background: var(--accent-team-soft, rgba(80, 120, 200, 0.15));
+    color: var(--text-strong);
+    border: 1px solid var(--accent-team);
+    font-size: var(--fs-xs);
+    font-family: var(--font-ui);
+    cursor: pointer;
+  }
+  .filter-chip:hover {
+    background: var(--accent-team);
+    color: white;
+  }
+  .filter-chip-label {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .filter-chip-x {
+    font-weight: 700;
+    font-size: 14px;
+    line-height: 1;
   }
 
   .lista-riga1 {
