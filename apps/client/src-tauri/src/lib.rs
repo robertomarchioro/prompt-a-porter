@@ -1,6 +1,7 @@
 mod audit;
 mod cartelle;
 mod editor;
+mod embeddings;
 mod errore;
 mod import_export;
 mod libreria;
@@ -266,6 +267,7 @@ pub fn run() {
             import_export::vault_export_json,
             import_export::vault_import_json,
             statistiche::statistiche_query,
+            embeddings::embeddings_status,
             cartelle::folder_lista,
             cartelle::folder_crea,
             cartelle::folder_rinomina,

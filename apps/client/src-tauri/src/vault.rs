@@ -65,6 +65,13 @@ impl VaultState {
         self.data_dir.join("pap-vault.db")
     }
 
+    /// Path della directory dati dell'app (es. `%APPDATA%\com.pap.app` su
+    /// Windows, `~/.local/share/com.pap.app` su Linux). Usato da altri moduli
+    /// (es. `embeddings`) per cache di file ausiliari.
+    pub fn data_dir(&self) -> &PathBuf {
+        &self.data_dir
+    }
+
     /// True se il file vault-meta.json esiste (vault è stato creato).
     pub fn esiste(&self) -> bool {
         self.meta_path().exists()

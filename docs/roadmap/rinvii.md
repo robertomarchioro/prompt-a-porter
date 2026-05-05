@@ -65,7 +65,7 @@ Item che vivono nel branch della release v0.2 ma aspettano qualcosa di non-tecni
 
 | Item | Stato | Azione |
 |---|---|---|
-| **`ort` 2.x compile fix su Rust stable** | 🔧 | rc.9/.10/.12 tutti rotti (mismatch ort/ort-sys). Verificare crates.io all'inizio di Fase 3 Step 1, scegliere prima rc che compila pulito. |
+| ~~**`ort` 2.x compile fix su Rust stable**~~ | ✅ risolto 2026-05-05 | rc.12 compila pulito con `default-features=false` + feature `api-23` (evita VitisAI introdotto in ORT 1.24). Configurazione documentata nell'ADR `architettura/decisioni/onnx-bundle.md`. |
 | Fallback `candle-core` se `ort` resta instabile a lungo | 🔧 | Piano B documentato in `docs/architettura/decisioni/onnx-bundle.md`. ~2-5 MB bundle invece di 14-22 MB, performance leggermente inferiore. |
 
 ---

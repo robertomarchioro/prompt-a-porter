@@ -17,6 +17,14 @@ Crate isolato `spikes/onnx-bundle/` con un binario `baseline` (hello world senza
 
 Il delta with-ort era previsto via secondo binario, ma `ort` 2.x rc.9, rc.10 e rc.12 hanno bug compile su Rust stable (mismatch tra `ort` e `ort-sys`: rc.9 chiama `.expect()` su fn pointer non-Option, rc.12 referenzia `SessionOptionsAppendExecutionProvider_VitisAI` non esposto da ort-sys). Il blocker non è bloccante per la decisione strategica, perché il **size impact** è ricavabile direttamente dalle release ufficiali ONNX Runtime, che è 99% del peso.
 
+> **Update 2026-05-05 — blocker risolto**: `ort` 2.0.0-rc.12 compila pulito su Rust 1.95 con questa configurazione:
+>
+> ```toml
+> ort = { version = "2.0.0-rc.12", default-features = false, features = ["load-dynamic", "api-23"] }
+> ```
+>
+> La feature `api-23` (invece della default `api-24`) evita il modulo VitisAI introdotto in ONNX Runtime 1.24 che genera il bug compile. Verificato in branch `feat/fase-3`. Step 1 di Fase 3 sbloccato.
+
 ## Misurazioni
 
 ### Baseline empirico (Linux x86_64)
