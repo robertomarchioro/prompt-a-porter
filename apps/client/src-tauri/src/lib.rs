@@ -268,6 +268,7 @@ pub fn run() {
             import_export::vault_import_json,
             statistiche::statistiche_query,
             embeddings::embeddings_status,
+            embeddings::embeddings_download,
             cartelle::folder_lista,
             cartelle::folder_crea,
             cartelle::folder_rinomina,

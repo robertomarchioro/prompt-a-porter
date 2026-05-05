@@ -27,10 +27,13 @@ rand = "0.8"
 # Configurazione: default-features=false + load-dynamic (carica libonnxruntime
 # da disco a runtime, lazy) + api-23 (evita VitisAI introdotto in ORT 1.24,
 # vedi ADR architettura/decisioni/onnx-bundle.md). ndarray richiesto per
-# costruire i tensor di input. download-binaries / tokenizer / HTTP client
-# verranno aggiunti nelle PR successive di Step 1 (download modello + compute).
+# costruire i tensor di input. tokenizer verrà aggiunto nella PR 3/3
+# di Step 1 (compute reale).
 ort = { version = "2.0.0-rc.12", default-features = false, features = ["load-dynamic", "api-23", "ndarray"] }
 ndarray = "0.16"
+# HTTP client per scaricare il modello ONNX da HuggingFace al primo uso.
+# Feature tls-rustls (no openssl, build più portabile in CI).
+ureq = { version = "2.10", default-features = false, features = ["tls"] }
 
 [dev-dependencies]
 tempfile = "3"
