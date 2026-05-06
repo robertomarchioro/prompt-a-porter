@@ -62,6 +62,30 @@
   let tuttiITag = $state<string[]>([]);
   let timerAutosave: ReturnType<typeof setTimeout>;
 
+  // ─── Tag suggeriti semantici (Fase 3 Step 4) ───
+  interface TagSuggerito {
+    id: string;
+    nome: string;
+    colore: string;
+    score: number;
+    sorgente: "vector" | "frequenza";
+  }
+  let tagSuggeriti = $state<TagSuggerito[]>([]);
+  let timerTagSuggest: ReturnType<typeof setTimeout>;
+
+  // ─── Lint diagnosi (Fase 3 Step 5) ───
+  type Severita = "error" | "warning" | "info";
+  interface LintIssue {
+    code: string;
+    severita: Severita;
+    messaggio: string;
+    linea: number | null;
+    colonna: number | null;
+  }
+  let lintIssues = $state<LintIssue[]>([]);
+  let timerLint: ReturnType<typeof setTimeout>;
+  let mostraDiagnosi = $state(false);
+
   const segnaposti = $derived(estraiSegnaposti(body));
 
   const suggerimentiTag = $derived(
@@ -86,6 +110,46 @@
     invoke<CartellaSel[]>("folder_lista")
       .then((cs) => (cartelleDisponibili = cs))
       .catch(() => {});
+  });
+
+  // Tag suggest debounced quando il body cambia. Riceve fallback
+  // (sorgente "frequenza") quando la Session embedding non è loaded.
+  $effect(() => {
+    const corrente = body;
+    clearTimeout(timerTagSuggest);
+    if (!corrente.trim() || corrente.trim().length < 30) {
+      tagSuggeriti = [];
+      return;
+    }
+    timerTagSuggest = setTimeout(() => {
+      invoke<TagSuggerito[]>("tags_suggest", { testo: corrente, limit: 5 })
+        .then((s) => {
+          // Filtro: non suggerire tag già presenti.
+          tagSuggeriti = s.filter((t) => !tagNomi.includes(t.nome));
+        })
+        .catch(() => {
+          tagSuggeriti = [];
+        });
+    }, 700);
+  });
+
+  // Lint debounced quando il body cambia. Comando puro (no DB lookup).
+  $effect(() => {
+    const corrente = body;
+    clearTimeout(timerLint);
+    if (!corrente.trim()) {
+      lintIssues = [];
+      return;
+    }
+    timerLint = setTimeout(() => {
+      invoke<LintIssue[]>("prompt_lint", { body: corrente })
+        .then((issues) => {
+          lintIssues = issues;
+        })
+        .catch(() => {
+          lintIssues = [];
+        });
+    }, 600);
   });
 
   $effect(() => {
@@ -300,6 +364,55 @@
         <div class="campo campo-grow">
           <label>Corpo del prompt</label>
           <div class="editor-wrap" bind:this={editorEl}></div>
+          {#if lintIssues.length > 0}
+            {@const errori = lintIssues.filter((i) => i.severita === "error").length}
+            {@const avvisi = lintIssues.filter((i) => i.severita === "warning").length}
+            {@const info = lintIssues.filter((i) => i.severita === "info").length}
+            <div class="diagnosi">
+              <button
+                class="diagnosi-toggle"
+                onclick={() => (mostraDiagnosi = !mostraDiagnosi)}
+                type="button"
+              >
+                <span class="diagnosi-titolo">Diagnosi</span>
+                {#if errori > 0}
+                  <span class="diagnosi-pill diagnosi-pill--err"
+                    >{errori} errori</span
+                  >
+                {/if}
+                {#if avvisi > 0}
+                  <span class="diagnosi-pill diagnosi-pill--warn"
+                    >{avvisi} avvisi</span
+                  >
+                {/if}
+                {#if info > 0}
+                  <span class="diagnosi-pill diagnosi-pill--info"
+                    >{info} info</span
+                  >
+                {/if}
+                <span class="diagnosi-chevron">
+                  {mostraDiagnosi ? "▾" : "▸"}
+                </span>
+              </button>
+              {#if mostraDiagnosi}
+                <ul class="diagnosi-lista">
+                  {#each lintIssues as issue (issue.code + (issue.linea ?? 0) + (issue.colonna ?? 0) + issue.messaggio.slice(0, 32))}
+                    <li
+                      class="diagnosi-item diagnosi-item--{issue.severita}"
+                    >
+                      <span class="diagnosi-code">{issue.code}</span>
+                      <span class="diagnosi-msg">{issue.messaggio}</span>
+                      {#if issue.linea !== null}
+                        <span class="diagnosi-pos"
+                          >L{issue.linea}{#if issue.colonna !== null}:{issue.colonna}{/if}</span
+                        >
+                      {/if}
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
+          {/if}
         </div>
       </div>
 
@@ -351,6 +464,35 @@
               </div>
             {/if}
           </div>
+
+          {#if tagSuggeriti.length > 0}
+            <div class="tag-auto-section">
+              <span class="tag-auto-label">
+                Suggeriti
+                {#if tagSuggeriti[0].sorgente === "vector"}
+                  <span class="tag-auto-fonte" title="Da ricerca semantica"
+                    >semantica</span
+                  >
+                {:else}
+                  <span class="tag-auto-fonte" title="Da tag più frequenti"
+                    >frequenza</span
+                  >
+                {/if}
+              </span>
+              <div class="tag-auto-pills">
+                {#each tagSuggeriti as t (t.id)}
+                  <button
+                    class="tag-auto-pill"
+                    onclick={() => aggiungiTag(t.nome)}
+                    title="Score: {t.score.toFixed(2)}"
+                    type="button"
+                  >
+                    + {t.nome}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
         </div>
 
         <div class="meta-sezione">
@@ -767,5 +909,161 @@
     font-size: var(--fs-xs);
     color: var(--text-subtle);
     margin-right: auto;
+  }
+
+  /* ── Tag suggeriti (Fase 3 Step 4) ── */
+
+  .tag-auto-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: var(--sp-3);
+    padding-top: var(--sp-3);
+    border-top: 1px dashed var(--border-subtle);
+  }
+
+  .tag-auto-label {
+    font-size: var(--fs-xs);
+    color: var(--text-subtle);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .tag-auto-fonte {
+    font-family: var(--font-mono);
+    text-transform: lowercase;
+    letter-spacing: 0;
+    background: var(--bg-input);
+    border-radius: 999px;
+    padding: 1px 6px;
+    color: var(--text-muted);
+  }
+
+  .tag-auto-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .tag-auto-pill {
+    background: var(--bg-input);
+    border: 1px dashed var(--border-default);
+    color: var(--text-default);
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: var(--fs-xs);
+    cursor: pointer;
+    transition:
+      background var(--motion-fast),
+      color var(--motion-fast),
+      border-color var(--motion-fast);
+  }
+  .tag-auto-pill:hover {
+    background: var(--accent-team-soft, rgba(80, 120, 200, 0.15));
+    border-color: var(--accent-team);
+    color: var(--accent-team);
+  }
+
+  /* ── Diagnosi lint (Fase 3 Step 5) ── */
+
+  .diagnosi {
+    margin-top: var(--sp-2);
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+  }
+
+  .diagnosi-toggle {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    color: var(--text-strong);
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+  }
+
+  .diagnosi-titolo {
+    font-weight: var(--fw-semibold);
+  }
+
+  .diagnosi-chevron {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  .diagnosi-pill {
+    font-size: var(--fs-xs);
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-family: var(--font-mono);
+  }
+  .diagnosi-pill--err {
+    background: rgba(220, 80, 80, 0.18);
+    color: #c83;
+  }
+  .diagnosi-pill--warn {
+    background: rgba(220, 160, 60, 0.18);
+    color: #c83;
+  }
+  .diagnosi-pill--info {
+    background: var(--bg-canvas);
+    color: var(--text-muted);
+  }
+
+  .diagnosi-lista {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 8px 0;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .diagnosi-item {
+    display: grid;
+    grid-template-columns: 70px 1fr auto;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: var(--fs-sm);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .diagnosi-item:last-child {
+    border-bottom: 0;
+  }
+  .diagnosi-item--error {
+    background: rgba(220, 80, 80, 0.05);
+  }
+  .diagnosi-item--warning {
+    background: rgba(220, 160, 60, 0.05);
+  }
+  .diagnosi-item--info {
+    background: transparent;
+  }
+
+  .diagnosi-code {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+
+  .diagnosi-msg {
+    color: var(--text-default);
+  }
+
+  .diagnosi-pos {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-subtle);
   }
 </style>
