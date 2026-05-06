@@ -21,6 +21,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
 rusqlite = { version = "0.32", features = ["bundled-sqlcipher-vendored-openssl"] }
+# sqlite-vec: estensione vector store per SQLite (vec0 virtual table).
+# Compatibilità con SQLCipher verificata nello Spike 1 (vedi
+# `docs/architettura/decisioni/sqlite-vec-sqlcipher.md`): registrata come
+# auto-extension statica via sqlite3_auto_extension prima di Connection::open.
+sqlite-vec = "0.1"
 argon2 = "0.5"
 rand = "0.8"
 # ONNX Runtime per embeddings locali (Fase 3 Step 1).

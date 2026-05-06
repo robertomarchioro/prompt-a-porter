@@ -497,6 +497,10 @@ mod test {
     use super::*;
 
     fn vault_temp() -> (tempfile::TempDir, VaultState) {
+        // Necessario perché i test runnano le migrazioni che includono V005
+        // (vec0 virtual table) — sqlite-vec deve essere registrata come
+        // auto-extension PRIMA di Connection::open. Idempotente via Once.
+        crate::embeddings_store::registra_auto_extension();
         let dir = tempfile::tempdir().unwrap();
         let state = VaultState::new(dir.path().to_path_buf());
         (dir, state)

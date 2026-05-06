@@ -2,6 +2,7 @@ mod audit;
 mod cartelle;
 mod editor;
 mod embeddings;
+mod embeddings_store;
 mod errore;
 mod import_export;
 mod libreria;
@@ -152,6 +153,11 @@ fn registra_hotkey(combo: String, app: tauri::AppHandle) -> Result<(), String> {
 }
 
 pub fn run() {
+    // Registra sqlite-vec come auto-extension PRIMA che venga aperta qualunque
+    // connessione SQLite (vault SQLCipher incluso). Idempotente via std::sync::Once.
+    // Vedi docs/architettura/decisioni/sqlite-vec-sqlcipher.md.
+    embeddings_store::registra_auto_extension();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
