@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { Button, Toast } from "$lib/components";
+  import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+  import { Button, Switch, Toast } from "$lib/components";
   import HotkeyInput from "$lib/components/HotkeyInput.svelte";
   import {
     syncGetState,
@@ -23,6 +24,8 @@
     sync_token: string;
     sync_intervallo_sec: number;
     sync_abilitato: boolean;
+    ricerca_semantica_abilitata: boolean;
+    ricerca_alpha: number;
   }
 
   interface VoceAudit {
@@ -47,6 +50,7 @@
     | "hotkey"
     | "aspetto"
     | "vault"
+    | "ricerca"
     | "audit"
     | "lingua"
     | "info";
@@ -57,6 +61,7 @@
     { id: "hotkey", etichetta: "Scorciatoie", icona: "⌨" },
     { id: "aspetto", etichetta: "Aspetto", icona: "🎨" },
     { id: "vault", etichetta: "Vault", icona: "🔒" },
+    { id: "ricerca", etichetta: "Ricerca semantica", icona: "🔎" },
     { id: "audit", etichetta: "Registro attività", icona: "📋" },
     { id: "lingua", etichetta: "Lingua", icona: "🌐" },
     { id: "info", etichetta: "Informazioni", icona: "ℹ" },
@@ -76,6 +81,8 @@
     sync_token: "",
     sync_intervallo_sec: 60,
     sync_abilitato: false,
+    ricerca_semantica_abilitata: false,
+    ricerca_alpha: 0.5,
   });
 
   let vaultPercorso = $state("");
@@ -110,6 +117,36 @@
   let auditMostraConfermaCleanup = $state(false);
   let auditEsportazioneInCorso = $state(false);
 
+  // ─── Ricerca semantica (Fase 3) ───
+  type StatoEmbeddings =
+    | { stato: "non_scaricato"; model_id: string; path_atteso: string }
+    | { stato: "pronto"; model_id: string; path: string; size_mb: number }
+    | { stato: "caricato"; model_id: string; dimensione: number };
+
+  let embStatus = $state<StatoEmbeddings | null>(null);
+  let embErrore = $state("");
+  let embOperazione = $state<"" | "download" | "init" | "backfill">("");
+  let embProgressDownload = $state<{
+    file: string;
+    bytes: number;
+    total: number | null;
+    indice_file: number;
+    totale_file: number;
+  } | null>(null);
+  let embProgressBackfill = $state<{
+    tipo: string;
+    processati: number;
+    totale_stima: number;
+    ultimo_id: string;
+  } | null>(null);
+  let embEsitoBackfill = $state<{
+    prompt_processati: number;
+    tag_processati: number;
+    errori: number;
+  } | null>(null);
+  let embUnlistenDownload: UnlistenFn | null = null;
+  let embUnlistenBackfill: UnlistenFn | null = null;
+
   // Import/export vault (Fase 2 Step 4)
   let importModalita = $state<"skip" | "overwrite" | "rename">("skip");
   let importInCorso = $state(false);
@@ -128,6 +165,40 @@
     if (sezione === "audit") {
       caricaAudit();
     }
+  });
+
+  $effect(() => {
+    if (sezione === "ricerca" && embStatus === null) {
+      void caricaStatoEmbeddings();
+    }
+  });
+
+  $effect(() => {
+    // Setup listener per progress events una sola volta.
+    let attivo = true;
+    (async () => {
+      const u1 = await listen<typeof embProgressDownload>(
+        "embeddings:download:progress",
+        (e) => {
+          if (!attivo) return;
+          embProgressDownload = e.payload;
+        },
+      );
+      const u2 = await listen<typeof embProgressBackfill>(
+        "embeddings:backfill:progress",
+        (e) => {
+          if (!attivo) return;
+          embProgressBackfill = e.payload;
+        },
+      );
+      embUnlistenDownload = u1;
+      embUnlistenBackfill = u2;
+    })();
+    return () => {
+      attivo = false;
+      embUnlistenDownload?.();
+      embUnlistenBackfill?.();
+    };
   });
 
   async function caricaDati() {
@@ -154,6 +225,77 @@
     } catch {
       /* errore salvataggio */
     }
+  }
+
+  // ─── Ricerca semantica (Fase 3) ───
+  async function caricaStatoEmbeddings() {
+    embErrore = "";
+    try {
+      embStatus = await invoke<StatoEmbeddings>("embeddings_status");
+    } catch (e) {
+      embErrore = String(e);
+    }
+  }
+
+  async function scaricaModello() {
+    embErrore = "";
+    embOperazione = "download";
+    embProgressDownload = null;
+    try {
+      embStatus = await invoke<StatoEmbeddings>("embeddings_download");
+    } catch (e) {
+      embErrore = `Download fallito: ${e}`;
+    } finally {
+      embOperazione = "";
+    }
+  }
+
+  async function inizializzaSession() {
+    embErrore = "";
+    embOperazione = "init";
+    try {
+      embStatus = await invoke<StatoEmbeddings>("embeddings_init");
+    } catch (e) {
+      embErrore = `Init fallito: ${e}`;
+    } finally {
+      embOperazione = "";
+    }
+  }
+
+  async function eseguiBackfill() {
+    embErrore = "";
+    embOperazione = "backfill";
+    embProgressBackfill = null;
+    embEsitoBackfill = null;
+    try {
+      embEsitoBackfill = await invoke<{
+        prompt_processati: number;
+        tag_processati: number;
+        saltati_no_session: number;
+        errori: number;
+      }>("embeddings_backfill");
+    } catch (e) {
+      embErrore = `Backfill fallito: ${e}`;
+    } finally {
+      embOperazione = "";
+    }
+  }
+
+  function alphaPreset(p: "lessicale" | "bilanciato" | "semantico") {
+    const v = p === "lessicale" ? 0.0 : p === "bilanciato" ? 0.5 : 1.0;
+    prefs.ricerca_alpha = v;
+    void salvaPreferenze();
+  }
+
+  function aggiornaAlpha(e: Event) {
+    const target = e.target as HTMLInputElement;
+    prefs.ricerca_alpha = parseFloat(target.value);
+    void salvaPreferenze();
+  }
+
+  async function toggleRicercaSemantica() {
+    prefs.ricerca_semantica_abilitata = !prefs.ricerca_semantica_abilitata;
+    await salvaPreferenze();
   }
 
   function cambiaTema(tema: string) {
@@ -797,6 +939,202 @@
                   </div>
                 </div>
               {/if}
+            </div>
+          </div>
+        {:else if sezione === "ricerca"}
+          <div class="sez">
+            <h3 class="sez-titolo">Ricerca semantica</h3>
+            <p class="sez-desc">
+              Trova prompt per significato (non solo per parole esatte) usando
+              embedding locali. Tutto offline, niente cloud, modello scaricato
+              al primo uso (~150 MB).
+            </p>
+
+            {#if embErrore}
+              <div class="ric-errore">{embErrore}</div>
+            {/if}
+
+            <div class="ric-card">
+              <div class="ric-card-head">
+                <span class="ric-card-titolo">Modello embedding</span>
+                {#if embStatus?.stato === "non_scaricato"}
+                  <span class="ric-badge ric-badge--off">Non scaricato</span>
+                {:else if embStatus?.stato === "pronto"}
+                  <span class="ric-badge ric-badge--ok">Pronto su disco</span>
+                {:else if embStatus?.stato === "caricato"}
+                  <span class="ric-badge ric-badge--attivo">Caricato in memoria</span>
+                {:else}
+                  <span class="ric-badge">Sconosciuto</span>
+                {/if}
+              </div>
+              <div class="ric-card-body">
+                {#if embStatus?.stato === "non_scaricato"}
+                  <p class="ric-info">
+                    Il modello (~150 MB tra ONNX + tokenizer + libonnxruntime)
+                    verrà scaricato al primo uso da HuggingFace e Microsoft.
+                  </p>
+                  <Button
+                    variante="primary"
+                    onclick={scaricaModello}
+                    disabled={embOperazione !== ""}
+                  >
+                    {embOperazione === "download"
+                      ? "Scarico…"
+                      : "Scarica modello"}
+                  </Button>
+                {:else if embStatus?.stato === "pronto"}
+                  <p class="ric-info">
+                    Modello scaricato ({embStatus.size_mb} MB su disco). Per
+                    usarlo serve caricarlo in memoria — operazione una sola
+                    volta a sessione, poi resta disponibile.
+                  </p>
+                  <Button
+                    variante="primary"
+                    onclick={inizializzaSession}
+                    disabled={embOperazione !== ""}
+                  >
+                    {embOperazione === "init"
+                      ? "Inizializzazione…"
+                      : "Inizializza"}
+                  </Button>
+                {:else if embStatus?.stato === "caricato"}
+                  <p class="ric-info">
+                    Pronto per la ricerca semantica. Output {embStatus.dimensione}
+                    dimensioni per prompt.
+                  </p>
+                {/if}
+
+                {#if embProgressDownload && embOperazione === "download"}
+                  <div class="ric-progress">
+                    <div class="ric-progress-label">
+                      File {embProgressDownload.indice_file}/{embProgressDownload.totale_file}:
+                      <code>{embProgressDownload.file}</code>
+                    </div>
+                    <div class="ric-progress-bar">
+                      {#if embProgressDownload.total}
+                        <div
+                          class="ric-progress-fill"
+                          style:width="{(embProgressDownload.bytes / embProgressDownload.total) * 100}%"
+                        ></div>
+                      {:else}
+                        <div class="ric-progress-fill ric-progress-fill--ind"></div>
+                      {/if}
+                    </div>
+                    <div class="ric-progress-text">
+                      {(embProgressDownload.bytes / 1024 / 1024).toFixed(1)} MB
+                      {#if embProgressDownload.total}
+                        / {(embProgressDownload.total / 1024 / 1024).toFixed(1)}
+                        MB
+                      {/if}
+                    </div>
+                  </div>
+                {/if}
+              </div>
+            </div>
+
+            {#if embStatus?.stato === "caricato"}
+              <div class="ric-card">
+                <div class="ric-card-head">
+                  <span class="ric-card-titolo">Backfill embedding esistenti</span>
+                </div>
+                <div class="ric-card-body">
+                  <p class="ric-info">
+                    Calcola embedding per i prompt e tag già presenti nel vault.
+                    Idempotente: salta quelli già processati.
+                  </p>
+                  <Button
+                    variante="ghost"
+                    onclick={eseguiBackfill}
+                    disabled={embOperazione !== ""}
+                  >
+                    {embOperazione === "backfill"
+                      ? "Elaborazione…"
+                      : "Avvia backfill"}
+                  </Button>
+                  {#if embProgressBackfill && embOperazione === "backfill"}
+                    <div class="ric-progress">
+                      <div class="ric-progress-label">
+                        {embProgressBackfill.tipo}: {embProgressBackfill.processati}
+                        / {embProgressBackfill.totale_stima}
+                      </div>
+                      <div class="ric-progress-bar">
+                        <div
+                          class="ric-progress-fill"
+                          style:width="{embProgressBackfill.totale_stima > 0
+                            ? (embProgressBackfill.processati /
+                                embProgressBackfill.totale_stima) *
+                              100
+                            : 0}%"
+                        ></div>
+                      </div>
+                    </div>
+                  {/if}
+                  {#if embEsitoBackfill}
+                    <div class="ric-esito">
+                      ✓ {embEsitoBackfill.prompt_processati} prompt + {embEsitoBackfill.tag_processati}
+                      tag elaborati
+                      {#if embEsitoBackfill.errori > 0}
+                        ({embEsitoBackfill.errori} errori)
+                      {/if}
+                    </div>
+                  {/if}
+                </div>
+              </div>
+            {/if}
+
+            <div class="ric-card">
+              <div class="ric-card-head">
+                <span class="ric-card-titolo">Bilanciamento ricerca</span>
+              </div>
+              <div class="ric-card-body">
+                <p class="ric-info">
+                  Quando la ricerca semantica è attiva, combina match
+                  lessicale (parole esatte) e match semantico (significato)
+                  via Reciprocal Rank Fusion. Sposta il cursore per privilegiare
+                  uno dei due.
+                </p>
+                <div class="ric-alpha">
+                  <div class="ric-alpha-preset">
+                    <button
+                      class="seg-btn"
+                      class:seg-btn--attivo={prefs.ricerca_alpha === 0}
+                      onclick={() => alphaPreset("lessicale")}
+                      type="button">Lessicale</button
+                    >
+                    <button
+                      class="seg-btn"
+                      class:seg-btn--attivo={prefs.ricerca_alpha === 0.5}
+                      onclick={() => alphaPreset("bilanciato")}
+                      type="button">Bilanciato</button
+                    >
+                    <button
+                      class="seg-btn"
+                      class:seg-btn--attivo={prefs.ricerca_alpha === 1}
+                      onclick={() => alphaPreset("semantico")}
+                      type="button">Semantico</button
+                    >
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={prefs.ricerca_alpha}
+                    oninput={aggiornaAlpha}
+                    class="ric-alpha-slider"
+                  />
+                  <div class="ric-alpha-valore">
+                    α = {prefs.ricerca_alpha.toFixed(2)}
+                  </div>
+                </div>
+                <div class="ric-toggle">
+                  <Switch
+                    attivo={prefs.ricerca_semantica_abilitata}
+                    onchange={toggleRicercaSemantica}
+                  />
+                  <span>Usa ricerca semantica nelle query</span>
+                </div>
+              </div>
             </div>
           </div>
         {:else if sezione === "audit"}
@@ -1689,5 +2027,154 @@
     color: var(--text-subtle);
     margin: 0;
     font-style: italic;
+  }
+
+  /* ── Ricerca semantica (Fase 3) ── */
+  .ric-errore {
+    background: var(--accent-danger-soft, rgba(220, 80, 80, 0.15));
+    color: var(--accent-danger, #c83);
+    border: 1px solid var(--accent-danger, #c83);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    margin-bottom: var(--sp-3);
+    font-size: var(--fs-sm);
+  }
+
+  .ric-card {
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: var(--sp-4);
+    margin-bottom: var(--sp-3);
+  }
+
+  .ric-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--sp-3);
+  }
+
+  .ric-card-titolo {
+    font-weight: var(--fw-semibold);
+    color: var(--text-strong);
+  }
+
+  .ric-badge {
+    font-size: var(--fs-xs);
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--bg-canvas);
+    border: 1px solid var(--border-default);
+    color: var(--text-muted);
+  }
+  .ric-badge--off {
+    color: var(--text-subtle);
+  }
+  .ric-badge--ok {
+    background: var(--accent-team-soft, rgba(80, 120, 200, 0.15));
+    border-color: var(--accent-team);
+    color: var(--accent-team);
+  }
+  .ric-badge--attivo {
+    background: var(--accent-success-soft, rgba(80, 180, 120, 0.18));
+    border-color: var(--accent-success, #5b8);
+    color: var(--accent-success, #5b8);
+  }
+
+  .ric-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+
+  .ric-info {
+    margin: 0;
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .ric-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .ric-progress-label {
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+  .ric-progress-label code {
+    font-family: var(--font-mono);
+    color: var(--text-strong);
+  }
+  .ric-progress-bar {
+    height: 8px;
+    background: var(--bg-canvas);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .ric-progress-fill {
+    height: 100%;
+    background: var(--accent-team);
+    border-radius: 4px;
+    transition: width 200ms ease;
+  }
+  .ric-progress-fill--ind {
+    width: 30% !important;
+    animation: ric-indeterminate 1.5s ease-in-out infinite;
+  }
+  @keyframes ric-indeterminate {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(400%);
+    }
+  }
+  .ric-progress-text {
+    font-size: var(--fs-xs);
+    color: var(--text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ric-esito {
+    font-size: var(--fs-sm);
+    color: var(--accent-success, #5b8);
+    font-weight: var(--fw-semibold);
+  }
+
+  .ric-alpha {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+
+  .ric-alpha-preset {
+    display: inline-flex;
+    background: var(--bg-canvas);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    width: fit-content;
+  }
+
+  .ric-alpha-slider {
+    width: 100%;
+    accent-color: var(--accent-team);
+  }
+
+  .ric-alpha-valore {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ric-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding-top: var(--sp-2);
+    border-top: 1px solid var(--border-subtle);
   }
 </style>

@@ -25,10 +25,22 @@ pub struct Preferenze {
     pub sync_intervallo_sec: u32,
     #[serde(default)]
     pub sync_abilitato: bool,
+    /// Ricerca semantica abilitata (Fase 3): triggera download modello +
+    /// init Session al boot del client se true.
+    #[serde(default)]
+    pub ricerca_semantica_abilitata: bool,
+    /// Peso semantico nella ricerca ibrida (alpha ∈ [0,1]).
+    /// 0 = solo FTS5 lessicale, 1 = solo vec0 semantico, 0.5 = bilanciato.
+    #[serde(default = "default_ricerca_alpha")]
+    pub ricerca_alpha: f64,
 }
 
 fn default_sync_intervallo() -> u32 {
     60
+}
+
+fn default_ricerca_alpha() -> f64 {
+    0.5
 }
 
 impl Default for Preferenze {
@@ -46,6 +58,8 @@ impl Default for Preferenze {
             sync_token: String::new(),
             sync_intervallo_sec: 60,
             sync_abilitato: false,
+            ricerca_semantica_abilitata: false,
+            ricerca_alpha: 0.5,
         }
     }
 }
@@ -116,6 +130,8 @@ mod test {
             sync_token: String::new(),
             sync_intervallo_sec: 120,
             sync_abilitato: true,
+            ricerca_semantica_abilitata: true,
+            ricerca_alpha: 0.7,
         };
 
         let json = serde_json::to_string_pretty(&prefs).unwrap();
