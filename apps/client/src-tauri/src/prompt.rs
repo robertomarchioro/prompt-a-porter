@@ -127,6 +127,7 @@ mod test {
 
     #[test]
     fn cerca_su_db_vuoto() {
+        crate::embeddings_store::registra_auto_extension();
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         crate::migrazione::esegui_migrazioni(&conn).unwrap();
         crate::libreria::assicura_dati_base(&conn).unwrap();
@@ -148,6 +149,7 @@ mod test {
 
     #[test]
     fn cerca_fts_trova_prompt() {
+        crate::embeddings_store::registra_auto_extension();
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         crate::migrazione::esegui_migrazioni(&conn).unwrap();
         crate::libreria::assicura_dati_base(&conn).unwrap();

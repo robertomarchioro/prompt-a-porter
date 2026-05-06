@@ -209,6 +209,7 @@ mod test {
     use super::*;
 
     fn db_test() -> Connection {
+        crate::embeddings_store::registra_auto_extension();
         let conn = Connection::open_in_memory().unwrap();
         crate::migrazione::esegui_migrazioni(&conn).unwrap();
         crate::libreria::assicura_dati_base(&conn).unwrap();
