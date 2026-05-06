@@ -14,11 +14,35 @@
     uso_count: number;
   }
 
+  /// Risultato di prompt_cerca_ibrida: include score + rank lex/sem.
+  /// Dal punto di vista UI lo trattiamo come PromptRisultato + flag
+  /// "match semantico" per il badge.
+  interface RisultatoIbrido extends PromptRisultato {
+    score: number;
+    rank_lex: number | null;
+    rank_sem: number | null;
+  }
+
+  interface Preferenze {
+    ricerca_semantica_abilitata: boolean;
+    ricerca_alpha: number;
+  }
+
   const finestra = getCurrentWindow();
 
   let query = $state("");
   let risultati = $state<PromptRisultato[]>([]);
   let indiceSelezionato = $state(0);
+  /// Stato preferenze (caricato lazy a window.show), governa quale
+  /// command Tauri viene chiamato per la ricerca.
+  let prefRicercaSemantica = $state(false);
+  let prefAlpha = $state(0.5);
+  /// True se l'ultima query ha usato il comando ibrido (per badge UI).
+  let usaIbrida = $state(false);
+  /// True se almeno un risultato ha rank_sem !== null (qualcuno ha
+  /// contributo semantico). Usato per disambiguare badge "ibrida con
+  /// match sem" vs "ibrida ma solo lex".
+  let qualcheMatchSem = $state(false);
   let modalita = $state<"ricerca" | "compila">("ricerca");
   let promptSelezionato = $state<PromptRisultato | null>(null);
   let valoriSegnaposti = $state<Record<string, string>>({});
@@ -39,6 +63,23 @@
   let timeoutRicerca: ReturnType<typeof setTimeout>;
 
   $effect(() => {
+    void caricaPreferenze();
+    // Ricarica preferenze ogni volta che la palette torna visibile —
+    // l'utente potrebbe aver cambiato il toggle in Impostazioni.
+    let unlisten: (() => void) | undefined;
+    finestra.onFocusChanged(({ payload: focused }) => {
+      if (focused) {
+        void caricaPreferenze();
+      }
+    }).then((u) => {
+      unlisten = u;
+    });
+    return () => {
+      unlisten?.();
+    };
+  });
+
+  $effect(() => {
     clearTimeout(timeoutRicerca);
     const q = query;
     timeoutRicerca = setTimeout(() => cerca(q), 150);
@@ -55,14 +96,39 @@
 
   async function cerca(q: string) {
     try {
-      risultati = await invoke<PromptRisultato[]>("prompt_cerca", {
-        query: q,
-      });
+      if (prefRicercaSemantica && q.trim().length > 0) {
+        const ibridi = await invoke<RisultatoIbrido[]>("prompt_cerca_ibrida", {
+          query: q,
+          limit: 20,
+          alpha: prefAlpha,
+        });
+        risultati = ibridi;
+        usaIbrida = true;
+        qualcheMatchSem = ibridi.some((r) => r.rank_sem !== null);
+      } else {
+        risultati = await invoke<PromptRisultato[]>("prompt_cerca", {
+          query: q,
+        });
+        usaIbrida = false;
+        qualcheMatchSem = false;
+      }
       indiceSelezionato = 0;
       vaultChiuso = false;
     } catch {
       risultati = [];
       vaultChiuso = true;
+      usaIbrida = false;
+      qualcheMatchSem = false;
+    }
+  }
+
+  async function caricaPreferenze() {
+    try {
+      const p = await invoke<Preferenze>("preferenze_carica");
+      prefRicercaSemantica = p.ricerca_semantica_abilitata;
+      prefAlpha = p.ricerca_alpha;
+    } catch {
+      /* default già settati */
     }
   }
 
@@ -160,6 +226,13 @@
         placeholder="Cerca prompt, tag o azione…"
         autofocus
       />
+      {#if usaIbrida && qualcheMatchSem}
+        <span
+          class="palette-badge-sem"
+          title="Ricerca ibrida lessicale + semantica attiva (α = {prefAlpha.toFixed(2)})"
+          >🔎 sem</span
+        >
+      {/if}
     </div>
 
     <div class="palette-corpo">
@@ -311,6 +384,19 @@
 
   .palette-input::placeholder {
     color: var(--text-subtle);
+  }
+
+  .palette-badge-sem {
+    margin-right: var(--sp-3);
+    font-size: var(--fs-xs);
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--accent-team-soft, rgba(80, 120, 200, 0.15));
+    border: 1px solid var(--accent-team);
+    color: var(--accent-team);
+    font-family: var(--font-mono);
+    white-space: nowrap;
+    cursor: help;
   }
 
   /* ── Corpo ── */
