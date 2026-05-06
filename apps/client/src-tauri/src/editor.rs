@@ -79,6 +79,7 @@ fn genera_id() -> String {
 
 fn sincronizza_tags(
     conn: &Connection,
+    rt_state: &EmbeddingsState,
     prompt_id: &str,
     tag_nomi: &[String],
 ) -> Result<(), PapErrore> {
@@ -104,6 +105,14 @@ fn sincronizza_tags(
                      VALUES (?1, 'ws-personale', ?2, datetime('now'), datetime('now'))",
                     rusqlite::params![id, nome],
                 )?;
+                // Hook embedding tag (Fase 3 Step 4): se Session loaded,
+                // calcola embedding del nome e upsert in TagsEmbeddings.
+                // No-op se non disponibile (backfill futuro popolerà).
+                if let Ok(Some(emb)) = compute_embedding_opt(rt_state, nome) {
+                    if let Err(e) = embeddings_store::upsert_tag_embedding(conn, &id, &emb) {
+                        log::warn!("upsert tag embedding fallito per {id}: {e}");
+                    }
+                }
                 id
             }
         };
@@ -159,7 +168,7 @@ pub fn prompt_crea(
                 folder,
             ],
         )?;
-        sincronizza_tags(conn, &id, &dati.tag_nomi)?;
+        sincronizza_tags(conn, &rt_state, &id, &dati.tag_nomi)?;
         // Snapshot v1 in PromptVersions (Fase 2 versioning).
         crate::versioning::snapshot_versione(conn, &id, "usr-locale")?;
         ricostruisci_fts(conn)?;
@@ -198,7 +207,7 @@ pub fn prompt_aggiorna(
                 dati.id
             ],
         )?;
-        sincronizza_tags(conn, &dati.id, &dati.tag_nomi)?;
+        sincronizza_tags(conn, &rt_state, &dati.id, &dati.tag_nomi)?;
         // Snapshot della nuova versione (Version e' gia' stata incrementata dall'UPDATE).
         crate::versioning::snapshot_versione(conn, &dati.id, "usr-locale")?;
         ricostruisci_fts(conn)?;
@@ -304,7 +313,7 @@ mod test {
         .unwrap();
 
         let tags = vec!["rust".to_string(), "test".to_string()];
-        sincronizza_tags(&conn, "prm-t1", &tags).unwrap();
+        sincronizza_tags(&conn, &EmbeddingsState::new(), "prm-t1", &tags).unwrap();
 
         let count: i64 = conn
             .query_row(
@@ -329,7 +338,7 @@ mod test {
         .unwrap();
 
         let tags = vec!["rust".to_string(), "".to_string(), "  ".to_string()];
-        sincronizza_tags(&conn, "prm-t2", &tags).unwrap();
+        sincronizza_tags(&conn, &EmbeddingsState::new(), "prm-t2", &tags).unwrap();
 
         let count: i64 = conn
             .query_row(
@@ -360,7 +369,7 @@ mod test {
         .unwrap();
 
         let tags = vec!["esistente".to_string()];
-        sincronizza_tags(&conn, "prm-t3", &tags).unwrap();
+        sincronizza_tags(&conn, &EmbeddingsState::new(), "prm-t3", &tags).unwrap();
 
         let tag_count: i64 =
             conn.query_row("SELECT COUNT(*) FROM Tags", [], |r| r.get(0)).unwrap();

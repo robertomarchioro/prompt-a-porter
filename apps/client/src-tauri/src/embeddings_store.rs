@@ -142,6 +142,105 @@ pub fn conta(conn: &Connection) -> Result<i64, PapErrore> {
     Ok(n)
 }
 
+// ─────────── Tag embeddings (Fase 3 Step 4) ───────────
+//
+// Pattern simmetrico a quello dei prompt: tabella vec0 separata
+// `TagsEmbeddings`. Usato dall'auto-suggerimento tag per trovare i tag
+// esistenti il cui nome è più vicino al body del prompt corrente.
+
+/// Inserisce o aggiorna l'embedding del nome di un tag.
+pub fn upsert_tag_embedding(
+    conn: &Connection,
+    tag_id: &str,
+    embedding: &[f32],
+) -> Result<(), PapErrore> {
+    if embedding.len() != EMBEDDING_DIM {
+        return Err(PapErrore::Generico(format!(
+            "tag embedding shape errata: attesa {EMBEDDING_DIM}, ricevuta {}",
+            embedding.len()
+        )));
+    }
+    let bytes = embedding_a_bytes(embedding);
+    // Stesso pattern DELETE+INSERT del prompt embedding: vec0 non
+    // supporta OR REPLACE (vedi commit history per il razionale).
+    conn.execute(
+        "DELETE FROM TagsEmbeddings WHERE TagId = ?1",
+        params![tag_id],
+    )?;
+    conn.execute(
+        "INSERT INTO TagsEmbeddings (TagId, Embedding) VALUES (?1, ?2)",
+        params![tag_id, bytes],
+    )?;
+    Ok(())
+}
+
+/// Rimuove l'embedding di un tag. No-op se assente.
+pub fn delete_tag_embedding(conn: &Connection, tag_id: &str) -> Result<(), PapErrore> {
+    conn.execute(
+        "DELETE FROM TagsEmbeddings WHERE TagId = ?1",
+        params![tag_id],
+    )?;
+    Ok(())
+}
+
+/// Cerca i tag più simili a un embedding query, top-K. Ritorna
+/// `Vec<(tag_id, distance)>` ordinato per distance ASC.
+pub fn search_nearest_tags(
+    conn: &Connection,
+    query_embedding: &[f32],
+    k: usize,
+) -> Result<Vec<(String, f64)>, PapErrore> {
+    if query_embedding.len() != EMBEDDING_DIM {
+        return Err(PapErrore::Generico(format!(
+            "query embedding shape errata: attesa {EMBEDDING_DIM}, ricevuta {}",
+            query_embedding.len()
+        )));
+    }
+    let bytes = embedding_a_bytes(query_embedding);
+    let mut stmt = conn.prepare(
+        "SELECT TagId, distance FROM TagsEmbeddings
+         WHERE Embedding MATCH ?1 AND k = ?2
+         ORDER BY distance",
+    )?;
+    let rows = stmt
+        .query_map(params![bytes, k as i64], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(rows)
+}
+
+/// Conta gli embeddings dei tag memorizzati.
+pub fn conta_tag(conn: &Connection) -> Result<i64, PapErrore> {
+    let n: i64 = conn.query_row("SELECT COUNT(*) FROM TagsEmbeddings", [], |r| r.get(0))?;
+    Ok(n)
+}
+
+/// Lista i tag che NON hanno ancora un embedding (candidati per backfill).
+pub fn tag_senza_embedding(
+    conn: &Connection,
+    limite: usize,
+) -> Result<Vec<(String, String)>, PapErrore> {
+    let mut stmt = conn.prepare(
+        "SELECT t.Id, t.Name FROM Tags t
+         WHERE t.DeletedAt IS NULL
+           AND NOT EXISTS (
+               SELECT 1 FROM TagsEmbeddings e WHERE e.TagId = t.Id
+           )
+         LIMIT ?1",
+    )?;
+    let rows = stmt
+        .query_map(params![limite as i64], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(rows)
+}
+
+// ─────────── Prompt embeddings backfill helper ───────────
+
 /// Lista i prompt che NON hanno ancora un embedding (candidati per il
 /// backfill iniziale al primo unlock con feature attivata).
 pub fn prompt_senza_embedding(
@@ -287,5 +386,75 @@ mod test {
         let v = vec![1.0f32, 2.0, 3.0, 4.0];
         let b = embedding_a_bytes(&v);
         assert_eq!(b.len(), 16, "4 float32 = 16 bytes");
+    }
+
+    // ─────────── Tag embeddings ───────────
+
+    fn inserisci_tag_minimo(conn: &Connection, id: &str, nome: &str) {
+        conn.execute(
+            "INSERT INTO Tags (Id, WorkspaceId, Name, CreatedAt, UpdatedAt)
+             VALUES (?1, 'ws-personale', ?2, datetime('now'), datetime('now'))",
+            params![id, nome],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn upsert_e_search_tag() {
+        let conn = db_test();
+        inserisci_tag_minimo(&conn, "tag-a", "marketing");
+        inserisci_tag_minimo(&conn, "tag-b", "tecnico");
+        inserisci_tag_minimo(&conn, "tag-c", "creativo");
+
+        upsert_tag_embedding(&conn, "tag-a", &embedding_dummy(0.1)).unwrap();
+        upsert_tag_embedding(&conn, "tag-b", &embedding_dummy(0.2)).unwrap();
+        upsert_tag_embedding(&conn, "tag-c", &embedding_dummy(0.9)).unwrap();
+
+        let risultati = search_nearest_tags(&conn, &embedding_dummy(0.11), 3).unwrap();
+        assert_eq!(risultati.len(), 3);
+        assert_eq!(risultati[0].0, "tag-a");
+        assert_eq!(risultati[1].0, "tag-b");
+    }
+
+    #[test]
+    fn upsert_tag_replace_su_id_esistente() {
+        let conn = db_test();
+        inserisci_tag_minimo(&conn, "tag-a", "x");
+        upsert_tag_embedding(&conn, "tag-a", &embedding_dummy(0.1)).unwrap();
+        upsert_tag_embedding(&conn, "tag-a", &embedding_dummy(0.5)).unwrap();
+        assert_eq!(conta_tag(&conn).unwrap(), 1);
+    }
+
+    #[test]
+    fn delete_tag_idempotente() {
+        let conn = db_test();
+        delete_tag_embedding(&conn, "non-esistente").unwrap();
+        inserisci_tag_minimo(&conn, "tag-a", "x");
+        upsert_tag_embedding(&conn, "tag-a", &embedding_dummy(0.1)).unwrap();
+        delete_tag_embedding(&conn, "tag-a").unwrap();
+        delete_tag_embedding(&conn, "tag-a").unwrap();
+        assert_eq!(conta_tag(&conn).unwrap(), 0);
+    }
+
+    #[test]
+    fn upsert_tag_rifiuta_shape_sbagliata() {
+        let conn = db_test();
+        inserisci_tag_minimo(&conn, "tag-a", "x");
+        let r = upsert_tag_embedding(&conn, "tag-a", &vec![0.0f32; 100]);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn tag_senza_embedding_lista_correttamente() {
+        let conn = db_test();
+        inserisci_tag_minimo(&conn, "tag-a", "alfa");
+        inserisci_tag_minimo(&conn, "tag-b", "beta");
+        upsert_tag_embedding(&conn, "tag-a", &embedding_dummy(0.1)).unwrap();
+        // tag-b senza embedding
+
+        let candidati = tag_senza_embedding(&conn, 100).unwrap();
+        assert_eq!(candidati.len(), 1);
+        assert_eq!(candidati[0].0, "tag-b");
+        assert_eq!(candidati[0].1, "beta");
     }
 }
