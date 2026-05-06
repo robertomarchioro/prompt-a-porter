@@ -31,6 +31,11 @@ static MIGRAZIONI: &[Migrazione] = &[
         nome: "cartelle",
         sql: include_str!("../migrations/V004__cartelle.sql"),
     },
+    Migrazione {
+        versione: 5,
+        nome: "embeddings",
+        sql: include_str!("../migrations/V005__embeddings.sql"),
+    },
 ];
 
 /// Crea la tabella di tracking se non esiste.
@@ -99,14 +104,18 @@ mod test {
 
     #[test]
     fn migrazioni_su_db_nuovo() {
+        // Necessario registrare l'auto-extension sqlite-vec PRIMA di aprire
+        // la connessione, perché V005 crea una vec0 virtual table.
+        crate::embeddings_store::registra_auto_extension();
         let conn = Connection::open_in_memory().unwrap();
         let n = esegui_migrazioni(&conn).unwrap();
-        assert!(n >= 4, "Tutte le migrazioni devono essere applicate (almeno 4)");
-        assert_eq!(versione_corrente(&conn).unwrap(), 4);
+        assert!(n >= 5, "Tutte le migrazioni devono essere applicate (almeno 5)");
+        assert_eq!(versione_corrente(&conn).unwrap(), 5);
     }
 
     #[test]
     fn migrazioni_idempotenti() {
+        crate::embeddings_store::registra_auto_extension();
         let conn = Connection::open_in_memory().unwrap();
         esegui_migrazioni(&conn).unwrap();
         let n = esegui_migrazioni(&conn).unwrap();
@@ -115,6 +124,7 @@ mod test {
 
     #[test]
     fn tabelle_create_correttamente() {
+        crate::embeddings_store::registra_auto_extension();
         let conn = Connection::open_in_memory().unwrap();
         esegui_migrazioni(&conn).unwrap();
 
