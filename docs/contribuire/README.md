@@ -8,6 +8,7 @@ Documentazione per **chi vuole contribuire codice** al progetto.
 |---|---|
 | [`setup-sviluppo.md`](./setup-sviluppo.md) | Prerequisiti, installazione toolchain (Rust, Node, pnpm, Go), comandi di build, struttura della monorepo |
 | [`setup-repo-github.md`](./setup-repo-github.md) | Branch strategy, naming convention dei branch, configurazione iniziale del repo GitHub |
+| [`ci-workflows.md`](./ci-workflows.md) | Mappa esaustiva path → workflow CI attivati, anti-pattern (PR doc-only, workflow non auto-listati), checklist operativa, comandi di debug |
 
 ## Per cominciare
 
