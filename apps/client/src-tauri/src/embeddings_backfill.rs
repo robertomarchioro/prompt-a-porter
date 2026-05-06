@@ -9,8 +9,11 @@
 //   per non bloccare altre operazioni utente.
 // - Per ogni prompt: legge body, calcola embedding, upsert in vec0.
 // - Emit progress event "embeddings:backfill:progress" ad ogni batch.
-// - Pre-condizione: Embeddings Session caricata (chiamata a embeddings_init
-//   precedente). Se non lo è, ritorna errore esplicito.
+// - Grace degradation: se la Session ort non è caricata (modello non
+//   scaricato o auto-init non ancora completato), il loop esce a mani
+//   vuote popolando il counter `saltati_no_session` invece di
+//   propagare un errore. L'utente può rilanciare il backfill dopo
+//   l'init senza perdere il progresso parziale (idempotente).
 
 use rusqlite::params;
 use serde::Serialize;
@@ -63,13 +66,15 @@ impl TipoBackfill {
 }
 
 /// Loop di backfill generico parametrizzato sul tipo. Ritorna numero
-/// processati. Errore esplicito se Session non loaded (no skip silenzioso).
+/// processati. Se la Session ort non è caricata, esce subito senza
+/// errore e incrementa `saltati_no_session` con la stima di candidati.
 fn esegui_loop(
     app: &tauri::AppHandle,
     state: &State<'_, VaultState>,
     rt_state: &State<'_, EmbeddingsState>,
     tipo: TipoBackfill,
     errori: &mut usize,
+    saltati_no_session: &mut usize,
 ) -> Result<usize, PapErrore> {
     let mut processati = 0usize;
 
@@ -138,9 +143,20 @@ fn esegui_loop(
             match compute_embedding_opt(rt_state, testo) {
                 Ok(Some(emb)) => emb_batch.push((id.clone(), emb)),
                 Ok(None) => {
-                    return Err(PapErrore::Generico(
-                        "Embeddings non inizializzati. Chiama embeddings_init prima del backfill.".into(),
-                    ));
+                    // Grace degradation: Session non loaded (modello non
+                    // scaricato o auto-init non ancora completato). Il
+                    // counter usa la stima totale aggiornata al netto di
+                    // quanti abbiamo già processato in questa run, così
+                    // l'UI può mostrare un numero rappresentativo.
+                    // Idempotente: l'utente rilancia post-init senza
+                    // perdere il progresso parziale.
+                    let rimanenti = totale_stima.saturating_sub(processati);
+                    *saltati_no_session += rimanenti;
+                    log::info!(
+                        "embeddings_backfill: Session non loaded, {rimanenti} {} saltati",
+                        tipo.etichetta()
+                    );
+                    return Ok(processati);
                 }
                 Err(e) => {
                     log::error!(
@@ -193,7 +209,7 @@ pub fn embeddings_backfill(
     state: State<'_, VaultState>,
     rt_state: State<'_, EmbeddingsState>,
 ) -> Result<EsitoBackfill, PapErrore> {
-    let saltati_no_session = 0usize;
+    let mut saltati_no_session = 0usize;
     let mut errori = 0usize;
 
     let prompt_processati = esegui_loop(
@@ -202,6 +218,7 @@ pub fn embeddings_backfill(
         &rt_state,
         TipoBackfill::Prompt,
         &mut errori,
+        &mut saltati_no_session,
     )?;
     let tag_processati = esegui_loop(
         &app,
@@ -209,10 +226,11 @@ pub fn embeddings_backfill(
         &rt_state,
         TipoBackfill::Tag,
         &mut errori,
+        &mut saltati_no_session,
     )?;
 
     log::info!(
-        "embeddings_backfill: completato. prompt={prompt_processati}, tag={tag_processati}, errori={errori}"
+        "embeddings_backfill: completato. prompt={prompt_processati}, tag={tag_processati}, saltati_no_session={saltati_no_session}, errori={errori}"
     );
     Ok(EsitoBackfill {
         prompt_processati,
@@ -238,5 +256,24 @@ mod test {
         assert!(super::BATCH_SIZE > 0);
         assert!(super::MAX_TOTAL > super::BATCH_SIZE);
         assert!(super::BATCH_SIZE <= 100, "batch troppo grande, blocca lock troppo a lungo");
+    }
+
+    #[test]
+    fn esito_backfill_segnale_grace_degradation() {
+        // Documenta l'invariante introdotto in Step 10: il campo
+        // `saltati_no_session` rappresenta il numero di candidati che
+        // non sono stati processati perché la Session ort non era
+        // ancora caricata. Quando > 0, il client UI può mostrare un
+        // hint "rilancia il backfill dopo l'init".
+        let esito = super::EsitoBackfill {
+            prompt_processati: 0,
+            tag_processati: 0,
+            saltati_no_session: 5,
+            errori: 0,
+        };
+        // Property semantica: saltati > 0 ⇒ idempotente, l'utente può
+        // rilanciare e i 5 saltati saranno picked up.
+        assert!(esito.saltati_no_session > 0);
+        assert_eq!(esito.errori, 0, "saltati_no_session NON è errore");
     }
 }

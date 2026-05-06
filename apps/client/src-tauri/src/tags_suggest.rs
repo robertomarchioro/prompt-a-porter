@@ -121,6 +121,42 @@ fn tag_semantici(
     Ok(suggeriti)
 }
 
+/// Logica pura del comando `tags_suggest`, testabile senza Tauri State.
+/// Il command Tauri pubblico (sotto) si limita a fare il dispatch.
+pub(crate) fn suggerisci_per_testo(
+    conn: &Connection,
+    rt_state: &EmbeddingsState,
+    testo_pulito: &str,
+    limite: usize,
+) -> Result<Vec<TagSuggerito>, PapErrore> {
+    // Soglia: se ci sono pochi tag con embedding o Session non loaded,
+    // fallback al path frequenza.
+    let n_tag_emb = conta_tag(conn)?;
+    if n_tag_emb < MIN_TAG_PER_SEMANTIC {
+        log::debug!(
+            "tags_suggest: solo {n_tag_emb} tag con embedding, fallback a tag_frequenti"
+        );
+        return tag_frequenti(conn, limite);
+    }
+
+    let query_emb = match compute_embedding_opt(rt_state, testo_pulito)? {
+        Some(emb) => emb,
+        None => {
+            log::debug!("tags_suggest: Session non loaded, fallback a tag_frequenti");
+            return tag_frequenti(conn, limite);
+        }
+    };
+
+    let suggeriti = tag_semantici(conn, &query_emb, limite)?;
+    if suggeriti.is_empty() {
+        // Tutti sotto soglia → fallback frequenza per non lasciare l'utente
+        // con zero suggerimenti.
+        log::debug!("tags_suggest: nessun tag sopra soglia, fallback a tag_frequenti");
+        return tag_frequenti(conn, limite);
+    }
+    Ok(suggeriti)
+}
+
 #[tauri::command]
 pub fn tags_suggest(
     testo: String,
@@ -138,34 +174,7 @@ pub fn tags_suggest(
         return Ok(vec![]);
     }
 
-    state.with_conn(|conn| {
-        // Soglia: se ci sono pochi tag con embedding o Session non loaded,
-        // fallback al path frequenza.
-        let n_tag_emb = conta_tag(conn)?;
-        if n_tag_emb < MIN_TAG_PER_SEMANTIC {
-            log::debug!(
-                "tags_suggest: solo {n_tag_emb} tag con embedding, fallback a tag_frequenti"
-            );
-            return tag_frequenti(conn, limite);
-        }
-
-        let query_emb = match compute_embedding_opt(&rt_state, testo_pulito)? {
-            Some(emb) => emb,
-            None => {
-                log::debug!("tags_suggest: Session non loaded, fallback a tag_frequenti");
-                return tag_frequenti(conn, limite);
-            }
-        };
-
-        let suggeriti = tag_semantici(conn, &query_emb, limite)?;
-        if suggeriti.is_empty() {
-            // Tutti sotto soglia → fallback frequenza per non lasciare l'utente
-            // con zero suggerimenti.
-            log::debug!("tags_suggest: nessun tag sopra soglia, fallback a tag_frequenti");
-            return tag_frequenti(conn, limite);
-        }
-        Ok(suggeriti)
-    })
+    state.with_conn(|conn| suggerisci_per_testo(conn, &rt_state, testo_pulito, limite))
 }
 
 #[cfg(test)]
@@ -245,5 +254,52 @@ mod test {
         assert!(SOGLIA_DISTANZA > 0.0 && SOGLIA_DISTANZA <= 2.0);
         assert!(DEFAULT_LIMIT > 0 && DEFAULT_LIMIT <= MAX_LIMIT);
         assert!(MIN_TAG_PER_SEMANTIC > 0);
+    }
+
+    // ─────────── Smoke test: fallback grace senza Session ───────────
+
+    #[test]
+    fn suggerisci_senza_session_fa_fallback_a_frequenza() {
+        // Quality gate Step 10 — grace degradation: con tag a sufficienza
+        // (>= MIN_TAG_PER_SEMANTIC) ma Session NON loaded, il path
+        // semantico non parte e dobbiamo cadere su tag_frequenti.
+        let conn = db_test();
+        // Inserisci 12 tag (sopra MIN_TAG_PER_SEMANTIC=10) con
+        // un embedding fittizio in TagsEmbeddings così conta_tag ritorna 12.
+        for i in 0..12 {
+            let id = format!("t-{i}");
+            inserisci_tag(&conn, &id, &format!("nome_{i}"));
+            // Inserisci embedding stub di dimensione 384 (richiesto da vec0).
+            let emb: Vec<f32> = vec![0.0_f32; 384];
+            crate::embeddings_store::upsert_tag_embedding(&conn, &id, &emb).unwrap();
+        }
+        // Almeno un PromptTag per ordinare via uso.
+        inserisci_prompt_con_tag(&conn, "prm-1", &["t-0", "t-1"]);
+
+        let rt = EmbeddingsState::new(); // session = None
+
+        let r = suggerisci_per_testo(&conn, &rt, "qualcosa", 5).unwrap();
+        // Ottengo risultati (dal fallback frequenza), no errore.
+        assert!(!r.is_empty(), "fallback a tag_frequenti deve restituire qualcosa");
+        // Tutti devono avere sorgente=frequenza, non vector.
+        assert!(
+            r.iter().all(|t| t.sorgente == "frequenza"),
+            "senza session, sorgente deve essere frequenza"
+        );
+    }
+
+    #[test]
+    fn suggerisci_pochi_tag_fa_fallback_a_frequenza() {
+        // Anche con Session in teoria caricabile, se pochi tag con embedding
+        // (< MIN_TAG_PER_SEMANTIC) il path semantico è skippato. Test
+        // sentinella per evitare regressioni di soglia.
+        let conn = db_test();
+        inserisci_tag(&conn, "t-1", "alpha");
+        inserisci_prompt_con_tag(&conn, "prm-1", &["t-1"]);
+
+        let rt = EmbeddingsState::new();
+        let r = suggerisci_per_testo(&conn, &rt, "qualcosa", 5).unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].sorgente, "frequenza");
     }
 }
