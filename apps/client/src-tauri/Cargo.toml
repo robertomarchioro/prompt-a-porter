@@ -28,6 +28,9 @@ rusqlite = { version = "0.32", features = ["bundled-sqlcipher-vendored-openssl"]
 sqlite-vec = "0.1"
 argon2 = "0.5"
 rand = "0.8"
+# Regex per modulo linting (Fase 3 Step 5): rilevamento segnaposti
+# malformati, PII (email, CC, API key), n-gram repetition.
+regex = "1"
 # ONNX Runtime per embeddings locali (Fase 3 Step 1).
 # Configurazione: default-features=false + load-dynamic (carica libonnxruntime
 # da disco a runtime, lazy) + api-23 (evita VitisAI introdotto in ORT 1.24,
