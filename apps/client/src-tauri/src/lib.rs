@@ -7,6 +7,7 @@ mod embeddings_store;
 mod errore;
 mod import_export;
 mod libreria;
+mod linting;
 mod migrazione;
 mod preferenze;
 mod prompt;
@@ -284,6 +285,7 @@ pub fn run() {
             embeddings::embeddings_compute,
             embeddings_backfill::embeddings_backfill,
             tags_suggest::tags_suggest,
+            linting::prompt_lint,
             cartelle::folder_lista,
             cartelle::folder_crea,
             cartelle::folder_rinomina,
