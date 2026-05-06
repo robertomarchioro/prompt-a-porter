@@ -133,16 +133,23 @@
     }, 700);
   });
 
-  // Lint debounced quando il body cambia. Comando puro (no DB lookup).
+  // Lint debounced quando il body cambia.
+  // Se il prompt è già salvato (promptId presente), passa l'id al
+  // backend in modo che attivi anche le regole IMP* (import non
+  // risolto / cicli / depth) sul grafo dei prompt componibili.
   $effect(() => {
     const corrente = body;
+    const idCorrente = promptId;
     clearTimeout(timerLint);
     if (!corrente.trim()) {
       lintIssues = [];
       return;
     }
     timerLint = setTimeout(() => {
-      invoke<LintIssue[]>("prompt_lint", { body: corrente })
+      invoke<LintIssue[]>("prompt_lint", {
+        body: corrente,
+        promptId: idCorrente,
+      })
         .then((issues) => {
           lintIssues = issues;
         })
