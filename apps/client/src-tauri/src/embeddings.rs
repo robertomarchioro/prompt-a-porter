@@ -523,20 +523,31 @@ fn l2_normalize(v: &mut Array1<f32>) {
     }
 }
 
-#[tauri::command]
-pub fn embeddings_compute(
-    testo: String,
-    rt_state: State<'_, EmbeddingsState>,
-) -> Result<Vec<f32>, PapErrore> {
+/// Helper interno per il calcolo embedding, riutilizzabile da altri moduli
+/// (es. ricerca_ibrida) senza passare dal layer Tauri command.
+///
+/// Ritorna `Ok(None)` se la Session non è ancora caricata: i caller possono
+/// degradare graziosamente (es. fallback a sola ricerca FTS5).
+pub(crate) fn compute_embedding_opt(
+    rt_state: &EmbeddingsState,
+    testo: &str,
+) -> Result<Option<Vec<f32>>, PapErrore> {
     let mut guard = rt_state.inner.lock().unwrap();
-    let loaded = guard
-        .as_mut()
-        .ok_or_else(|| PapErrore::Generico("Embeddings non inizializzati. Chiama embeddings_init.".into()))?;
+    let Some(loaded) = guard.as_mut() else {
+        return Ok(None);
+    };
+    let result = compute_with_loaded(loaded, testo)?;
+    Ok(Some(result))
+}
 
+fn compute_with_loaded(
+    loaded: &mut EmbeddingsLoaded,
+    testo: &str,
+) -> Result<Vec<f32>, PapErrore> {
     // 1. Tokenize
     let encoding = loaded
         .tokenizer
-        .encode(testo.as_str(), true)
+        .encode(testo, true)
         .map_err(|e| PapErrore::Generico(format!("Tokenizer encode: {e}")))?;
 
     // 2. Trunc/pad a MAX_SEQ_LEN
@@ -601,6 +612,18 @@ pub fn embeddings_compute(
     l2_normalize(&mut pooled);
 
     Ok(pooled.to_vec())
+}
+
+#[tauri::command]
+pub fn embeddings_compute(
+    testo: String,
+    rt_state: State<'_, EmbeddingsState>,
+) -> Result<Vec<f32>, PapErrore> {
+    compute_embedding_opt(&rt_state, &testo)?.ok_or_else(|| {
+        PapErrore::Generico(
+            "Embeddings non inizializzati. Chiama embeddings_init.".into(),
+        )
+    })
 }
 
 #[cfg(test)]
