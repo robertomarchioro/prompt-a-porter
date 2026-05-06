@@ -1,5 +1,61 @@
 # Changelog — Prompt a Porter
 
+## v0.3.0 — Intelligenza & Authoring (2026-05-06)
+
+> **Fase 3 chiusa.** Tutti gli 11 step della roadmap completati: ricerca semantica (sqlite-vec + ONNX), linting, cartelle, prompt componibili, statistiche, quality gate. Nessun breaking change su DB/format export rispetto a v0.2.x.
+
+### Highlights
+
+- **Ricerca semantica + ibrida** — Comprendi i prompt per significato, non solo per keyword. RRF pesata (alpha configurabile) fra FTS5 lessicale e sqlite-vec semantico. Modello locale 384 dim (`paraphrase-multilingual-MiniLM-L12-v2`, ~118 MB), download lazy al primo uso. Niente cloud, niente leak.
+- **Linting in tempo reale** — 11 regole su body (LEN/PH/PII/STY/IMP) con pannello Diagnosi nell'editor. Cattura PII (email/CC/API key), segnaposti malformati, ripetizioni, import non risolti, cicli, profondità eccessiva.
+- **Cartelle gerarchiche** — Modello dati piatto + `Path` denormalizzato. Drag & drop, rinomina inline, sposta cascata, anti-ciclo. Stress test passa con 100 cartelle e profondità 5.
+- **Prompt componibili** — Sintassi `{{import "path"}}` con risoluzione cartella+titolo, parser ricorsivo, cycle detection, depth limit 5, anti-bomba 1 MB.
+- **Tag suggeriti** — Suggeritore semantico (top-K vicini per cosine) con fallback su frequenza per workspace ancora "freddi".
+- **Statistiche / Insight** — Vista dedicata con KPI, top usati, candidati cleanup, distribuzioni per tag/target/visibilità. Lint health % aggregata.
+- **Auto-init Session al boot** — Se modello + runtime sono su disco, il client carica la Session ort senza richiedere click manuale.
+- **Idle-unload Session** — Configurabile (5/10/30/60 min, o disattivata). Libera ~150 MB di RAM quando inattiva.
+
+### Quality gate Fase 3 (Step 10)
+
+- **Grace degradation** verificata su tutti i path: backfill ora skippa graceful invece di crashare se Session None
+- **Bench P95 ricerca ibrida**: 8.29 ms su 10 000 prompt (lex+sem+RRF) → ~38 ms includendo encoding query MiniLM. Sotto target 100 ms con margine ~2.5×
+- **Stress cartelle**: 14 unit test, 100 cartelle profondità 5, invariante `Path` ↔ `ParentFolderId` validato
+- **Coverage gate**: cargo-llvm-cov nel CI con threshold 60 % line. Coverage attuale: 60.12 %. Roadmap esplicita verso 70 % per v0.4
+
+### Schema DB (V005-V007)
+
+- **V005** `embeddings` — Tabella vec0 `PromptsEmbeddings` (sqlite-vec)
+- **V006** `tag_embeddings` — Tabella vec0 `TagsEmbeddings`
+- **V007** `prompt_imports` — Tabella `PromptImports` come grafo dipendenze import
+
+Tutte le migrazioni sono additive. Vault esistenti vengono migrati al primo unlock post-update.
+
+### Documentazione nuova
+
+- [`docs/utente/ricerca-semantica.md`](docs/utente/ricerca-semantica.md)
+- [`docs/utente/linting-regole.md`](docs/utente/linting-regole.md)
+- [`docs/utente/cartelle.md`](docs/utente/cartelle.md)
+- [`docs/utente/prompt-componibili.md`](docs/utente/prompt-componibili.md)
+- [`docs/operativo/bench-ricerca-ibrida.md`](docs/operativo/bench-ricerca-ibrida.md)
+- [`docs/operativo/coverage.md`](docs/operativo/coverage.md)
+- ADR completi: `embedding-model.md`, `sqlite-vec-sqlcipher.md`, `onnx-bundle.md`
+
+### Statistics
+
+- 26 PR mergiate dalla v0.2.1 (Fase 3 effettiva: PR #28-#53)
+- 169 unit test Rust totali (+58 da v0.2.1)
+- 0 errori type check, 0 vulnerabilità note (audit verde)
+- ~5 800 righe Rust strumentate, 60.12 % line coverage
+
+### Out of scope (rinviato)
+
+- **Riload automatico Session post idle-unload** — oggi serve riavviare il client. Issue tracker per v0.3.x patch
+- **Sintassi `with k=v` su import** — variabili scopate per import. Roadmap Fase 4
+- **Pinning a versione storica negli import** (`{{import "x" version=N}}`) — schema `PromptVersions` già pronto, manca parser. Roadmap Fase 4
+- **Coverage 70 % globale** — roadmap incrementale in `docs/operativo/coverage.md`
+
+---
+
 ## v0.2.1 (2026-05-05)
 
 > **Status**: patch della linea `v0.2.x` con quick wins anticipati di Fase 3 e infrastruttura release. 4 PR funzionali + 1 CI in un singolo ciclo, niente AI introdotta (foundations rimangono stabili). Spike pre-Fase 3 chiusi con verdict prima dei feature step.

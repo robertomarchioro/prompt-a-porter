@@ -9,6 +9,10 @@ Documentazione per **chi usa** Prompt a Porter, sia il client desktop che gli st
 | [`cli.md`](./cli.md) | Reference della CLI `pap` (Go + cobra): 5 comandi read-only per accedere al vault dal terminale, output in `table`/`json`/`yaml`/`plain`, completion bash/zsh/fish/powershell |
 | [`mcp.md`](./mcp.md) | Integrazione Model Context Protocol: setup Claude Desktop, Cursor, custom client; 4 tool esposti (`pap_search`, `pap_get`, `pap_list_recent`, `pap_render`); trasporto stdio; troubleshooting |
 | [`formato-export-json.md`](./formato-export-json.md) | Schema del formato di export JSON v1: campi obbligatori/opzionali, modalità conflitti import (skip/overwrite/rename), garanzie round-trip lossless |
+| [`ricerca-semantica.md`](./ricerca-semantica.md) | Ricerca ibrida (FTS + embedding), modello scelto, alpha bilanciamento, idle-unload, performance e privacy |
+| [`linting-regole.md`](./linting-regole.md) | Catalogo completo delle 11 regole di linting con esempi pratici (LEN/PH/PII/STY/IMP) |
+| [`cartelle.md`](./cartelle.md) | Modello dati e UX cartelle (anticipa permessi Fase 4) |
+| [`prompt-componibili.md`](./prompt-componibili.md) | Sintassi `{{import "..."}}`, esempi, anti-pattern, depth limits e cicli |
 
 ## Per iniziare
 

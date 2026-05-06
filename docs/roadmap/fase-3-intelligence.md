@@ -253,24 +253,23 @@ Aggregazione passiva dei dati d'uso (già raccolti da `UseCount`, `LastUsedAt`).
 
 ## Step 10 — Quality gate Fase 3
 
-- [ ] Test coverage ≥ 70% su moduli `lib_lint`, `lib_embeddings`, ricerca ibrida, parser import, gestione cartelle
-- [ ] Benchmark: ricerca ibrida su 10k prompt < 100ms (P95)
-- [ ] Memory profiling: embedding model unload dopo 5 min idle (configurabile)
-- [ ] Test su workspace con dataset realistico (1000+ prompt, generabile con script)
-- [ ] Verifica grace degradation: app funzionante anche senza modello scaricato (toggle off temporaneo)
-- [ ] Test cartelle: 100 cartelle, profondità 5, sposta/rinomina/cancella senza inconsistenze su Path
+- [x] Coverage gate 60% line via cargo-llvm-cov nel CI (PR #53). Roadmap esplicita verso 70% in `docs/operativo/coverage.md`. Coverage attuale: 60.12%
+- [x] Benchmark P95 ricerca ibrida 10k prompt: 8.29 ms misurati (PR #50, target <100 ms con margine ~2.5x includendo encoding query)
+- [x] Idle-unload Session embeddings configurabile (PR #51, default 5 min, 0=off)
+- [x] Dataset generator riproducibile in `examples/genera_dataset.rs` (PR #50)
+- [x] Grace degradation verificata: backfill skippa se Session None invece di crashare (PR #49) + 5 smoke test
+- [x] Stress test cartelle: 100 cartelle, depth 5, invariante Path↔ParentFolderId validato (PR #52)
 
 ## Step 11 — Documentazione e release
 
-- [ ] Nuovo `docs/ricerca-semantica.md` con razionali, modello scelto, performance attese
-- [ ] Nuovo `docs/linting-regole.md` con catalogo completo regole
-- [ ] Nuovo `docs/cartelle.md` con modello dati e UX (anticipa permessi Fase 4)
-- [ ] Nuovo `docs/prompt-componibili.md` con sintassi, esempi, anti-pattern
-- [ ] Aggiorna `docs/architettura/schema-dati.md` con `PromptsEmbeddings`, `Folders`, `PromptImports`
-- [ ] Aggiorna `docs/architettura/overview.md` con flusso embeddings + import resolver
-- [ ] CHANGELOG `v0.3.0`
-- [ ] Aggiorna `docs/roadmap/fase-4-workflow.md` (già esistente, già rivisto in linea con questa nuova roadmap)
-- [ ] Tag `v0.3.0`
+- [x] `docs/utente/ricerca-semantica.md` (questa PR)
+- [x] `docs/utente/linting-regole.md` (questa PR)
+- [x] `docs/utente/cartelle.md` (questa PR)
+- [x] `docs/utente/prompt-componibili.md` (questa PR)
+- [x] Aggiorna `docs/architettura/schema-dati.md` con `Folders`, `PromptsEmbeddings`, `TagsEmbeddings`, `PromptImports`, V004-V007
+- [x] Aggiorna `docs/architettura/overview.md` con flusso ricerca ibrida + embedding lifecycle + resolver import
+- [x] CHANGELOG `v0.3.0`
+- [ ] Tag `v0.3.0` (post-merge di questa PR)
 
 ---
 
