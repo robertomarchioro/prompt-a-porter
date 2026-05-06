@@ -15,6 +15,7 @@ pub mod migrazione;
 pub mod preferenze;
 pub mod prompt;
 pub mod prompt_componibili;
+pub mod regression;
 pub mod ricerca_ibrida;
 pub mod statistiche;
 pub mod sync;
@@ -337,6 +338,10 @@ pub fn run() {
             cartelle::folder_sposta,
             cartelle::folder_elimina,
             cartelle::prompt_sposta,
+            regression::golden_crea,
+            regression::golden_aggiorna,
+            regression::golden_elimina,
+            regression::golden_lista,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())
