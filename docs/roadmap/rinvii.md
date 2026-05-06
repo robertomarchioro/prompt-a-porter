@@ -47,6 +47,7 @@ Item che vivono nel branch della release v0.2 ma aspettano qualcosa di non-tecni
 |---|---|
 | **golangci-lint reattivare sul server** dopo che l'action `golangci/golangci-lint-action@v6+` supporta stabilmente v2.x. Oggi è stato sostituito con `go vet` (PR #17) perché v1.64 incompatibile con Go 1.25. | 🔧 |
 | **~37 warning a11y di `svelte-check`** (autofocus, label senza control, role/aria mismatch). Target `v0.6.0` (pulizia UI). | 🎨 |
+| **Workflow CI non auto-listati nei propri path filter**: `cli-build.yml`, `mcp-server-build.yml`, `server-build.yml`. Modifiche a questi YAML non triggerano una run di validazione. Aggiungere ognuno nei propri `paths:` come fatto per `client-build.yml` (PR #53). Vedi `docs/contribuire/ci-workflows.md`. | 🎨 |
 
 ---
 
