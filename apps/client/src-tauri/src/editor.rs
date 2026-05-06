@@ -3,8 +3,33 @@ use rusqlite::Connection;
 use serde::Deserialize;
 use tauri::State;
 
+use crate::embeddings::{compute_embedding_opt, EmbeddingsState};
+use crate::embeddings_store;
 use crate::errore::PapErrore;
 use crate::vault::VaultState;
+
+/// Hook embedding: dopo una INSERT/UPDATE su `Prompts`, se la Session ort è
+/// caricata, calcola l'embedding del body e fa upsert in vec0. Graceful
+/// skip se la Session non è disponibile (utente non ha attivato la feature
+/// o modello non scaricato): in quel caso il prompt resta senza embedding
+/// e verrà processato dal backfill quando la feature viene attivata.
+fn aggiorna_embedding(
+    conn: &Connection,
+    rt_state: &EmbeddingsState,
+    prompt_id: &str,
+    body: &str,
+) -> Result<(), PapErrore> {
+    match compute_embedding_opt(rt_state, body)? {
+        Some(emb) => {
+            embeddings_store::upsert_embedding(conn, prompt_id, &emb)?;
+            log::debug!("embedding upserted per {prompt_id}");
+        }
+        None => {
+            log::debug!("embedding skipped per {prompt_id} (Session non loaded)");
+        }
+    }
+    Ok(())
+}
 
 #[derive(Debug, Deserialize)]
 pub struct NuovoPrompt {
@@ -111,11 +136,13 @@ pub(crate) fn ricostruisci_fts(conn: &Connection) -> Result<(), PapErrore> {
 pub fn prompt_crea(
     dati: NuovoPrompt,
     state: State<'_, VaultState>,
+    rt_state: State<'_, EmbeddingsState>,
 ) -> Result<String, PapErrore> {
     state.with_conn(|conn| {
         let id = format!("prm-{}", genera_id());
         let target = normalizza_target_model(&dati.target_model);
         let folder = normalizza_target_model(&dati.folder_id);
+        let body_clean = dati.body.trim();
         conn.execute(
             "INSERT INTO Prompts
                 (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
@@ -126,7 +153,7 @@ pub fn prompt_crea(
                 id,
                 dati.titolo.trim(),
                 dati.descrizione.trim(),
-                dati.body.trim(),
+                body_clean,
                 dati.visibilita,
                 target,
                 folder,
@@ -136,6 +163,8 @@ pub fn prompt_crea(
         // Snapshot v1 in PromptVersions (Fase 2 versioning).
         crate::versioning::snapshot_versione(conn, &id, "usr-locale")?;
         ricostruisci_fts(conn)?;
+        // Hook embedding (Fase 3 Step 3): no-op se Session non loaded.
+        aggiorna_embedding(conn, &rt_state, &id, body_clean)?;
         crate::audit::registra(conn, "prompt.creato", "Prompt", &id, Some(dati.titolo.trim()));
         log::info!("Prompt creato: {id}");
         Ok(id)
@@ -146,10 +175,12 @@ pub fn prompt_crea(
 pub fn prompt_aggiorna(
     dati: AggiornamentoPrompt,
     state: State<'_, VaultState>,
+    rt_state: State<'_, EmbeddingsState>,
 ) -> Result<(), PapErrore> {
     state.with_conn(|conn| {
         let target = normalizza_target_model(&dati.target_model);
         let folder = normalizza_target_model(&dati.folder_id);
+        let body_clean = dati.body.trim();
         conn.execute(
             "UPDATE Prompts
              SET Title = ?1, Description = ?2, Body = ?3, Visibility = ?4,
@@ -160,7 +191,7 @@ pub fn prompt_aggiorna(
             rusqlite::params![
                 dati.titolo.trim(),
                 dati.descrizione.trim(),
-                dati.body.trim(),
+                body_clean,
                 dati.visibilita,
                 target,
                 folder,
@@ -171,6 +202,9 @@ pub fn prompt_aggiorna(
         // Snapshot della nuova versione (Version e' gia' stata incrementata dall'UPDATE).
         crate::versioning::snapshot_versione(conn, &dati.id, "usr-locale")?;
         ricostruisci_fts(conn)?;
+        // Hook embedding (Fase 3 Step 3): re-compute perché il body è cambiato.
+        // No-op se Session non loaded.
+        aggiorna_embedding(conn, &rt_state, &dati.id, body_clean)?;
         crate::audit::registra(conn, "prompt.aggiornato", "Prompt", &dati.id, Some(dati.titolo.trim()));
         log::info!("Prompt aggiornato: {}", dati.id);
         Ok(())
@@ -198,6 +232,9 @@ pub fn prompt_elimina(id: String, state: State<'_, VaultState>) -> Result<(), Pa
         )?;
         conn.execute("DELETE FROM PromptTags WHERE PromptId = ?1", [&id])?;
         ricostruisci_fts(conn)?;
+        // Pulizia vec0: la riga embedding non serve più. Sicuro chiamarlo
+        // anche se non c'era mai stato un embedding (delete è no-op).
+        embeddings_store::delete_embedding(conn, &id)?;
         crate::audit::registra(conn, "prompt.eliminato", "Prompt", &id, None);
         log::info!("Prompt eliminato: {id}");
         Ok(())
