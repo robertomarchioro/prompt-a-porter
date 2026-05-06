@@ -325,4 +325,29 @@ mod test {
         assert_eq!(sanitizza_fts("hello world"), "hello* world*");
         assert_eq!(sanitizza_fts("hello! @world#"), "hello* world*");
     }
+
+    // ─────────── Smoke test: fallback grace senza Session ───────────
+
+    fn db_test() -> Connection {
+        crate::embeddings_store::registra_auto_extension();
+        let conn = Connection::open_in_memory().unwrap();
+        crate::migrazione::esegui_migrazioni(&conn).unwrap();
+        crate::libreria::assicura_dati_base(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn cerca_semantica_senza_session_loaded_ritorna_vuoto() {
+        // Quality gate Step 10 — grace degradation: se l'utente non ha
+        // ancora abilitato/scaricato il modello, ricerca_ibrida deve
+        // tornare risultati FTS-only senza errori.
+        let conn = db_test();
+        let rt_state = EmbeddingsState::new(); // session = None
+
+        let ids = cerca_semantica(&conn, &rt_state, "qualunque query", 10).unwrap();
+        assert!(
+            ids.is_empty(),
+            "senza Session, cerca_semantica ritorna vec vuoto, no errore"
+        );
+    }
 }

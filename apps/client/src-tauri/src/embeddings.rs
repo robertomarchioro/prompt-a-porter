@@ -696,4 +696,17 @@ mod test {
         assert!((v[0] - 0.6).abs() < 1e-6);
         assert!((v[1] - 0.8).abs() < 1e-6);
     }
+
+    #[test]
+    fn compute_embedding_opt_senza_session_ritorna_none() {
+        // Quality gate Step 10 — grace degradation: tutti i caller
+        // (ricerca_ibrida, tags_suggest, editor::aggiorna_embedding_*,
+        // embeddings_backfill) si appoggiano a questo guard. Se la
+        // primitiva ritorna None senza errori, il fallback graceful
+        // funziona ovunque.
+        let rt = EmbeddingsState::new();
+        let r = compute_embedding_opt(&rt, "qualunque testo");
+        assert!(r.is_ok(), "no errore quando session non loaded");
+        assert!(r.unwrap().is_none(), "ritorna None, non Some(emb)");
+    }
 }
