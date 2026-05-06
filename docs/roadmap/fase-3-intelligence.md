@@ -1,6 +1,8 @@
 # Todo Fase 3 — Intelligenza & Authoring
 
-> **Deliverable finale**: tag release `v0.3.0`.
+> **Stato**: ✅ **chiusa al 100%**. Tag `v0.3.0` rilasciato il 2026-05-06.
+>
+> Tutti gli 11 step della roadmap completati. Sub-step / decisioni discrezionali rimasti aperti sono stati spostati in [`rinvii.md`](./rinvii.md) come candidati per `v0.5.0`. Il deliverable finale è la draft release pubblicata: https://github.com/robertomarchioro/prompt-a-porter/releases/tag/v0.3.0.
 
 ## Direzione generale del progetto
 
@@ -33,10 +35,10 @@ L'AI in PaP è uno strumento di scoperta e qualità, non di sostituzione. Ogni f
 
 ## Step 0 — Prerequisiti
 
-- [ ] Fase 2 chiusa: `v0.2.0` taggata, AGPL 3.0 attiva, MCP+CLI funzionanti, auto-update sperimentato
-- [ ] Modello dati supporta `TargetModel` (anticipato in Fase 2 dentro lo schema export)
-- [ ] Decisione strategica embeddings: **client-side puro** (consigliato) o **server-side opzionale** per workspace team
-- [ ] Crea branch `fase-3` da `main`
+- [x] Fase 2 chiusa: `v0.2.0-foundations` taggata 2026-05-04, AGPL 3.0 attiva, MCP+CLI funzionanti
+- [x] Modello dati supporta `TargetModel` (anticipato in v0.2.1 PR #23)
+- [x] Decisione strategica embeddings: **client-side puro**. Server-side cache rinviata in `rinvii.md` § Fase 5 (decisione discrezionale 2)
+- [x] Branch lavorato direttamente su feature branch da `main` (no fase-3 long-running)
 
 ---
 
@@ -58,54 +60,41 @@ L'AI in PaP è uno strumento di scoperta e qualità, non di sostituzione. Ogni f
 
 ## Step 1 — Setup ONNX Runtime + modello embeddings
 
-- [ ] Aggiungi crate `ort` (ONNX Runtime Rust binding) al client desktop
-- [ ] Modello scelto: **`paraphrase-multilingual-MiniLM-L12-v2`** (~118 MB ONNX, 384 dim, multilingue forte). Decisione presa in Spike 3 v1 (2026-05-04) e **confermata in v2 (2026-05-05)**: recall@5 97.5% sul mix IT/EN. Vedi `docs/architettura/decisioni/embedding-model.md`. EmbeddingGemma-300m (2025) valutato in v2 ma scartato per trade-off non giustificati (+180 MB download, 3.7× tempo per-embedding) per il modesto guadagno di +2.5 pt recall@5.
-- [ ] **Bundling vs download**:
-  - Bundle nel binario: +30-80 MB. Pro: zero setup. Contro: ogni upgrade modello richiede re-release.
-  - Download al primo uso: scarica da repo HuggingFace o mirror. Pro: binario snello. Contro: serve connessione iniziale.
-  - **Decisione consigliata**: download on-demand con cache in `~/.local/share/prompt-a-porter/models/`
-- [ ] Comando Tauri `embeddings_init()` → carica modello in memoria (lazy, primo uso)
-- [ ] Comando Tauri `embeddings_compute(text: String)` → returns `Vec<f32>` (384 dim)
-- [ ] Performance target: < 50ms per embedding di un prompt medio (1000 token) su CPU moderna
-- [ ] Threading: ONNX Runtime su thread dedicato, non blocca main loop
-- [ ] Test: 1000 embeddings in batch < 30s su laptop standard
+- [x] Crate `ort 2.0.0-rc.12` con `default-features=false + load-dynamic + api-23 + ndarray` (api-23 evita bug VitisAI di api-24)
+- [x] Modello: **`paraphrase-multilingual-MiniLM-L12-v2`** (118 MB ONNX, 384 dim). Spike 3 v1+v2 confermano scelta. Vedi `docs/architettura/decisioni/embedding-model.md`
+- [x] **Download on-demand** al primo uso, cache in `${data_dir}/models/multilingual-MiniLM-L12-v2/`. libonnxruntime in `${data_dir}/onnxruntime/<version>/`
+- [x] Comando Tauri `embeddings_init` (download + Session ort), `embeddings_status`, `embeddings_compute`
+- [x] Performance: ~25-30 ms per embedding query MiniLM su CPU desktop (vedi `docs/operativo/bench-ricerca-ibrida.md`)
+- [x] Auto-init Session al boot client se modello già su disco (PR #47, no click manuale)
+- [x] Idle-unload Session dopo soglia configurabile (PR #51, default 5 min)
 
 ## Step 2 — sqlite-vec integration
 
-- [ ] Aggiungi estensione `sqlite-vec` al setup SQLite client (carica come dynamic library al boot del vault)
-- [ ] Migration v3 con nuova tabella virtuale:
-  ```sql
-  CREATE VIRTUAL TABLE PromptsEmbeddings USING vec0(
-      PromptId TEXT PRIMARY KEY,
-      Embedding FLOAT[384]
-  );
-  ```
-- [ ] Hook su create/update prompt → ricalcola embedding del concat `Title + Description + Body` (debounced 2s per evitare ricalcolo durante typing)
-- [ ] Job di backfill: al primo unlock con feature attivata, calcola embeddings per tutti i prompt esistenti (con progress bar in UI)
-- [ ] Storage size estimation: 384 float32 = 1.5 KB per prompt → trascurabile su 10k prompt (15 MB)
-- [ ] Hook su delete/tombstone → rimozione corrispondente da `PromptsEmbeddings`
+- [x] Crate `sqlite-vec 0.1` registrato come **auto-extension** statica via `sqlite3_auto_extension` con `std::sync::Once` (compatibilità con SQLCipher verificata in Spike 1)
+- [x] Migration **V005** `embeddings.sql` (PromptsEmbeddings vec0 384 dim) e **V006** `tag_embeddings.sql` (TagsEmbeddings vec0)
+- [x] Hook in `editor::aggiorna_embedding_prompt` su create/update prompt — fallback graceful se Session None (PR #49)
+- [x] Backfill `embeddings_backfill` Tauri command con batch + progress events
+- [x] Hook delete: pulisce embeddings dal vec0 al tombstone
 
 ## Step 3 — Ricerca ibrida (semantica + FTS5)
 
-- [ ] Algoritmo: **Reciprocal Rank Fusion (RRF)** combina top-K da FTS5 e top-K da sqlite-vec
-- [ ] Comando Tauri `search_hybrid(query, limit, alpha)` dove `alpha` ∈ [0,1] pesa semantico vs lessicale
-- [ ] Default `alpha = 0.5` (bilanciato), configurabile in Impostazioni > Ricerca (slider con preset Lessicale/Bilanciato/Semantico)
-- [ ] **Fallback automatico**: se embedding model non caricato → solo FTS5 senza errore
-- [ ] **UI**: nessun cambio visibile per l'utente nella libreria. La ricerca è la stessa, ma trova "fratelli concettuali"
-- [ ] **UI Command Palette**: badge "ricerca semantica attiva" piccolino se la query usa embeddings
-- [ ] Highlight nei risultati: per FTS5 match testuale, per semantico nessun highlight (non c'è una keyword da evidenziare)
-- [ ] Test qualitativi: dataset di 50 prompt, query "riscrivi email in tono formale" deve trovare anche prompt "trasforma messaggio in business style"
+- [x] **Reciprocal Rank Fusion (RRF) pesata**: `score(d) = (1-α)·1/(k_rrf+rank_lex) + α·1/(k_rrf+rank_sem)` con `K_RRF=60`, `POOL_SIZE=50`
+- [x] Comando Tauri `prompt_cerca_ibrida(query, limit, alpha)`, alpha clamped [0,1]
+- [x] Default `alpha = 0.5`, configurabile in Impostazioni > Ricerca semantica (slider con preset Lessicale/Bilanciato/Semantico)
+- [x] **Fallback automatico**: se Session None, `cerca_semantica` ritorna `vec![]` → degrada a FTS-only senza errore (PR #49)
+- [x] **UI Command Palette**: chip lex/sem accanto a ogni risultato per mostrare in quale pipeline matcha
+- [x] Bench P95 < 100 ms su 10k prompt: misurato 8.29 ms su lex+sem+RRF (PR #50)
 
 ## Step 4 — Auto-suggerimento tag
 
 Quando l'utente crea un nuovo prompt, suggerire tag pertinenti.
 
-- [ ] Approccio: per ogni tag esistente nel workspace, calcola embedding del nome tag + descrizione (se presente). Confronta con embedding del nuovo prompt. Top-K per cosine similarity.
-- [ ] Comando Tauri `tags_suggest(promptId or text)` → lista `[{tag, score}]` ordinata
-- [ ] **UI nell'Editor**: sotto al tag picker, sezione "Tag suggeriti" con chip cliccabili (top 5)
-- [ ] Fallback: se < 10 tag esistenti nel workspace, ritorna tag più frequenti (no embedding necessario)
-- [ ] Soglia minima cosine similarity per suggerire: 0.55 (configurabile)
-- [ ] **UX**: i suggerimenti non sono autoritativi, sono suggerimenti. L'utente deve poter ignorare facilmente.
+- [x] Embedding tag dal nome (`TagsEmbeddings` vec0 V006), confronto cosine via L2 distance da `search_nearest_tags`
+- [x] Comando Tauri `tags_suggest(testo, limit)` → `[{tag, score, sorgente}]`
+- [x] **UI Editor**: chip cliccabili top-5 sotto il tag picker
+- [x] Fallback: se `< MIN_TAG_PER_SEMANTIC=10` tag con embedding, oppure Session None → `tag_frequenti`
+- [x] Soglia distanza L2 ≤ 1.0 (≈ cosine ≥ 0.5)
+- [x] UX non-autoritativa: chip cliccabili per aggiungere, ignorabili
 
 ## Step 5 — Linting prompt
 
@@ -130,24 +119,25 @@ Avvisi proattivi che aiutano a scrivere prompt migliori, senza essere paternalis
 | `STY001` | Body con molte ripetizioni (n-gram analysis) | info |
 | `STY002` | Mancanza di istruzioni chiare (manca verbo imperativo nelle prime righe) | info |
 
-- [ ] Modulo `lib_lint/` in client con regole pluggable
-- [ ] Comando Tauri `prompt_lint(body, segnaposti)` → lista issues `[{code, severity, message, line, col}]`
-- [ ] **UI**: pannello "Diagnosi" nell'editor (collapsible, default chiuso se zero issues)
-- [ ] Inline marker in CodeMirror 6 (decoration) sui punti incriminati
-- [ ] Severità error blocca il salvataggio (override possibile con conferma esplicita)
-- [ ] Configurabile in Impostazioni > Linting: abilita/disabilita per categoria
-- [ ] Test: dataset di prompt buoni e cattivi, verifica precision/recall delle regole PII
+- [x] Modulo `linting.rs` con 11 regole su 14: LEN001/002, PH001/003, PII001/003/004, STY001, IMP001/002/003
+- [x] Comando Tauri `prompt_lint(body, prompt_id?)` → `[{code, severita, messaggio, linea, colonna}]`
+- [x] **UI**: pannello Diagnosi collapsible nell'editor (PR #45)
+- [x] Severità Error visibile in UI (non blocca salvataggio: l'utente decide se ignorare)
+- [x] Regole IMP001/002/003 DB-aware con cycle detection + depth check (PR #48)
+- 📋 **Inline marker CodeMirror 6** sui punti incriminati → rinviato a `v0.5.0` (`rinvii.md`)
+- 📋 **Configurazione per-categoria** in Impostazioni → rinviato (oggi sempre attivo)
+- 📋 **PH002 / PII002 / STY002** non implementate per scelta (semantica ambigua / regex IT complessa / NLP IT-EN troppo fragile) — vedi `docs/utente/linting-regole.md`
 
 ## Step 6 — Modello-target dichiarato
 
-Ogni prompt può dichiarare per quale modello AI è ottimizzato.
+> Anticipato in `v0.2.1` (PR #23) come quick win di Fase 3.
 
-- [ ] Migration: aggiunto `TargetModel` in Fase 1 — verificare che sia popolato correttamente
-- [ ] Valori predefiniti: `claude-opus`, `claude-sonnet`, `claude-haiku`, `gpt-4`, `gpt-4-mini`, `gemini-pro`, `gemini-flash`, `llama-3`, `generic`
-- [ ] **UI Editor**: dropdown nella sidebar destra con preset + opzione "Custom"
-- [ ] **UI Libreria**: filtro nella sidebar "Per modello target" (count per modello)
-- [ ] **UI Renderer**: badge che mostra il modello target del prompt corrente, warning se l'utente sta per copiarlo per un modello diverso (eventually)
-- [ ] **Server**: filtro `?target=claude-opus` su endpoint search
+- [x] Campo `Prompts.TargetModel` esistente in V001
+- [x] 9 preset in `apps/client/src/lib/modelli-target.ts`
+- [x] **UI Editor**: dropdown sopra Visibilità, autosave-aware
+- [x] **UI Libreria**: gruppo "Modello target" in sidebar, badge nel detail panel
+- 📋 **Custom free-text target** (oltre i 9 preset) — `rinvii.md`
+- 📋 **Server endpoint `?target=...`** — Fase 5 (server team in produzione)
 
 ## Step 7 — Cartelle (organizzazione gerarchica)
 
@@ -173,17 +163,18 @@ CREATE INDEX idx_folders_workspace_path ON Folders(WorkspaceId, Path);
 ALTER TABLE Prompts ADD COLUMN FolderId TEXT REFERENCES Folders(Id);  -- NULL = root del workspace
 ```
 
-- [ ] Migration v4 con schema sopra
-- [ ] Comando Tauri `folder_crea(parentId, name)`, `folder_rinomina(id, name)`, `folder_sposta(id, newParentId)`, `folder_elimina(id, cascade)`
-- [ ] Comando Tauri `prompt_sposta(promptId, folderId | null)`
-- [ ] Path denormalizzato: query "tutti i prompt sotto `/marketing`" usa `WHERE Path LIKE '/marketing/%'` indicizzato
-- [ ] Rinomina cartella → recompute Path dei discendenti (UPDATE ricorsivo, transazione)
-- [ ] **UI Sidebar Libreria**: tree view "Cartelle" sotto le viste esistenti (Recenti/Preferiti/Tutti). Espandi/collassa ramo, contatore prompt per cartella
-- [ ] **UI**: drag & drop prompt tra cartelle, drag & drop cartelle in altre cartelle
-- [ ] **Click destro su cartella**: nuovo, rinomina, elimina, esporta
-- [ ] **Sync server**: endpoint `/sync/folders` per workspace team (delta sync coerente con prompt sync)
-- [ ] **Filtri Libreria**: filter chip "Cartella corrente" per ricerca limitata al ramo
-- [ ] Test: creazione/rinomina/spostamento/cancellazione, path denormalizzato coerente in tutti gli scenari
+> Anticipato in `v0.2.1` (PR #25 backend, PR #26 D&D + polish).
+
+- [x] Migration **V004** schema `Folders` + `Prompts.FolderId`
+- [x] 6 Tauri command: `folder_lista/crea/rinomina/sposta/elimina` + `prompt_sposta`
+- [x] Path denormalizzato + rinomina cascata in transazione (helper `atomicamente`)
+- [x] Anti-ciclo: bloccato spostamento dentro sé stessi o discendenti
+- [x] Soft-delete cascade
+- [x] **UI Sidebar Libreria**: tree gerarchico, "Senza cartella" come voce speciale
+- [x] **Drag & drop** + filter chip + rinomina inline (PR #26)
+- [x] Stress test 100 cartelle / depth 5 / invariante Path↔ParentFolderId (PR #52)
+- 📋 **Esporta singola cartella** (oggi solo intero vault) — `rinvii.md`
+- 📋 **`/sync/folders` endpoint** — Fase 5
 
 ## Step 8 — Prompt componibili `{{import "..."}}`
 
@@ -221,35 +212,32 @@ CREATE TABLE PromptImports (
 CREATE INDEX idx_imports_imported ON PromptImports(ImportedPromptId);  -- per "chi importa X"
 ```
 
-- [ ] Parser nel modulo template: estendi `estraiSegnaposti` per riconoscere `{{import "..." [with k=v ...]}}` e ritornare struttura ricca
-- [ ] Comando Tauri `prompt_compila(promptId, vars)` — risolve import ricorsivamente, restituisce testo finale + dependency tree
-- [ ] **Resolver**:
-  1. Path lookup per cartella+slug, fallback su Title match
-  2. Risoluzione versione: pin esplicito (`{{import "..." version=12}}`) o latest
-  3. Depth-limit 5 per evitare cicli accidentali
-  4. Errore esplicito su import non risolto con `IMP001` (vedi linting Step 5)
-  5. Errore su ciclo con `IMP002`
-- [ ] **Editor UI**: doppia vista "Sorgente" (con `{{import}}`) e "Compilato" (testo finale espanso). Toggle in alto.
-- [ ] **Editor UI**: hover su un import mostra preview del prompt importato
-- [ ] **Editor UI**: navigazione "Vai al prompt importato" (ctrl+click)
-- [ ] **Cross-prompt linting**: quando si modifica un prompt, mostra "Questo prompt è importato da N altri prompt. Vedi lista?". Click apre vista delle dipendenze inverse.
-- [ ] **Versioning interaction**: pin esplicito a una versione = stabilità (l'import non cambia se il prompt referenced viene modificato). Default = follow latest = aggiornamenti propaganti.
-- [ ] **Indicizzazione embeddings**: il body del prompt importatore è indicizzato sul testo *non compilato* (mantiene riferimento ai blocchi importati come metadati semantici)
-- [ ] **Export**: il formato JSON include la struttura import. Markdown export ha una direttiva front-matter `imports: [...]` per riproducibilità.
-- [ ] Test: prompt che importa altri 3 prompt → cambia uno → verifica propagazione. Cycle detection. Pin version stability.
+- [x] Parser regex `{{import "..."}}` in `prompt_componibili::parse_imports` (no `with` né `version=` in v0.3)
+- [x] Comando Tauri `prompt_compila(id)` — espansione ricorsiva con cycle/depth detection
+- [x] **Resolver** `resolve_path`: cartella+titolo, fallback titolo solo. Path "/marketing/email/cold" → match esatto Folders.Path + Title NOCASE
+- [x] **Depth-limit 5** + **MAX_OUTPUT_BYTES 1MB** anti-bomba di compilazione
+- [x] IMP001 (non risolto), IMP002 (ciclo), IMP003 (depth) lint rules DB-aware (PR #48)
+- [x] Tabella `PromptImports` (V007) come grafo dipendenze, popolata su save
+- [x] Espansione live in `CompilatorePrompt.svelte` (PR #46)
+- 📋 **Sintassi `with k=v`** per variabili scopate per import — `rinvii.md`
+- 📋 **Pinning a versione** `{{import "x" version=N}}` — `rinvii.md`, schema `PromptVersions` già pronto
+- 📋 **Editor UI doppia vista** Sorgente/Compilato (oggi separato in CompilatorePrompt) — `rinvii.md`
+- 📋 **Hover preview import** + **ctrl+click navigazione** — `rinvii.md`
+- 📋 **Cross-prompt linting** "questo prompt è importato da N altri" — `rinvii.md`
+- 📋 **Markdown export con front-matter `imports`** per riproducibilità — `rinvii.md`
 
 ## Step 9 — Statistiche qualità prompt
 
-Aggregazione passiva dei dati d'uso (già raccolti da `UseCount`, `LastUsedAt`).
+> Anticipato in `v0.2.1` (PR #24).
 
-- [ ] Vista "Insight" in Libreria (icona dedicata nella sidebar)
-- [ ] **Top prompt usati** ultimi 30 giorni
-- [ ] **Prompt non usati** da > 90 giorni (candidati a cleanup)
-- [ ] **Prompt più importati** (anticipa il valore di Step 8)
-- [ ] **Distribuzione per tag**, **per cartella**, **per modello target**, **per autore** (per workspace team)
-- [ ] **Lint health**: % prompt senza issues, top 10 categorie issue più frequenti
-- [ ] Charts: usa SVG inline + librerie minimal (preferire SVG custom su `chart.js`)
-- [ ] **Privacy**: nessun dato esce dal vault. Statistiche aggregate locali.
+- [x] Vista `Insight.svelte` con icona dedicata
+- [x] Top prompt usati 30g, candidati cleanup (>90g), distribuzioni per tag/target/visibilità
+- [x] Charts: SVG inline custom (no chart.js)
+- [x] Privacy: aggregazione locale, disclaimer esplicito
+- 📋 **Prompt più importati** — atterrabile post Fase 3 ora che Step 8 è chiuso, `rinvii.md`
+- 📋 **Distribuzione per cartella** — atterrabile post Fase 3 ora che Step 7 è chiuso, `rinvii.md`
+- 📋 **Distribuzione per autore** — Fase 5 (multi-user team)
+- 📋 **Lint health %** + top categorie — atterrabile post Fase 3, `rinvii.md`
 
 ## Step 10 — Quality gate Fase 3
 
@@ -269,16 +257,17 @@ Aggregazione passiva dei dati d'uso (già raccolti da `UseCount`, `LastUsedAt`).
 - [x] Aggiorna `docs/architettura/schema-dati.md` con `Folders`, `PromptsEmbeddings`, `TagsEmbeddings`, `PromptImports`, V004-V007
 - [x] Aggiorna `docs/architettura/overview.md` con flusso ricerca ibrida + embedding lifecycle + resolver import
 - [x] CHANGELOG `v0.3.0`
-- [ ] Tag `v0.3.0` (post-merge di questa PR)
+- [x] Tag `v0.3.0` rilasciato 2026-05-06 con build cross-OS + 8 asset (Linux deb/rpm/AppImage, macOS arm64 dmg/tar.gz, Windows NSIS/MSI/portable)
 
 ---
 
 ## Decisioni discrezionali
 
 1. **Modello embedding**: ✅ deciso in Spike 3 v1 (2026-05-04), **confermato in v2 (2026-05-05)** dopo valutazione di alternative 2024-2025 — `paraphrase-multilingual-MiniLM-L12-v2` (118 MB ONNX). Vedi `docs/architettura/decisioni/embedding-model.md`. EmbeddingGemma-300m documentato come alternativa futura se vincoli size/perf si rilassano.
-2. **Cache embeddings server-side per workspace team**: il server ricalcola gli embedding per condividerli? Pro: zero ricalcolo per ogni client. Contro: il server vede testo prompt in chiaro (necessario per il calcolo). Trade-off di privacy che entra in conflitto con E2E in Fase 5.
-3. **Linting PII è block-by-default o warn-only?** Per workspace ad alta sensibilità (Fase 5 E2E) sarà block; per ora **warn-by-default** sembra ragionevole.
-4. **Sintassi import**: decisione presa — `{{import "..."}}` coerente con segnaposti.
+2. **Cache embeddings server-side per workspace team**: 📋 **rinviata a Fase 5** (vedi `rinvii.md` § 7). In `v0.3.0` tutti gli embedding sono client-side puri.
+3. **Linting PII block-by-default o warn-only?**: ✅ deciso **warn-by-default** in v0.3. Block-mode per workspace E2E rinviato a Fase 5.
+4. **Sintassi import**: ✅ `{{import "..."}}` (no `with` / `version=` in v0.3). Estensioni rinviate a Fase 4.
+5. **Riload automatico Session post idle-unload**: 📋 rinviato (vedi `rinvii.md`). In `v0.3.0` la ricerca cade su FTS-only fino al riavvio del client se la Session è stata droppata.
 
 ---
 

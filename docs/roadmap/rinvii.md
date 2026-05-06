@@ -2,13 +2,14 @@
 
 > Censimento unificato di **tutto ciò che è stato deliberatamente rinviato** durante lo sviluppo. Questo documento è la singola fonte di verità: nuovi rinvii vengono aggiunti qui ad ogni PR che li introduce, e gli item vengono rimossi/spuntati quando atterrano.
 >
-> **Stato**: aggiornato al 2026-05-05 dopo `v0.2.1` + prerelease `v0.2.1-fix1`.
+> **Stato**: aggiornato al 2026-05-06 dopo `v0.3.0` (Fase 3 chiusa).
 >
 > **Convenzioni**:
 > - 🔒 = bloccato da fattore esterno (cert, KYC, hardware, decisione di prodotto) → resta nel patch line di destinazione (es. `v0.2.x`)
 > - 🔧 = bloccato da fattore tecnico (libreria instabile, dipendenza non pronta) → si sblocca quando il fattore tecnico cade
 > - 📋 = sub-step già pianificato di una feature, da fare quando il padre arriva → **candidato naturale per `v0.5.0` (recupero ritardi)**
 > - 🎨 = polish / cosmetico, non bloccante per nessuno → **candidato naturale per `v0.5.0` (recupero ritardi)** o per `v0.6.0` (pulizia UI) se è puramente visuale
+> - ⛔ = scelto deliberatamente di **non** implementare (rapporto costo/beneficio sfavorevole). Resta qui solo come traccia decisionale
 > - ✅ = item che è atterrato ed è qui solo per archivio storico
 >
 > Vedi [`release-plan.md`](./release-plan.md) per il calendario completo di v0.5.0/v0.6.0 e i criteri di ingresso.
@@ -44,59 +45,79 @@ Item che vivono nel branch della release v0.2 ma aspettano qualcosa di non-tecni
 
 | Item | Note |
 |---|---|
-| **Versione in `Cargo.toml` + `tauri.conf.json` ferma a 0.1.0** → asset di release riportano `0.1.0` nei nomi anche su tag v0.2.x. Bumpare manualmente al prossimo PR feature. | 🎨 |
 | **golangci-lint reattivare sul server** dopo che l'action `golangci/golangci-lint-action@v6+` supporta stabilmente v2.x. Oggi è stato sostituito con `go vet` (PR #17) perché v1.64 incompatibile con Go 1.25. | 🔧 |
-| **CI Rust client coverage report numerico** via `cargo-llvm-cov` o `tarpaulin`. Oggi solo pass/fail. | 🎨 |
+| **~37 warning a11y di `svelte-check`** (autofocus, label senza control, role/aria mismatch). Target `v0.6.0` (pulizia UI). | 🎨 |
 
 ---
 
-## 4. Coverage e quality gate (action item per `v0.3` quality gate)
+## 4. Coverage e quality gate
 
 | Item | Soglia target | Stato oggi |
 |---|---|---|
 | Coverage TS client `vitest --coverage` su `lib/*.ts` | 70% | non configurata |
-| Coverage server **alzare da 50% → 70%** con unit test mirati su `database`/`middleware`/`models`/`sync`/`ws` | 70% | 56.2% via test integrazione cross-package |
+| Coverage server **alzare da 56% → 70%** con unit test mirati su `database`/`middleware`/`models`/`sync`/`ws` | 70% | 56.2% via test integrazione cross-package |
 | Test unit MCP server (almeno `sanitizzaFts`, `compila`, `estraiSegnaposti`) | qualunque >0 | placeholder `echo "No tests yet"` |
-| Coverage Rust client report numerico in CI | report visibile | 56 test pass/fail, no %. |
+| Coverage **client Rust 60.12% → 70%** (cargo-llvm-cov nel CI già attivo, gate floor 60% in PR #53) | 70% | 60.12% line, 67.64% function. Roadmap incrementale per file in `docs/operativo/coverage.md` |
 
 ---
 
-## 5. Fase 3 — prerequisiti tecnici
+## 5. Fase 3 — prerequisiti tecnici (storia)
 
 | Item | Stato | Azione |
 |---|---|---|
-| ~~**`ort` 2.x compile fix su Rust stable**~~ | ✅ risolto 2026-05-05 | rc.12 compila pulito con `default-features=false` + feature `api-23` (evita VitisAI introdotto in ORT 1.24). Configurazione documentata nell'ADR `architettura/decisioni/onnx-bundle.md`. |
-| Fallback `candle-core` se `ort` resta instabile a lungo | 🔧 | Piano B documentato in `docs/architettura/decisioni/onnx-bundle.md`. ~2-5 MB bundle invece di 14-22 MB, performance leggermente inferiore. |
+| ~~**`ort` 2.x compile fix su Rust stable**~~ | ✅ risolto 2026-05-05 | rc.12 compila pulito con `default-features=false` + feature `api-23`. Documentato in `architettura/decisioni/onnx-bundle.md`. |
+| Fallback `candle-core` se `ort` resta instabile a lungo | 🔧 | Piano B documentato in `docs/architettura/decisioni/onnx-bundle.md`. Non attivato in Fase 3 (ort è risultato stabile). |
 
 ---
 
-## 6. Sub-step rinviati a Fase 3 piena
+## 6. Sub-step rinviati (di feature già atterrate)
 
-Pezzi di feature già parzialmente atterrate, con il resto programmato per la fase di destinazione.
+Pezzi di feature parzialmente atterrate, con il resto programmato per `v0.5.0` (recupero ritardi) o per fasi successive.
 
-### Da Step 4 — Import/export
-- 📋 **Markdown import/export** (oggi solo JSON con schema v1) — sub-step di Step 4
+### Da Fase 2 Step 4 — Import/export
+- 📋 **Markdown import/export** (oggi solo JSON con schema v1)
 
-### Da Step 6 — Modello target
-- 📋 **Custom free-text target model** (oggi solo i 9 preset) — polish UX
-- 📋 **Server endpoint `/search?target=...`** — quando workspace team va in produzione (anche è in Fase 5)
-
-### Da Step 7 — Cartelle
-- 📋 **Esporta singola cartella** (oggi solo intero vault) — sub-step di Step 7
-- 📋 **Server endpoint `/sync/folders`** — Fase 5 Step 0a
-
-### Da Step 7 di Fase 2 — MCP server
-- 📋 **Trasporto HTTP/SSE** (oggi solo stdio) — sub-step di Step 7 Fase 2
+### Da Fase 2 Step 7 — MCP server
+- 📋 **Trasporto HTTP/SSE** (oggi solo stdio)
 - 📋 **Tool `pap_create_draft`** — richiede approval workflow di Fase 4
 
-### Da Step 8 di Fase 2 — CLI `pap`
+### Da Fase 2 Step 8 — CLI `pap`
 - 📋 **Comandi `login` / `new` / `import` / `export`** — richiedono server API o IPC client desktop
 
-### Da Step 9 — Statistiche
-- 📋 **Prompt più importati** — richiede Step 8 di Fase 3 (import resolver)
-- 📋 **Distribuzione per cartella** — Step 7 ora atterrato in v0.2.1, si può aggiungere subito in `v0.2.2` o all'inizio di Fase 3
-- 📋 **Distribuzione per autore** — richiede multi-user (workspace team in produzione)
-- 📋 **Lint health % senza issues + top categorie** — richiede Step 5 di Fase 3 (linting)
+### Da Fase 3 Step 5 — Linting
+- 📋 **Inline marker CodeMirror 6** sui punti incriminati (decoration). Oggi solo pannello Diagnosi
+- 📋 **Configurazione per-categoria** in Impostazioni (abilita/disabilita LEN/PH/PII/STY/IMP). Oggi sempre attive
+- ⛔ **PH002** (segnaposto dichiarato non usato) — semantica ambigua, scelta di non implementare in v0.3
+- ⛔ **PII002** (codice fiscale italiano) — regex complessa low-priority, scelta di non implementare in v0.3
+- ⛔ **STY002** (mancanza istruzioni chiare) — richiede NLP IT/EN troppo fragile a regex, scelta di non implementare in v0.3
+- 📋 **Linting PII block-by-default** (oggi warn-only). Per workspace ad alta sensibilità, naturale in Fase 5 con E2E
+
+### Da Fase 3 Step 6 — Modello target
+- 📋 **Custom free-text target model** (oggi solo i 9 preset)
+- 📋 **Server endpoint `?target=...`** — Fase 5
+
+### Da Fase 3 Step 7 — Cartelle
+- 📋 **Esporta singola cartella** (oggi solo intero vault)
+- 📋 **Server endpoint `/sync/folders`** — Fase 5
+
+### Da Fase 3 Step 8 — Prompt componibili
+- 📋 **Sintassi `{{import "x" with k=v}}`** per variabili scopate per import. Schema decodifica già pensato, manca parser
+- 📋 **Pinning a versione storica** `{{import "x" version=N}}` — schema `PromptVersions` già pronto, manca solo parser + lookup. Naturale in Fase 4
+- 📋 **Editor doppia vista Sorgente/Compilato** integrata (oggi separato in `CompilatorePrompt` standalone)
+- 📋 **Hover preview import** sul body con tooltip del prompt importato
+- 📋 **Ctrl+click "Vai al prompt importato"** dentro l'editor
+- 📋 **Cross-prompt linting** — quando si modifica un prompt, mostra "questo prompt è importato da N altri" usando `PromptImports` come grafo inverso
+- 📋 **Markdown export con front-matter `imports`** per riproducibilità
+
+### Da Fase 3 Step 9 — Statistiche
+- 📋 **Prompt più importati** — Step 8 ora chiuso, si può atterrare in `v0.5.0`
+- 📋 **Distribuzione per cartella** — Step 7 chiuso, idem
+- 📋 **Distribuzione per autore** — Fase 5 (multi-user team)
+- 📋 **Lint health %** + top categorie — Step 5 chiuso, si può atterrare in `v0.5.0`
+
+### Da Fase 3 Step 10 — Quality gate
+- 📋 **Riload automatico Session post idle-unload**. Oggi: dopo idle-unload la ricerca degrada a FTS-only fino al riavvio del client. Implementabile rendendo l'auto-init idempotente e chiamandolo on-demand al primo `compute_embedding_opt → None` post-drop
+- 📋 **Coverage line client Rust 60% → 70%** — gate CI già attivo, roadmap per file in `docs/operativo/coverage.md` (priorità: `embeddings.rs`, `vault.rs`, `audit.rs`, `import_export.rs`)
 
 ---
 
@@ -145,6 +166,18 @@ Tutti questi atterrano se e solo se c'è un workspace team in produzione che li 
 | ✅ Step 7 cartelle backend + UI base (Fase 3 anticipato) | PR #25 | schema V004, CRUD Tauri, sidebar tree |
 | ✅ Step 7 cartelle drag&drop + filter chip + rinomina inline | PR #26 | UX completa |
 | ✅ Bug 1 (vault loop portable) + bug 2 parziale (tray icon visibile) | PR #29 / `v0.2.1-fix1` | residuo: doppia icona Windows |
+| ✅ Step 1 ONNX Runtime + MiniLM-L12-v2 (Fase 3) | v0.3.0 | `ort 2.0.0-rc.12 default-features=false + api-23 + load-dynamic`, modello + runtime download lazy |
+| ✅ Step 2 sqlite-vec integration (V005, V006) | v0.3.0 | Auto-extension + vec0 384-dim, hooks editor su create/update/delete |
+| ✅ Step 3 ricerca ibrida RRF pesata | v0.3.0 | P95 8.29 ms su 10k prompt, slider alpha 0/0.5/1, fallback FTS-only |
+| ✅ Step 4 tag suggeriti semantici | v0.3.0 | Top-K vec0 nearest, fallback frequenza < MIN_TAG_PER_SEMANTIC |
+| ✅ Step 5 linting (11 regole su 14) | PR #45, #48 / v0.3.0 | LEN/PH/PII/STY body-only + IMP* DB-aware con cycle/depth |
+| ✅ Step 8 prompt componibili `{{import "..."}}` | v0.3.0 | Parser + resolver cartella/titolo + cycle detection + depth 5 + V007 grafo |
+| ✅ Auto-init Session embeddings al boot | PR #47 / v0.3.0 | Caricamento automatico se modello+runtime presenti su disco |
+| ✅ Idle-unload Session embeddings | PR #51 / v0.3.0 | Soglia configurabile (5/10/30/60 min, 0=off), libera ~150 MB RAM |
+| ✅ Quality gate Step 10 (5 sub-step) | PR #49-#53 / v0.3.0 | Grace degradation, bench P95, idle-unload, stress cartelle, coverage gate 60% |
+| ✅ Tag `v0.3.0` con build cross-OS (8 asset) | 2026-05-06 | Linux deb/rpm/AppImage, macOS arm64, Windows NSIS/MSI/portable |
+| ✅ Bumpare versione `Cargo.toml`/`tauri.conf.json` 0.1.0 → 0.3.0 | PR #55 / v0.3.0 | Allineamento al tag, debt tecnico chiuso |
+| ✅ CI Rust client coverage report numerico | PR #53 / v0.3.0 | cargo-llvm-cov nel workflow rust-test, gate 60% line, doc in `docs/operativo/coverage.md` |
 
 ---
 
