@@ -38,7 +38,7 @@ ureq = { version = "2.10", default-features = false, features = ["tls"] }
 # il testo prima dell'inference ort. default-features=false evita onig
 # (richiede C compiler), progressbar (TTY) e esaxx_fast. fancy-regex come
 # regex backend pure-Rust è obbligatorio (alternativa a onig).
-tokenizers = { version = "0.20", default-features = false, features = ["fancy-regex"] }
+tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
 # Estrazione archivi onnxruntime release: tar.gz su Linux/macOS, zip su Windows.
 flate2 = "1.0"
 tar = "0.4"
