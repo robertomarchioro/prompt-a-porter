@@ -2,13 +2,18 @@
 //
 // Avvisi proattivi che aiutano a scrivere prompt migliori, senza essere
 // paternalistici. Eseguito on-demand dal frontend via comando Tauri,
-// nessun salvataggio dei risultati (riprodotti al volo).
+// con due livelli:
+//   - body-only (no DB): regole pure sul testo
+//   - completo (con vault): aggiunge le regole IMP* su grafo di import
 //
-// 8 regole implementate (di 14 nello spec):
+// 11 regole implementate (di 14 nello spec):
 //   - LEN001/002: lunghezza body
 //   - PH001/003: segnaposti
 //   - PII001/003/004: privacy
 //   - STY001: ripetizione n-gram
+//   - IMP001: import non risolto
+//   - IMP002: ciclo di import
+//   - IMP003: profondità di import oltre il limite
 //
 // Skippate per ora (motivo nello spec / PR successive):
 //   - PH002 (segnaposto dichiarato non usato): semantica ambigua, il
@@ -16,15 +21,17 @@
 //   - PII002 (codice fiscale italiano): regex compleessa, low-priority
 //   - STY002 (mancanza istruzioni chiare): richiede NLP IT/EN, troppo
 //     fragile a regex
-//   - IMP001/002/003 (import): richiede Step 8 (prompt componibili);
-//     verranno integrate in PR successiva quando il parser di import
-//     atterra
 
 use regex::Regex;
+use rusqlite::Connection;
 use serde::Serialize;
+use std::collections::HashSet;
 use std::sync::OnceLock;
+use tauri::State;
 
 use crate::errore::PapErrore;
+use crate::prompt_componibili::{parse_imports, resolve_path, MAX_DEPTH};
+use crate::vault::VaultState;
 
 // ─────────── Tipi pubblici ───────────
 
@@ -319,6 +326,151 @@ fn pos_a_linea_col(testo: &str, byte_offset: usize) -> (usize, usize) {
     (linea, colonna)
 }
 
+// ─────────── Regole IMP (richiedono accesso DB) ───────────
+
+/// Esito di un walk DFS dal target di un import.
+#[derive(Debug)]
+enum WalkExit {
+    /// Sottografo OK, profondità sotto soglia, nessun ciclo.
+    Ok,
+    /// Trovato ciclo (un id già visitato è stato re-incontrato).
+    Cycle,
+    /// La profondità massima è stata superata. `depth` è il livello che
+    /// ha tripped il limite (sempre > MAX_DEPTH).
+    TooDeep { depth: usize },
+}
+
+/// DFS dal nodo `current_id`. Il chiamante deve aver già aggiunto al
+/// `visitati` set tutti gli antenati (incluso il root del prompt che si
+/// sta linting). `depth` è la profondità di `current_id` rispetto al
+/// root (root = 0, target di un import al primo livello = 1, etc.).
+///
+/// Ritorna alla prima anomalia trovata: per il linter è sufficiente
+/// segnalare un ciclo / depth-exceeded sul singolo import — l'utente
+/// risolve quello, poi rilinta.
+fn walk_dfs(
+    conn: &Connection,
+    current_id: &str,
+    visitati: &mut HashSet<String>,
+    depth: usize,
+) -> WalkExit {
+    if depth > MAX_DEPTH {
+        return WalkExit::TooDeep { depth };
+    }
+    if !visitati.insert(current_id.to_string()) {
+        return WalkExit::Cycle;
+    }
+
+    let body: String = match conn.query_row(
+        "SELECT Body FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
+        [current_id],
+        |r| r.get(0),
+    ) {
+        Ok(b) => b,
+        Err(_) => {
+            visitati.remove(current_id);
+            return WalkExit::Ok;
+        }
+    };
+
+    for imp in parse_imports(&body) {
+        let child_id = match resolve_path(conn, &imp.path) {
+            Ok(Some(id)) => id,
+            _ => continue, // import non risolvibili lungo la catena: skippa, IMP001 li flagga al root
+        };
+        let exit = walk_dfs(conn, &child_id, visitati, depth + 1);
+        if !matches!(exit, WalkExit::Ok) {
+            visitati.remove(current_id);
+            return exit;
+        }
+    }
+
+    visitati.remove(current_id);
+    WalkExit::Ok
+}
+
+/// Analizza gli import del body e genera issue IMP001/002/003.
+///
+/// `parent_id_opt` è l'id del prompt che si sta linting (None se non è
+/// ancora stato salvato): quando presente, viene seminato nel set di
+/// visitati per rilevare cicli che includono il root.
+fn regole_imp(
+    conn: &Connection,
+    body: &str,
+    parent_id_opt: Option<&str>,
+    out: &mut Vec<Issue>,
+) {
+    for imp in parse_imports(body) {
+        let (linea, colonna) = pos_a_linea_col(body, imp.byte_start);
+        let target_id = match resolve_path(conn, &imp.path) {
+            Ok(Some(id)) => id,
+            Ok(None) => {
+                out.push(Issue {
+                    code: "IMP001",
+                    severita: Severita::Error,
+                    messaggio: format!(
+                        "Import non risolto: \"{}\". Verifica che il prompt esista nella libreria.",
+                        imp.path
+                    ),
+                    linea: Some(linea),
+                    colonna: Some(colonna),
+                });
+                continue;
+            }
+            Err(_) => continue, // errore DB: niente issue, fallback silenzioso
+        };
+
+        // Caso ciclo banale: il prompt importa se stesso (self-loop).
+        if let Some(self_id) = parent_id_opt {
+            if self_id == target_id {
+                out.push(Issue {
+                    code: "IMP002",
+                    severita: Severita::Error,
+                    messaggio: format!(
+                        "Ciclo di import: \"{}\" punta al prompt stesso.",
+                        imp.path
+                    ),
+                    linea: Some(linea),
+                    colonna: Some(colonna),
+                });
+                continue;
+            }
+        }
+
+        let mut visitati: HashSet<String> = HashSet::new();
+        if let Some(self_id) = parent_id_opt {
+            visitati.insert(self_id.to_string());
+        }
+        match walk_dfs(conn, &target_id, &mut visitati, 1) {
+            WalkExit::Ok => {}
+            WalkExit::Cycle => {
+                out.push(Issue {
+                    code: "IMP002",
+                    severita: Severita::Error,
+                    messaggio: format!(
+                        "Ciclo di import rilevato attraverso \"{}\". I prompt non possono importarsi a vicenda.",
+                        imp.path
+                    ),
+                    linea: Some(linea),
+                    colonna: Some(colonna),
+                });
+            }
+            WalkExit::TooDeep { depth } => {
+                out.push(Issue {
+                    code: "IMP003",
+                    severita: Severita::Warning,
+                    messaggio: format!(
+                        "Profondità di import {depth} (max {MAX_DEPTH}) raggiunta tramite \"{}\". Considera di appiattire la catena.",
+                        imp.path
+                    ),
+                    linea: Some(linea),
+                    colonna: Some(colonna),
+                });
+            }
+        }
+    }
+}
+
 // ─────────── Entrypoint ───────────
 
 pub fn analizza(body: &str) -> Vec<Issue> {
@@ -334,9 +486,37 @@ pub fn analizza(body: &str) -> Vec<Issue> {
     out
 }
 
+/// Variante completa: include `analizza` body-only + le regole IMP che
+/// richiedono accesso al vault per risolvere e camminare il grafo.
+pub fn analizza_completo(
+    conn: &Connection,
+    body: &str,
+    parent_id_opt: Option<&str>,
+) -> Vec<Issue> {
+    let mut out = analizza(body);
+    regole_imp(conn, body, parent_id_opt, &mut out);
+    out
+}
+
+/// Comando Tauri unificato. Esegue sempre il lint body-only; se il vault
+/// è aperto, aggiunge anche le regole IMP. Se il vault non è
+/// disponibile (login non ancora effettuato) il fallback è silenzioso —
+/// il lint rimane utile anche con db chiuso.
 #[tauri::command]
-pub fn prompt_lint(body: String) -> Result<Vec<Issue>, PapErrore> {
-    Ok(analizza(&body))
+pub fn prompt_lint(
+    body: String,
+    prompt_id: Option<String>,
+    state: State<'_, VaultState>,
+) -> Result<Vec<Issue>, PapErrore> {
+    let mut out = analizza(&body);
+    if let Ok(imp) = state.with_conn(|conn| {
+        let mut buf = Vec::new();
+        regole_imp(conn, &body, prompt_id.as_deref(), &mut buf);
+        Ok(buf)
+    }) {
+        out.extend(imp);
+    }
+    Ok(out)
 }
 
 // ─────────── Test ───────────
@@ -497,5 +677,141 @@ mod test {
         // entrambe almeno una volta
         assert!(conta_codice(&issues, "PII001") >= 1);
         assert!(conta_codice(&issues, "PII004") >= 1);
+    }
+
+    // ─────────── Test regole IMP (richiedono DB) ───────────
+
+    use rusqlite::params;
+
+    fn db_test() -> Connection {
+        crate::embeddings_store::registra_auto_extension();
+        let conn = Connection::open_in_memory().unwrap();
+        crate::migrazione::esegui_migrazioni(&conn).unwrap();
+        crate::libreria::assicura_dati_base(&conn).unwrap();
+        conn
+    }
+
+    fn inserisci_prompt(conn: &Connection, id: &str, titolo: &str, body: &str) {
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body,
+                Visibility, FolderId, Version, CreatedAt, UpdatedAt)
+             VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, 'private', NULL, 1,
+                     datetime('now'), datetime('now'))",
+            params![id, titolo, body],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn imp001_import_non_risolto() {
+        let conn = db_test();
+        // Niente prompt "fantasma" inserito. Il body lo importa.
+        let body = r#"Inizio testo. {{import "fantasma"}} fine. Lungo a sufficienza per LEN002."#;
+        let issues = analizza_completo(&conn, body, None);
+        assert!(ha_codice(&issues, "IMP001"));
+        let i = issues.iter().find(|i| i.code == "IMP001").unwrap();
+        assert!(matches!(i.severita, Severita::Error));
+        assert!(i.linea.is_some());
+        assert!(i.colonna.is_some());
+        assert!(i.messaggio.contains("fantasma"));
+    }
+
+    #[test]
+    fn imp001_no_falso_positivo_quando_path_risolve() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "ruolo-esperto", "Sei un esperto di...");
+        let body = r#"Setup {{import "ruolo-esperto"}} continua. Lungo per evitare LEN002."#;
+        let issues = analizza_completo(&conn, body, None);
+        assert!(!ha_codice(&issues, "IMP001"));
+    }
+
+    #[test]
+    fn imp002_self_loop_diretto() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "auto", "self: {{import \"auto\"}}");
+        let body = "self: {{import \"auto\"}}";
+        // parent_id_opt = Some("prm-1") simula il prompt che si sta editando.
+        let issues = analizza_completo(&conn, body, Some("prm-1"));
+        assert!(ha_codice(&issues, "IMP002"));
+    }
+
+    #[test]
+    fn imp002_ciclo_indiretto_a_b_a() {
+        let conn = db_test();
+        // A → B → A
+        inserisci_prompt(&conn, "prm-a", "A", r#"{{import "B"}}"#);
+        inserisci_prompt(&conn, "prm-b", "B", r#"{{import "A"}}"#);
+        // Stiamo linting A (che importa B che importa A).
+        let body = r#"{{import "B"}}"#;
+        let issues = analizza_completo(&conn, body, Some("prm-a"));
+        assert!(ha_codice(&issues, "IMP002"));
+    }
+
+    #[test]
+    fn imp002_no_falso_positivo_su_grafo_aciclico() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-a", "A", r#"{{import "B"}}"#);
+        inserisci_prompt(&conn, "prm-b", "B", "foglia.");
+        let body = r#"{{import "B"}}"#;
+        let issues = analizza_completo(&conn, body, Some("prm-a"));
+        assert!(!ha_codice(&issues, "IMP002"));
+    }
+
+    #[test]
+    fn imp003_profondita_oltre_max() {
+        let conn = db_test();
+        // Catena di 7: root(prm-r) → A → B → C → D → E → F (depth=6 supera MAX_DEPTH=5)
+        inserisci_prompt(&conn, "prm-a", "A", r#"{{import "B"}}"#);
+        inserisci_prompt(&conn, "prm-b", "B", r#"{{import "C"}}"#);
+        inserisci_prompt(&conn, "prm-c", "C", r#"{{import "D"}}"#);
+        inserisci_prompt(&conn, "prm-d", "D", r#"{{import "E"}}"#);
+        inserisci_prompt(&conn, "prm-e", "E", r#"{{import "F"}}"#);
+        inserisci_prompt(&conn, "prm-f", "F", "foglia profonda.");
+        let body = r#"{{import "A"}}"#;
+        let issues = analizza_completo(&conn, body, Some("prm-r"));
+        assert!(ha_codice(&issues, "IMP003"));
+        let i = issues.iter().find(|i| i.code == "IMP003").unwrap();
+        assert!(matches!(i.severita, Severita::Warning));
+    }
+
+    #[test]
+    fn imp003_no_falso_positivo_a_5_livelli() {
+        let conn = db_test();
+        // Catena root → A → B → C → D → E (depth massimo = 5 = MAX_DEPTH, OK)
+        inserisci_prompt(&conn, "prm-a", "A", r#"{{import "B"}}"#);
+        inserisci_prompt(&conn, "prm-b", "B", r#"{{import "C"}}"#);
+        inserisci_prompt(&conn, "prm-c", "C", r#"{{import "D"}}"#);
+        inserisci_prompt(&conn, "prm-d", "D", r#"{{import "E"}}"#);
+        inserisci_prompt(&conn, "prm-e", "E", "foglia.");
+        let body = r#"{{import "A"}}"#;
+        let issues = analizza_completo(&conn, body, Some("prm-r"));
+        assert!(!ha_codice(&issues, "IMP003"));
+    }
+
+    #[test]
+    fn analizza_completo_non_perde_regole_body_only() {
+        let conn = db_test();
+        // Body con email PII001 + import non risolto → entrambe segnalate.
+        let body = r#"Email a x@y.com e {{import "missing"}} grazie. Lungo per LEN002."#;
+        let issues = analizza_completo(&conn, body, None);
+        assert!(ha_codice(&issues, "PII001"));
+        assert!(ha_codice(&issues, "IMP001"));
+    }
+
+    #[test]
+    fn regole_imp_senza_parent_id_funzionano_comunque() {
+        // Use case: editor con prompt nuovo (ancora senza id) — IMP001
+        // funziona, IMP002 non può detectare self-loop (manca self_id) ma
+        // detecta cicli che NON includono il root.
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-a", "A", r#"{{import "B"}}"#);
+        inserisci_prompt(&conn, "prm-b", "B", r#"{{import "A"}}"#);
+        // Body lint = "{{import "A"}}", parent_id None → walk parte da A,
+        // visita B, B importa A, A non era ancora visited (root non
+        // iniettato), quindi ENTRA in A. Poi A importa B che è in
+        // visited → IMP002.
+        let body = r#"{{import "A"}}"#;
+        let issues = analizza_completo(&conn, body, None);
+        assert!(ha_codice(&issues, "IMP002"));
     }
 }

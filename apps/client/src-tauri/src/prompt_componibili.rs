@@ -30,7 +30,7 @@ use crate::vault::VaultState;
 
 /// Profondità massima di nidificazione import. Oltre questa soglia il
 /// resolver ritorna errore — impedisce esplosioni da grafi profondi.
-const MAX_DEPTH: usize = 5;
+pub const MAX_DEPTH: usize = 5;
 
 /// Limite di lunghezza output per evitare bombe di compilazione (analogo
 /// a billion-laughs in XML). Se la compilazione produce più di tot byte,
