@@ -9,6 +9,7 @@ mod libreria;
 mod migrazione;
 mod preferenze;
 mod prompt;
+mod ricerca_ibrida;
 mod statistiche;
 mod sync;
 mod vault;
@@ -255,6 +256,7 @@ pub fn run() {
             preferenze::preferenze_carica,
             preferenze::preferenze_salva,
             prompt::prompt_cerca,
+            ricerca_ibrida::prompt_cerca_ibrida,
             libreria::libreria_conteggi,
             libreria::libreria_lista,
             libreria::libreria_dettaglio,
