@@ -32,8 +32,37 @@
   let formato = $state<"testo" | "markdown" | "json">("testo");
   let toastVisibile = $state(false);
 
-  const segnaposti = $derived(estraiSegnaposti(prompt.body));
-  const compilato = $derived(compila(prompt.body, valori));
+  // ─── Espansione import (Fase 3 Step 8) ───
+  let bodyEspanso = $state<string | null>(null);
+  let loadingEspandi = $state(false);
+  let errEspandi = $state("");
+
+  /// True se il body sorgente contiene almeno un `{{import "..."}}`.
+  const haImport = $derived(/\{\{\s*import\s+"[^"]+"\s*\}\}/.test(prompt.body));
+
+  /// Body corrente per il flow di compilazione: espanso se l'utente ha
+  /// chiesto l'espansione, altrimenti sorgente.
+  const bodyCorrente = $derived(bodyEspanso ?? prompt.body);
+
+  async function toggleEspansione() {
+    errEspandi = "";
+    if (bodyEspanso !== null) {
+      // Già espanso → torna alla sorgente.
+      bodyEspanso = null;
+      return;
+    }
+    loadingEspandi = true;
+    try {
+      bodyEspanso = await invoke<string>("prompt_compila", { id: prompt.id });
+    } catch (e) {
+      errEspandi = String(e);
+    } finally {
+      loadingEspandi = false;
+    }
+  }
+
+  const segnaposti = $derived(estraiSegnaposti(bodyCorrente));
+  const compilato = $derived(compila(bodyCorrente, valori));
   const numCompilati = $derived(contaCompilati(segnaposti, valori));
   const progresso = $derived(
     segnaposti.length > 0 ? numCompilati / segnaposti.length : 1,
@@ -174,6 +203,21 @@
       <div class="col-preview">
         <div class="preview-head">
           <h3>Anteprima</h3>
+          {#if haImport}
+            <button
+              class="import-toggle"
+              class:import-toggle--attivo={bodyEspanso !== null}
+              onclick={toggleEspansione}
+              disabled={loadingEspandi}
+              type="button"
+            >
+              {loadingEspandi
+                ? "Espansione…"
+                : bodyEspanso !== null
+                  ? "Mostra sorgente"
+                  : "Espandi import"}
+            </button>
+          {/if}
           <div class="formato-toggle">
             <button
               class="fmt-btn"
@@ -196,10 +240,14 @@
           </div>
         </div>
 
+        {#if errEspandi}
+          <div class="import-errore">{errEspandi}</div>
+        {/if}
+
         {#if formato === "testo"}
           <!-- eslint-disable-next-line svelte/no-at-html-tags -->
           <div class="preview-box">
-            {@html renderCompilazione(prompt.body, valori)}
+            {@html renderCompilazione(bodyCorrente, valori)}
           </div>
         {:else}
           <pre class="preview-box preview-raw">{testoPerCopia()}</pre>
@@ -415,6 +463,48 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
+  }
+
+  .import-toggle {
+    appearance: none;
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 4px 10px;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+      background var(--motion-fast),
+      border-color var(--motion-fast),
+      color var(--motion-fast);
+    margin-left: auto;
+  }
+  .import-toggle:hover:not(:disabled) {
+    border-color: var(--accent-team);
+    color: var(--accent-team);
+  }
+  .import-toggle:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .import-toggle--attivo {
+    background: var(--accent-team-soft, rgba(80, 120, 200, 0.15));
+    border-color: var(--accent-team);
+    color: var(--accent-team);
+  }
+
+  .import-errore {
+    background: rgba(220, 80, 80, 0.12);
+    color: #c83;
+    border: 1px solid rgba(220, 80, 80, 0.4);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    font-size: var(--fs-xs);
+    font-family: var(--font-mono);
+    margin: 0 0 8px 0;
   }
 
   .preview-head h3 {
