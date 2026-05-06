@@ -2,6 +2,7 @@ mod audit;
 mod cartelle;
 mod editor;
 mod embeddings;
+mod embeddings_backfill;
 mod embeddings_store;
 mod errore;
 mod import_export;
@@ -280,6 +281,7 @@ pub fn run() {
             embeddings::embeddings_download,
             embeddings::embeddings_init,
             embeddings::embeddings_compute,
+            embeddings_backfill::embeddings_backfill,
             cartelle::folder_lista,
             cartelle::folder_crea,
             cartelle::folder_rinomina,
