@@ -13,6 +13,7 @@ mod prompt;
 mod ricerca_ibrida;
 mod statistiche;
 mod sync;
+mod tags_suggest;
 mod vault;
 mod versioning;
 
@@ -282,6 +283,7 @@ pub fn run() {
             embeddings::embeddings_init,
             embeddings::embeddings_compute,
             embeddings_backfill::embeddings_backfill,
+            tags_suggest::tags_suggest,
             cartelle::folder_lista,
             cartelle::folder_crea,
             cartelle::folder_rinomina,

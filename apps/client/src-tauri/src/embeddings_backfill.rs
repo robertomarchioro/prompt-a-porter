@@ -32,56 +32,94 @@ const MAX_TOTAL: usize = 5000;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ProgressBackfill {
+    pub tipo: &'static str, // "prompt" | "tag"
     pub processati: usize,
     pub totale_stima: usize,
-    /// Prompt id appena completato (utile per UI debug).
+    /// ID appena completato (utile per UI debug).
     pub ultimo_id: String,
 }
 
 #[derive(Debug, Serialize)]
 pub struct EsitoBackfill {
-    pub processati: usize,
+    pub prompt_processati: usize,
+    pub tag_processati: usize,
     pub saltati_no_session: usize,
     pub errori: usize,
 }
 
-#[tauri::command]
-pub fn embeddings_backfill(
-    app: tauri::AppHandle,
-    state: State<'_, VaultState>,
-    rt_state: State<'_, EmbeddingsState>,
-) -> Result<EsitoBackfill, PapErrore> {
+/// Tipo di entità da processare nel backfill.
+enum TipoBackfill {
+    Prompt,
+    Tag,
+}
+
+impl TipoBackfill {
+    fn etichetta(&self) -> &'static str {
+        match self {
+            TipoBackfill::Prompt => "prompt",
+            TipoBackfill::Tag => "tag",
+        }
+    }
+}
+
+/// Loop di backfill generico parametrizzato sul tipo. Ritorna numero
+/// processati. Errore esplicito se Session non loaded (no skip silenzioso).
+fn esegui_loop(
+    app: &tauri::AppHandle,
+    state: &State<'_, VaultState>,
+    rt_state: &State<'_, EmbeddingsState>,
+    tipo: TipoBackfill,
+    errori: &mut usize,
+) -> Result<usize, PapErrore> {
     let mut processati = 0usize;
-    let mut saltati_no_session = 0usize;
-    let mut errori = 0usize;
 
-    // Stima iniziale del totale (per progress UI). Si aggiorna ad ogni batch.
     let totale_stima: usize = state.with_conn(|conn| {
-        let n: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM Prompts p
-             WHERE p.DeletedAt IS NULL
-               AND NOT EXISTS (
-                   SELECT 1 FROM PromptsEmbeddings e WHERE e.PromptId = p.Id
-               )",
-            [],
-            |r| r.get(0),
-        )?;
-        Ok(n as usize)
-    })?;
-
-    log::info!("embeddings_backfill: stima {totale_stima} prompt da processare");
-
-    while processati < MAX_TOTAL {
-        // 1. Leggi un batch di candidati (id + body) sotto lock.
-        let candidati: Vec<(String, String)> = state.with_conn(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT p.Id, p.Body FROM Prompts p
+        let sql = match tipo {
+            TipoBackfill::Prompt => {
+                "SELECT COUNT(*) FROM Prompts p
                  WHERE p.DeletedAt IS NULL
                    AND NOT EXISTS (
                        SELECT 1 FROM PromptsEmbeddings e WHERE e.PromptId = p.Id
-                   )
-                 LIMIT ?1",
-            )?;
+                   )"
+            }
+            TipoBackfill::Tag => {
+                "SELECT COUNT(*) FROM Tags t
+                 WHERE t.DeletedAt IS NULL
+                   AND NOT EXISTS (
+                       SELECT 1 FROM TagsEmbeddings e WHERE e.TagId = t.Id
+                   )"
+            }
+        };
+        let n: i64 = conn.query_row(sql, [], |r| r.get(0))?;
+        Ok(n as usize)
+    })?;
+
+    log::info!(
+        "embeddings_backfill: stima {totale_stima} {} da processare",
+        tipo.etichetta()
+    );
+
+    while processati < MAX_TOTAL {
+        let candidati: Vec<(String, String)> = state.with_conn(|conn| {
+            let sql = match tipo {
+                TipoBackfill::Prompt => {
+                    "SELECT p.Id, p.Body FROM Prompts p
+                     WHERE p.DeletedAt IS NULL
+                       AND NOT EXISTS (
+                           SELECT 1 FROM PromptsEmbeddings e WHERE e.PromptId = p.Id
+                       )
+                     LIMIT ?1"
+                }
+                TipoBackfill::Tag => {
+                    "SELECT t.Id, t.Name FROM Tags t
+                     WHERE t.DeletedAt IS NULL
+                       AND NOT EXISTS (
+                           SELECT 1 FROM TagsEmbeddings e WHERE e.TagId = t.Id
+                       )
+                     LIMIT ?1"
+                }
+            };
+            let mut stmt = conn.prepare(sql)?;
             let rows = stmt
                 .query_map(params![BATCH_SIZE as i64], |row| {
                     Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -95,34 +133,38 @@ pub fn embeddings_backfill(
             break;
         }
 
-        // 2. Calcola gli embeddings fuori dal lock vault (lock rt_state interno
-        //    al compute, condiviso con altri command embedding).
         let mut emb_batch: Vec<(String, Vec<f32>)> = Vec::with_capacity(candidati.len());
-        for (id, body) in &candidati {
-            match compute_embedding_opt(&rt_state, body) {
+        for (id, testo) in &candidati {
+            match compute_embedding_opt(rt_state, testo) {
                 Ok(Some(emb)) => emb_batch.push((id.clone(), emb)),
                 Ok(None) => {
-                    saltati_no_session += 1;
-                    // Session non loaded: ritorna subito errore esplicito,
-                    // non c'è motivo di continuare.
                     return Err(PapErrore::Generico(
                         "Embeddings non inizializzati. Chiama embeddings_init prima del backfill.".into(),
                     ));
                 }
                 Err(e) => {
-                    log::error!("backfill compute fallito per {id}: {e}");
-                    errori += 1;
+                    log::error!(
+                        "backfill {} compute fallito per {id}: {e}",
+                        tipo.etichetta()
+                    );
+                    *errori += 1;
                 }
             }
         }
 
-        // 3. Upsert in vec0 sotto lock vault.
         let ultimo_id = state.with_conn(|conn| {
             let mut last = String::new();
             for (id, emb) in &emb_batch {
-                if let Err(e) = embeddings_store::upsert_embedding(conn, id, emb) {
-                    log::error!("backfill upsert fallito per {id}: {e}");
-                    errori += 1;
+                let res = match tipo {
+                    TipoBackfill::Prompt => embeddings_store::upsert_embedding(conn, id, emb),
+                    TipoBackfill::Tag => embeddings_store::upsert_tag_embedding(conn, id, emb),
+                };
+                if let Err(e) = res {
+                    log::error!(
+                        "backfill {} upsert fallito per {id}: {e}",
+                        tipo.etichetta()
+                    );
+                    *errori += 1;
                 } else {
                     last = id.clone();
                     processati += 1;
@@ -131,10 +173,10 @@ pub fn embeddings_backfill(
             Ok(last)
         })?;
 
-        // 4. Emit progress.
         let _ = app.emit(
             "embeddings:backfill:progress",
             ProgressBackfill {
+                tipo: tipo.etichetta(),
                 processati,
                 totale_stima,
                 ultimo_id,
@@ -142,11 +184,39 @@ pub fn embeddings_backfill(
         );
     }
 
+    Ok(processati)
+}
+
+#[tauri::command]
+pub fn embeddings_backfill(
+    app: tauri::AppHandle,
+    state: State<'_, VaultState>,
+    rt_state: State<'_, EmbeddingsState>,
+) -> Result<EsitoBackfill, PapErrore> {
+    let saltati_no_session = 0usize;
+    let mut errori = 0usize;
+
+    let prompt_processati = esegui_loop(
+        &app,
+        &state,
+        &rt_state,
+        TipoBackfill::Prompt,
+        &mut errori,
+    )?;
+    let tag_processati = esegui_loop(
+        &app,
+        &state,
+        &rt_state,
+        TipoBackfill::Tag,
+        &mut errori,
+    )?;
+
     log::info!(
-        "embeddings_backfill: completato. processati={processati}, errori={errori}"
+        "embeddings_backfill: completato. prompt={prompt_processati}, tag={tag_processati}, errori={errori}"
     );
     Ok(EsitoBackfill {
-        processati,
+        prompt_processati,
+        tag_processati,
         saltati_no_session,
         errori,
     })
