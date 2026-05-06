@@ -73,7 +73,10 @@ fn sanitizza_fts(query: &str) -> String {
 
 /// Top-K prompt id matching della query in FTS5, ordinati per rank ASC
 /// (rank FTS5 più basso = più rilevante).
-fn cerca_lessicale(
+///
+/// `pub` per il bench harness (Step 10 quality gate). Non parte dell'API
+/// pubblica del crate per consumatori esterni.
+pub fn cerca_lessicale(
     conn: &Connection,
     query: &str,
     k: usize,
@@ -117,7 +120,9 @@ fn cerca_semantica(
 ///
 /// Restituisce `Vec<(id, score, rank_lex, rank_sem)>` ordinato per score DESC
 /// (più alto prima).
-fn rrf_fuse(
+///
+/// `pub` per il bench harness (Step 10 quality gate).
+pub fn rrf_fuse(
     lex: &[String],
     sem: &[String],
     alpha: f64,

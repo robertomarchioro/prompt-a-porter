@@ -1,23 +1,26 @@
-mod audit;
-mod cartelle;
-mod editor;
-mod embeddings;
-mod embeddings_backfill;
-mod embeddings_store;
-mod errore;
-mod import_export;
-mod libreria;
-mod linting;
-mod migrazione;
-mod preferenze;
-mod prompt;
-mod prompt_componibili;
-mod ricerca_ibrida;
-mod statistiche;
-mod sync;
-mod tags_suggest;
-mod vault;
-mod versioning;
+// `pub mod` per essere accessibili da `examples/` e `benches/`
+// (Step 10 quality gate). I tipi privati rimangono privati per
+// visibilità Rust ordinaria.
+pub mod audit;
+pub mod cartelle;
+pub mod editor;
+pub mod embeddings;
+pub mod embeddings_backfill;
+pub mod embeddings_store;
+pub mod errore;
+pub mod import_export;
+pub mod libreria;
+pub mod linting;
+pub mod migrazione;
+pub mod preferenze;
+pub mod prompt;
+pub mod prompt_componibili;
+pub mod ricerca_ibrida;
+pub mod statistiche;
+pub mod sync;
+pub mod tags_suggest;
+pub mod vault;
+pub mod versioning;
 
 use tauri::{
     menu::{Menu, MenuItem},
