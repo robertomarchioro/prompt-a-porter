@@ -8,6 +8,7 @@ on:
       - "packages/**"
       - "pnpm-workspace.yaml"
       - "pnpm-lock.yaml"
+      - ".github/workflows/client-build.yml"
       - "!apps/client/**/*.md"
       - "!apps/client/**/CHANGELOG.md"
       - "!apps/client/**/LICENSE"
@@ -19,6 +20,7 @@ on:
       - "packages/**"
       - "pnpm-workspace.yaml"
       - "pnpm-lock.yaml"
+      - ".github/workflows/client-build.yml"
       - "!apps/client/**/*.md"
       - "!apps/client/**/CHANGELOG.md"
       - "!apps/client/**/LICENSE"
@@ -56,15 +58,27 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
 
       - name: Installa dipendenze sistema
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
 
-      - name: Cargo test
+      # cargo-llvm-cov: tooling di line/region coverage per Rust su stable.
+      # Usa l'action ufficiale taiki-e per fetch del binario pre-compilato
+      # (no compile, ~5 sec invece dei ~3 minuti di cargo install).
+      - name: Installa cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      # Threshold floor 60% anti-regressione (Step 10 quality gate Fase 3).
+      # Coverage attuale ~60% line. Roadmap: portare a 70% in v0.4.x
+      # focalizzando su lib.rs, embeddings.rs, vault.rs, audit.rs (file
+      # con coverage < 60% oggi). Vedi docs/operativo/coverage.md.
+      - name: Cargo test + coverage gate
         working-directory: apps/client/src-tauri
-        run: cargo test
+        run: cargo llvm-cov --lib --summary-only --fail-under-lines 60
 
   # La build multi-OS dei bundle è in .github/workflows/release.yml,
   # triggerata da tag `v*` per evitare di consumare minuti su ogni PR.

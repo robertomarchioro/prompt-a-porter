@@ -10,6 +10,7 @@ Documentazione di **operations**: deploy del server di sync, configurazione, run
 |---|---|
 | [`deploy-produzione.md`](./deploy-produzione.md) | Deploy del client desktop e del server di sync via Docker; variabili d'ambiente; raccomandazioni di base |
 | [`bench-ricerca-ibrida.md`](./bench-ricerca-ibrida.md) | Quality gate Fase 3: bench P95 ricerca ibrida su dataset realistico 1k/10k prompt |
+| [`coverage.md`](./coverage.md) | Quality gate Fase 3: coverage line del client Rust, gate CI 60%, roadmap verso 70% |
 
 ## Aspetti correlati in altri cluster
 
