@@ -554,21 +554,18 @@ pub fn embeddings_compute(
     }
 
     let seq_len = ids.len();
-    let ids_arr = Array2::from_shape_vec((1, seq_len), ids).map_err(|e| {
-        PapErrore::Generico(format!("ndarray from ids: {e}"))
-    })?;
-    let mask_arr = Array2::from_shape_vec((1, seq_len), mask.clone()).map_err(|e| {
-        PapErrore::Generico(format!("ndarray from mask: {e}"))
-    })?;
-    let type_arr = Array2::from_shape_vec((1, seq_len), type_ids).map_err(|e| {
-        PapErrore::Generico(format!("ndarray from type_ids: {e}"))
-    })?;
-
-    // 3. Run inference
+    // Costruzione tensor via tupla (shape, vec) — forma universale ort 2.x,
+    // funziona per i64 senza dover passare attraverso ndarray (che richiede
+    // OwnedTensorArrayData<_> trait, non implementato per Array2<i64>).
+    let shape = vec![1i64, seq_len as i64];
+    let mask_clone = mask.clone();
     let inputs = ort::inputs![
-        "input_ids" => Tensor::from_array(ids_arr).map_err(|e| PapErrore::Generico(format!("tensor ids: {e}")))?,
-        "attention_mask" => Tensor::from_array(mask_arr).map_err(|e| PapErrore::Generico(format!("tensor mask: {e}")))?,
-        "token_type_ids" => Tensor::from_array(type_arr).map_err(|e| PapErrore::Generico(format!("tensor type: {e}")))?,
+        "input_ids" => Tensor::from_array((shape.clone(), ids))
+            .map_err(|e| PapErrore::Generico(format!("tensor ids: {e}")))?,
+        "attention_mask" => Tensor::from_array((shape.clone(), mask_clone))
+            .map_err(|e| PapErrore::Generico(format!("tensor mask: {e}")))?,
+        "token_type_ids" => Tensor::from_array((shape, type_ids))
+            .map_err(|e| PapErrore::Generico(format!("tensor type: {e}")))?,
     ];
     let outputs = loaded
         .session
