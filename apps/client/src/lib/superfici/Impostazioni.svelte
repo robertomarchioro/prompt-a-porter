@@ -26,6 +26,7 @@
     sync_abilitato: boolean;
     ricerca_semantica_abilitata: boolean;
     ricerca_alpha: number;
+    idle_unload_secondi: number;
   }
 
   interface VoceAudit {
@@ -83,6 +84,7 @@
     sync_abilitato: false,
     ricerca_semantica_abilitata: false,
     ricerca_alpha: 0.5,
+    idle_unload_secondi: 300,
   });
 
   let vaultPercorso = $state("");
@@ -1133,6 +1135,29 @@
                     onchange={toggleRicercaSemantica}
                   />
                   <span>Usa ricerca semantica nelle query</span>
+                </div>
+
+                <div class="ric-idle-unload">
+                  <label for="idle-unload-select">
+                    Scarica modello dopo inattività
+                  </label>
+                  <select
+                    id="idle-unload-select"
+                    bind:value={prefs.idle_unload_secondi}
+                    onchange={salvaPreferenze}
+                  >
+                    <option value={0}>Mai (resta sempre caricato)</option>
+                    <option value={300}>5 minuti (consigliato)</option>
+                    <option value={600}>10 minuti</option>
+                    <option value={1800}>30 minuti</option>
+                    <option value={3600}>1 ora</option>
+                  </select>
+                  <p class="sez-hint">
+                    Libera ~150 MB di RAM quando il modello non è in
+                    uso. Dopo lo scarico, la ricerca cade su FTS
+                    lessicale fino al prossimo riavvio del client (il
+                    riload automatico arriva in una versione successiva).
+                  </p>
                 </div>
               </div>
             </div>

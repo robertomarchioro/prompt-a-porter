@@ -141,6 +141,15 @@ fn carica_hotkey_preferenze(data_dir: &std::path::Path) -> String {
     "Ctrl+Shift+P".to_string()
 }
 
+/// Legge `idle_unload_secondi` dal file preferenze. `None` se file
+/// inesistente o malformato (caller usa il default).
+fn carica_idle_unload_pref(data_dir: &std::path::Path) -> Option<u32> {
+    let prefs_path = data_dir.join("preferenze.json");
+    let json = std::fs::read_to_string(prefs_path).ok()?;
+    let prefs: preferenze::Preferenze = serde_json::from_str(&json).ok()?;
+    Some(prefs.idle_unload_secondi)
+}
+
 fn registra_shortcut(app: &tauri::AppHandle, combo: &str) -> Result<(), String> {
     let _ = app.global_shortcut().unregister_all();
     let shortcut = parse_hotkey(combo)?;
@@ -246,6 +255,37 @@ pub fn run() {
             if let Err(e) = registra_shortcut(app.handle(), &hotkey_combo) {
                 log::warn!("Impossibile registrare hotkey '{hotkey_combo}': {e}");
             }
+
+            // ── Task background: idle-unload Session embeddings (Step 10) ──
+            //
+            // Ogni IDLE_CHECK_INTERVAL_SEC controlla la preferenza
+            // utente `idle_unload_secondi`. Se > 0 e la Session ort è
+            // stata inattiva da almeno quella soglia, la droppa per
+            // liberare RAM. La preferenza viene riletta a ogni tick così
+            // l'utente può cambiarla dall'UI senza riavvio.
+            //
+            // Thread OS dedicato (no async) — il workload è molto leggero
+            // (~1 lock check ogni 30s) e non richiede tokio.
+            const IDLE_CHECK_INTERVAL_SEC: u64 = 30;
+            let handle_idle = app.handle().clone();
+            let data_dir_idle = data_dir.clone();
+            std::thread::spawn(move || {
+                let intervallo =
+                    std::time::Duration::from_secs(IDLE_CHECK_INTERVAL_SEC);
+                loop {
+                    std::thread::sleep(intervallo);
+                    let soglia_sec =
+                        carica_idle_unload_pref(&data_dir_idle).unwrap_or(300);
+                    if soglia_sec == 0 {
+                        continue; // disattivata
+                    }
+                    let rt_state = handle_idle.state::<embeddings::EmbeddingsState>();
+                    let _ = embeddings::unload_se_idle(
+                        &rt_state,
+                        std::time::Duration::from_secs(soglia_sec as u64),
+                    );
+                }
+            });
 
             Ok(())
         })
