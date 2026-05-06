@@ -11,6 +11,7 @@ mod linting;
 mod migrazione;
 mod preferenze;
 mod prompt;
+mod prompt_componibili;
 mod ricerca_ibrida;
 mod statistiche;
 mod sync;
@@ -286,6 +287,7 @@ pub fn run() {
             embeddings_backfill::embeddings_backfill,
             tags_suggest::tags_suggest,
             linting::prompt_lint,
+            prompt_componibili::prompt_compila,
             cartelle::folder_lista,
             cartelle::folder_crea,
             cartelle::folder_rinomina,

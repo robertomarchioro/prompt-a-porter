@@ -41,6 +41,11 @@ static MIGRAZIONI: &[Migrazione] = &[
         nome: "tag_embeddings",
         sql: include_str!("../migrations/V006__tag_embeddings.sql"),
     },
+    Migrazione {
+        versione: 7,
+        nome: "prompt_imports",
+        sql: include_str!("../migrations/V007__prompt_imports.sql"),
+    },
 ];
 
 /// Crea la tabella di tracking se non esiste.
@@ -114,8 +119,8 @@ mod test {
         crate::embeddings_store::registra_auto_extension();
         let conn = Connection::open_in_memory().unwrap();
         let n = esegui_migrazioni(&conn).unwrap();
-        assert!(n >= 6, "Tutte le migrazioni devono essere applicate (almeno 6)");
-        assert_eq!(versione_corrente(&conn).unwrap(), 6);
+        assert!(n >= 7, "Tutte le migrazioni devono essere applicate (almeno 7)");
+        assert_eq!(versione_corrente(&conn).unwrap(), 7);
     }
 
     #[test]

@@ -6,6 +6,7 @@ use tauri::State;
 use crate::embeddings::{compute_embedding_opt, EmbeddingsState};
 use crate::embeddings_store;
 use crate::errore::PapErrore;
+use crate::prompt_componibili;
 use crate::vault::VaultState;
 
 /// Hook embedding: dopo una INSERT/UPDATE su `Prompts`, se la Session ort è
@@ -174,6 +175,8 @@ pub fn prompt_crea(
         ricostruisci_fts(conn)?;
         // Hook embedding (Fase 3 Step 3): no-op se Session non loaded.
         aggiorna_embedding(conn, &rt_state, &id, body_clean)?;
+        // Hook import graph (Fase 3 Step 8): popola PromptImports.
+        prompt_componibili::aggiorna_imports(conn, &id, body_clean)?;
         crate::audit::registra(conn, "prompt.creato", "Prompt", &id, Some(dati.titolo.trim()));
         log::info!("Prompt creato: {id}");
         Ok(id)
@@ -214,6 +217,8 @@ pub fn prompt_aggiorna(
         // Hook embedding (Fase 3 Step 3): re-compute perché il body è cambiato.
         // No-op se Session non loaded.
         aggiorna_embedding(conn, &rt_state, &dati.id, body_clean)?;
+        // Hook import graph (Fase 3 Step 8): re-popola PromptImports.
+        prompt_componibili::aggiorna_imports(conn, &dati.id, body_clean)?;
         crate::audit::registra(conn, "prompt.aggiornato", "Prompt", &dati.id, Some(dati.titolo.trim()));
         log::info!("Prompt aggiornato: {}", dati.id);
         Ok(())
@@ -244,6 +249,8 @@ pub fn prompt_elimina(id: String, state: State<'_, VaultState>) -> Result<(), Pa
         // Pulizia vec0: la riga embedding non serve più. Sicuro chiamarlo
         // anche se non c'era mai stato un embedding (delete è no-op).
         embeddings_store::delete_embedding(conn, &id)?;
+        // Cleanup PromptImports (Fase 3 Step 8).
+        prompt_componibili::pulisci_imports(conn, &id)?;
         crate::audit::registra(conn, "prompt.eliminato", "Prompt", &id, None);
         log::info!("Prompt eliminato: {id}");
         Ok(())
