@@ -174,6 +174,29 @@
     }
   }
 
+  /// Auto-init della Session embeddings se l'utente ha attivato la feature
+  /// in preferenze e il modello è già scaricato su disco. Best-effort:
+  /// errori loggati ma non bloccanti (l'utente può comunque usare il
+  /// client senza ricerca semantica).
+  async function inizializzaEmbeddingsSeReady() {
+    try {
+      const stato = await invoke<{ stato: string }>("embeddings_status");
+      if (stato.stato === "pronto") {
+        await invoke("embeddings_init");
+        console.log("Embeddings Session caricata in background");
+      } else if (stato.stato === "non_scaricato") {
+        // Non scarichiamo automaticamente: il download è ~150 MB, va
+        // richiesto esplicitamente dall'utente in Impostazioni > Ricerca.
+        console.log(
+          "Ricerca semantica attivata ma modello non scaricato — vai in Impostazioni > Ricerca",
+        );
+      }
+      // stato === "caricato": già pronto, nulla da fare.
+    } catch (e) {
+      console.warn("Auto-init embeddings fallito:", e);
+    }
+  }
+
   async function caricaDati() {
     try {
       const prefs = await invoke<{
@@ -185,6 +208,7 @@
         sync_token: string;
         sync_intervallo_sec: number;
         sync_abilitato: boolean;
+        ricerca_semantica_abilitata?: boolean;
       }>("preferenze_carica");
       hotkeyCombo = prefs.hotkey;
       document.documentElement.setAttribute("data-theme", prefs.tema);
@@ -198,6 +222,14 @@
           intervalloSec: prefs.sync_intervallo_sec,
           abilitato: true,
         });
+      }
+
+      // Auto-init Session embeddings se feature attivata e modello pronto.
+      // Fire-and-forget: il caricamento Session prende secondi ma è async,
+      // non blocca la UI. Errori loggati silenziosamente (l'utente li vede
+      // comunque in Impostazioni > Ricerca quando ne ha bisogno).
+      if (prefs.ricerca_semantica_abilitata) {
+        void inizializzaEmbeddingsSeReady();
       }
 
       syncOnChange(() => {
