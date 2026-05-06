@@ -53,10 +53,16 @@ erDiagram
     Workspaces ||--o{ Users : contiene
     Workspaces ||--o{ Prompts : contiene
     Workspaces ||--o{ Tags : contiene
+    Workspaces ||--o{ Folders : contiene
     Workspaces ||--o| SyncMeta : ha
     Users ||--o{ Prompts : autore
     Prompts ||--o{ PromptVersions : versioni
     Prompts }o--o{ Tags : PromptTags
+    Prompts ||--o| PromptsEmbeddings : "embedding 384-dim"
+    Tags ||--o| TagsEmbeddings : "embedding 384-dim"
+    Folders ||--o{ Folders : "ParentFolderId"
+    Folders ||--o{ Prompts : "FolderId NULL=root"
+    Prompts ||--o{ PromptImports : importa
     Workspaces ||--o{ AuditLog : registra
 
     Workspaces {
@@ -167,6 +173,50 @@ Una riga per workspace: ultimo sync, token cursor, ultimo errore.
 Tabella virtuale per full-text search su Title, Description, Body, Tags.
 Usa `content=''` (contentless) — i dati vanno sincronizzati manualmente via trigger.
 
+### Folders (Fase 3)
+Cartelle gerarchiche, una per workspace. `ParentFolderId` può essere
+`NULL` (cartella a root). `Path` è denormalizzato come stringa
+`/parent/child/...` ricalcolata su sposta/rinomina di sotto-tree —
+permette query efficienti tipo `WHERE Path LIKE '/marketing/%'`.
+
+Vincolo: `UNIQUE(WorkspaceId, ParentFolderId, Name)` — nomi
+duplicati vietati come fratelli, ammessi cross-tree.
+
+I prompt sono "ubicati" in una sola cartella tramite `Prompts.FolderId`
+(`NULL` = a root del workspace). Le cartelle sono ortogonali ai
+tag (un prompt → 1 cartella, → N tag).
+
+### PromptsEmbeddings (Fase 3, sqlite-vec)
+Tabella virtuale `vec0` (estensione [sqlite-vec](https://github.com/asg017/sqlite-vec))
+con vettore 384-dim L2-normalized per ogni prompt indicizzato dalla
+ricerca semantica. Schema: `(PromptId TEXT PRIMARY KEY, Embedding FLOAT[384])`.
+
+Auto-extension registrata via `sqlite3_auto_extension` prima del
+primo `Connection::open` — vedi
+[`sqlite-vec-sqlcipher.md`](./decisioni/sqlite-vec-sqlcipher.md).
+
+Modello: `paraphrase-multilingual-MiniLM-L12-v2` (vedi
+[`embedding-model.md`](./decisioni/embedding-model.md)).
+
+### TagsEmbeddings (Fase 3, sqlite-vec)
+Stessa struttura di `PromptsEmbeddings` ma su `TagId`. Usato dal
+suggeritore semantico di tag nell'editor (Fase 3 Step 4): cerca i
+tag più vicini al testo del prompt che si sta scrivendo.
+
+### PromptImports (Fase 3)
+Grafo delle dipendenze fra prompt componibili. Una riga per ogni
+`{{import "..."}}` parsato dal body del prompt parent.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `ParentPromptId` | TEXT | FK a `Prompts.Id` |
+| `Position` | INT | 0-based, ordine di apparizione nel body |
+| `ImportedPath` | TEXT | Path letterale dall'import |
+| `ImportedPromptId` | TEXT | FK a `Prompts.Id`, `NULL` se non risolto |
+
+Popolata su crea/aggiorna del prompt parent. Permette query "chi
+importa X?" in O(1) invece di scansionare tutti i body.
+
 ## Indici
 
 | Indice | Tabella | Colonne |
@@ -187,5 +237,11 @@ Sistema di migrazioni versionato. File SQL in `src-tauri/migrations/`, embedded 
 | Versione | Nome | Contenuto |
 |----------|------|-----------|
 | V001 | schema_iniziale | Tutte le tabelle, indici, FTS5 |
+| V002 | versioning_completo | Triggers + storico PromptVersions popolato |
+| V003 | indici_audit | Indici aggiuntivi su `AuditLog` per query veloci |
+| V004 | cartelle | Tabella `Folders` + `Prompts.FolderId` |
+| V005 | embeddings | `PromptsEmbeddings` (vec0 sqlite-vec, 384 dim) |
+| V006 | tag_embeddings | `TagsEmbeddings` (vec0, 384 dim) |
+| V007 | prompt_imports | Tabella `PromptImports` (grafo dipendenze) |
 
 Tabella `_Migrazioni` nel DB traccia le versioni applicate.
