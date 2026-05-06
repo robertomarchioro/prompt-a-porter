@@ -7,86 +7,128 @@
 //
 // Architettura distribuzione:
 // - Modello scaricato lazy al primo uso da HuggingFace (Xenova fork)
+// - libonnxruntime scaricata lazy al primo uso da Microsoft GitHub
+//   release (per la piattaforma corrente)
 // - Cache locale in `${data_dir}/models/multilingual-MiniLM-L12-v2/`
-// - libonnxruntime caricata via `load-dynamic` (vedi ADR onnx-bundle.md)
+//   e `${data_dir}/onnxruntime/`
+// - load-dynamic via env var `ORT_DYLIB_PATH` settata prima di creare
+//   la prima Session (vedi ADR onnx-bundle.md)
 //
-// Stato implementazione:
+// Implementazione completa:
 // - PR 1/3: scaffolding + comando `embeddings_status`
-// - PR 2/3 (questa): comando `embeddings_download` per scaricare i due
-//   file modello (model_quantized.onnx + tokenizer.json) da HuggingFace
-//   con progress via Tauri events
-// - PR 3/3: download libonnxruntime + Session ort + comando
-//   `embeddings_compute`
+// - PR 2/3: download model.onnx + tokenizer.json
+// - PR 3/3 (questa): download libonnxruntime per piattaforma + Session
+//   ort + tokenizer load + comando `embeddings_compute`
 
+use ndarray::{Array1, Array2};
+use ort::session::Session;
+use ort::value::Tensor;
 use serde::Serialize;
 use std::fs;
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{Emitter, State};
+use tokenizers::Tokenizer;
 
 use crate::errore::PapErrore;
 use crate::vault::VaultState;
 
-/// ID del modello scelto. Usato come nome cartella sotto `${data_dir}/models/`
-/// per supportare future migrations a modelli diversi (vedi ADR
-/// embedding-model.md → "Migration path se in futuro si vuole cambiare modello").
-pub const MODEL_ID: &str = "multilingual-MiniLM-L12-v2";
+// ─────────── Costanti modello ───────────
 
-/// Dimensione embedding output (384 per MiniLM-L12-v2).
+pub const MODEL_ID: &str = "multilingual-MiniLM-L12-v2";
 pub const EMBEDDING_DIM: usize = 384;
 
-/// Repository HuggingFace di Xenova con la versione ONNX quantizzata.
 const HF_REPO: &str = "Xenova/paraphrase-multilingual-MiniLM-L12-v2";
-
-/// File da scaricare. Coppia `(path-su-HF, nome-locale)`.
-/// model_quantized.onnx ≈ 118 MB; tokenizer.json ≈ 17 MB.
-const FILES: &[(&str, &str)] = &[
+const FILES_HF: &[(&str, &str)] = &[
     ("onnx/model_quantized.onnx", "model.onnx"),
     ("tokenizer.json", "tokenizer.json"),
 ];
 
-/// Timeout HTTP generoso per file da centinaia di MB su connessioni lente.
+// ─────────── Costanti onnxruntime ───────────
+
+/// Versione di ONNX Runtime da scaricare. Allineata con `api-23` di `ort`
+/// crate (ORT 1.23 supporta tutte le API che usiamo).
+const ORT_VERSION: &str = "1.23.0";
+const ORT_RELEASE_BASE: &str = "https://github.com/microsoft/onnxruntime/releases/download/";
 const HTTP_TIMEOUT_SEC: u64 = 600;
 
-/// Status corrente del modulo embeddings dal punto di vista del frontend.
+/// Lunghezza massima sequenza supportata dal MiniLM-L12-v2 (token).
+const MAX_SEQ_LEN: usize = 128;
+
+// ─────────── State ───────────
+
+/// Stato globale del modulo embeddings. Inizialmente vuoto; popolato da
+/// `embeddings_init` dopo che il modello è scaricato e libonnxruntime è
+/// pronta sul filesystem.
+pub struct EmbeddingsState {
+    inner: Mutex<Option<EmbeddingsLoaded>>,
+}
+
+struct EmbeddingsLoaded {
+    session: Session,
+    tokenizer: Tokenizer,
+}
+
+impl EmbeddingsState {
+    pub fn new() -> Self {
+        Self {
+            inner: Mutex::new(None),
+        }
+    }
+}
+
+// ─────────── Status ───────────
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case", tag = "stato")]
 pub enum EmbeddingsStato {
-    /// Il modello non è stato scaricato. Il frontend deve mostrare la
-    /// progress UI di download al primo uso.
     NonScaricato { model_id: String, path_atteso: String },
-    /// Il modello è scaricato su disco ma non è ancora caricato in memoria.
-    /// L'init è stato richiesto e/o il modello è pronto per l'uso.
-    Pronto {
-        model_id: String,
-        path: String,
-        size_mb: u64,
-    },
-    /// Il modello è caricato in sessione ort, embedding ready.
+    Pronto { model_id: String, path: String, size_mb: u64 },
     Caricato { model_id: String, dimensione: usize },
 }
 
-/// Evento di progress emesso al frontend durante il download.
-/// Channel: `embeddings:download:progress`.
 #[derive(Debug, Clone, Serialize)]
 pub struct ProgressDownload {
     pub file: String,
-    /// Bytes scaricati per il file corrente.
     pub bytes: u64,
-    /// Bytes totali del file (se Content-Length disponibile, altrimenti `None`).
     pub total: Option<u64>,
-    /// Indice del file corrente fra quelli da scaricare (1-based).
     pub indice_file: usize,
-    /// Numero totale di file da scaricare.
     pub totale_file: usize,
 }
+
+// ─────────── Path helpers ───────────
 
 fn percorso_modello(state: &VaultState) -> PathBuf {
     state.data_dir().join("models").join(MODEL_ID)
 }
 
-fn dim_cartella_mb(path: &PathBuf) -> u64 {
+fn percorso_runtime_dir(state: &VaultState) -> PathBuf {
+    state.data_dir().join("onnxruntime").join(ORT_VERSION)
+}
+
+/// Nome file della libreria nativa per la piattaforma corrente.
+fn nome_libonnxruntime() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        "onnxruntime.dll"
+    }
+    #[cfg(target_os = "macos")]
+    {
+        "libonnxruntime.dylib"
+    }
+    #[cfg(all(target_os = "linux", not(target_os = "macos")))]
+    {
+        "libonnxruntime.so"
+    }
+}
+
+fn percorso_libonnxruntime(state: &VaultState) -> PathBuf {
+    percorso_runtime_dir(state).join(nome_libonnxruntime())
+}
+
+fn dim_cartella_mb(path: &Path) -> u64 {
     let mut total: u64 = 0;
     if let Ok(entries) = fs::read_dir(path) {
         for entry in entries.flatten() {
@@ -100,12 +142,23 @@ fn dim_cartella_mb(path: &PathBuf) -> u64 {
     total / (1024 * 1024)
 }
 
-fn modello_completo(path: &PathBuf) -> bool {
-    FILES.iter().all(|(_, locale)| path.join(locale).is_file())
+fn modello_completo(path: &Path) -> bool {
+    FILES_HF.iter().all(|(_, locale)| path.join(locale).is_file())
 }
 
+// ─────────── Status command ───────────
+
 #[tauri::command]
-pub fn embeddings_status(state: State<'_, VaultState>) -> Result<EmbeddingsStato, PapErrore> {
+pub fn embeddings_status(
+    state: State<'_, VaultState>,
+    rt_state: State<'_, EmbeddingsState>,
+) -> Result<EmbeddingsStato, PapErrore> {
+    if rt_state.inner.lock().unwrap().is_some() {
+        return Ok(EmbeddingsStato::Caricato {
+            model_id: MODEL_ID.to_string(),
+            dimensione: EMBEDDING_DIM,
+        });
+    }
     let path = percorso_modello(&state);
     if !path.exists() || !modello_completo(&path) {
         return Ok(EmbeddingsStato::NonScaricato {
@@ -120,41 +173,43 @@ pub fn embeddings_status(state: State<'_, VaultState>) -> Result<EmbeddingsStato
     })
 }
 
-/// Scarica un singolo file con streaming + progress event.
-fn scarica_file(
-    app: &tauri::AppHandle,
-    url: &str,
-    dest: &PathBuf,
-    indice_file: usize,
-    totale_file: usize,
-    nome_visibile: &str,
-) -> Result<(), PapErrore> {
+// ─────────── Download HTTP streaming ───────────
+
+fn http_get_streaming(url: &str) -> Result<Box<dyn Read + Send + Sync>, PapErrore> {
     let agent = ureq::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(30))
         .timeout_read(Duration::from_secs(HTTP_TIMEOUT_SEC))
         .build();
-
     let resp = agent
         .get(url)
         .call()
-        .map_err(|e| PapErrore::Generico(format!("Download fallito ({}): {e}", url)))?;
+        .map_err(|e| PapErrore::Generico(format!("HTTP get fallito ({}): {e}", url)))?;
+    Ok(resp.into_reader())
+}
 
+fn http_get_with_progress(
+    app: &tauri::AppHandle,
+    url: &str,
+    indice_file: usize,
+    totale_file: usize,
+    nome_visibile: &str,
+) -> Result<(Vec<u8>, Option<u64>), PapErrore> {
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_secs(30))
+        .timeout_read(Duration::from_secs(HTTP_TIMEOUT_SEC))
+        .build();
+    let resp = agent
+        .get(url)
+        .call()
+        .map_err(|e| PapErrore::Generico(format!("HTTP get fallito ({}): {e}", url)))?;
     let total: Option<u64> = resp
         .header("Content-Length")
         .and_then(|s| s.parse::<u64>().ok());
-
-    // Scrittura su file temporaneo + rename atomico → nessun file parziale
-    // in caso di crash a metà download.
-    let dest_tmp = dest.with_extension("download-partial");
-    if let Some(parent) = dest_tmp.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let mut out = fs::File::create(&dest_tmp)?;
     let mut reader = resp.into_reader();
     let mut buf = [0u8; 64 * 1024];
     let mut acc: u64 = 0;
     let mut last_emit_acc: u64 = 0;
-
+    let mut out: Vec<u8> = Vec::with_capacity(total.unwrap_or(0) as usize);
     loop {
         let n = reader
             .read(&mut buf)
@@ -162,11 +217,8 @@ fn scarica_file(
         if n == 0 {
             break;
         }
-        out.write_all(&buf[..n])?;
+        out.extend_from_slice(&buf[..n]);
         acc += n as u64;
-
-        // Throttling: emit progress ogni 256 KB per non saturare il bus eventi
-        // su file grandi.
         if acc - last_emit_acc >= 256 * 1024 {
             let _ = app.emit(
                 "embeddings:download:progress",
@@ -181,12 +233,6 @@ fn scarica_file(
             last_emit_acc = acc;
         }
     }
-
-    out.flush()?;
-    drop(out);
-    fs::rename(&dest_tmp, dest)?;
-
-    // Emit finale a 100%
     let _ = app.emit(
         "embeddings:download:progress",
         ProgressDownload {
@@ -197,77 +243,434 @@ fn scarica_file(
             totale_file,
         },
     );
+    Ok((out, total))
+}
+
+fn scarica_file(
+    app: &tauri::AppHandle,
+    url: &str,
+    dest: &Path,
+    indice_file: usize,
+    totale_file: usize,
+    nome_visibile: &str,
+) -> Result<(), PapErrore> {
+    let dest_tmp = dest.with_extension("download-partial");
+    if let Some(parent) = dest_tmp.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut out = fs::File::create(&dest_tmp)?;
+    let mut reader = http_get_streaming(url)?;
+    let mut buf = [0u8; 64 * 1024];
+    let mut acc: u64 = 0;
+    let mut last_emit_acc: u64 = 0;
+    loop {
+        let n = reader
+            .read(&mut buf)
+            .map_err(|e| PapErrore::Generico(format!("Read stream: {e}")))?;
+        if n == 0 {
+            break;
+        }
+        out.write_all(&buf[..n])?;
+        acc += n as u64;
+        if acc - last_emit_acc >= 256 * 1024 {
+            let _ = app.emit(
+                "embeddings:download:progress",
+                ProgressDownload {
+                    file: nome_visibile.to_string(),
+                    bytes: acc,
+                    total: None,
+                    indice_file,
+                    totale_file,
+                },
+            );
+            last_emit_acc = acc;
+        }
+    }
+    out.flush()?;
+    drop(out);
+    fs::rename(&dest_tmp, dest)?;
+    let _ = app.emit(
+        "embeddings:download:progress",
+        ProgressDownload {
+            file: nome_visibile.to_string(),
+            bytes: acc,
+            total: None,
+            indice_file,
+            totale_file,
+        },
+    );
     Ok(())
 }
+
+// ─────────── Download libonnxruntime ───────────
+
+/// Tarball name + sub-path della libreria nativa nella release upstream.
+fn ort_release_filename() -> Result<(String, String), PapErrore> {
+    let arch = std::env::consts::ARCH;
+    let lib = nome_libonnxruntime();
+    let (suffix, sub) = match (std::env::consts::OS, arch) {
+        ("linux", "x86_64") => (
+            format!("onnxruntime-linux-x64-{ORT_VERSION}.tgz"),
+            format!("onnxruntime-linux-x64-{ORT_VERSION}/lib/{lib}"),
+        ),
+        ("linux", "aarch64") => (
+            format!("onnxruntime-linux-aarch64-{ORT_VERSION}.tgz"),
+            format!("onnxruntime-linux-aarch64-{ORT_VERSION}/lib/{lib}"),
+        ),
+        ("macos", "aarch64") => (
+            format!("onnxruntime-osx-arm64-{ORT_VERSION}.tgz"),
+            format!("onnxruntime-osx-arm64-{ORT_VERSION}/lib/{lib}"),
+        ),
+        ("macos", "x86_64") => (
+            format!("onnxruntime-osx-x86_64-{ORT_VERSION}.tgz"),
+            format!("onnxruntime-osx-x86_64-{ORT_VERSION}/lib/{lib}"),
+        ),
+        ("windows", "x86_64") => (
+            format!("onnxruntime-win-x64-{ORT_VERSION}.zip"),
+            format!("onnxruntime-win-x64-{ORT_VERSION}/lib/{lib}"),
+        ),
+        (os, arch) => {
+            return Err(PapErrore::Generico(format!(
+                "Piattaforma non supportata per onnxruntime: {os}/{arch}"
+            )))
+        }
+    };
+    Ok((suffix, sub))
+}
+
+fn estrai_libonnxruntime(
+    archive_bytes: &[u8],
+    path_in_archive: &str,
+    dest: &Path,
+) -> Result<(), PapErrore> {
+    fs::create_dir_all(
+        dest.parent()
+            .ok_or_else(|| PapErrore::Generico("dest senza parent".into()))?,
+    )?;
+
+    if std::env::consts::OS == "windows" {
+        // ZIP
+        let cursor = std::io::Cursor::new(archive_bytes);
+        let mut archive = zip::ZipArchive::new(cursor)
+            .map_err(|e| PapErrore::Generico(format!("zip read: {e}")))?;
+        let mut entry = archive
+            .by_name(path_in_archive)
+            .map_err(|e| PapErrore::Generico(format!("zip entry {path_in_archive} non trovata: {e}")))?;
+        let mut out = fs::File::create(dest)?;
+        std::io::copy(&mut entry, &mut out)?;
+    } else {
+        // tar.gz
+        let dec = flate2::read::GzDecoder::new(archive_bytes);
+        let mut archive = tar::Archive::new(dec);
+        let mut found = false;
+        for entry in archive
+            .entries()
+            .map_err(|e| PapErrore::Generico(format!("tar entries: {e}")))?
+        {
+            let mut entry = entry.map_err(|e| PapErrore::Generico(format!("tar entry: {e}")))?;
+            let entry_path = entry
+                .path()
+                .map_err(|e| PapErrore::Generico(format!("tar path: {e}")))?
+                .to_string_lossy()
+                .to_string();
+            if entry_path == path_in_archive {
+                let mut out = fs::File::create(dest)?;
+                std::io::copy(&mut entry, &mut out)?;
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            return Err(PapErrore::Generico(format!(
+                "tar: file {path_in_archive} non trovato nell'archivio"
+            )));
+        }
+    }
+    Ok(())
+}
+
+// ─────────── Download command ───────────
 
 #[tauri::command]
 pub fn embeddings_download(
     app: tauri::AppHandle,
     state: State<'_, VaultState>,
+    rt_state: State<'_, EmbeddingsState>,
 ) -> Result<EmbeddingsStato, PapErrore> {
-    let dir = percorso_modello(&state);
-    fs::create_dir_all(&dir)?;
+    let dir_modello = percorso_modello(&state);
+    fs::create_dir_all(&dir_modello)?;
 
-    let totale_file = FILES.len();
-    for (idx, (path_remoto, nome_locale)) in FILES.iter().enumerate() {
-        let dest = dir.join(nome_locale);
+    // Conteggio totale: 2 file modello + 1 tarball onnxruntime se mancante.
+    let lib_path = percorso_libonnxruntime(&state);
+    let libonnxruntime_da_scaricare = !lib_path.is_file();
+    let totale_file = FILES_HF.len() + if libonnxruntime_da_scaricare { 1 } else { 0 };
+
+    // 1. Modello + tokenizer da HuggingFace
+    for (idx, (path_remoto, nome_locale)) in FILES_HF.iter().enumerate() {
+        let dest = dir_modello.join(nome_locale);
         if dest.is_file() {
-            log::info!(
-                "embeddings_download: {} già presente, skip",
-                dest.display()
-            );
             continue;
         }
         let url = format!("https://huggingface.co/{HF_REPO}/resolve/main/{path_remoto}");
-        log::info!("embeddings_download: scarico {url} -> {}", dest.display());
         scarica_file(&app, &url, &dest, idx + 1, totale_file, nome_locale)?;
     }
 
-    log::info!(
-        "embeddings_download: completato, dir = {}",
-        dir.display()
-    );
+    // 2. libonnxruntime da Microsoft GitHub release (tarball/zip → estrai solo lib)
+    if libonnxruntime_da_scaricare {
+        let (filename, path_in_archive) = ort_release_filename()?;
+        let url = format!("{ORT_RELEASE_BASE}v{ORT_VERSION}/{filename}");
+        let (bytes, _total) = http_get_with_progress(
+            &app,
+            &url,
+            FILES_HF.len() + 1,
+            totale_file,
+            &filename,
+        )?;
+        estrai_libonnxruntime(&bytes, &path_in_archive, &lib_path)?;
+        log::info!("libonnxruntime estratta in {}", lib_path.display());
+    }
 
-    embeddings_status(state)
+    embeddings_status(state, rt_state)
+}
+
+// ─────────── Init Session ───────────
+
+#[tauri::command]
+pub fn embeddings_init(
+    state: State<'_, VaultState>,
+    rt_state: State<'_, EmbeddingsState>,
+) -> Result<EmbeddingsStato, PapErrore> {
+    {
+        let guard = rt_state.inner.lock().unwrap();
+        if guard.is_some() {
+            return Ok(EmbeddingsStato::Caricato {
+                model_id: MODEL_ID.to_string(),
+                dimensione: EMBEDDING_DIM,
+            });
+        }
+    }
+
+    let dir_modello = percorso_modello(&state);
+    if !modello_completo(&dir_modello) {
+        return Err(PapErrore::Generico(
+            "Modello non scaricato. Chiama embeddings_download prima di embeddings_init.".into(),
+        ));
+    }
+
+    let lib_path = percorso_libonnxruntime(&state);
+    if !lib_path.is_file() {
+        return Err(PapErrore::Generico(
+            "libonnxruntime non scaricata. Chiama embeddings_download.".into(),
+        ));
+    }
+
+    // Punta ort a libonnxruntime via env var. Sicuro perché siamo single-thread
+    // qui (Tauri command sequenziati su mutex), e l'env var è letta solo al
+    // primo Session::create.
+    // SAFETY: set_var è unsafe in edition 2024+ ma stable in 2021.
+    std::env::set_var("ORT_DYLIB_PATH", &lib_path);
+
+    let model_path = dir_modello.join("model.onnx");
+    let tokenizer_path = dir_modello.join("tokenizer.json");
+
+    let session = Session::builder()
+        .map_err(|e| PapErrore::Generico(format!("Session builder: {e}")))?
+        .commit_from_file(&model_path)
+        .map_err(|e| PapErrore::Generico(format!("Session load: {e}")))?;
+    let tokenizer = Tokenizer::from_file(&tokenizer_path)
+        .map_err(|e| PapErrore::Generico(format!("Tokenizer load: {e}")))?;
+
+    let mut guard = rt_state.inner.lock().unwrap();
+    *guard = Some(EmbeddingsLoaded { session, tokenizer });
+
+    log::info!(
+        "embeddings_init: Session ort + tokenizer pronti per {MODEL_ID}"
+    );
+    Ok(EmbeddingsStato::Caricato {
+        model_id: MODEL_ID.to_string(),
+        dimensione: EMBEDDING_DIM,
+    })
+}
+
+// ─────────── Compute ───────────
+
+/// Mean pooling: media delle hidden states pesata da attention mask.
+fn mean_pooling(token_embeddings: &Array2<f32>, attention_mask: &Array1<i64>) -> Array1<f32> {
+    let (seq_len, hidden) = token_embeddings.dim();
+    let mut sum = vec![0.0f32; hidden];
+    let mut count = 0.0f32;
+    for i in 0..seq_len {
+        if attention_mask[i] == 0 {
+            continue;
+        }
+        for h in 0..hidden {
+            sum[h] += token_embeddings[[i, h]];
+        }
+        count += 1.0;
+    }
+    if count > 0.0 {
+        for x in sum.iter_mut() {
+            *x /= count;
+        }
+    }
+    Array1::from_vec(sum)
+}
+
+fn l2_normalize(v: &mut Array1<f32>) {
+    let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm > 1e-12 {
+        v.mapv_inplace(|x| x / norm);
+    }
+}
+
+#[tauri::command]
+pub fn embeddings_compute(
+    testo: String,
+    rt_state: State<'_, EmbeddingsState>,
+) -> Result<Vec<f32>, PapErrore> {
+    let mut guard = rt_state.inner.lock().unwrap();
+    let loaded = guard
+        .as_mut()
+        .ok_or_else(|| PapErrore::Generico("Embeddings non inizializzati. Chiama embeddings_init.".into()))?;
+
+    // 1. Tokenize
+    let encoding = loaded
+        .tokenizer
+        .encode(testo.as_str(), true)
+        .map_err(|e| PapErrore::Generico(format!("Tokenizer encode: {e}")))?;
+
+    // 2. Trunc/pad a MAX_SEQ_LEN
+    let mut ids: Vec<i64> = encoding.get_ids().iter().map(|x| *x as i64).collect();
+    let mut mask: Vec<i64> = encoding.get_attention_mask().iter().map(|x| *x as i64).collect();
+    let mut type_ids: Vec<i64> = encoding.get_type_ids().iter().map(|x| *x as i64).collect();
+    if ids.len() > MAX_SEQ_LEN {
+        ids.truncate(MAX_SEQ_LEN);
+        mask.truncate(MAX_SEQ_LEN);
+        type_ids.truncate(MAX_SEQ_LEN);
+    } else {
+        ids.resize(MAX_SEQ_LEN, 0);
+        mask.resize(MAX_SEQ_LEN, 0);
+        type_ids.resize(MAX_SEQ_LEN, 0);
+    }
+
+    let seq_len = ids.len();
+    // Costruzione tensor via tupla (shape, vec) — forma universale ort 2.x,
+    // funziona per i64 senza dover passare attraverso ndarray (che richiede
+    // OwnedTensorArrayData<_> trait, non implementato per Array2<i64>).
+    let shape = vec![1i64, seq_len as i64];
+    let mask_clone = mask.clone();
+    let inputs = ort::inputs![
+        "input_ids" => Tensor::from_array((shape.clone(), ids))
+            .map_err(|e| PapErrore::Generico(format!("tensor ids: {e}")))?,
+        "attention_mask" => Tensor::from_array((shape.clone(), mask_clone))
+            .map_err(|e| PapErrore::Generico(format!("tensor mask: {e}")))?,
+        "token_type_ids" => Tensor::from_array((shape, type_ids))
+            .map_err(|e| PapErrore::Generico(format!("tensor type: {e}")))?,
+    ];
+    let outputs = loaded
+        .session
+        .run(inputs)
+        .map_err(|e| PapErrore::Generico(format!("ort run: {e}")))?;
+
+    // 4. Output last_hidden_state shape [1, seq_len, hidden_dim]
+    let (output_name, _) = outputs
+        .iter()
+        .next()
+        .ok_or_else(|| PapErrore::Generico("nessun output da Session run".into()))?;
+    let value = outputs
+        .get(output_name)
+        .ok_or_else(|| PapErrore::Generico("output mancante".into()))?;
+    let (shape, data) = value
+        .try_extract_tensor::<f32>()
+        .map_err(|e| PapErrore::Generico(format!("extract f32 tensor: {e}")))?;
+
+    if shape.len() != 3 || shape[0] != 1 || shape[2] as usize != EMBEDDING_DIM {
+        return Err(PapErrore::Generico(format!(
+            "Shape output inattesa: {:?} (atteso [1, seq_len, {EMBEDDING_DIM}])",
+            shape
+        )));
+    }
+    let actual_seq = shape[1] as usize;
+
+    let token_emb = Array2::from_shape_vec((actual_seq, EMBEDDING_DIM), data.to_vec())
+        .map_err(|e| PapErrore::Generico(format!("ndarray output: {e}")))?;
+    let mask_arr1 = Array1::from_vec(mask.iter().take(actual_seq).copied().collect());
+
+    // 5. Mean pooling + L2 normalize
+    let mut pooled = mean_pooling(&token_emb, &mask_arr1);
+    l2_normalize(&mut pooled);
+
+    Ok(pooled.to_vec())
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::path::Path;
 
     #[test]
     fn model_id_coerente_con_adr() {
-        // Sentinel test: se cambiamo modello (es. in futuro EmbeddingGemma),
-        // questo test deve essere aggiornato esplicitamente.
         assert_eq!(MODEL_ID, "multilingual-MiniLM-L12-v2");
         assert_eq!(EMBEDDING_DIM, 384);
     }
 
     #[test]
     fn dim_cartella_dir_inesistente() {
-        let p = Path::new("/percorso/inesistente").to_path_buf();
-        assert_eq!(dim_cartella_mb(&p), 0);
+        let p = std::path::Path::new("/percorso/inesistente");
+        assert_eq!(dim_cartella_mb(p), 0);
     }
 
     #[test]
     fn modello_completo_richiede_entrambi_i_file() {
         let dir = tempfile::tempdir().unwrap();
-        let p = dir.path().to_path_buf();
-        assert!(!modello_completo(&p), "dir vuota deve essere incompleto");
+        let p = dir.path();
+        assert!(!modello_completo(p));
         std::fs::write(p.join("model.onnx"), b"stub").unwrap();
-        assert!(!modello_completo(&p), "solo model.onnx non basta");
+        assert!(!modello_completo(p));
         std::fs::write(p.join("tokenizer.json"), b"stub").unwrap();
-        assert!(modello_completo(&p), "entrambi i file presenti = completo");
+        assert!(modello_completo(p));
     }
 
     #[test]
-    fn files_coerenti_con_ids_modello() {
-        // Sanity: i file nel manifest devono essere quelli che ci aspettiamo
-        // di trovare sul HF Xenova repo. Se cambia il modello bisogna anche
-        // aggiornare FILES.
-        assert_eq!(FILES.len(), 2);
-        assert_eq!(FILES[0].1, "model.onnx");
-        assert_eq!(FILES[1].1, "tokenizer.json");
+    fn ort_release_filename_supporta_principali_piattaforme() {
+        // Sentinel: la fn ritorna Ok per la piattaforma corrente di test.
+        let r = ort_release_filename();
+        assert!(r.is_ok(), "Piattaforma corrente deve essere supportata");
+        let (filename, sub) = r.unwrap();
+        assert!(filename.contains(ORT_VERSION));
+        assert!(sub.contains("/lib/"));
+    }
+
+    #[test]
+    fn nome_libonnxruntime_per_piattaforma_corretto() {
+        let n = nome_libonnxruntime();
+        if cfg!(target_os = "windows") {
+            assert_eq!(n, "onnxruntime.dll");
+        } else if cfg!(target_os = "macos") {
+            assert_eq!(n, "libonnxruntime.dylib");
+        } else {
+            assert_eq!(n, "libonnxruntime.so");
+        }
+    }
+
+    #[test]
+    fn mean_pooling_con_mask_zero_ignora_token() {
+        // 2 token, hidden=3. Mask=[1,0]. Atteso: pooling = [1.0, 2.0, 3.0]
+        // (solo il primo token contribuisce).
+        let emb = Array2::from_shape_vec(
+            (2, 3),
+            vec![1.0, 2.0, 3.0, 100.0, 200.0, 300.0],
+        )
+        .unwrap();
+        let mask = Array1::from_vec(vec![1, 0]);
+        let pooled = mean_pooling(&emb, &mask);
+        assert_eq!(pooled.to_vec(), vec![1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn l2_normalize_vector_unitario() {
+        let mut v = Array1::from_vec(vec![3.0, 4.0]);
+        l2_normalize(&mut v);
+        assert!((v[0] - 0.6).abs() < 1e-6);
+        assert!((v[1] - 0.8).abs() < 1e-6);
     }
 }

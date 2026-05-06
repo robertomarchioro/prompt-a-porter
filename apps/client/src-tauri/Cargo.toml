@@ -34,6 +34,15 @@ ndarray = "0.16"
 # HTTP client per scaricare il modello ONNX da HuggingFace al primo uso.
 # Feature tls-rustls (no openssl, build più portabile in CI).
 ureq = { version = "2.10", default-features = false, features = ["tls"] }
+# Tokenizer compatibile con tokenizer.json di HuggingFace per pre-processare
+# il testo prima dell'inference ort. default-features=false evita onig
+# (richiede C compiler), progressbar (TTY) e esaxx_fast. fancy-regex come
+# regex backend pure-Rust è obbligatorio (alternativa a onig).
+tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
+# Estrazione archivi onnxruntime release: tar.gz su Linux/macOS, zip su Windows.
+flate2 = "1.0"
+tar = "0.4"
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 tempfile = "3"
