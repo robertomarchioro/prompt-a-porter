@@ -497,4 +497,237 @@ mod test {
         );
         assert!(result.is_err(), "Insert con nome duplicato deve fallire");
     }
+
+    // ─────────── Stress test (Step 10 quality gate) ───────────
+
+    /// Costruisce 20 catene lineari di profondità 5 → 100 cartelle totali,
+    /// depth = 5 sul ramo più lungo. Ritorna un Vec<Vec<String>> con gli id
+    /// delle cartelle, indicizzati [tree][level].
+    fn costruisci_foresta_depth_5(conn: &Connection) -> Vec<Vec<String>> {
+        const N_TREES: usize = 20;
+        const DEPTH: usize = 5;
+        let mut foresta = Vec::with_capacity(N_TREES);
+        for t in 0..N_TREES {
+            let mut catena = Vec::with_capacity(DEPTH);
+            let mut parent: Option<String> = None;
+            for l in 0..DEPTH {
+                let nome = format!("t{t:02}-l{l}");
+                let id = crea(conn, &nome, parent.as_deref());
+                catena.push(id.clone());
+                parent = Some(id);
+            }
+            foresta.push(catena);
+        }
+        foresta
+    }
+
+    /// Verifica l'invariante: per ogni cartella non eliminata,
+    /// `Path` coincide con la concatenazione dei `Name` dei suoi antenati
+    /// (incluso self). È la sentinella primaria contro inconsistenze
+    /// `ParentFolderId` ↔ `Path` su sposta/rinomina di sotto-tree.
+    fn verifica_invariante_path(conn: &Connection) {
+        let mut stmt = conn
+            .prepare(
+                "SELECT Id, ParentFolderId, Name, Path FROM Folders
+                 WHERE DeletedAt IS NULL",
+            )
+            .unwrap();
+        let rows: Vec<(String, Option<String>, String, String)> = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        for (id, parent_id, nome, path) in &rows {
+            // Calcola path atteso risalendo lungo ParentFolderId.
+            let atteso = match parent_id {
+                None => format!("/{nome}"),
+                Some(pid) => {
+                    let parent_path: String = conn
+                        .query_row(
+                            "SELECT Path FROM Folders WHERE Id = ?1",
+                            [pid],
+                            |r| r.get(0),
+                        )
+                        .unwrap();
+                    format!("{parent_path}/{nome}")
+                }
+            };
+            assert_eq!(
+                path, &atteso,
+                "Path inconsistente per id={id}: stored={path}, atteso={atteso}"
+            );
+        }
+    }
+
+    #[test]
+    fn foresta_100_cartelle_depth_5_invariante_path() {
+        let conn = db_test();
+        let foresta = costruisci_foresta_depth_5(&conn);
+        assert_eq!(foresta.len() * foresta[0].len(), 100);
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Folders WHERE DeletedAt IS NULL",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 100);
+
+        // Path delle foglie L4 ha 5 segmenti.
+        let leaf = &foresta[0][4];
+        let path_leaf: String = conn
+            .query_row("SELECT Path FROM Folders WHERE Id = ?1", [leaf], |r| r.get(0))
+            .unwrap();
+        assert_eq!(path_leaf, "/t00-l0/t00-l1/t00-l2/t00-l3/t00-l4");
+
+        verifica_invariante_path(&conn);
+    }
+
+    #[test]
+    fn rinomina_root_aggiorna_tutta_la_catena() {
+        let conn = db_test();
+        let foresta = costruisci_foresta_depth_5(&conn);
+        let root_t0 = &foresta[0][0];
+
+        rinomina_cascata(&conn, root_t0, "rinominato").unwrap();
+
+        // Tutta la catena deve ora avere Path /rinominato/...
+        for (l, id) in foresta[0].iter().enumerate() {
+            let path: String = conn
+                .query_row("SELECT Path FROM Folders WHERE Id = ?1", [id], |r| r.get(0))
+                .unwrap();
+            let segmenti: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+            assert_eq!(segmenti.len(), l + 1);
+            assert_eq!(segmenti[0], "rinominato");
+        }
+        // L'invariante globale tiene su tutta la foresta.
+        verifica_invariante_path(&conn);
+    }
+
+    #[test]
+    fn sposta_sub_tree_profondo_aggiorna_path_discendenti() {
+        let conn = db_test();
+        let foresta = costruisci_foresta_depth_5(&conn);
+        // Sposta il L2 di t00 (che ha 2 discendenti L3, L4) sotto t01-L0.
+        let nodo_da_spostare = &foresta[0][2]; // /t00-l0/t00-l1/t00-l2
+        let nuovo_parent = &foresta[1][0]; // /t01-l0
+
+        sposta_cascata(&conn, nodo_da_spostare, Some(nuovo_parent)).unwrap();
+
+        // Il nodo spostato ora vive sotto /t01-l0/t00-l2
+        let path_spostato: String = conn
+            .query_row(
+                "SELECT Path FROM Folders WHERE Id = ?1",
+                [nodo_da_spostare],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(path_spostato, "/t01-l0/t00-l2");
+
+        // I suoi 2 discendenti L3, L4 anche.
+        let l3 = &foresta[0][3];
+        let l4 = &foresta[0][4];
+        let path_l3: String = conn
+            .query_row("SELECT Path FROM Folders WHERE Id = ?1", [l3], |r| r.get(0))
+            .unwrap();
+        let path_l4: String = conn
+            .query_row("SELECT Path FROM Folders WHERE Id = ?1", [l4], |r| r.get(0))
+            .unwrap();
+        assert_eq!(path_l3, "/t01-l0/t00-l2/t00-l3");
+        assert_eq!(path_l4, "/t01-l0/t00-l2/t00-l3/t00-l4");
+
+        // Il restante tree t00 (l0, l1) NON deve essere stato toccato.
+        let l0 = &foresta[0][0];
+        let l1 = &foresta[0][1];
+        let path_l0: String = conn
+            .query_row("SELECT Path FROM Folders WHERE Id = ?1", [l0], |r| r.get(0))
+            .unwrap();
+        let path_l1: String = conn
+            .query_row("SELECT Path FROM Folders WHERE Id = ?1", [l1], |r| r.get(0))
+            .unwrap();
+        assert_eq!(path_l0, "/t00-l0");
+        assert_eq!(path_l1, "/t00-l0/t00-l1");
+
+        verifica_invariante_path(&conn);
+    }
+
+    #[test]
+    fn elimina_tree_marca_tutta_la_catena_deleted() {
+        let conn = db_test();
+        let foresta = costruisci_foresta_depth_5(&conn);
+        // Soft-delete dell'intero tree 0 (la radice + 4 discendenti).
+        let path_root_t0: String = conn
+            .query_row(
+                "SELECT Path FROM Folders WHERE Id = ?1",
+                [&foresta[0][0]],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let prefisso = format!("{path_root_t0}/");
+        conn.execute(
+            "UPDATE Folders
+             SET DeletedAt = datetime('now')
+             WHERE (Id = ?1 OR Path LIKE ?2 || '%') AND DeletedAt IS NULL",
+            params![&foresta[0][0], prefisso],
+        )
+        .unwrap();
+
+        let viventi: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Folders WHERE DeletedAt IS NULL",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(viventi, 95, "100 - 5 (tree eliminato) = 95");
+
+        // Sentinel: ogni id del tree 0 ha DeletedAt valorizzato.
+        for id in &foresta[0] {
+            let deleted: Option<String> = conn
+                .query_row(
+                    "SELECT DeletedAt FROM Folders WHERE Id = ?1",
+                    [id],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert!(deleted.is_some(), "tree-0 nodo {id} non eliminato");
+        }
+    }
+
+    #[test]
+    fn sposta_dentro_discendente_profondo_fallisce() {
+        let conn = db_test();
+        let foresta = costruisci_foresta_depth_5(&conn);
+        // L0 dentro L4 (suo discendente di 4 livelli) → deve fallire.
+        let l0 = &foresta[0][0];
+        let l4 = &foresta[0][4];
+        assert!(
+            sposta_cascata(&conn, l0, Some(l4)).is_err(),
+            "sposta dentro discendente profondo deve fallire"
+        );
+        // Nessuna modifica intermedia: invariante intatta.
+        verifica_invariante_path(&conn);
+    }
+
+    #[test]
+    fn nomi_duplicati_fra_sotto_tree_diversi_consentiti() {
+        // Lo schema UNIQUE è per (parent, name): nomi uguali sotto parent
+        // diversi sono OK. Test sentinel: stesso nome "comune" sotto due
+        // root diverse non viola il vincolo.
+        let conn = db_test();
+        let r1 = crea(&conn, "alpha", None);
+        let r2 = crea(&conn, "beta", None);
+        let _ = crea(&conn, "comune", Some(&r1));
+        let _ = crea(&conn, "comune", Some(&r2));
+        // Nessun panic — l'INSERT è andato.
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Folders WHERE Name = 'comune'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 2);
+    }
 }
