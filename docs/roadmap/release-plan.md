@@ -2,7 +2,7 @@
 
 > **Fonte autorevole** della pianificazione di rilascio. Una sola tabella per tutta la vita del progetto, dalla v0.1 alla v1.0+. Aggiornato a ogni tag o decisione di rinvio.
 >
-> **Aggiornato al**: 2026-05-05.
+> **Aggiornato al**: 2026-05-06 (post-tag `v0.3.0`).
 
 ## Concetti
 
@@ -26,7 +26,7 @@ Una fase può ospitare 0..N rilasci; un rilascio può attraversare 0..N fasi.
 | `v0.2.1` | 2026-05-05 | patch + quick wins | Quick wins anticipati di Fase 3 (modello target, Insight, cartelle) + portable Windows agli asset | ✅ rilasciato | [`fase-2-foundations.md`](./fase-2-foundations.md) (patch line) |
 | `v0.2.1-fix1` | 2026-05-05 | patch fix | Bug 1 vault loop portable + bug 2 parziale tray icon | ✅ prerelease | (fix branch) |
 | `v0.2.x` | TBD | patch line | **Step 5 — Auto-update silenzioso** (NSIS per-user, Tauri Updater, Authenticode signing) | 🔒 bloccato cert Certum (KYC in corso) | [`fase-2-foundations.md`](./fase-2-foundations.md) Step 5 deferred |
-| `v0.3.0` | TBD | fase | Intelligenza & Authoring — embeddings ONNX locali, ricerca ibrida FTS+vettoriale, linting, prompt componibili `{{import}}` | ⏳ in preparazione (3 spike chiusi) | [`fase-3-intelligence.md`](./fase-3-intelligence.md) |
+| `v0.3.0` | 2026-05-06 | fase | Intelligenza & Authoring — embeddings ONNX locali, ricerca ibrida FTS+vettoriale, linting, cartelle, prompt componibili `{{import}}`, statistiche, idle-unload | ✅ rilasciato (11/11 step) | [`fase-3-intelligence.md`](./fase-3-intelligence.md) |
 | `v0.4.0` | TBD | fase | Workflow Avanzati & Quality Assurance — varianti, approval workflow, ACL cartelle, regression testing | 📋 pianificata | [`fase-4-workflow.md`](./fase-4-workflow.md) |
 | **`v0.5.0`** | TBD | **rilascio speciale** | **Recupero ritardi** — paga il debito accumulato in v0.1-v0.4 (item da `rinvii.md`). Stabilizzazione pre-1.0 | 📋 pianificata | sezione [Rilascio v0.5.0](#rilascio-v050--recupero-ritardi) |
 | **`v0.6.0`** | TBD | **rilascio speciale** | **Pulizia interfaccia grafica** — pass cosmetico cross-cutting su tutte le superfici, niente nuove capability | 📋 pianificata | sezione [Rilascio v0.6.0](#rilascio-v060--pulizia-interfaccia-grafica) |
@@ -53,9 +53,9 @@ Item con marker 🔒 (cert Certum, Apple Developer) restano nel patch line `v0.2
 
 Il pool è costruito dinamicamente da `rinvii.md`. Al momento dell'apertura del branch `feat/v0.5-recupero` si fa un audit completo e si selezionano i candidati. Esempi probabili (da rinvii.md attuale):
 
-- **Sub-step di feature già atterrate** (📋): markdown import/export, custom free-text target model, statistiche per cartella, MCP HTTP/SSE, MCP `pap_create_draft` (se Fase 4 ha portato approval workflow), CLI `import`/`export`, esporta singola cartella.
-- **Coverage gap** chiusi prima di v1.0.0: TS client `vitest --coverage`, server 70%, MCP unit test minimi, Rust client report numerico CI.
-- **Cosmetic / debiti tecnici minori** (🎨): bumpare versione `Cargo.toml`/`tauri.conf.json` (oggi ferma a 0.1.0), riattivare golangci-lint quando v2 stabile.
+- **Sub-step di feature già atterrate** (📋): markdown import/export, custom free-text target model, statistiche per cartella + per autore, MCP HTTP/SSE, MCP `pap_create_draft`, CLI `import`/`export`, esporta singola cartella, **riload automatico Session post idle-unload (Fase 3)**, **inline marker CodeMirror sui lint issue (Fase 3)**, **sintassi import `with k=v` e `version=N` (Fase 3)**, **editor doppia vista Sorgente/Compilato + hover preview + ctrl+click navigazione (Fase 3)**, **cross-prompt linting "chi importa X" (Fase 3)**, **Markdown export con front-matter `imports` (Fase 3)**.
+- **Coverage gap** chiusi prima di v1.0.0: TS client `vitest --coverage`, server 70%, MCP unit test minimi, **client Rust 60% → 70%** (oggi 60.12%, roadmap incrementale in `docs/operativo/coverage.md`).
+- **Cosmetic / debiti tecnici minori** (🎨): riattivare golangci-lint quando v2 stabile, ~37 warning a11y svelte-check.
 
 ### Quality gate v0.5.0
 
@@ -63,8 +63,9 @@ Definito in fase di apertura branch. Bozza:
 - [ ] Tutti i 📋/🎨 di `rinvii.md` valutati: ognuno è "atterrato" o "rinviato a 1.x" con razionale documentato
 - [ ] Coverage TS client ≥ 70% su `lib/*.ts`
 - [ ] Coverage server ≥ 70%
+- [ ] Coverage client Rust ≥ 70% (oggi 60.12% gate CI, target documentato in `docs/operativo/coverage.md`)
 - [ ] MCP server con almeno 5 unit test
-- [ ] `Cargo.toml`/`tauri.conf.json` allineati al tag
+- [x] `Cargo.toml`/`tauri.conf.json` allineati al tag (fatto in v0.3.0 PR #55)
 
 ---
 
