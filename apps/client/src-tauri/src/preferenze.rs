@@ -33,6 +33,13 @@ pub struct Preferenze {
     /// 0 = solo FTS5 lessicale, 1 = solo vec0 semantico, 0.5 = bilanciato.
     #[serde(default = "default_ricerca_alpha")]
     pub ricerca_alpha: f64,
+    /// Step 10: dopo quanti secondi di inattività la Session ort viene
+    /// droppata per liberare RAM (~150 MB modello + runtime).
+    /// `0` = disattivato (Session resta caricata fino a chiusura app).
+    /// Valori ammessi: 0 oppure ≥ 60. Sotto 60 viene trattato come 0.
+    /// Default 300s = 5 minuti.
+    #[serde(default = "default_idle_unload_secondi")]
+    pub idle_unload_secondi: u32,
 }
 
 fn default_sync_intervallo() -> u32 {
@@ -41,6 +48,10 @@ fn default_sync_intervallo() -> u32 {
 
 fn default_ricerca_alpha() -> f64 {
     0.5
+}
+
+fn default_idle_unload_secondi() -> u32 {
+    300
 }
 
 impl Default for Preferenze {
@@ -60,6 +71,7 @@ impl Default for Preferenze {
             sync_abilitato: false,
             ricerca_semantica_abilitata: false,
             ricerca_alpha: 0.5,
+            idle_unload_secondi: 300,
         }
     }
 }
@@ -132,6 +144,7 @@ mod test {
             sync_abilitato: true,
             ricerca_semantica_abilitata: true,
             ricerca_alpha: 0.7,
+            idle_unload_secondi: 600,
         };
 
         let json = serde_json::to_string_pretty(&prefs).unwrap();

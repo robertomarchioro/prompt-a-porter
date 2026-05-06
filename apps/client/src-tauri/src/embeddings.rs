@@ -28,7 +28,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{Emitter, State};
 use tokenizers::Tokenizer;
 
@@ -62,8 +62,13 @@ const MAX_SEQ_LEN: usize = 128;
 /// Stato globale del modulo embeddings. Inizialmente vuoto; popolato da
 /// `embeddings_init` dopo che il modello è scaricato e libonnxruntime è
 /// pronta sul filesystem.
+///
+/// `last_used` traccia il timestamp dell'ultima `compute_embedding_opt`
+/// successful. Usato dal task background di idle-unload (Step 10) per
+/// liberare RAM quando la Session è inattiva da una soglia configurabile.
 pub struct EmbeddingsState {
     inner: Mutex<Option<EmbeddingsLoaded>>,
+    last_used: Mutex<Option<Instant>>,
 }
 
 struct EmbeddingsLoaded {
@@ -75,6 +80,7 @@ impl EmbeddingsState {
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(None),
+            last_used: Mutex::new(None),
         }
     }
 }
@@ -482,6 +488,9 @@ pub fn embeddings_init(
 
     let mut guard = rt_state.inner.lock().unwrap();
     *guard = Some(EmbeddingsLoaded { session, tokenizer });
+    // Marca l'init come "uso recente" così il timer di idle-unload (Step 10)
+    // non droppa subito una Session appena caricata.
+    *rt_state.last_used.lock().unwrap() = Some(Instant::now());
 
     log::info!(
         "embeddings_init: Session ort + tokenizer pronti per {MODEL_ID}"
@@ -528,6 +537,9 @@ fn l2_normalize(v: &mut Array1<f32>) {
 ///
 /// Ritorna `Ok(None)` se la Session non è ancora caricata: i caller possono
 /// degradare graziosamente (es. fallback a sola ricerca FTS5).
+///
+/// Effetto collaterale: aggiorna `last_used` a `Instant::now()` su success,
+/// così il task di idle-unload (Step 10) sa quando la Session è viva.
 pub(crate) fn compute_embedding_opt(
     rt_state: &EmbeddingsState,
     testo: &str,
@@ -537,7 +549,60 @@ pub(crate) fn compute_embedding_opt(
         return Ok(None);
     };
     let result = compute_with_loaded(loaded, testo)?;
+    *rt_state.last_used.lock().unwrap() = Some(Instant::now());
     Ok(Some(result))
+}
+
+/// Soglia minima accettabile per `unload_se_idle`. Sotto questa soglia la
+/// chiamata è no-op (evita unload aggressivi che vanificano la cache).
+/// La preferenza `idle_unload_secondi = 0` significa "disattivata".
+const SOGLIA_MIN_UNLOAD: Duration = Duration::from_secs(60);
+
+/// Se la Session è caricata e non è stata usata da almeno `soglia`, la
+/// droppa per liberare RAM (~150 MB modello + runtime ort). Idempotente:
+/// no-op se Session è già `None` o se è ancora "calda".
+///
+/// Ritorna `true` se ha effettuato l'unload, `false` altrimenti.
+///
+/// Casistiche:
+/// - `soglia < SOGLIA_MIN_UNLOAD` → no-op (pref disattivata o fuori range)
+/// - `last_used = None` (Session caricata ma mai usata) → no-op: lasciamo
+///   la prima compute decidere quando partire il timer
+/// - `last_used.elapsed() < soglia` → no-op
+/// - altrimenti → `*inner = None` e log info
+pub fn unload_se_idle(rt_state: &EmbeddingsState, soglia: Duration) -> bool {
+    if soglia < SOGLIA_MIN_UNLOAD {
+        return false;
+    }
+    let last = *rt_state.last_used.lock().unwrap();
+    let Some(last) = last else {
+        return false;
+    };
+    if last.elapsed() < soglia {
+        return false;
+    }
+    let mut guard = rt_state.inner.lock().unwrap();
+    if guard.is_some() {
+        *guard = None;
+        log::info!(
+            "embeddings: Session droppata per inattività ({}s)",
+            last.elapsed().as_secs()
+        );
+        true
+    } else {
+        false
+    }
+}
+
+/// Restituisce l'`Instant` dell'ultimo uso della Session. Esposto per i
+/// test e per il task background.
+pub fn ultimo_uso(rt_state: &EmbeddingsState) -> Option<Instant> {
+    *rt_state.last_used.lock().unwrap()
+}
+
+/// `true` se la Session è caricata. Esposto per i test e per UI status.
+pub fn session_caricata(rt_state: &EmbeddingsState) -> bool {
+    rt_state.inner.lock().unwrap().is_some()
 }
 
 fn compute_with_loaded(
@@ -708,5 +773,49 @@ mod test {
         let r = compute_embedding_opt(&rt, "qualunque testo");
         assert!(r.is_ok(), "no errore quando session non loaded");
         assert!(r.unwrap().is_none(), "ritorna None, non Some(emb)");
+    }
+
+    // ─────────── Test idle-unload (Step 10 quality gate) ───────────
+
+    #[test]
+    fn unload_se_idle_session_none_no_op() {
+        let rt = EmbeddingsState::new();
+        // Session = None, last_used = None → unload_se_idle no-op.
+        let dropped = unload_se_idle(&rt, Duration::from_secs(60));
+        assert!(!dropped, "no-op se Session non era caricata");
+        assert!(!session_caricata(&rt));
+    }
+
+    #[test]
+    fn unload_se_idle_soglia_sotto_minimo_no_op() {
+        // Soglia 0 (disattivato) o sotto SOGLIA_MIN_UNLOAD (60s) → no-op.
+        let rt = EmbeddingsState::new();
+        // Forziamo last_used antico per simulare "molto idle".
+        *rt.last_used.lock().unwrap() = Some(Instant::now() - Duration::from_secs(3600));
+        let dropped = unload_se_idle(&rt, Duration::from_secs(0));
+        assert!(!dropped, "soglia 0 = disattivata, non droppa");
+        let dropped2 = unload_se_idle(&rt, Duration::from_secs(30));
+        assert!(!dropped2, "soglia < 60s sotto minimo, non droppa");
+    }
+
+    #[test]
+    fn unload_se_idle_session_calda_no_op() {
+        let rt = EmbeddingsState::new();
+        // last_used = adesso, soglia 60s → calda, no unload.
+        *rt.last_used.lock().unwrap() = Some(Instant::now());
+        let dropped = unload_se_idle(&rt, Duration::from_secs(60));
+        assert!(!dropped);
+    }
+
+    #[test]
+    fn ultimo_uso_e_session_caricata_riflettono_lo_state() {
+        let rt = EmbeddingsState::new();
+        assert!(!session_caricata(&rt));
+        assert_eq!(ultimo_uso(&rt), None);
+        // Simuliamo un compute "successful" senza dover caricare ort
+        // davvero: settando last_used direttamente.
+        let now = Instant::now();
+        *rt.last_used.lock().unwrap() = Some(now);
+        assert_eq!(ultimo_uso(&rt), Some(now));
     }
 }
