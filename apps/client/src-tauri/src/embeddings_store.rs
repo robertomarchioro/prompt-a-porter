@@ -79,11 +79,17 @@ pub fn upsert_embedding(
     }
     let bytes = embedding_a_bytes(embedding);
 
-    // vec0 non supporta UPSERT con ON CONFLICT, ma supporta DELETE + INSERT
-    // (atomico se in transazione esplicita). Per semplicità qui usiamo
-    // INSERT OR REPLACE — funziona perché PromptId è PRIMARY KEY in vec0.
+    // vec0 non supporta INSERT OR REPLACE né ON CONFLICT (limite della
+    // virtual table). DELETE + INSERT è il pattern raccomandato. La
+    // sequenza è eseguita all'interno di una transazione implicita di
+    // SQLite (each statement è atomico, e in single-thread context il
+    // gap è invisibile).
     conn.execute(
-        "INSERT OR REPLACE INTO PromptsEmbeddings (PromptId, Embedding) VALUES (?1, ?2)",
+        "DELETE FROM PromptsEmbeddings WHERE PromptId = ?1",
+        params![prompt_id],
+    )?;
+    conn.execute(
+        "INSERT INTO PromptsEmbeddings (PromptId, Embedding) VALUES (?1, ?2)",
         params![prompt_id, bytes],
     )?;
     Ok(())
