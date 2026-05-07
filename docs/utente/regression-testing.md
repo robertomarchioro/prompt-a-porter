@@ -31,6 +31,7 @@ tabella `ProviderConfig`):
 | **Anthropic** | API key `sk-ant-…` da console.anthropic.com | per token |
 | **OpenAI** | API key `sk-…` da platform.openai.com | per token |
 | **OpenAI-compat** | URL custom (LM Studio, vLLM) + key generica | varia |
+| **Google (Gemini)** | API key da `aistudio.google.com/apikey`; modelli `gemini-2.5-flash` / `gemini-2.5-pro` | per token |
 
 > **Sicurezza**: le API key vivono in plaintext nel DB cifrato
 > SQLCipher AES-256. La protezione è quella del vault — niente doppia
@@ -134,9 +135,9 @@ Vedi `docs/architettura/schema-dati.md` § V008-V010. Riassunto:
   manca subcommand in `apps/cli`.
 - **MCP integration** `pap_test_prompt` come tool per agenti —
   Fase 5 con MCP HTTP/SSE.
-- **Provider Google (Gemini)** — non implementato. 4 provider
-  pianificati su 5 implementati (Anthropic, OpenAI, OpenAI-compat,
-  Ollama).
+- ✅ **Provider Google (Gemini)** atterrato in `v0.5.0`: 5/5
+  provider pianificati ora implementati (Anthropic, OpenAI,
+  OpenAI-compat, Ollama, Gemini).
 - ✅ **UI Impostazioni Provider** — atterrato in `v0.5.0`
   (pannello dedicato in **Impostazioni** → **Provider AI**).
 
