@@ -1,6 +1,8 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { Button, EmptyState, Toast } from "$lib/components";
+  import VersionDiff from "$lib/components/VersionDiff.svelte";
+  import { diffMarkdown, statiDiff } from "$lib/diff";
 
   interface VersioneStorica {
     id: string;
@@ -25,11 +27,25 @@
 
   let versioni = $state<VersioneStorica[]>([]);
   let versioneSelezionata = $state<VersioneStorica | null>(null);
+  let confrontaConVersion = $state<number | null>(null);
+  let modalitaVista = $state<"body" | "unified" | "side-by-side">("body");
   let caricamento = $state(true);
   let errore = $state("");
   let confermaRollback = $state<number | null>(null);
   let messaggioToast = $state("");
   let toastVisibile = $state(false);
+
+  const versioneConfronto = $derived(
+    confrontaConVersion !== null
+      ? (versioni.find((v) => v.version === confrontaConVersion) ?? null)
+      : (versioni[0] ?? null),
+  );
+
+  const differenzeRiga = $derived(
+    versioneSelezionata && versioneConfronto
+      ? statiDiff(versioneConfronto.body, versioneSelezionata.body)
+      : { aggiunte: 0, rimosse: 0 },
+  );
 
   function mostraToast(testo: string) {
     messaggioToast = testo;
@@ -98,6 +114,20 @@
       } else {
         onchiudi();
       }
+    }
+  }
+
+  async function copiaDiffMarkdown() {
+    if (!versioneSelezionata || !versioneConfronto) return;
+    const md = diffMarkdown(versioneConfronto.body, versioneSelezionata.body, {
+      etichettaA: `v${versioneConfronto.version}`,
+      etichettaB: `v${versioneSelezionata.version}`,
+    });
+    try {
+      await navigator.clipboard.writeText(md);
+      mostraToast("Diff copiato in Markdown");
+    } catch (e) {
+      errore = `Copia non riuscita: ${e}`;
     }
   }
 
@@ -177,7 +207,84 @@
               {#if versioneSelezionata.descrizione}
                 <p class="preview-desc">{versioneSelezionata.descrizione}</p>
               {/if}
-              <pre class="preview-body">{versioneSelezionata.body}</pre>
+
+              <!-- ── Controlli vista (Step 3) ── -->
+              <div class="vista-controlli">
+                <div class="seg-control" role="tablist" aria-label="Modalità vista">
+                  <button
+                    type="button"
+                    class="seg-btn"
+                    class:seg-btn--attivo={modalitaVista === "body"}
+                    onclick={() => (modalitaVista = "body")}
+                    role="tab"
+                    aria-selected={modalitaVista === "body"}>Body</button
+                  >
+                  <button
+                    type="button"
+                    class="seg-btn"
+                    class:seg-btn--attivo={modalitaVista === "unified"}
+                    onclick={() => (modalitaVista = "unified")}
+                    role="tab"
+                    aria-selected={modalitaVista === "unified"}
+                    disabled={versioni.length < 2}>Diff inline</button
+                  >
+                  <button
+                    type="button"
+                    class="seg-btn"
+                    class:seg-btn--attivo={modalitaVista === "side-by-side"}
+                    onclick={() => (modalitaVista = "side-by-side")}
+                    role="tab"
+                    aria-selected={modalitaVista === "side-by-side"}
+                    disabled={versioni.length < 2}>Diff side-by-side</button
+                  >
+                </div>
+
+                {#if modalitaVista !== "body" && versioni.length >= 2}
+                  <label class="confronta-label">
+                    Confronta con
+                    <select
+                      bind:value={confrontaConVersion}
+                      class="confronta-select"
+                    >
+                      {#each versioni.filter((v) => v.version !== versioneSelezionata?.version) as v (v.id)}
+                        <option value={v.version}
+                          >v{v.version} · {tempoRelativo(v.creato_a)}</option
+                        >
+                      {/each}
+                    </select>
+                  </label>
+
+                  {#if versioneConfronto}
+                    <span class="diff-badges">
+                      <span class="badge-aggiunte"
+                        >+{differenzeRiga.aggiunte}</span
+                      >
+                      <span class="badge-rimosse"
+                        >−{differenzeRiga.rimosse}</span
+                      >
+                    </span>
+                    <Button variante="ghost" onclick={copiaDiffMarkdown}
+                      >Copia Markdown</Button
+                    >
+                  {/if}
+                {/if}
+              </div>
+
+              {#if modalitaVista === "body"}
+                <pre class="preview-body">{versioneSelezionata.body}</pre>
+              {:else if versioneConfronto}
+                <div class="vd-wrap">
+                  <VersionDiff
+                    a={versioneConfronto.body}
+                    b={versioneSelezionata.body}
+                    modalita={modalitaVista}
+                    etichettaA={`v${versioneConfronto.version}`}
+                    etichettaB={`v${versioneSelezionata.version}`}
+                  />
+                </div>
+              {:else}
+                <p class="hint">Seleziona una versione di confronto</p>
+              {/if}
             {:else}
               <p class="hint">Seleziona una versione dalla lista</p>
             {/if}
@@ -417,6 +524,91 @@
     margin: 0;
     overflow: auto;
     flex: 1;
+  }
+
+  /* ── Controlli vista (Step 3) ── */
+  .vista-controlli {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    flex-wrap: wrap;
+  }
+
+  .seg-control {
+    display: inline-flex;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--bg-canvas);
+  }
+
+  .seg-btn {
+    padding: var(--sp-1) var(--sp-3);
+    background: transparent;
+    border: none;
+    color: var(--text-default);
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    border-right: 1px solid var(--border-subtle);
+  }
+
+  .seg-btn:last-child {
+    border-right: none;
+  }
+
+  .seg-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .seg-btn--attivo {
+    background: var(--accent-team-soft);
+    color: var(--text-strong);
+  }
+
+  .confronta-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+  }
+
+  .confronta-select {
+    padding: 4px var(--sp-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--bg-canvas);
+    color: var(--text-default);
+    font-family: inherit;
+    font-size: var(--fs-sm);
+  }
+
+  .diff-badges {
+    display: inline-flex;
+    gap: var(--sp-1);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+  }
+
+  .badge-aggiunte {
+    color: var(--accent-success, #2c8a2c);
+    background: rgba(108, 184, 108, 0.18);
+    padding: 2px 6px;
+    border-radius: var(--radius-md);
+  }
+
+  .badge-rimosse {
+    color: var(--accent-danger, #b73c38);
+    background: rgba(217, 83, 79, 0.18);
+    padding: 2px 6px;
+    border-radius: var(--radius-md);
+  }
+
+  .vd-wrap {
+    flex: 1;
+    overflow: auto;
   }
 
   .modale-footer {
