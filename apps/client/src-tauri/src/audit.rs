@@ -452,4 +452,68 @@ mod test {
         assert_eq!(csv_quote("con \"virgolette\""), "\"con \"\"virgolette\"\"\"");
         assert_eq!(csv_quote("a\nb"), "\"a\nb\"");
     }
+
+    #[test]
+    fn componi_where_filtri_vuoti_clausola_vuota() {
+        let f = AuditFiltro::default();
+        let (clausola, params) = componi_where(&f);
+        assert_eq!(clausola, "");
+        assert!(params.is_empty());
+    }
+
+    #[test]
+    fn componi_where_date_range_e_user() {
+        let f = AuditFiltro {
+            da: Some("2026-05-01T00:00:00Z".to_string()),
+            a: Some("2026-05-07T23:59:59Z".to_string()),
+            user_id: Some("usr-locale".to_string()),
+            ..Default::default()
+        };
+        let (clausola, params) = componi_where(&f);
+        assert!(clausola.contains("OccurredAt >= :da"));
+        assert!(clausola.contains("OccurredAt < :a"));
+        assert!(clausola.contains("UserId = :user_id"));
+        assert!(clausola.starts_with("WHERE"));
+        assert_eq!(params.len(), 3);
+    }
+
+    #[test]
+    fn componi_where_testo_libero_cerca_in_entity_e_metadata() {
+        let f = AuditFiltro {
+            testo: Some("prm-".to_string()),
+            ..Default::default()
+        };
+        let (clausola, params) = componi_where(&f);
+        assert!(clausola.contains("EntityId LIKE :testo"));
+        assert!(clausola.contains("Metadata LIKE :testo"));
+        assert_eq!(params.len(), 1);
+    }
+
+    #[test]
+    fn componi_where_filtri_stringa_vuota_ignorati() {
+        // Stringa "" deve essere trattata come None.
+        let f = AuditFiltro {
+            da: Some("".to_string()),
+            tipo_entita: Some("".to_string()),
+            ..Default::default()
+        };
+        let (clausola, params) = componi_where(&f);
+        assert_eq!(clausola, "");
+        assert!(params.is_empty());
+    }
+
+    #[test]
+    fn csv_quote_stringa_vuota_e_solo_spazi() {
+        assert_eq!(csv_quote(""), "");
+        assert_eq!(csv_quote("  "), "  ");
+    }
+
+    #[test]
+    fn csv_quote_combinazione_virgola_e_virgolette() {
+        // Caso edge: contiene sia virgola che virgolette annidate.
+        assert_eq!(
+            csv_quote("a,\"b\",c"),
+            "\"a,\"\"b\"\",c\""
+        );
+    }
 }
