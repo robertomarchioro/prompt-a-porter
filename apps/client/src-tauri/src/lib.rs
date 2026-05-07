@@ -17,6 +17,7 @@ pub mod preferenze;
 pub mod prompt;
 pub mod prompt_componibili;
 pub mod provider_ai;
+pub mod rating;
 pub mod regression;
 pub mod ricerca_ibrida;
 pub mod similarity;
@@ -357,6 +358,8 @@ pub fn run() {
             varianti::varianti_lista,
             fork::prompt_fork,
             fork::fork_info,
+            rating::rating_aggiungi,
+            rating::rating_aggregato,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())

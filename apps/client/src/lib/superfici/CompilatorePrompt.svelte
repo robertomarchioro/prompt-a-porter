@@ -32,6 +32,33 @@
   let formato = $state<"testo" | "markdown" | "json">("testo");
   let toastVisibile = $state(false);
 
+  // ─── Rating post-uso (Fase 4 Step 2) ───
+  let mostraRating = $state(false);
+  let ratingDato = $state<-1 | 0 | 1 | null>(null);
+  let timerRating: ReturnType<typeof setTimeout> | null = null;
+
+  async function aggiungiRating(valore: -1 | 0 | 1) {
+    ratingDato = valore;
+    try {
+      await invoke<string>("rating_aggiungi", {
+        nuovo: {
+          prompt_id: prompt.id,
+          rating: valore,
+          nota: null,
+          used_with_model: prompt.target_model || null,
+        },
+      });
+    } catch {
+      // Silenzioso: il rating è opzionale, non vogliamo blocco UX.
+    }
+    // Auto-dismiss più rapido dopo l'azione (1s feedback).
+    if (timerRating) clearTimeout(timerRating);
+    timerRating = setTimeout(() => {
+      mostraRating = false;
+      ratingDato = null;
+    }, 1000);
+  }
+
   // ─── Espansione import (Fase 3 Step 8) ───
   let bodyEspanso = $state<string | null>(null);
   let loadingEspandi = $state(false);
@@ -99,6 +126,14 @@
     invoke("prompt_registra_uso", { id: prompt.id }).catch(() => {});
     toastVisibile = true;
     setTimeout(() => (toastVisibile = false), 2000);
+    // Mostra il toast rating dopo il copy. Auto-dismiss a 5s se l'utente
+    // non interagisce (timer abbreviato a 1s se invece clicca).
+    ratingDato = null;
+    mostraRating = true;
+    if (timerRating) clearTimeout(timerRating);
+    timerRating = setTimeout(() => {
+      mostraRating = false;
+    }, 5000);
   }
 
   function renderCompilazione(
@@ -268,6 +303,51 @@
     </footer>
   </div>
 </div>
+
+{#if mostraRating}
+  <div
+    class="rating-toast"
+    role="region"
+    aria-label="Valuta questo prompt"
+  >
+    <span class="rating-toast-msg">
+      {#if ratingDato !== null}
+        Grazie per il feedback!
+      {:else}
+        Com'è andata con questo prompt?
+      {/if}
+    </span>
+    <div class="rating-bottoni">
+      <button
+        type="button"
+        class="rating-btn rating-btn--neg"
+        class:rating-btn--attivo={ratingDato === -1}
+        onclick={() => aggiungiRating(-1)}
+        disabled={ratingDato !== null}
+        aria-label="Negativo"
+        title="Non ha funzionato">👎</button
+      >
+      <button
+        type="button"
+        class="rating-btn rating-btn--neu"
+        class:rating-btn--attivo={ratingDato === 0}
+        onclick={() => aggiungiRating(0)}
+        disabled={ratingDato !== null}
+        aria-label="Neutro"
+        title="Così così">😐</button
+      >
+      <button
+        type="button"
+        class="rating-btn rating-btn--pos"
+        class:rating-btn--attivo={ratingDato === 1}
+        onclick={() => aggiungiRating(1)}
+        disabled={ratingDato !== null}
+        aria-label="Positivo"
+        title="Ottimo risultato">👍</button
+      >
+    </div>
+  </div>
+{/if}
 
 <Toast variante="success" visibile={toastVisibile}>
   ✓ Copiato negli appunti
@@ -631,5 +711,72 @@
     background: var(--bg-overlay);
     border: 1px solid var(--border-subtle);
     border-radius: 3px;
+  }
+
+  /* ── Toast rating (Fase 4 Step 2) ── */
+  .rating-toast {
+    position: fixed;
+    bottom: var(--sp-4);
+    right: var(--sp-4);
+    background: var(--bg-canvas);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-3);
+    padding: var(--sp-2) var(--sp-3);
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    z-index: var(--z-toast, 1000);
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+    animation: rating-slide-in var(--motion-fast) var(--easing-standard);
+  }
+
+  @keyframes rating-slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .rating-toast-msg {
+    color: var(--text-default);
+  }
+
+  .rating-bottoni {
+    display: flex;
+    gap: var(--sp-1);
+  }
+
+  .rating-btn {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 4px 8px;
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+    transition:
+      background var(--motion-fast) var(--easing-standard),
+      transform var(--motion-fast) var(--easing-standard);
+  }
+
+  .rating-btn:not(:disabled):hover {
+    background: var(--bg-overlay);
+    transform: translateY(-1px);
+  }
+
+  .rating-btn--attivo {
+    background: var(--accent-team-soft);
+    border-color: var(--accent-team);
+  }
+
+  .rating-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
   }
 </style>
