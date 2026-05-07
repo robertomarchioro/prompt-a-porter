@@ -22,7 +22,9 @@ use rusqlite::Connection;
 use serde::Serialize;
 use tauri::State;
 
-use crate::embeddings::{compute_embedding_opt, EmbeddingsState};
+use crate::embeddings::{
+    assicura_session_caricata, compute_embedding_opt, EmbeddingsState,
+};
 use crate::embeddings_store::search_nearest;
 use crate::errore::PapErrore;
 use crate::vault::VaultState;
@@ -103,12 +105,21 @@ pub fn cerca_lessicale(
 /// Top-K prompt id più vicini all'embedding query in vec0, ordinati per
 /// distance ASC. Vec vuoto se Session non disponibile o se vec0 non ha
 /// embeddings.
+///
+/// v0.6.0 Step 2: prima del compute embedding, tenta un riload on-demand
+/// della Session se è stata droppata dal timer idle-unload. Se il riload
+/// fallisce (es. modello non scaricato), degrada a Ok(vec![]) — la
+/// ricerca lessicale resta funzionante via FTS5.
 fn cerca_semantica(
     conn: &Connection,
+    vault_state: &crate::vault::VaultState,
     rt_state: &EmbeddingsState,
     query: &str,
     k: usize,
 ) -> Result<Vec<String>, PapErrore> {
+    // Riload on-demand. Errori (modello assente) → degrade silenzioso.
+    let _ = assicura_session_caricata(rt_state, vault_state);
+
     let Some(query_emb) = compute_embedding_opt(rt_state, query)? else {
         return Ok(vec![]);
     };
@@ -209,7 +220,7 @@ pub fn prompt_cerca_ibrida(
         }
 
         let lex_ids = cerca_lessicale(conn, q, POOL_SIZE)?;
-        let sem_ids = cerca_semantica(conn, &rt_state, q, POOL_SIZE)?;
+        let sem_ids = cerca_semantica(conn, state.inner(), &rt_state, q, POOL_SIZE)?;
 
         let fused = rrf_fuse(&lex_ids, &sem_ids, alpha, K_RRF);
 
@@ -346,10 +357,16 @@ mod test {
         // Quality gate Step 10 — grace degradation: se l'utente non ha
         // ancora abilitato/scaricato il modello, ricerca_ibrida deve
         // tornare risultati FTS-only senza errori.
+        // v0.6.0 Step 2: assicura_session_caricata interno a
+        // cerca_semantica fallisce silenziosamente se modello mancante,
+        // poi compute_embedding_opt ritorna None → vec vuoto.
         let conn = db_test();
+        let dir = tempfile::tempdir().unwrap();
+        let vault_state = crate::vault::VaultState::new(dir.path().to_path_buf());
         let rt_state = EmbeddingsState::new(); // session = None
 
-        let ids = cerca_semantica(&conn, &rt_state, "qualunque query", 10).unwrap();
+        let ids = cerca_semantica(&conn, &vault_state, &rt_state, "qualunque query", 10)
+            .unwrap();
         assert!(
             ids.is_empty(),
             "senza Session, cerca_semantica ritorna vec vuoto, no errore"
