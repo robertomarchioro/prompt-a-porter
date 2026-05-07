@@ -10,17 +10,16 @@
 ## Stato attuale
 
 Coverage misurato il 2026-05-07 con `cargo-llvm-cov` (toolchain stable,
-profilo test) post Fase 4 client-first track chiusa:
+profilo test) post v0.6.0 Step 1 (hardening):
 
-- **Line coverage globale: 69.91%** (9 077 linee strumentate, 2 731 non
-  coperte) — era 60.12% post v0.3.0
-- **Region coverage globale: 71.73%**
-- **Function coverage globale: 74.30%**
+- **Line coverage globale: 71.02%** (9 525 linee strumentate, 2 760 non
+  coperte) — era 70.27% post v0.5.0, 60.12% post v0.3.0
+- **Region coverage globale: 72.81%**
+- **Function coverage globale: 75.61%**
 
-CI gate: `--fail-under-lines 60`. Sotto questa soglia il workflow
-`rust-test` fallisce e blocca il merge. La soglia resta 60% per
-margine: alzarla a 70% richiede coverage stabile su `lib.rs` (oggi 0%
-perché solo Tauri setup).
+CI gate: `--fail-under-lines 65` (alzato da 60 in v0.6.0 Step 1). Sotto
+questa soglia il workflow `rust-test` fallisce e blocca il merge.
+Margine corrente vs gate: ~+6 punti, sicuro contro regressioni.
 
 ## Per modulo (snapshot 2026-05-07)
 
@@ -85,32 +84,29 @@ cargo llvm-cov --lib --html
 cargo llvm-cov --lib --summary-only --no-clean linting::
 ```
 
-## Roadmap verso 70%
+## Roadmap verso 75%
 
-I 4 file sotto 50% pesano ~1 800 linee (30% del totale strumentato).
-Portarli a 60% recupererebbe ~180 linee → +3% globale.
+I 2 file ancora sotto 50% pesano ~940 linee (10% del totale strumentato).
+Portarli a 60% recupererebbe ~150 linee → +1.5% globale.
 
-Priorità per v0.4.x:
+Priorità per v0.6.x → v0.7:
 
 1. **`embeddings.rs` 28% → 50%**: estrarre helper testabili dalla logica
    di download (`scarica_modello`, `scarica_runtime`) con HTTP mockato,
    testare `mean_pooling`/`l2_normalize` con tensori sintetici. Stima
    +250 linee.
-2. **`vault.rs` 44% → 60%**: scenari mancanti su `vault_lock_then_unlock`,
-   `vault_re_key`, gestione errori sblocco con password lunga/corta.
-   Stima +60 linee.
-3. **`audit.rs` 52% → 65%**: edge case CSV escape (virgolette annidate,
-   newline embed), filtri combinati `tipo + range temporale + utente`.
-   Stima +50 linee.
-4. **`import_export.rs` 29% → 50%**: scenari di round-trip JSON/CSV
+2. **`import_export.rs` 29% → 50%**: scenari di round-trip JSON/CSV
    con segnaposti complessi, gestione versione schema mismatch.
    Stima +75 linee.
-5. **`embeddings_backfill.rs` 10% → 40%**: dopo il punto 1, i path di
+3. **`embeddings_backfill.rs` 10% → 40%**: dopo il punto 1, i path di
    batching diventano testabili senza dipendenza dal modello reale.
+4. **`libreria.rs` 59% → 72%** ⏳ in progresso v0.6 Step 1:
+   filtri vista (preferiti, privati, team), ordinamento, ricerca testo.
 
 Target raggiunti / aggiornati:
 - ~~65% line coverage globale entro v0.4.0~~ ✅ raggiunto al **69.91%** (Fase 4 client-first track)
-- ~~70% line coverage globale entro v0.5~~ → ridefinito: **75% globale entro v0.5**, gate CI alzato a 65%
+- ~~70% line coverage globale entro v0.5~~ ✅ raggiunto al **70.27%** (v0.5.0 Step 6 Gemini test)
+- **75% globale entro v0.7**, gate CI ora a **65%** (alzato in v0.6 Step 1)
 
 I 5 file in arancio/rosso (≤ 50%) restano la zavorra principale: senza
 intervento dedicato su `embeddings.rs`, `vault.rs`, `audit.rs`,

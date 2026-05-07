@@ -598,6 +598,79 @@ mod test {
     }
 
     #[test]
+    fn hex_a_bytes_lunghezza_dispari_o_char_invalido() {
+        let r = hex_a_bytes("zz");
+        assert!(r.is_err(), "Char non hex deve produrre Err");
+
+        let r = hex_a_bytes("xy01");
+        assert!(r.is_err());
+
+        // Stringa vuota → Vec vuoto valido.
+        let r = hex_a_bytes("").unwrap();
+        assert!(r.is_empty());
+    }
+
+    #[test]
+    fn salva_e_leggi_meta_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("vault-meta.json");
+
+        let originale = VaultMeta {
+            salt_hex: "deadbeef".to_string(),
+            db_nome: "pap-vault.db".to_string(),
+            creato_a: "2026-05-07T00:00:00Z".to_string(),
+            argon2_memory_kib: 65536,
+            argon2_time_cost: 3,
+            argon2_parallelism: 4,
+            cifrato: true,
+        };
+        salva_meta(&path, &originale).unwrap();
+
+        let letto = leggi_meta(&path).unwrap();
+        assert_eq!(letto.salt_hex, originale.salt_hex);
+        assert_eq!(letto.argon2_memory_kib, originale.argon2_memory_kib);
+        assert_eq!(letto.cifrato, originale.cifrato);
+    }
+
+    #[test]
+    fn leggi_meta_file_inesistente_e_errore() {
+        let r = leggi_meta(Path::new("/nonexistent/path/vault-meta.json"));
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn leggi_meta_json_malformato_e_errore() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("vault-meta.json");
+        std::fs::write(&path, "{not-valid-json").unwrap();
+        let r = leggi_meta(&path);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn deriva_chiave_password_diverse_chiavi_diverse() {
+        let salt = [42u8; SALT_LEN];
+        let k1 = deriva_chiave("password_uno", &salt, 4096, 1, 1).unwrap();
+        let k2 = deriva_chiave("password_due", &salt, 4096, 1, 1).unwrap();
+        assert_ne!(k1, k2, "Password diverse devono dare chiavi diverse");
+    }
+
+    #[test]
+    fn deriva_chiave_salt_diversi_chiavi_diverse() {
+        let salt1 = [1u8; SALT_LEN];
+        let salt2 = [2u8; SALT_LEN];
+        let k1 = deriva_chiave("stessa", &salt1, 4096, 1, 1).unwrap();
+        let k2 = deriva_chiave("stessa", &salt2, 4096, 1, 1).unwrap();
+        assert_ne!(k1, k2, "Salt diversi devono dare chiavi diverse");
+    }
+
+    #[test]
+    fn timestamp_iso_non_vuoto() {
+        let ts = timestamp_iso();
+        assert!(!ts.is_empty());
+    }
+
+    #[test]
     fn re_key_funziona() {
         let (_dir, state) = vault_temp();
 

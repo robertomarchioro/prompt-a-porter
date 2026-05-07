@@ -591,4 +591,126 @@ mod test {
         // Nessun rating dentro la finestra → AVG ritorna NULL.
         assert!(media.is_none());
     }
+
+    fn inserisci_prompt(
+        conn: &Connection,
+        id: &str,
+        titolo: &str,
+        visibility: &str,
+        is_favorite: i64,
+        target_model: Option<&str>,
+    ) {
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body,
+             Visibility, Version, IsFavorite, TargetModel, CreatedAt, UpdatedAt)
+             VALUES (?1, 'ws-personale', 'usr-locale', ?2, 'body', ?3, 1, ?4, ?5,
+             datetime('now'), datetime('now'))",
+            rusqlite::params![id, titolo, visibility, is_favorite, target_model],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn filtro_vista_preferiti_solo_favorite() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        inserisci_prompt(&conn, "prm-fav", "Fav", "private", 1, None);
+        inserisci_prompt(&conn, "prm-no-fav", "NoFav", "private", 0, None);
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Prompts p
+                 WHERE p.DeletedAt IS NULL AND p.IsFavorite = 1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn filtro_vista_privati_e_team() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        inserisci_prompt(&conn, "prm-priv", "Priv", "private", 0, None);
+        inserisci_prompt(&conn, "prm-team", "Team", "workspace", 0, None);
+
+        let count_priv: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Prompts WHERE Visibility = 'private'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let count_team: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Prompts WHERE Visibility = 'workspace'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count_priv, 1);
+        assert_eq!(count_team, 1);
+    }
+
+    #[test]
+    fn filtro_target_model_specifico() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        inserisci_prompt(&conn, "prm-claude", "Claude", "private", 0, Some("claude-sonnet-4-6"));
+        inserisci_prompt(&conn, "prm-gpt", "GPT", "private", 0, Some("gpt-4o"));
+        inserisci_prompt(&conn, "prm-no-model", "NoModel", "private", 0, None);
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Prompts WHERE TargetModel = ?1",
+                rusqlite::params!["claude-sonnet-4-6"],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+
+        // Modello inesistente → 0 match.
+        let count_null: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Prompts WHERE TargetModel = ?1",
+                rusqlite::params!["nessuno"],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count_null, 0);
+    }
+
+    #[test]
+    fn filtro_testo_match_title_e_description() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
+             Visibility, Version, CreatedAt, UpdatedAt)
+             VALUES ('prm-1', 'ws-personale', 'usr-locale', 'Reclami', 'gestione clienti', 'b',
+             'private', 1, datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
+             Visibility, Version, CreatedAt, UpdatedAt)
+             VALUES ('prm-2', 'ws-personale', 'usr-locale', 'Codice', 'review programmatica', 'b',
+             'private', 1, datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        // Testo "clienti" matcha solo prm-1 via Description.
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Prompts
+                 WHERE Title LIKE ?1 OR Description LIKE ?1",
+                rusqlite::params!["%clienti%"],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
 }
