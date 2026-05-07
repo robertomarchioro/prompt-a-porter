@@ -21,7 +21,8 @@ sottostante (Claude 4.6 → 4.7, GPT-5 → GPT-6, ecc.).
 ## Setup provider
 
 Prima di eseguire golden, configura almeno un provider in
-**Impostazioni** → **Provider AI** (futura: oggi via SQL diretto sulla
+**Impostazioni** → **Provider AI** (pannello dedicato disponibile da
+`v0.5.0`; su `v0.4.x` l'inserimento avveniva via SQL diretto sulla
 tabella `ProviderConfig`):
 
 | Provider | Cosa serve | Costo |
@@ -134,8 +135,8 @@ Vedi `docs/architettura/schema-dati.md` § V008-V010. Riassunto:
 - **Provider Google (Gemini)** — non implementato. 4 provider
   pianificati su 5 implementati (Anthropic, OpenAI, OpenAI-compat,
   Ollama).
-- **UI Impostazioni Provider** — oggi i record `ProviderConfig`
-  vanno creati via SQL/MCP. Pannello dedicato in `v0.5.0`.
+- ✅ **UI Impostazioni Provider** — atterrato in `v0.5.0`
+  (pannello dedicato in **Impostazioni** → **Provider AI**).
 
 ## Riferimenti
 

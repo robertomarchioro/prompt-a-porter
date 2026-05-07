@@ -1,7 +1,12 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-  import { Button, Switch, Toast } from "$lib/components";
+  import {
+    Button,
+    PannelloProviderConfig,
+    Switch,
+    Toast,
+  } from "$lib/components";
   import HotkeyInput from "$lib/components/HotkeyInput.svelte";
   import {
     syncGetState,
@@ -52,6 +57,7 @@
     | "aspetto"
     | "vault"
     | "ricerca"
+    | "provider"
     | "audit"
     | "lingua"
     | "info";
@@ -63,6 +69,7 @@
     { id: "aspetto", etichetta: "Aspetto", icona: "🎨" },
     { id: "vault", etichetta: "Vault", icona: "🔒" },
     { id: "ricerca", etichetta: "Ricerca semantica", icona: "🔎" },
+    { id: "provider", etichetta: "Provider AI", icona: "🤖" },
     { id: "audit", etichetta: "Registro attività", icona: "📋" },
     { id: "lingua", etichetta: "Lingua", icona: "🌐" },
     { id: "info", etichetta: "Informazioni", icona: "ℹ" },
@@ -1161,6 +1168,10 @@
                 </div>
               </div>
             </div>
+          </div>
+        {:else if sezione === "provider"}
+          <div class="sez">
+            <PannelloProviderConfig />
           </div>
         {:else if sezione === "audit"}
           <div class="sez">
