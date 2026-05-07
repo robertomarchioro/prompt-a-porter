@@ -114,6 +114,30 @@
   let creandoVariante = $state(false);
   let erroreVariante = $state("");
 
+  // ─── Rating aggregato (Fase 4 Step 2) ───
+  interface RatingAggregato {
+    media: number | null;
+    conteggio: number;
+    positivi: number;
+    neutri: number;
+    negativi: number;
+  }
+  let ratingAgg = $state<RatingAggregato | null>(null);
+
+  async function caricaRating() {
+    if (!promptDet) {
+      ratingAgg = null;
+      return;
+    }
+    try {
+      ratingAgg = await invoke<RatingAggregato>("rating_aggregato", {
+        promptId: promptDet.id,
+      });
+    } catch {
+      ratingAgg = null;
+    }
+  }
+
   // ─── Fork / Clone (Fase 4 Step 5) ───
   interface ForkOfInfo {
     original_id: string;
@@ -531,6 +555,7 @@
         promptDet = det;
         await caricaVarianti();
         await caricaForkInfo();
+        await caricaRating();
       }
     } catch {
       /* prompt non trovato */
@@ -1229,6 +1254,19 @@
               <span
                 >Usato {promptDet.uso_count}
                 {promptDet.uso_count === 1 ? "volta" : "volte"}</span
+              >
+            {/if}
+            {#if ratingAgg && ratingAgg.conteggio > 0}
+              {@const pct = Math.round(
+                (ratingAgg.positivi / ratingAgg.conteggio) * 100,
+              )}
+              <span
+                class="rating-badge"
+                class:rating-badge--ottimo={pct >= 80}
+                class:rating-badge--medio={pct >= 50 && pct < 80}
+                class:rating-badge--basso={pct < 50}
+                title={`${ratingAgg.positivi} positivi · ${ratingAgg.neutri} neutri · ${ratingAgg.negativi} negativi`}
+                >👍 {pct}% su {ratingAgg.conteggio}</span
               >
             {/if}
             <span>{tempoRelativo(promptDet.aggiornato_a)}</span>
@@ -2068,6 +2106,30 @@
     margin: var(--sp-1) 0 0;
     font-size: var(--fs-xs);
     color: var(--danger);
+  }
+
+  .rating-badge {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    padding: 2px 8px;
+    border-radius: var(--radius-md);
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-subtle);
+  }
+  .rating-badge--ottimo {
+    color: var(--accent-success, #2c8a2c);
+    background: rgba(108, 184, 108, 0.16);
+    border-color: rgba(108, 184, 108, 0.4);
+  }
+  .rating-badge--medio {
+    color: var(--accent-warn, #b07a26);
+    background: rgba(217, 162, 95, 0.16);
+    border-color: rgba(217, 162, 95, 0.4);
+  }
+  .rating-badge--basso {
+    color: var(--accent-danger, #b73c38);
+    background: rgba(217, 83, 79, 0.16);
+    border-color: rgba(217, 83, 79, 0.4);
   }
 
   .det-fork-banner {
