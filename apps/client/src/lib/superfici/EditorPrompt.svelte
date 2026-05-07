@@ -223,6 +223,40 @@
     }
   }
 
+  // ─── Esegui tutti i golden batch (v0.5.0 Step 4) ───
+  let batchInCorso = $state(false);
+  let batchProgresso = $state<{ fatti: number; totali: number } | null>(null);
+  let batchSummary = $state<{
+    passed: number;
+    failed: number;
+    error: number;
+  } | null>(null);
+
+  async function eseguiTuttiGolden() {
+    if (batchInCorso || goldens.length === 0) return;
+    batchInCorso = true;
+    batchSummary = null;
+    batchProgresso = { fatti: 0, totali: goldens.length };
+    let passed = 0;
+    let failed = 0;
+    let error = 0;
+    // Sequenziale per evitare rate limit del provider scelto.
+    for (const g of goldens) {
+      await eseguiGolden(g.id);
+      const stato = runStato[g.id];
+      if (stato === "ok") passed++;
+      else if (stato === "ko") failed++;
+      else error++;
+      batchProgresso = {
+        fatti: (batchProgresso?.fatti ?? 0) + 1,
+        totali: goldens.length,
+      };
+    }
+    batchSummary = { passed, failed, error };
+    batchInCorso = false;
+    batchProgresso = null;
+  }
+
   async function eseguiGolden(id: string) {
     runStato[id] = "running";
     runMessaggio[id] = "";
@@ -629,7 +663,39 @@
                     <span class="test-hint">
                       Provider remote (Anthropic, OpenAI) in arrivo nello Step 8f.
                     </span>
+                    {#if goldens.length > 0}
+                      <Button
+                        dimensione="sm"
+                        variante="primary"
+                        disabled={batchInCorso}
+                        onclick={eseguiTuttiGolden}
+                      >
+                        {#if batchInCorso && batchProgresso}
+                          Esecuzione {batchProgresso.fatti}/{batchProgresso.totali}…
+                        {:else}
+                          Esegui tutti ({goldens.length})
+                        {/if}
+                      </Button>
+                    {/if}
                   </div>
+                  {#if batchSummary}
+                    <div
+                      class="test-batch-summary"
+                      class:test-batch-summary--ok={batchSummary.failed === 0 &&
+                        batchSummary.error === 0}
+                      class:test-batch-summary--ko={batchSummary.failed > 0 ||
+                        batchSummary.error > 0}
+                      role="status"
+                    >
+                      ✓ {batchSummary.passed} passed
+                      {#if batchSummary.failed > 0}
+                        · ✗ {batchSummary.failed} failed
+                      {/if}
+                      {#if batchSummary.error > 0}
+                        · ⚠ {batchSummary.error} errore
+                      {/if}
+                    </div>
+                  {/if}
 
                   {#each goldens as g (g.id)}
                     {@const stato = runStato[g.id] ?? "idle"}
@@ -1504,6 +1570,24 @@
   .test-hint {
     color: var(--text-subtle);
     font-size: var(--fs-xs);
+  }
+
+  .test-batch-summary {
+    margin-top: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    background: var(--bg-overlay);
+    color: var(--text-strong);
+  }
+  .test-batch-summary--ok {
+    background: var(--success-soft);
+    color: var(--success);
+  }
+  .test-batch-summary--ko {
+    background: var(--danger-soft);
+    color: var(--danger);
   }
 
   .test-input,
