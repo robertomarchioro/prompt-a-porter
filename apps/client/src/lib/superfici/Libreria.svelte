@@ -97,6 +97,55 @@
   let compilatoreKey = $state(0);
   let mostraCronologia = $state(false);
   let cronologiaKey = $state(0);
+
+  // ─── Varianti / A-B testing (Fase 4 Step 1) ───
+  interface VariantInfo {
+    id: string;
+    parent_prompt_id: string;
+    variant_label: string;
+    titolo: string;
+    body: string;
+    uso_count: number;
+    creato_a: string;
+    aggiornato_a: string;
+  }
+  let varianti = $state<VariantInfo[]>([]);
+  let creandoVariante = $state(false);
+  let erroreVariante = $state("");
+
+  async function caricaVarianti() {
+    if (!promptDet) {
+      varianti = [];
+      return;
+    }
+    try {
+      varianti = await invoke<VariantInfo[]>("varianti_lista", {
+        parentId: promptDet.id,
+      });
+    } catch {
+      varianti = [];
+    }
+  }
+
+  async function aggiungiVariante() {
+    if (!promptDet) return;
+    creandoVariante = true;
+    erroreVariante = "";
+    try {
+      const nuovoId = await invoke<string>("prompt_crea_variante", {
+        parentId: promptDet.id,
+        etichetta: null,
+      });
+      await caricaDati();
+      idSelezionato = nuovoId;
+      await caricaDettaglio(nuovoId);
+      await caricaVarianti();
+    } catch (e) {
+      erroreVariante = String(e);
+    } finally {
+      creandoVariante = false;
+    }
+  }
   let mostraImpostazioni = $state(false);
   let mostraInsight = $state(false);
   let mostraRegressioni = $state(false);
@@ -416,7 +465,10 @@
       const det = await invoke<PromptDettaglio>("libreria_dettaglio", {
         id,
       });
-      if (idSelezionato === id) promptDet = det;
+      if (idSelezionato === id) {
+        promptDet = det;
+        await caricaVarianti();
+      }
     } catch {
       /* prompt non trovato */
     }
@@ -1048,6 +1100,12 @@
                 }}>Cronologia</Button
               >
               <Button
+                variante="ghost"
+                dimensione="sm"
+                onclick={aggiungiVariante}
+                disabled={creandoVariante}>+ Variante</Button
+              >
+              <Button
                 variante="primary"
                 dimensione="sm"
                 onclick={() => {
@@ -1083,6 +1141,28 @@
                 <Tag colore={tag.colore}>{tag.nome}</Tag>
               {/each}
             </div>
+          {/if}
+          {#if varianti.length > 0}
+            <div class="det-varianti" aria-label="Varianti del prompt">
+              <span class="det-varianti-label">Varianti:</span>
+              {#each varianti as v (v.id)}
+                <button
+                  type="button"
+                  class="variante-pill"
+                  class:variante-pill--attiva={idSelezionato === v.id}
+                  onclick={() => {
+                    idSelezionato = v.id;
+                    caricaDettaglio(v.id);
+                  }}
+                  title={v.titolo}
+                >
+                  {v.variant_label}
+                </button>
+              {/each}
+            </div>
+          {/if}
+          {#if erroreVariante}
+            <p class="det-errore-variante">{erroreVariante}</p>
           {/if}
         </div>
 
@@ -1804,6 +1884,49 @@
   .det-tags {
     display: flex;
     gap: var(--sp-2);
+  }
+
+  .det-varianti {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+    flex-wrap: wrap;
+    font-size: var(--fs-xs);
+  }
+
+  .det-varianti-label {
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-right: var(--sp-1);
+  }
+
+  .variante-pill {
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 2px 10px;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-default);
+    cursor: pointer;
+    transition: background var(--motion-fast) var(--easing-standard);
+  }
+
+  .variante-pill:hover {
+    background: var(--accent-team-soft);
+  }
+
+  .variante-pill--attiva {
+    background: var(--accent-team);
+    color: white;
+    border-color: var(--accent-team);
+  }
+
+  .det-errore-variante {
+    margin: var(--sp-1) 0 0;
+    font-size: var(--fs-xs);
+    color: var(--danger);
   }
 
   .det-body {

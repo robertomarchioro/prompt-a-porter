@@ -14,7 +14,7 @@ use crate::vault::VaultState;
 /// skip se la Session non è disponibile (utente non ha attivato la feature
 /// o modello non scaricato): in quel caso il prompt resta senza embedding
 /// e verrà processato dal backfill quando la feature viene attivata.
-fn aggiorna_embedding(
+pub(crate) fn aggiorna_embedding(
     conn: &Connection,
     rt_state: &EmbeddingsState,
     prompt_id: &str,

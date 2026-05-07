@@ -22,6 +22,7 @@ pub mod similarity;
 pub mod statistiche;
 pub mod sync;
 pub mod tags_suggest;
+pub mod varianti;
 pub mod vault;
 pub mod versioning;
 
@@ -351,6 +352,8 @@ pub fn run() {
             provider_ai::provider_config_lista,
             provider_ai::provider_config_salva,
             provider_ai::provider_config_elimina,
+            varianti::prompt_crea_variante,
+            varianti::varianti_lista,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())

@@ -61,6 +61,11 @@ static MIGRAZIONI: &[Migrazione] = &[
         nome: "provider_config",
         sql: include_str!("../migrations/V010__provider_config.sql"),
     },
+    Migrazione {
+        versione: 11,
+        nome: "prompt_varianti",
+        sql: include_str!("../migrations/V011__prompt_varianti.sql"),
+    },
 ];
 
 /// Crea la tabella di tracking se non esiste.
@@ -135,10 +140,10 @@ mod test {
         let conn = Connection::open_in_memory().unwrap();
         let n = esegui_migrazioni(&conn).unwrap();
         assert!(
-            n >= 10,
-            "Tutte le migrazioni devono essere applicate (almeno 10)"
+            n >= 11,
+            "Tutte le migrazioni devono essere applicate (almeno 11)"
         );
-        assert_eq!(versione_corrente(&conn).unwrap(), 10);
+        assert_eq!(versione_corrente(&conn).unwrap(), 11);
     }
 
     #[test]
