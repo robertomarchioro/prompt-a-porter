@@ -122,7 +122,7 @@ Pezzi di feature parzialmente atterrate, con il resto programmato per `v0.5.0` (
 
 ### Da Fase 4 Step 1 — Varianti
 - 📋 **UI Editor "Crea variante"** (oggi solo dalla Libreria) — atterrabile come quick win in `v0.5.0`
-- 📋 **Vista "Confronto varianti" dedicata** multicolonna — riusabile da `ConfrontoPrompt` (Step 4 atterrato)
+- ✅ **Vista "Confronto varianti" dedicata** atterrata in v0.6.0 Step 5: bottone "Confronta tutte" nella riga delle pillole varianti del detail pane apre `ConfrontoPrompt` (Step 4 Fase 4) preselezionando principale + tutte le varianti. Riuso completo del componente esistente, no nuovo modulo.
 - 📋 **Renderer dropdown variante** con switch al volo mantenendo i valori del form
 - 📋 **Promuovi variante a principale** (swap main ↔ variant con preservazione storia)
 
