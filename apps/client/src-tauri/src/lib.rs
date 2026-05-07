@@ -346,6 +346,9 @@ pub fn run() {
             regression::golden_lista,
             regression::golden_esegui,
             provider_ai::provider_ollama_genera,
+            provider_ai::provider_config_lista,
+            provider_ai::provider_config_salva,
+            provider_ai::provider_config_elimina,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())

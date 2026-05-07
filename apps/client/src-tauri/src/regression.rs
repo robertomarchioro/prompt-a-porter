@@ -394,6 +394,23 @@ pub(crate) fn esegui_pure_con_provider(
     model: &str,
     user_id: &str,
 ) -> Result<Observation, PapErrore> {
+    esegui_pure_con_ctx(conn, rt, golden_id, provider, model, None, None, user_id)
+}
+
+/// Variante completa di `esegui_pure_con_provider` con anche il
+/// provider giudice opzionale per `llm-judge`. I caller pre-8f
+/// possono usare `esegui_pure_con_provider`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn esegui_pure_con_ctx(
+    conn: &Connection,
+    rt: Option<&EmbeddingsState>,
+    golden_id: &str,
+    provider: &dyn AIProvider,
+    model: &str,
+    judge: Option<&dyn AIProvider>,
+    judge_model: Option<&str>,
+    user_id: &str,
+) -> Result<Observation, PapErrore> {
     let golden = carica_golden(conn, golden_id)?;
     let body = carica_prompt_body(conn, &golden.prompt_id)?;
     let prompt_compilato = compila_per_golden(&body, &golden.input_vars)?;
@@ -404,11 +421,16 @@ pub(crate) fn esegui_pure_con_provider(
 
     let observation = match provider.generate(&prompt_compilato, model) {
         Ok(out) => {
-            let sim_result = similarity::calcola(
+            let ctx = similarity::SimilarityCtx {
+                embeddings: rt,
+                judge,
+                judge_model,
+            };
+            let sim_result = similarity::calcola_con_ctx(
                 &golden.similarity_fn,
                 &golden.expected_output,
                 &out.content,
-                rt,
+                &ctx,
             );
             let (similarita, errore) = match sim_result {
                 Ok(s) => (Some(s), None),
@@ -496,30 +518,59 @@ pub fn golden_lista(
     state.with_conn(|conn| lista_pure(conn, &prompt_id))
 }
 
-/// Esegue un golden via il provider scelto. Solo Ollama supportato in
-/// 8d (provider remote in 8f). `model` è il nome del modello come noto
-/// al provider (es. "llama3.2"). `base_url` è opzionale per override
-/// dell'endpoint Ollama (default `http://localhost:11434`).
+/// Esegue un golden via il provider scelto. Supporta tutti i provider
+/// configurati in `ProviderConfig` (Step 8f): ollama, anthropic,
+/// openai, openai-compat. Per `ollama` accetta override di `base_url`.
+/// Per i provider remote la API key è caricata dal vault.
+///
+/// `judge_provider`/`judge_model` sono richiesti solo se la
+/// `similarity_fn` del golden è `llm-judge`. Possono coincidere col
+/// provider principale o esserne diversi (es. eseguire con OpenAI ma
+/// giudicare con Anthropic per evitare bias del giudice).
 #[tauri::command]
 pub fn golden_esegui(
     golden_id: String,
     provider_kind: String,
     model: String,
     base_url: Option<String>,
+    judge_provider: Option<String>,
+    judge_model: Option<String>,
     state: State<'_, VaultState>,
     rt_state: State<'_, EmbeddingsState>,
 ) -> Result<Observation, PapErrore> {
-    if provider_kind != "ollama" {
-        return Err(PapErrore::Generico(format!(
-            "Provider '{provider_kind}' non supportato in v0.4 alpha (solo 'ollama'). Provider remote arrivano in 8f."
-        )));
-    }
-    let provider: OllamaProvider = match base_url {
-        Some(u) if !u.trim().is_empty() => OllamaProvider::new(u),
-        _ => OllamaProvider::default(),
-    };
     state.with_conn(|conn| {
-        esegui_pure_con_provider(conn, Some(&rt_state), &golden_id, &provider, &model, USER_LOCALE)
+        // Provider principale: Ollama-on-the-fly se base_url passato,
+        // altrimenti carica da config.
+        let main_provider: Box<dyn crate::provider_ai::AIProvider> = if provider_kind == "ollama"
+            && base_url.as_deref().map(|u| !u.trim().is_empty()).unwrap_or(false)
+        {
+            Box::new(OllamaProvider::new(base_url.clone().unwrap()))
+        } else {
+            let cfg = crate::provider_ai::config_carica_completa(conn, &provider_kind)?;
+            crate::provider_ai::istanzia_provider(&cfg)?
+        };
+
+        // Provider giudice: opzionale (serve solo se similarity_fn=llm-judge).
+        let judge_box: Option<Box<dyn crate::provider_ai::AIProvider>> = match &judge_provider {
+            Some(name) if !name.trim().is_empty() => {
+                let cfg = crate::provider_ai::config_carica_completa(conn, name)?;
+                Some(crate::provider_ai::istanzia_provider(&cfg)?)
+            }
+            _ => None,
+        };
+        let judge_ref: Option<&dyn crate::provider_ai::AIProvider> =
+            judge_box.as_deref();
+
+        esegui_pure_con_ctx(
+            conn,
+            Some(&rt_state),
+            &golden_id,
+            main_provider.as_ref(),
+            &model,
+            judge_ref,
+            judge_model.as_deref(),
+            USER_LOCALE,
+        )
     })
 }
 
