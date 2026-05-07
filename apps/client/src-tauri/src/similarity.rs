@@ -19,6 +19,12 @@ use regex::Regex;
 
 use crate::embeddings::{compute_embedding_opt, EmbeddingsState};
 use crate::errore::PapErrore;
+use crate::provider_ai::AIProvider;
+
+/// Meta-prompt usato da `similarita_llm_judge`. Chiede al modello
+/// giudice un punteggio puro 0-1 da estrarre con regex semplice.
+/// Bilingue IT/EN per ridurre bias del modello su lingua dell'output.
+const LLM_JUDGE_RUBRIC: &str = "Sei un valutatore. Confronta l'OUTPUT_OTTENUTO rispetto all'OUTPUT_ATTESO e ritorna un punteggio decimale tra 0 e 1 di aderenza semantica/strutturale (0 = totalmente diverso, 1 = perfettamente equivalente). Rispondi SOLO con il numero, senza spiegazione, niente unità, niente percentuali.\n\nOUTPUT_ATTESO:\n{expected}\n\nOUTPUT_OTTENUTO:\n{actual}\n\nPunteggio:";
 
 /// Cosine similarity per vettori L2-normalized. Per embedding non
 /// normalizzati il chiamante dovrebbe pre-normalizzare. La nostra
@@ -70,31 +76,121 @@ pub fn similarita_regex(expected: &str, actual: &str) -> Result<f64, PapErrore> 
     Ok(if re.is_match(actual) { 1.0 } else { 0.0 })
 }
 
-/// Dispatch per la `SimilarityFn` salvata nel golden. Per `cosine`
-/// serve la Session ort (chiamante passa `Some(rt)`); per `exact-match`
-/// e `regex` `rt` può essere `None`.
-pub fn calcola(
+/// Estrae il primo numero decimale `[0,1]` da una stringa di output del
+/// modello giudice. Tollera prefissi/suffissi minimi: il rubric chiede
+/// "solo il numero" ma i modelli a volte aggiungono spazi, virgole, o
+/// rispondono in formato `"0.85"`.
+pub(crate) fn estrai_punteggio_judge(output: &str) -> Option<f64> {
+    static R: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    let re = R.get_or_init(|| Regex::new(r"(\d+(?:[.,]\d+)?)").unwrap());
+    let cap = re.captures(output)?;
+    let raw = cap.get(1)?.as_str().replace(',', ".");
+    let v: f64 = raw.parse().ok()?;
+    // Se il modello risponde "85" invece di "0.85", normalizza.
+    let normalizzato = if v > 1.0 && v <= 100.0 {
+        v / 100.0
+    } else {
+        v
+    };
+    if (0.0..=1.0).contains(&normalizzato) {
+        Some(normalizzato)
+    } else {
+        None
+    }
+}
+
+/// Chiede al `provider` (modello `model`) di valutare quanto `actual`
+/// aderisce a `expected` ritornando un punteggio 0-1. Errore se il
+/// provider fallisce o se l'output non contiene un numero valido.
+pub fn similarita_llm_judge(
+    provider: &dyn AIProvider,
+    model: &str,
+    expected: &str,
+    actual: &str,
+) -> Result<f64, PapErrore> {
+    let prompt = LLM_JUDGE_RUBRIC
+        .replace("{expected}", expected)
+        .replace("{actual}", actual);
+    let out = provider.generate(&prompt, model)?;
+    estrai_punteggio_judge(&out.content).ok_or_else(|| {
+        PapErrore::Generico(format!(
+            "llm-judge: output del giudice non parsabile come [0,1]: {:?}",
+            out.content.chars().take(80).collect::<String>()
+        ))
+    })
+}
+
+/// Contesto opzionale richiesto da alcune funzioni di similarità.
+/// `cosine` richiede `embeddings`; `llm-judge` richiede `judge` (un
+/// provider con relativo model). `exact-match` e `regex` non
+/// guardano nessuno dei due.
+#[derive(Default)]
+pub struct SimilarityCtx<'a> {
+    pub embeddings: Option<&'a EmbeddingsState>,
+    pub judge: Option<&'a dyn AIProvider>,
+    pub judge_model: Option<&'a str>,
+}
+
+impl<'a> SimilarityCtx<'a> {
+    pub fn empty() -> Self {
+        Self::default()
+    }
+
+    pub fn con_embeddings(rt: &'a EmbeddingsState) -> Self {
+        Self {
+            embeddings: Some(rt),
+            ..Default::default()
+        }
+    }
+}
+
+/// Dispatch per la `SimilarityFn` salvata nel golden. Vedi
+/// `SimilarityCtx` per i requisiti per funzione.
+pub fn calcola_con_ctx(
     funzione: &str,
     expected: &str,
     actual: &str,
-    rt: Option<&EmbeddingsState>,
+    ctx: &SimilarityCtx<'_>,
 ) -> Result<f64, PapErrore> {
     match funzione {
         "cosine" => {
-            let rt = rt.ok_or_else(|| {
+            let rt = ctx.embeddings.ok_or_else(|| {
                 PapErrore::Generico("EmbeddingsState richiesto per cosine".into())
             })?;
             similarita_cosine(rt, expected, actual)
         }
         "exact-match" => Ok(similarita_exact_match(expected, actual)),
         "regex" => similarita_regex(expected, actual),
-        "llm-judge" => Err(PapErrore::Generico(
-            "Funzione 'llm-judge' non disponibile in v0.4 alpha (Step 8f)".into(),
-        )),
+        "llm-judge" => {
+            let judge = ctx.judge.ok_or_else(|| {
+                PapErrore::Generico(
+                    "llm-judge richiede un provider giudice configurato".into(),
+                )
+            })?;
+            let model = ctx.judge_model.ok_or_else(|| {
+                PapErrore::Generico("llm-judge richiede un model giudice".into())
+            })?;
+            similarita_llm_judge(judge, model, expected, actual)
+        }
         altro => Err(PapErrore::Generico(format!(
             "Funzione similarità sconosciuta: '{altro}'"
         ))),
     }
+}
+
+/// Wrapper di compatibilità per i caller pre-8f. Equivalente a
+/// `calcola_con_ctx` con un `SimilarityCtx` minimale.
+pub fn calcola(
+    funzione: &str,
+    expected: &str,
+    actual: &str,
+    rt: Option<&EmbeddingsState>,
+) -> Result<f64, PapErrore> {
+    let ctx = SimilarityCtx {
+        embeddings: rt,
+        ..Default::default()
+    };
+    calcola_con_ctx(funzione, expected, actual, &ctx)
 }
 
 /// Decide se una similarità "passa" il golden secondo la sua funzione.
@@ -256,10 +352,10 @@ mod test {
     }
 
     #[test]
-    fn calcola_llm_judge_e_not_yet() {
+    fn calcola_llm_judge_senza_provider_e_errore() {
         let r = calcola("llm-judge", "a", "b", None);
         assert!(r.is_err());
-        assert!(r.unwrap_err().to_string().contains("8f"));
+        assert!(r.unwrap_err().to_string().contains("provider giudice"));
     }
 
     #[test]
@@ -301,5 +397,49 @@ mod test {
     fn is_passed_llm_judge_usa_soglia() {
         assert!(is_passed("llm-judge", 0.9, 0.85));
         assert!(!is_passed("llm-judge", 0.5, 0.85));
+    }
+
+    // ─────────── llm-judge ───────────
+
+    #[test]
+    fn estrai_punteggio_zero_uno_diretto() {
+        assert_eq!(estrai_punteggio_judge("0.85"), Some(0.85));
+        assert_eq!(estrai_punteggio_judge("1.0"), Some(1.0));
+        assert_eq!(estrai_punteggio_judge("0"), Some(0.0));
+    }
+
+    #[test]
+    fn estrai_punteggio_con_virgola_decimale() {
+        // Modello italiano potrebbe rispondere "0,85".
+        assert_eq!(estrai_punteggio_judge("0,85"), Some(0.85));
+    }
+
+    #[test]
+    fn estrai_punteggio_con_prefisso_testo() {
+        // Modello loquace ignora il "rispondi solo col numero".
+        assert_eq!(
+            estrai_punteggio_judge("Punteggio: 0.72"),
+            Some(0.72)
+        );
+        assert_eq!(estrai_punteggio_judge("  0.5  "), Some(0.5));
+    }
+
+    #[test]
+    fn estrai_punteggio_percentuale_normalizza() {
+        // Modello risponde "85" invece di "0.85".
+        assert_eq!(estrai_punteggio_judge("85"), Some(0.85));
+        assert_eq!(estrai_punteggio_judge("100"), Some(1.0));
+    }
+
+    #[test]
+    fn estrai_punteggio_no_numero_e_none() {
+        assert_eq!(estrai_punteggio_judge("non lo so"), None);
+        assert_eq!(estrai_punteggio_judge(""), None);
+    }
+
+    #[test]
+    fn estrai_punteggio_oltre_range_e_none() {
+        // 250 normalizza a 2.5, fuori range → None.
+        assert_eq!(estrai_punteggio_judge("250"), None);
     }
 }

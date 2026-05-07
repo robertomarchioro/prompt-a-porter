@@ -17,15 +17,28 @@
 // Provider remote (Anthropic, OpenAI, ecc.) atterrano in 8f con gestione
 // API key cifrate nel vault.
 
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
+use tauri::State;
 
 use crate::errore::PapErrore;
+use crate::vault::VaultState;
 
 const OLLAMA_DEFAULT_URL: &str = "http://localhost:11434";
+const ANTHROPIC_DEFAULT_URL: &str = "https://api.anthropic.com";
+const ANTHROPIC_VERSION: &str = "2023-06-01";
+const OPENAI_DEFAULT_URL: &str = "https://api.openai.com";
+
 /// Timeout HTTP generoso: i modelli Ollama locali su CPU possono
-/// impiegare 30-60s per generare una risposta lunga.
+/// impiegare 30-60s per generare una risposta lunga; gli endpoint
+/// remote (Anthropic/OpenAI) tipicamente rispondono in <30s.
 const HTTP_TIMEOUT_SEC: u64 = 180;
+
+/// Default `max_tokens` per Anthropic — campo obbligatorio nelle
+/// /v1/messages. 4096 è un compromesso tra "abbastanza per qualunque
+/// risposta normale" e "non sprecare crediti se il modello allucina".
+const ANTHROPIC_MAX_TOKENS_DEFAULT: u32 = 4096;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct GenerateOutput {
@@ -148,6 +161,483 @@ impl AIProvider for OllamaProvider {
     }
 }
 
+// ─────────── Anthropic ───────────
+
+#[derive(Debug, Clone)]
+pub struct AnthropicProvider {
+    pub base_url: String,
+    pub api_key: String,
+    pub max_tokens: u32,
+}
+
+impl AnthropicProvider {
+    pub fn new(api_key: impl Into<String>, base_url: Option<String>) -> Self {
+        Self {
+            base_url: base_url
+                .filter(|u| !u.trim().is_empty())
+                .unwrap_or_else(|| ANTHROPIC_DEFAULT_URL.to_string()),
+            api_key: api_key.into(),
+            max_tokens: ANTHROPIC_MAX_TOKENS_DEFAULT,
+        }
+    }
+
+    pub(crate) fn endpoint(&self) -> String {
+        format!("{}/v1/messages", self.base_url.trim_end_matches('/'))
+    }
+}
+
+#[derive(Serialize)]
+struct AnthropicMsg<'a> {
+    role: &'a str,
+    content: &'a str,
+}
+
+#[derive(Serialize)]
+struct AnthropicRequest<'a> {
+    model: &'a str,
+    max_tokens: u32,
+    messages: Vec<AnthropicMsg<'a>>,
+}
+
+#[derive(Deserialize)]
+struct AnthropicContentBlock {
+    #[serde(rename = "type")]
+    type_: String,
+    #[serde(default)]
+    text: String,
+}
+
+#[derive(Deserialize, Default)]
+struct AnthropicUsage {
+    #[serde(default)]
+    output_tokens: u32,
+    #[serde(default)]
+    input_tokens: u32,
+}
+
+#[derive(Deserialize)]
+struct AnthropicResponse {
+    content: Vec<AnthropicContentBlock>,
+    #[serde(default)]
+    usage: AnthropicUsage,
+}
+
+/// Estrae `(content, output_tokens)` dalla response /v1/messages.
+/// Concatena tutti i block di tipo `text` (di solito ce n'è uno solo).
+pub(crate) fn parse_anthropic_response(json: &str) -> Result<(String, Option<u32>), PapErrore> {
+    let r: AnthropicResponse = serde_json::from_str(json)
+        .map_err(|e| PapErrore::Generico(format!("Risposta Anthropic malformata: {e}")))?;
+    let content: String = r
+        .content
+        .iter()
+        .filter(|b| b.type_ == "text")
+        .map(|b| b.text.clone())
+        .collect::<Vec<_>>()
+        .join("");
+    let tokens = if r.usage.output_tokens > 0 {
+        Some(r.usage.output_tokens)
+    } else {
+        None
+    };
+    Ok((content, tokens))
+}
+
+impl AIProvider for AnthropicProvider {
+    fn name(&self) -> &'static str {
+        "anthropic"
+    }
+
+    fn generate(&self, prompt: &str, model: &str) -> Result<GenerateOutput, PapErrore> {
+        let req = AnthropicRequest {
+            model,
+            max_tokens: self.max_tokens,
+            messages: vec![AnthropicMsg {
+                role: "user",
+                content: prompt,
+            }],
+        };
+        let body = serde_json::to_string(&req)
+            .map_err(|e| PapErrore::Generico(format!("serializzazione richiesta: {e}")))?;
+
+        let agent = ureq::AgentBuilder::new()
+            .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SEC))
+            .build();
+
+        let start = Instant::now();
+        let resp = agent
+            .post(&self.endpoint())
+            .set("x-api-key", &self.api_key)
+            .set("anthropic-version", ANTHROPIC_VERSION)
+            .set("content-type", "application/json")
+            .send_string(&body)
+            .map_err(|e| PapErrore::Generico(format!("Anthropic HTTP: {e}")))?;
+        let latency_ms = start.elapsed().as_millis() as u64;
+
+        let json = resp
+            .into_string()
+            .map_err(|e| PapErrore::Generico(format!("Anthropic body: {e}")))?;
+
+        let (content, tokens) = parse_anthropic_response(&json)?;
+
+        Ok(GenerateOutput {
+            content,
+            latency_ms,
+            tokens_used: tokens,
+            provider: "anthropic",
+            model: model.to_string(),
+        })
+    }
+}
+
+// ─────────── OpenAI ───────────
+
+#[derive(Debug, Clone)]
+pub struct OpenAIProvider {
+    pub base_url: String,
+    pub api_key: String,
+}
+
+impl OpenAIProvider {
+    pub fn new(api_key: impl Into<String>, base_url: Option<String>) -> Self {
+        Self {
+            base_url: base_url
+                .filter(|u| !u.trim().is_empty())
+                .unwrap_or_else(|| OPENAI_DEFAULT_URL.to_string()),
+            api_key: api_key.into(),
+        }
+    }
+
+    pub(crate) fn endpoint(&self) -> String {
+        format!(
+            "{}/v1/chat/completions",
+            self.base_url.trim_end_matches('/')
+        )
+    }
+}
+
+#[derive(Serialize)]
+struct OpenAIMsg<'a> {
+    role: &'a str,
+    content: &'a str,
+}
+
+#[derive(Serialize)]
+struct OpenAIRequest<'a> {
+    model: &'a str,
+    messages: Vec<OpenAIMsg<'a>>,
+}
+
+#[derive(Deserialize)]
+struct OpenAIChoiceMessage {
+    #[serde(default)]
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct OpenAIChoice {
+    message: OpenAIChoiceMessage,
+}
+
+#[derive(Deserialize, Default)]
+struct OpenAIUsage {
+    #[serde(default)]
+    total_tokens: u32,
+    #[serde(default)]
+    completion_tokens: u32,
+}
+
+#[derive(Deserialize)]
+struct OpenAIResponse {
+    choices: Vec<OpenAIChoice>,
+    #[serde(default)]
+    usage: OpenAIUsage,
+}
+
+/// Estrae `(content, completion_tokens)` dalla response /v1/chat/completions.
+/// Usa `choices[0].message.content` (il primo, che è quello che il caller
+/// si aspetta non avendo richiesto `n>1`).
+pub(crate) fn parse_openai_response(json: &str) -> Result<(String, Option<u32>), PapErrore> {
+    let r: OpenAIResponse = serde_json::from_str(json)
+        .map_err(|e| PapErrore::Generico(format!("Risposta OpenAI malformata: {e}")))?;
+    let content = r
+        .choices
+        .first()
+        .map(|c| c.message.content.clone())
+        .unwrap_or_default();
+    // Preferisci completion_tokens (più preciso); fallback a total se manca.
+    let tokens = if r.usage.completion_tokens > 0 {
+        Some(r.usage.completion_tokens)
+    } else if r.usage.total_tokens > 0 {
+        Some(r.usage.total_tokens)
+    } else {
+        None
+    };
+    Ok((content, tokens))
+}
+
+impl AIProvider for OpenAIProvider {
+    fn name(&self) -> &'static str {
+        "openai"
+    }
+
+    fn generate(&self, prompt: &str, model: &str) -> Result<GenerateOutput, PapErrore> {
+        let req = OpenAIRequest {
+            model,
+            messages: vec![OpenAIMsg {
+                role: "user",
+                content: prompt,
+            }],
+        };
+        let body = serde_json::to_string(&req)
+            .map_err(|e| PapErrore::Generico(format!("serializzazione richiesta: {e}")))?;
+
+        let agent = ureq::AgentBuilder::new()
+            .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SEC))
+            .build();
+
+        let start = Instant::now();
+        let resp = agent
+            .post(&self.endpoint())
+            .set("Authorization", &format!("Bearer {}", self.api_key))
+            .set("content-type", "application/json")
+            .send_string(&body)
+            .map_err(|e| PapErrore::Generico(format!("OpenAI HTTP: {e}")))?;
+        let latency_ms = start.elapsed().as_millis() as u64;
+
+        let json = resp
+            .into_string()
+            .map_err(|e| PapErrore::Generico(format!("OpenAI body: {e}")))?;
+
+        let (content, tokens) = parse_openai_response(&json)?;
+
+        Ok(GenerateOutput {
+            content,
+            latency_ms,
+            tokens_used: tokens,
+            provider: "openai",
+            model: model.to_string(),
+        })
+    }
+}
+
+// ─────────── ProviderConfig storage (V010) ───────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderConfigItem {
+    pub provider: String,
+    /// `None` quando il chiamante è la UI di lista — non rinviamo mai
+    /// la API key in chiaro al frontend a meno che non la chieda
+    /// esplicitamente con un comando dedicato.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+    pub base_url: Option<String>,
+    pub default_model: Option<String>,
+    pub abilitato: bool,
+    pub creato_a: String,
+    pub aggiornato_a: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProviderConfigInput {
+    pub provider: String,
+    /// `None` o stringa vuota = "non toccare la chiave esistente". Utile
+    /// quando l'utente modifica solo `default_model` da UI senza re-incollare
+    /// la API key.
+    #[serde(default)]
+    pub api_key: Option<String>,
+    #[serde(default)]
+    pub base_url: Option<String>,
+    #[serde(default)]
+    pub default_model: Option<String>,
+    #[serde(default = "default_abilitato")]
+    pub abilitato: bool,
+}
+
+fn default_abilitato() -> bool {
+    true
+}
+
+const PROVIDERS_VALIDI: &[&str] = &["anthropic", "openai", "ollama", "openai-compat"];
+
+fn valida_provider(name: &str) -> Result<(), PapErrore> {
+    if !PROVIDERS_VALIDI.contains(&name) {
+        return Err(PapErrore::Generico(format!(
+            "Provider '{name}' non riconosciuto. Validi: {:?}",
+            PROVIDERS_VALIDI
+        )));
+    }
+    Ok(())
+}
+
+pub(crate) fn config_lista_pure(
+    conn: &Connection,
+) -> Result<Vec<ProviderConfigItem>, PapErrore> {
+    let mut stmt = conn.prepare(
+        "SELECT Provider, BaseUrl, DefaultModel, Abilitato, CreatedAt, UpdatedAt
+         FROM ProviderConfig
+         ORDER BY Provider ASC",
+    )?;
+    let rows: Vec<ProviderConfigItem> = stmt
+        .query_map([], |r| {
+            Ok(ProviderConfigItem {
+                provider: r.get(0)?,
+                api_key: None,
+                base_url: r.get(1)?,
+                default_model: r.get(2)?,
+                abilitato: r.get::<_, i64>(3)? != 0,
+                creato_a: r.get(4)?,
+                aggiornato_a: r.get(5)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(rows)
+}
+
+pub(crate) fn config_salva_pure(
+    conn: &Connection,
+    input: &ProviderConfigInput,
+) -> Result<(), PapErrore> {
+    valida_provider(&input.provider)?;
+    // Se api_key è None o stringa vuota, manteniamo la chiave esistente.
+    let manteni_chiave = input
+        .api_key
+        .as_ref()
+        .map(|k| k.is_empty())
+        .unwrap_or(true);
+    if manteni_chiave {
+        conn.execute(
+            "INSERT INTO ProviderConfig (Provider, ApiKey, BaseUrl, DefaultModel,
+                Abilitato, CreatedAt, UpdatedAt)
+             VALUES (?1, NULL, ?2, ?3, ?4, datetime('now'), datetime('now'))
+             ON CONFLICT(Provider) DO UPDATE SET
+                BaseUrl = excluded.BaseUrl,
+                DefaultModel = excluded.DefaultModel,
+                Abilitato = excluded.Abilitato,
+                UpdatedAt = datetime('now')",
+            params![
+                input.provider,
+                input.base_url,
+                input.default_model,
+                input.abilitato as i64,
+            ],
+        )?;
+    } else {
+        conn.execute(
+            "INSERT INTO ProviderConfig (Provider, ApiKey, BaseUrl, DefaultModel,
+                Abilitato, CreatedAt, UpdatedAt)
+             VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'), datetime('now'))
+             ON CONFLICT(Provider) DO UPDATE SET
+                ApiKey = excluded.ApiKey,
+                BaseUrl = excluded.BaseUrl,
+                DefaultModel = excluded.DefaultModel,
+                Abilitato = excluded.Abilitato,
+                UpdatedAt = datetime('now')",
+            params![
+                input.provider,
+                input.api_key,
+                input.base_url,
+                input.default_model,
+                input.abilitato as i64,
+            ],
+        )?;
+    }
+    crate::audit::registra(
+        conn,
+        "provider.salvato",
+        "ProviderConfig",
+        &input.provider,
+        None,
+    );
+    Ok(())
+}
+
+pub(crate) fn config_elimina_pure(
+    conn: &Connection,
+    provider: &str,
+) -> Result<(), PapErrore> {
+    let n = conn.execute(
+        "DELETE FROM ProviderConfig WHERE Provider = ?1",
+        [provider],
+    )?;
+    if n == 0 {
+        return Err(PapErrore::Generico(format!(
+            "Provider '{provider}' non configurato"
+        )));
+    }
+    crate::audit::registra(
+        conn,
+        "provider.eliminato",
+        "ProviderConfig",
+        provider,
+        None,
+    );
+    Ok(())
+}
+
+/// Carica la config completa (api_key inclusa) per uso interno
+/// (`regression::golden_esegui` la usa per istanziare il provider).
+pub(crate) fn config_carica_completa(
+    conn: &Connection,
+    provider: &str,
+) -> Result<ProviderConfigItem, PapErrore> {
+    conn.query_row(
+        "SELECT Provider, ApiKey, BaseUrl, DefaultModel, Abilitato, CreatedAt, UpdatedAt
+         FROM ProviderConfig WHERE Provider = ?1",
+        [provider],
+        |r| {
+            Ok(ProviderConfigItem {
+                provider: r.get(0)?,
+                api_key: r.get(1)?,
+                base_url: r.get(2)?,
+                default_model: r.get(3)?,
+                abilitato: r.get::<_, i64>(4)? != 0,
+                creato_a: r.get(5)?,
+                aggiornato_a: r.get(6)?,
+            })
+        },
+    )
+    .map_err(|_| PapErrore::Generico(format!("Provider '{provider}' non configurato")))
+}
+
+/// Costruisce un'istanza `Box<dyn AIProvider>` a partire da una
+/// `ProviderConfigItem` caricata dal DB. Errore se la config richiede
+/// una API key e questa è mancante.
+pub(crate) fn istanzia_provider(
+    cfg: &ProviderConfigItem,
+) -> Result<Box<dyn AIProvider>, PapErrore> {
+    match cfg.provider.as_str() {
+        "ollama" => Ok(Box::new(match cfg.base_url.clone() {
+            Some(u) if !u.trim().is_empty() => OllamaProvider::new(u),
+            _ => OllamaProvider::default(),
+        })),
+        "anthropic" => {
+            let key = cfg.api_key.as_ref().ok_or_else(|| {
+                PapErrore::Generico("Anthropic richiede una API key configurata".into())
+            })?;
+            Ok(Box::new(AnthropicProvider::new(
+                key.clone(),
+                cfg.base_url.clone(),
+            )))
+        }
+        "openai" | "openai-compat" => {
+            let key = cfg.api_key.as_ref().ok_or_else(|| {
+                PapErrore::Generico(format!(
+                    "{} richiede una API key configurata",
+                    cfg.provider
+                ))
+            })?;
+            Ok(Box::new(OpenAIProvider::new(
+                key.clone(),
+                cfg.base_url.clone(),
+            )))
+        }
+        altro => Err(PapErrore::Generico(format!(
+            "Provider '{altro}' non supportato"
+        ))),
+    }
+}
+
 // ─────────── Tauri commands ───────────
 
 /// Genera con Ollama. Utile per smoke test dal frontend
@@ -165,6 +655,29 @@ pub fn provider_ollama_genera(
         _ => OllamaProvider::default(),
     };
     provider.generate(&prompt, &model)
+}
+
+#[tauri::command]
+pub fn provider_config_lista(
+    state: State<'_, VaultState>,
+) -> Result<Vec<ProviderConfigItem>, PapErrore> {
+    state.with_conn(config_lista_pure)
+}
+
+#[tauri::command]
+pub fn provider_config_salva(
+    input: ProviderConfigInput,
+    state: State<'_, VaultState>,
+) -> Result<(), PapErrore> {
+    state.with_conn(|conn| config_salva_pure(conn, &input))
+}
+
+#[tauri::command]
+pub fn provider_config_elimina(
+    provider: String,
+    state: State<'_, VaultState>,
+) -> Result<(), PapErrore> {
+    state.with_conn(|conn| config_elimina_pure(conn, &provider))
 }
 
 #[cfg(test)]
@@ -247,5 +760,332 @@ mod test {
     fn provider_name_ollama() {
         let p = OllamaProvider::default();
         assert_eq!(p.name(), "ollama");
+    }
+
+    // ─────────── Anthropic ───────────
+
+    #[test]
+    fn anthropic_endpoint_e_default_url() {
+        let p = AnthropicProvider::new("k", None);
+        assert_eq!(p.endpoint(), "https://api.anthropic.com/v1/messages");
+        assert_eq!(p.api_key, "k");
+    }
+
+    #[test]
+    fn anthropic_endpoint_custom_url() {
+        let p = AnthropicProvider::new("k", Some("https://my-proxy.local/".into()));
+        assert_eq!(p.endpoint(), "https://my-proxy.local/v1/messages");
+    }
+
+    #[test]
+    fn anthropic_endpoint_empty_url_e_default() {
+        // Stringa vuota significa "non override".
+        let p = AnthropicProvider::new("k", Some("  ".into()));
+        assert_eq!(p.endpoint(), "https://api.anthropic.com/v1/messages");
+    }
+
+    #[test]
+    fn parse_anthropic_response_un_blocco() {
+        let json = r#"{"content":[{"type":"text","text":"ciao"}],"usage":{"input_tokens":10,"output_tokens":5}}"#;
+        let (content, tokens) = parse_anthropic_response(json).unwrap();
+        assert_eq!(content, "ciao");
+        assert_eq!(tokens, Some(5));
+    }
+
+    #[test]
+    fn parse_anthropic_response_blocchi_misti_concatena_solo_text() {
+        // Content può contenere `tool_use`, `image`, ecc. — prendiamo solo `text`.
+        let json = r#"{"content":[{"type":"text","text":"prima"},{"type":"tool_use","text":"ignored"},{"type":"text","text":" parte"}],"usage":{"output_tokens":7}}"#;
+        let (content, tokens) = parse_anthropic_response(json).unwrap();
+        assert_eq!(content, "prima parte");
+        assert_eq!(tokens, Some(7));
+    }
+
+    #[test]
+    fn parse_anthropic_response_no_usage_e_none() {
+        let json = r#"{"content":[{"type":"text","text":"x"}]}"#;
+        let (_, tokens) = parse_anthropic_response(json).unwrap();
+        assert_eq!(tokens, None);
+    }
+
+    #[test]
+    fn parse_anthropic_response_json_invalido_e_errore() {
+        assert!(parse_anthropic_response("non-json").is_err());
+    }
+
+    #[test]
+    fn anthropic_provider_name() {
+        let p = AnthropicProvider::new("k", None);
+        assert_eq!(p.name(), "anthropic");
+    }
+
+    // ─────────── OpenAI ───────────
+
+    #[test]
+    fn openai_endpoint_e_default_url() {
+        let p = OpenAIProvider::new("k", None);
+        assert_eq!(p.endpoint(), "https://api.openai.com/v1/chat/completions");
+    }
+
+    #[test]
+    fn openai_endpoint_custom_url() {
+        let p = OpenAIProvider::new("k", Some("http://localhost:1234".into()));
+        assert_eq!(p.endpoint(), "http://localhost:1234/v1/chat/completions");
+    }
+
+    #[test]
+    fn parse_openai_response_choice_zero() {
+        let json = r#"{"choices":[{"message":{"role":"assistant","content":"ciao"}}],"usage":{"total_tokens":15,"completion_tokens":5}}"#;
+        let (content, tokens) = parse_openai_response(json).unwrap();
+        assert_eq!(content, "ciao");
+        // Preferisce completion_tokens.
+        assert_eq!(tokens, Some(5));
+    }
+
+    #[test]
+    fn parse_openai_response_solo_total_tokens() {
+        let json = r#"{"choices":[{"message":{"content":"x"}}],"usage":{"total_tokens":12}}"#;
+        let (_, tokens) = parse_openai_response(json).unwrap();
+        assert_eq!(tokens, Some(12));
+    }
+
+    #[test]
+    fn parse_openai_response_no_usage() {
+        let json = r#"{"choices":[{"message":{"content":"x"}}]}"#;
+        let (content, tokens) = parse_openai_response(json).unwrap();
+        assert_eq!(content, "x");
+        assert_eq!(tokens, None);
+    }
+
+    #[test]
+    fn parse_openai_response_no_choices_content_vuoto() {
+        let json = r#"{"choices":[],"usage":{"total_tokens":0}}"#;
+        let (content, tokens) = parse_openai_response(json).unwrap();
+        assert_eq!(content, "");
+        assert_eq!(tokens, None);
+    }
+
+    #[test]
+    fn parse_openai_response_json_invalido_e_errore() {
+        assert!(parse_openai_response("non-json").is_err());
+    }
+
+    #[test]
+    fn openai_provider_name() {
+        let p = OpenAIProvider::new("k", None);
+        assert_eq!(p.name(), "openai");
+    }
+
+    // ─────────── ProviderConfig (storage) ───────────
+
+    fn db_test() -> Connection {
+        crate::embeddings_store::registra_auto_extension();
+        let conn = Connection::open_in_memory().unwrap();
+        crate::migrazione::esegui_migrazioni(&conn).unwrap();
+        crate::libreria::assicura_dati_base(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn config_lista_db_vuoto_e_vec_vuoto() {
+        let conn = db_test();
+        let r = config_lista_pure(&conn).unwrap();
+        assert_eq!(r.len(), 0);
+    }
+
+    #[test]
+    fn config_salva_inserisce_e_lista_lo_ritorna() {
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "anthropic".into(),
+            api_key: Some("sk-ant-xyz".into()),
+            base_url: None,
+            default_model: Some("claude-sonnet-4.6".into()),
+            abilitato: true,
+        };
+        config_salva_pure(&conn, &input).unwrap();
+        let r = config_lista_pure(&conn).unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].provider, "anthropic");
+        // La lista NON espone la api_key.
+        assert!(r[0].api_key.is_none());
+        assert_eq!(r[0].default_model.as_deref(), Some("claude-sonnet-4.6"));
+        assert!(r[0].abilitato);
+    }
+
+    #[test]
+    fn config_carica_completa_include_api_key() {
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "openai".into(),
+            api_key: Some("sk-test".into()),
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+        };
+        config_salva_pure(&conn, &input).unwrap();
+        let cfg = config_carica_completa(&conn, "openai").unwrap();
+        assert_eq!(cfg.api_key.as_deref(), Some("sk-test"));
+    }
+
+    #[test]
+    fn config_salva_provider_invalido_e_errore() {
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "fantasma".into(),
+            api_key: None,
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+        };
+        let r = config_salva_pure(&conn, &input);
+        assert!(r.is_err());
+        assert!(r.unwrap_err().to_string().contains("non riconosciuto"));
+    }
+
+    #[test]
+    fn config_salva_upsert_aggiorna_senza_perdere_chiave() {
+        let conn = db_test();
+        // Primo insert con chiave.
+        config_salva_pure(
+            &conn,
+            &ProviderConfigInput {
+                provider: "anthropic".into(),
+                api_key: Some("sk-ant-VECCHIA".into()),
+                base_url: None,
+                default_model: Some("claude-3.7".into()),
+                abilitato: true,
+            },
+        )
+        .unwrap();
+        // Upsert SENZA passare api_key (None) — deve preservarla.
+        config_salva_pure(
+            &conn,
+            &ProviderConfigInput {
+                provider: "anthropic".into(),
+                api_key: None,
+                base_url: None,
+                default_model: Some("claude-sonnet-4.6".into()),
+                abilitato: true,
+            },
+        )
+        .unwrap();
+        let cfg = config_carica_completa(&conn, "anthropic").unwrap();
+        assert_eq!(cfg.api_key.as_deref(), Some("sk-ant-VECCHIA"));
+        assert_eq!(cfg.default_model.as_deref(), Some("claude-sonnet-4.6"));
+    }
+
+    #[test]
+    fn config_salva_upsert_aggiorna_chiave_se_passata() {
+        let conn = db_test();
+        config_salva_pure(
+            &conn,
+            &ProviderConfigInput {
+                provider: "openai".into(),
+                api_key: Some("sk-VECCHIA".into()),
+                base_url: None,
+                default_model: None,
+                abilitato: true,
+            },
+        )
+        .unwrap();
+        config_salva_pure(
+            &conn,
+            &ProviderConfigInput {
+                provider: "openai".into(),
+                api_key: Some("sk-NUOVA".into()),
+                base_url: None,
+                default_model: None,
+                abilitato: true,
+            },
+        )
+        .unwrap();
+        let cfg = config_carica_completa(&conn, "openai").unwrap();
+        assert_eq!(cfg.api_key.as_deref(), Some("sk-NUOVA"));
+    }
+
+    #[test]
+    fn config_elimina_rimuove_dalla_lista() {
+        let conn = db_test();
+        config_salva_pure(
+            &conn,
+            &ProviderConfigInput {
+                provider: "anthropic".into(),
+                api_key: Some("k".into()),
+                base_url: None,
+                default_model: None,
+                abilitato: true,
+            },
+        )
+        .unwrap();
+        config_elimina_pure(&conn, "anthropic").unwrap();
+        assert_eq!(config_lista_pure(&conn).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn config_elimina_su_provider_inesistente_e_errore() {
+        let conn = db_test();
+        let r = config_elimina_pure(&conn, "anthropic");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn istanzia_provider_anthropic_con_chiave() {
+        let cfg = ProviderConfigItem {
+            provider: "anthropic".into(),
+            api_key: Some("k".into()),
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+            creato_a: "x".into(),
+            aggiornato_a: "x".into(),
+        };
+        let p = istanzia_provider(&cfg).unwrap();
+        assert_eq!(p.name(), "anthropic");
+    }
+
+    #[test]
+    fn istanzia_provider_anthropic_senza_chiave_e_errore() {
+        let cfg = ProviderConfigItem {
+            provider: "anthropic".into(),
+            api_key: None,
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+            creato_a: "x".into(),
+            aggiornato_a: "x".into(),
+        };
+        let r = istanzia_provider(&cfg);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn istanzia_provider_ollama_no_key_richiesta() {
+        let cfg = ProviderConfigItem {
+            provider: "ollama".into(),
+            api_key: None,
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+            creato_a: "x".into(),
+            aggiornato_a: "x".into(),
+        };
+        let p = istanzia_provider(&cfg).unwrap();
+        assert_eq!(p.name(), "ollama");
+    }
+
+    #[test]
+    fn istanzia_provider_kind_sconosciuto_e_errore() {
+        let cfg = ProviderConfigItem {
+            provider: "fantasma".into(),
+            api_key: Some("k".into()),
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+            creato_a: "x".into(),
+            aggiornato_a: "x".into(),
+        };
+        let r = istanzia_provider(&cfg);
+        assert!(r.is_err());
     }
 }
