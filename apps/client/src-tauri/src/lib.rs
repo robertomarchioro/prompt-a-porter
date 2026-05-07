@@ -18,6 +18,7 @@ pub mod prompt_componibili;
 pub mod provider_ai;
 pub mod regression;
 pub mod ricerca_ibrida;
+pub mod similarity;
 pub mod statistiche;
 pub mod sync;
 pub mod tags_suggest;
