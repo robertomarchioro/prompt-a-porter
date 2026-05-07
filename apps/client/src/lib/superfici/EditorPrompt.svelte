@@ -86,6 +86,145 @@
   let timerLint: ReturnType<typeof setTimeout>;
   let mostraDiagnosi = $state(false);
 
+  // ─── Golden examples (Fase 4 Step 8) ───
+  type SimilarityFn = "cosine" | "exact-match" | "regex" | "llm-judge";
+  interface Golden {
+    id: string;
+    prompt_id: string;
+    etichetta: string;
+    input_vars: string;
+    expected_output: string;
+    similarity_fn: SimilarityFn;
+    soglia_tolleranza: number;
+    creato_a: string;
+    aggiornato_a: string;
+  }
+  interface Observation {
+    id: string;
+    prompt_version_id: string;
+    golden_id: string | null;
+    provider: string;
+    model: string;
+    actual_output: string;
+    similarita: number | null;
+    passed: boolean;
+    latenza_ms: number | null;
+    tokens_used: number | null;
+    costo_stimato: number | null;
+    errore: string | null;
+    ran_at: string;
+    ran_by: string;
+  }
+  let goldens = $state<Golden[]>([]);
+  let mostraTest = $state(false);
+  let modificaGolden = $state<Record<string, Golden | null>>({});
+  let mostraNuovoGolden = $state(false);
+  let nuovoEtichetta = $state("");
+  let nuovoInputVars = $state("{}");
+  let nuovoExpected = $state("");
+  let nuovoSimFn = $state<SimilarityFn>("cosine");
+  let nuovoSoglia = $state(0.85);
+  let runMessaggio = $state<Record<string, string>>({});
+  let runStato = $state<Record<string, "idle" | "running" | "ok" | "ko">>({});
+  let ultimaObs = $state<Record<string, Observation>>({});
+  let modelOllama = $state("llama3.2");
+
+  async function ricaricaGoldens() {
+    if (!promptId) {
+      goldens = [];
+      return;
+    }
+    try {
+      goldens = await invoke<Golden[]>("golden_lista", { promptId });
+    } catch {
+      goldens = [];
+    }
+  }
+
+  $effect(() => {
+    // ricarica quando promptId atterra (dopo primo salvataggio).
+    if (promptId) ricaricaGoldens();
+  });
+
+  async function aggiungiGolden() {
+    if (!promptId || !nuovoEtichetta.trim() || !nuovoExpected.trim()) return;
+    try {
+      await invoke<string>("golden_crea", {
+        dati: {
+          prompt_id: promptId,
+          etichetta: nuovoEtichetta.trim(),
+          input_vars: nuovoInputVars.trim() || "{}",
+          expected_output: nuovoExpected,
+          similarity_fn: nuovoSimFn,
+          soglia_tolleranza: nuovoSoglia,
+        },
+      });
+      mostraNuovoGolden = false;
+      nuovoEtichetta = "";
+      nuovoInputVars = "{}";
+      nuovoExpected = "";
+      nuovoSimFn = "cosine";
+      nuovoSoglia = 0.85;
+      await ricaricaGoldens();
+    } catch (e) {
+      runMessaggio["__nuovo"] = String(e);
+    }
+  }
+
+  async function salvaModifica(g: Golden) {
+    const m = modificaGolden[g.id];
+    if (!m) return;
+    try {
+      await invoke("golden_aggiorna", {
+        dati: {
+          id: g.id,
+          etichetta: m.etichetta.trim(),
+          input_vars: m.input_vars.trim() || "{}",
+          expected_output: m.expected_output,
+          similarity_fn: m.similarity_fn,
+          soglia_tolleranza: m.soglia_tolleranza,
+        },
+      });
+      modificaGolden[g.id] = null;
+      await ricaricaGoldens();
+    } catch (e) {
+      runMessaggio[g.id] = String(e);
+    }
+  }
+
+  async function eliminaGolden(id: string) {
+    if (!confirm("Eliminare questo golden? L'azione è reversibile dal DB.")) return;
+    try {
+      await invoke("golden_elimina", { id });
+      await ricaricaGoldens();
+    } catch (e) {
+      runMessaggio[id] = String(e);
+    }
+  }
+
+  async function eseguiGolden(id: string) {
+    runStato[id] = "running";
+    runMessaggio[id] = "";
+    try {
+      const obs = await invoke<Observation>("golden_esegui", {
+        goldenId: id,
+        providerKind: "ollama",
+        model: modelOllama.trim() || "llama3.2",
+        baseUrl: null,
+      });
+      ultimaObs[id] = obs;
+      runStato[id] = obs.passed ? "ok" : "ko";
+      if (obs.errore) {
+        runMessaggio[id] = obs.errore;
+      } else if (obs.similarita !== null) {
+        runMessaggio[id] = `similarità ${obs.similarita.toFixed(3)} · ${obs.latenza_ms ?? "?"}ms`;
+      }
+    } catch (e) {
+      runStato[id] = "ko";
+      runMessaggio[id] = String(e);
+    }
+  }
+
   const segnaposti = $derived(estraiSegnaposti(body));
 
   const suggerimentiTag = $derived(
@@ -417,6 +556,211 @@
                     </li>
                   {/each}
                 </ul>
+              {/if}
+            </div>
+          {/if}
+
+          {#if promptId}
+            <!-- ── Pannello Test (Fase 4 Step 8e) ── -->
+            <div class="test-pannello">
+              <button
+                class="diagnosi-toggle"
+                onclick={() => (mostraTest = !mostraTest)}
+                type="button"
+              >
+                <span class="diagnosi-titolo">Test</span>
+                {#if goldens.length > 0}
+                  <span class="diagnosi-pill diagnosi-pill--info">
+                    {goldens.length} golden
+                  </span>
+                {/if}
+                <span class="diagnosi-chevron">{mostraTest ? "▾" : "▸"}</span>
+              </button>
+
+              {#if mostraTest}
+                <div class="test-corpo">
+                  <div class="test-config">
+                    <label class="test-label">
+                      Modello Ollama
+                      <input
+                        type="text"
+                        bind:value={modelOllama}
+                        placeholder="llama3.2"
+                        class="test-input-inline"
+                      />
+                    </label>
+                    <span class="test-hint">
+                      Provider remote (Anthropic, OpenAI) in arrivo nello Step 8f.
+                    </span>
+                  </div>
+
+                  {#each goldens as g (g.id)}
+                    {@const stato = runStato[g.id] ?? "idle"}
+                    {@const isModifica = modificaGolden[g.id] != null}
+                    <div class="test-item test-item--{stato}">
+                      {#if isModifica}
+                        {@const m = modificaGolden[g.id]!}
+                        <div class="test-form">
+                          <input
+                            class="test-input"
+                            bind:value={m.etichetta}
+                            placeholder="etichetta"
+                          />
+                          <textarea
+                            class="test-textarea"
+                            bind:value={m.input_vars}
+                            placeholder="JSON variabili (es: {`{}`})"
+                            rows="2"
+                          ></textarea>
+                          <textarea
+                            class="test-textarea"
+                            bind:value={m.expected_output}
+                            placeholder="output atteso"
+                            rows="3"
+                          ></textarea>
+                          <div class="test-form-row">
+                            <select
+                              bind:value={m.similarity_fn}
+                              class="test-select"
+                            >
+                              <option value="cosine">cosine</option>
+                              <option value="exact-match">exact-match</option>
+                              <option value="regex">regex</option>
+                              <option value="llm-judge" disabled
+                                >llm-judge (8f)</option
+                              >
+                            </select>
+                            <input
+                              type="number"
+                              min="0"
+                              max="1"
+                              step="0.01"
+                              bind:value={m.soglia_tolleranza}
+                              class="test-input-inline"
+                            />
+                            <Button onclick={() => salvaModifica(g)}
+                              >Salva</Button
+                            >
+                            <button
+                              class="test-link"
+                              onclick={() => (modificaGolden[g.id] = null)}
+                              type="button">Annulla</button
+                            >
+                          </div>
+                        </div>
+                      {:else}
+                        <div class="test-row">
+                          <span class="test-icon-stato test-icon-stato--{stato}">
+                            {stato === "ok"
+                              ? "✓"
+                              : stato === "ko"
+                                ? "✗"
+                                : stato === "running"
+                                  ? "…"
+                                  : "○"}
+                          </span>
+                          <span class="test-etichetta">{g.etichetta}</span>
+                          <span class="test-meta">
+                            {g.similarity_fn} · soglia {g.soglia_tolleranza.toFixed(2)}
+                          </span>
+                          <button
+                            class="test-action"
+                            onclick={() => eseguiGolden(g.id)}
+                            disabled={stato === "running"}
+                            type="button"
+                          >
+                            {stato === "running" ? "..." : "Esegui"}
+                          </button>
+                          <button
+                            class="test-link"
+                            onclick={() => {
+                              modificaGolden[g.id] = { ...g };
+                            }}
+                            type="button">Modifica</button
+                          >
+                          <button
+                            class="test-link test-link--danger"
+                            onclick={() => eliminaGolden(g.id)}
+                            type="button">Elimina</button
+                          >
+                        </div>
+                        {#if runMessaggio[g.id]}
+                          <div class="test-messaggio test-messaggio--{stato}">
+                            {runMessaggio[g.id]}
+                          </div>
+                        {/if}
+                        {#if ultimaObs[g.id] && (ultimaObs[g.id].actual_output || ultimaObs[g.id].errore)}
+                          <details class="test-details">
+                            <summary>Output ricevuto</summary>
+                            <pre class="test-output">{ultimaObs[g.id]
+                                .actual_output ||
+                                ultimaObs[g.id].errore ||
+                                ""}</pre>
+                          </details>
+                        {/if}
+                      {/if}
+                    </div>
+                  {/each}
+
+                  {#if mostraNuovoGolden}
+                    <div class="test-item test-item--nuovo">
+                      <div class="test-form">
+                        <input
+                          class="test-input"
+                          bind:value={nuovoEtichetta}
+                          placeholder="etichetta (es. 'caso comune')"
+                        />
+                        <textarea
+                          class="test-textarea"
+                          bind:value={nuovoInputVars}
+                          placeholder={'{"variabile":"valore"}'}
+                          rows="2"
+                        ></textarea>
+                        <textarea
+                          class="test-textarea"
+                          bind:value={nuovoExpected}
+                          placeholder="output atteso"
+                          rows="3"
+                        ></textarea>
+                        <div class="test-form-row">
+                          <select
+                            bind:value={nuovoSimFn}
+                            class="test-select"
+                          >
+                            <option value="cosine">cosine</option>
+                            <option value="exact-match">exact-match</option>
+                            <option value="regex">regex</option>
+                          </select>
+                          <input
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            bind:value={nuovoSoglia}
+                            class="test-input-inline"
+                          />
+                          <Button onclick={aggiungiGolden}>Crea</Button>
+                          <button
+                            class="test-link"
+                            onclick={() => (mostraNuovoGolden = false)}
+                            type="button">Annulla</button
+                          >
+                        </div>
+                        {#if runMessaggio["__nuovo"]}
+                          <div class="test-messaggio test-messaggio--ko">
+                            {runMessaggio["__nuovo"]}
+                          </div>
+                        {/if}
+                      </div>
+                    </div>
+                  {:else}
+                    <button
+                      class="test-aggiungi"
+                      onclick={() => (mostraNuovoGolden = true)}
+                      type="button">+ Nuovo golden</button
+                    >
+                  {/if}
+                </div>
               {/if}
             </div>
           {/if}
@@ -1072,5 +1416,252 @@
     font-family: var(--font-mono);
     font-size: var(--fs-xs);
     color: var(--text-subtle);
+  }
+
+  /* ── Test pannello (Fase 4 Step 8e) ── */
+  .test-pannello {
+    margin-top: var(--space-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    overflow: hidden;
+  }
+
+  .test-corpo {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  .test-config {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px dashed var(--border-subtle);
+    font-size: var(--fs-sm);
+  }
+
+  .test-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--text-default);
+  }
+
+  .test-hint {
+    color: var(--text-subtle);
+    font-size: var(--fs-xs);
+  }
+
+  .test-input,
+  .test-input-inline {
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    background: var(--bg-elevated);
+    color: var(--text-default);
+    font-family: var(--font-sans);
+    font-size: var(--fs-sm);
+  }
+
+  .test-input {
+    width: 100%;
+  }
+
+  .test-input-inline {
+    width: 80px;
+  }
+
+  .test-textarea {
+    width: 100%;
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    background: var(--bg-elevated);
+    color: var(--text-default);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    resize: vertical;
+  }
+
+  .test-select {
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    background: var(--bg-elevated);
+    color: var(--text-default);
+    font-size: var(--fs-sm);
+  }
+
+  .test-item {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    padding: var(--space-2);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    background: var(--bg-elevated);
+  }
+
+  .test-item--ok {
+    border-color: var(--accent-success, #6cb86c);
+  }
+
+  .test-item--ko {
+    border-color: var(--accent-danger, #d9534f);
+  }
+
+  .test-item--running {
+    border-color: var(--accent-warn, #d2a85f);
+  }
+
+  .test-item--nuovo {
+    border-style: dashed;
+  }
+
+  .test-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .test-icon-stato {
+    width: 18px;
+    text-align: center;
+    font-weight: bold;
+  }
+
+  .test-icon-stato--ok {
+    color: var(--accent-success, #6cb86c);
+  }
+
+  .test-icon-stato--ko {
+    color: var(--accent-danger, #d9534f);
+  }
+
+  .test-icon-stato--running {
+    color: var(--accent-warn, #d2a85f);
+  }
+
+  .test-icon-stato--idle {
+    color: var(--text-subtle);
+  }
+
+  .test-etichetta {
+    flex: 1 1 auto;
+    font-weight: 500;
+    color: var(--text-default);
+  }
+
+  .test-meta {
+    font-size: var(--fs-xs);
+    color: var(--text-subtle);
+    font-family: var(--font-mono);
+  }
+
+  .test-action {
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xs);
+    background: var(--bg-surface);
+    color: var(--text-default);
+    cursor: pointer;
+    font-size: var(--fs-sm);
+  }
+
+  .test-action:hover:not(:disabled) {
+    background: var(--bg-elevated);
+  }
+
+  .test-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .test-link {
+    background: none;
+    border: none;
+    color: var(--text-subtle);
+    font-size: var(--fs-xs);
+    cursor: pointer;
+    padding: var(--space-1);
+  }
+
+  .test-link:hover {
+    color: var(--text-default);
+    text-decoration: underline;
+  }
+
+  .test-link--danger:hover {
+    color: var(--accent-danger, #d9534f);
+  }
+
+  .test-messaggio {
+    font-size: var(--fs-xs);
+    font-family: var(--font-mono);
+    color: var(--text-subtle);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-xs);
+  }
+
+  .test-messaggio--ok {
+    color: var(--accent-success, #6cb86c);
+  }
+
+  .test-messaggio--ko {
+    color: var(--accent-danger, #d9534f);
+  }
+
+  .test-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .test-form-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .test-aggiungi {
+    align-self: flex-start;
+    background: none;
+    border: 1px dashed var(--border-default);
+    border-radius: var(--radius-xs);
+    color: var(--text-subtle);
+    padding: var(--space-1) var(--space-2);
+    cursor: pointer;
+    font-size: var(--fs-sm);
+  }
+
+  .test-aggiungi:hover {
+    color: var(--text-default);
+    border-color: var(--text-default);
+  }
+
+  .test-details {
+    margin-top: var(--space-1);
+    font-size: var(--fs-xs);
+  }
+
+  .test-details summary {
+    cursor: pointer;
+    color: var(--text-subtle);
+  }
+
+  .test-output {
+    margin-top: var(--space-1);
+    padding: var(--space-2);
+    background: var(--bg-surface);
+    border-radius: var(--radius-xs);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
   }
 </style>
