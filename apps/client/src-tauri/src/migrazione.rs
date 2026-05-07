@@ -66,6 +66,11 @@ static MIGRAZIONI: &[Migrazione] = &[
         nome: "prompt_varianti",
         sql: include_str!("../migrations/V011__prompt_varianti.sql"),
     },
+    Migrazione {
+        versione: 12,
+        nome: "prompt_fork",
+        sql: include_str!("../migrations/V012__prompt_fork.sql"),
+    },
 ];
 
 /// Crea la tabella di tracking se non esiste.
@@ -140,10 +145,10 @@ mod test {
         let conn = Connection::open_in_memory().unwrap();
         let n = esegui_migrazioni(&conn).unwrap();
         assert!(
-            n >= 11,
-            "Tutte le migrazioni devono essere applicate (almeno 11)"
+            n >= 12,
+            "Tutte le migrazioni devono essere applicate (almeno 12)"
         );
-        assert_eq!(versione_corrente(&conn).unwrap(), 11);
+        assert_eq!(versione_corrente(&conn).unwrap(), 12);
     }
 
     #[test]
