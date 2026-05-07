@@ -487,6 +487,152 @@ pub(crate) fn esegui_pure_con_ctx(
     Ok(observation)
 }
 
+// ─────────── Report regressioni (Step 8g) ───────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RegressionReportRow {
+    pub prompt_id: String,
+    pub prompt_titolo: String,
+    pub provider: String,
+    pub model: String,
+    pub num_run: i64,
+    pub num_passed: i64,
+    pub num_failed: i64,
+    /// Media `Similarita` sui run recenti, `None` se tutti i run sono
+    /// errori (tutte similarita NULL).
+    pub similarita_media: Option<f64>,
+    /// `Similarita` dell'ultimo run (`MAX(RanAt)`).
+    pub similarita_ultima: Option<f64>,
+    pub ultima_run_at: Option<String>,
+    /// Drift percentuale: positivo = peggiorato vs media,
+    /// negativo = migliorato. `None` se valori mancanti.
+    pub drift_percentuale: Option<f64>,
+}
+
+/// Aggrega le observations degli ultimi `giorni` raggruppando per
+/// (prompt × provider × model). Il drift indica quanto l'ultimo run
+/// differisce dalla media: utile per individuare regressioni dopo un
+/// cambio di modello sottostante.
+pub(crate) fn report_pure(
+    conn: &Connection,
+    giorni: i64,
+) -> Result<Vec<RegressionReportRow>, PapErrore> {
+    let cutoff = format!("-{} days", giorni.max(1));
+
+    // Step 1: aggregazione media e count per gruppo.
+    let mut stmt = conn.prepare(
+        "SELECT
+            p.Id, p.Title, o.Provider, o.Model,
+            COUNT(*) AS n,
+            SUM(CASE WHEN o.Passed THEN 1 ELSE 0 END) AS n_passed,
+            AVG(o.Similarita) AS media,
+            MAX(o.RanAt) AS ultima_at
+         FROM PromptRunObservations o
+         JOIN PromptVersions pv ON pv.Id = o.PromptVersionId
+         JOIN Prompts p ON p.Id = pv.PromptId AND p.DeletedAt IS NULL
+         WHERE o.RanAt >= datetime('now', ?1)
+         GROUP BY p.Id, p.Title, o.Provider, o.Model
+         ORDER BY ultima_at DESC",
+    )?;
+
+    let righe: Vec<(String, String, String, String, i64, i64, Option<f64>, Option<String>)> =
+        stmt.query_map([&cutoff], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+                r.get(7)?,
+            ))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    // Step 2: per ogni riga, fetch della Similarita dell'ultima run.
+    let mut out = Vec::with_capacity(righe.len());
+    for (prompt_id, titolo, provider, model, n, n_passed, media, ultima_at) in righe {
+        let similarita_ultima: Option<f64> = match &ultima_at {
+            Some(t) => conn
+                .query_row(
+                    "SELECT o.Similarita FROM PromptRunObservations o
+                     JOIN PromptVersions pv ON pv.Id = o.PromptVersionId
+                     WHERE pv.PromptId = ?1 AND o.Provider = ?2 AND o.Model = ?3
+                       AND o.RanAt = ?4
+                     LIMIT 1",
+                    params![prompt_id, provider, model, t],
+                    |r| r.get(0),
+                )
+                .unwrap_or(None),
+            None => None,
+        };
+        let drift = match (media, similarita_ultima) {
+            (Some(m), Some(u)) if m > 0.0 => Some(((m - u) / m) * 100.0),
+            _ => None,
+        };
+        out.push(RegressionReportRow {
+            prompt_id,
+            prompt_titolo: titolo,
+            provider,
+            model,
+            num_run: n,
+            num_passed: n_passed,
+            num_failed: n - n_passed,
+            similarita_media: media,
+            similarita_ultima,
+            ultima_run_at: ultima_at,
+            drift_percentuale: drift,
+        });
+    }
+    Ok(out)
+}
+
+/// Genera CSV (RFC 4180) del report. Le colonne testuali sono
+/// quoted-escaped solo se contengono `,` `"` `\n`.
+pub(crate) fn report_csv_pure(rows: &[RegressionReportRow]) -> String {
+    fn esc(s: &str) -> String {
+        if s.contains(',') || s.contains('"') || s.contains('\n') {
+            format!("\"{}\"", s.replace('"', "\"\""))
+        } else {
+            s.to_string()
+        }
+    }
+    let mut out = String::new();
+    out.push_str(
+        "prompt_id,prompt_titolo,provider,model,num_run,num_passed,num_failed,\
+         similarita_media,similarita_ultima,ultima_run_at,drift_percentuale\n",
+    );
+    for r in rows {
+        let media = r.similarita_media.map(|v| format!("{v:.4}")).unwrap_or_default();
+        let ultima = r
+            .similarita_ultima
+            .map(|v| format!("{v:.4}"))
+            .unwrap_or_default();
+        let drift = r
+            .drift_percentuale
+            .map(|v| format!("{v:.2}"))
+            .unwrap_or_default();
+        let ultima_at = r.ultima_run_at.clone().unwrap_or_default();
+        out.push_str(&format!(
+            "{},{},{},{},{},{},{},{},{},{},{}\n",
+            esc(&r.prompt_id),
+            esc(&r.prompt_titolo),
+            esc(&r.provider),
+            esc(&r.model),
+            r.num_run,
+            r.num_passed,
+            r.num_failed,
+            media,
+            ultima,
+            esc(&ultima_at),
+            drift
+        ));
+    }
+    out
+}
+
 // ─────────── Tauri commands (delegano agli helper) ───────────
 
 #[tauri::command]
@@ -516,6 +662,31 @@ pub fn golden_lista(
     state: State<'_, VaultState>,
 ) -> Result<Vec<Golden>, PapErrore> {
     state.with_conn(|conn| lista_pure(conn, &prompt_id))
+}
+
+/// Aggregazione observations degli ultimi `giorni` raggruppando per
+/// (prompt × provider × model). Default 30 giorni.
+#[tauri::command]
+pub fn regression_report(
+    giorni: Option<i64>,
+    state: State<'_, VaultState>,
+) -> Result<Vec<RegressionReportRow>, PapErrore> {
+    let g = giorni.unwrap_or(30);
+    state.with_conn(|conn| report_pure(conn, g))
+}
+
+/// Stessa aggregazione di `regression_report` ma serializzata come CSV
+/// (per export download). Frontend usa Blob + URL.createObjectURL.
+#[tauri::command]
+pub fn regression_report_csv(
+    giorni: Option<i64>,
+    state: State<'_, VaultState>,
+) -> Result<String, PapErrore> {
+    let g = giorni.unwrap_or(30);
+    state.with_conn(|conn| {
+        let rows = report_pure(conn, g)?;
+        Ok(report_csv_pure(&rows))
+    })
 }
 
 /// Esegue un golden via il provider scelto. Supporta tutti i provider
@@ -1198,6 +1369,189 @@ mod test {
 
         // E che il PromptVersionId punti effettivamente alla versione corrente.
         assert_eq!(obs.prompt_version_id, v_id);
+    }
+
+    // ─────────── Test report (Step 8g) ───────────
+
+    fn inserisci_observation(
+        conn: &Connection,
+        id: &str,
+        version_id: &str,
+        provider: &str,
+        model: &str,
+        similarita: f64,
+        passed: bool,
+        offset_minuti: i64,
+    ) {
+        conn.execute(
+            "INSERT INTO PromptRunObservations (
+                Id, PromptVersionId, GoldenId, Provider, Model, ActualOutput,
+                Similarita, Passed, RanAt, RanBy
+             ) VALUES (?1, ?2, NULL, ?3, ?4, 'out', ?5, ?6,
+                       datetime('now', ?7), 'usr-locale')",
+            params![
+                id,
+                version_id,
+                provider,
+                model,
+                similarita,
+                passed as i64,
+                format!("-{} minutes", offset_minuti)
+            ],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn report_db_vuoto_ritorna_vec_vuoto() {
+        let conn = db_test();
+        let r = report_pure(&conn, 30).unwrap();
+        assert_eq!(r.len(), 0);
+    }
+
+    #[test]
+    fn report_un_prompt_un_modello() {
+        let (conn, v_id) = db_test_con_versione();
+        inserisci_observation(&conn, "obs-1", &v_id, "ollama", "llama3.2", 0.9, true, 5);
+        inserisci_observation(&conn, "obs-2", &v_id, "ollama", "llama3.2", 0.7, false, 1);
+
+        let r = report_pure(&conn, 30).unwrap();
+        assert_eq!(r.len(), 1);
+        let row = &r[0];
+        assert_eq!(row.prompt_id, "prm-1");
+        assert_eq!(row.provider, "ollama");
+        assert_eq!(row.model, "llama3.2");
+        assert_eq!(row.num_run, 2);
+        assert_eq!(row.num_passed, 1);
+        assert_eq!(row.num_failed, 1);
+        assert!((row.similarita_media.unwrap() - 0.8).abs() < 1e-6);
+        // L'ultima è obs-2 (offset minore = più recente).
+        assert_eq!(row.similarita_ultima, Some(0.7));
+        // Drift positivo = peggioramento (0.8 -> 0.7 = +12.5%).
+        let drift = row.drift_percentuale.unwrap();
+        assert!((drift - 12.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn report_raggruppa_per_provider_e_model() {
+        let (conn, v_id) = db_test_con_versione();
+        inserisci_observation(&conn, "obs-1", &v_id, "ollama", "llama3.2", 0.9, true, 10);
+        inserisci_observation(&conn, "obs-2", &v_id, "anthropic", "claude-sonnet", 0.95, true, 5);
+        inserisci_observation(&conn, "obs-3", &v_id, "anthropic", "claude-haiku", 0.7, false, 2);
+
+        let r = report_pure(&conn, 30).unwrap();
+        assert_eq!(r.len(), 3, "3 (provider,model) gruppi distinti");
+
+        let modelli: Vec<_> = r.iter().map(|x| x.model.clone()).collect();
+        assert!(modelli.contains(&"llama3.2".to_string()));
+        assert!(modelli.contains(&"claude-sonnet".to_string()));
+        assert!(modelli.contains(&"claude-haiku".to_string()));
+    }
+
+    #[test]
+    fn report_ordinato_per_ultima_run_desc() {
+        let (conn, v_id) = db_test_con_versione();
+        // model_old → 60 min fa, model_new → 1 min fa.
+        inserisci_observation(&conn, "obs-1", &v_id, "ollama", "old", 0.5, true, 60);
+        inserisci_observation(&conn, "obs-2", &v_id, "ollama", "new", 0.9, true, 1);
+
+        let r = report_pure(&conn, 30).unwrap();
+        assert_eq!(r[0].model, "new", "il più recente in cima");
+        assert_eq!(r[1].model, "old");
+    }
+
+    #[test]
+    fn report_filtro_giorni_esclude_run_vecchi() {
+        let (conn, v_id) = db_test_con_versione();
+        // 2 giorni fa = 2880 minuti.
+        inserisci_observation(&conn, "obs-old", &v_id, "ollama", "x", 0.5, true, 2880);
+        // 30 minuti fa.
+        inserisci_observation(&conn, "obs-new", &v_id, "ollama", "x", 0.9, true, 30);
+
+        // Filtra a 1 giorno: deve includere solo il run di 30 minuti fa.
+        let r = report_pure(&conn, 1).unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].num_run, 1);
+        assert_eq!(r[0].similarita_ultima, Some(0.9));
+    }
+
+    #[test]
+    fn report_drift_negativo_se_migliorato() {
+        let (conn, v_id) = db_test_con_versione();
+        inserisci_observation(&conn, "obs-1", &v_id, "ollama", "x", 0.5, true, 10);
+        inserisci_observation(&conn, "obs-2", &v_id, "ollama", "x", 0.9, true, 1);
+        let r = report_pure(&conn, 30).unwrap();
+        // media 0.7, ultima 0.9 → drift = (0.7 - 0.9) / 0.7 = -28.57%
+        let drift = r[0].drift_percentuale.unwrap();
+        assert!(drift < 0.0, "miglioramento → drift negativo");
+        assert!((drift + 28.57).abs() < 0.5);
+    }
+
+    #[test]
+    fn report_csv_header_corretto() {
+        let csv = report_csv_pure(&[]);
+        assert!(csv.starts_with("prompt_id,prompt_titolo,provider,model,num_run,num_passed,num_failed,similarita_media,similarita_ultima,ultima_run_at,drift_percentuale"));
+    }
+
+    #[test]
+    fn report_csv_escapa_virgole_in_titolo() {
+        let row = RegressionReportRow {
+            prompt_id: "prm-1".into(),
+            prompt_titolo: "Riassumi, in italiano".into(),
+            provider: "ollama".into(),
+            model: "x".into(),
+            num_run: 1,
+            num_passed: 1,
+            num_failed: 0,
+            similarita_media: Some(0.9),
+            similarita_ultima: Some(0.9),
+            ultima_run_at: Some("2026-05-07 10:00:00".into()),
+            drift_percentuale: Some(0.0),
+        };
+        let csv = report_csv_pure(&[row]);
+        // La virgola dentro il titolo deve essere quotata.
+        assert!(csv.contains("\"Riassumi, in italiano\""));
+    }
+
+    #[test]
+    fn report_csv_escapa_quote_dentro_quote() {
+        let row = RegressionReportRow {
+            prompt_id: "prm-1".into(),
+            prompt_titolo: "Dice \"ciao\" e poi".into(),
+            provider: "ollama".into(),
+            model: "x".into(),
+            num_run: 1,
+            num_passed: 1,
+            num_failed: 0,
+            similarita_media: None,
+            similarita_ultima: None,
+            ultima_run_at: None,
+            drift_percentuale: None,
+        };
+        let csv = report_csv_pure(&[row]);
+        // Quote interne raddoppiate.
+        assert!(csv.contains("\"Dice \"\"ciao\"\" e poi\""));
+    }
+
+    #[test]
+    fn report_csv_valori_null_e_stringa_vuota() {
+        let row = RegressionReportRow {
+            prompt_id: "prm-1".into(),
+            prompt_titolo: "x".into(),
+            provider: "ollama".into(),
+            model: "x".into(),
+            num_run: 0,
+            num_passed: 0,
+            num_failed: 0,
+            similarita_media: None,
+            similarita_ultima: None,
+            ultima_run_at: None,
+            drift_percentuale: None,
+        };
+        let csv = report_csv_pure(&[row]);
+        let line = csv.lines().last().unwrap();
+        // Tre campi opzionali consecutivi vuoti + ultima_run_at vuoto + drift vuoto.
+        assert!(line.contains(",,,,"), "campi NULL devono essere stringa vuota");
     }
 
     #[test]

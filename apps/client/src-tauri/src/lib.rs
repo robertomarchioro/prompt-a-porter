@@ -345,6 +345,8 @@ pub fn run() {
             regression::golden_elimina,
             regression::golden_lista,
             regression::golden_esegui,
+            regression::regression_report,
+            regression::regression_report_csv,
             provider_ai::provider_ollama_genera,
             provider_ai::provider_config_lista,
             provider_ai::provider_config_salva,
