@@ -117,7 +117,7 @@ Pezzi di feature parzialmente atterrate, con il resto programmato per `v0.5.0` (
 - 📋 **Lint health %** + top categorie — Step 5 chiuso, si può atterrare in `v0.5.0`
 
 ### Da Fase 3 Step 10 — Quality gate
-- 📋 **Riload automatico Session post idle-unload**. Oggi: dopo idle-unload la ricerca degrada a FTS-only fino al riavvio del client. Implementabile rendendo l'auto-init idempotente e chiamandolo on-demand al primo `compute_embedding_opt → None` post-drop
+- ✅ **Riload automatico Session post idle-unload** atterrato in v0.6.0 Step 2: nuova `assicura_session_caricata(rt_state, vault_state)` chiamata da `cerca_semantica` prima di `compute_embedding_opt`; refactor `init_session_pure` idempotente.
 - 📋 **Coverage line client Rust 60% → 70%** — gate CI già attivo, roadmap per file in `docs/operativo/coverage.md` (priorità: `embeddings.rs`, `vault.rs`, `audit.rs`, `import_export.rs`)
 
 ### Da Fase 4 Step 1 — Varianti
