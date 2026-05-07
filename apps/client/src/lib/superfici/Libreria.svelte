@@ -11,6 +11,7 @@
   } from "$lib/sync";
   import CompilatorePrompt from "./CompilatorePrompt.svelte";
   import CronologiaPrompt from "./CronologiaPrompt.svelte";
+  import ConfrontoPrompt from "./ConfrontoPrompt.svelte";
   import EditorPrompt from "./EditorPrompt.svelte";
   import Impostazioni from "./Impostazioni.svelte";
   import Insight from "./Insight.svelte";
@@ -112,6 +113,25 @@
   let varianti = $state<VariantInfo[]>([]);
   let creandoVariante = $state(false);
   let erroreVariante = $state("");
+
+  // ─── Confronto fianco-a-fianco (Fase 4 Step 4) ───
+  let selezioneConfronto = $state<Set<string>>(new Set());
+  let mostraConfronto = $state(false);
+  let confrontoKey = $state(0);
+
+  function toggleSelezioneConfronto(id: string) {
+    const s = new Set(selezioneConfronto);
+    if (s.has(id)) {
+      s.delete(id);
+    } else {
+      s.add(id);
+    }
+    selezioneConfronto = s;
+  }
+
+  function svuotaSelezioneConfronto() {
+    selezioneConfronto = new Set();
+  }
 
   async function caricaVarianti() {
     if (!promptDet) {
@@ -506,7 +526,14 @@
     timeoutCerca = setTimeout(() => caricaLista(), 250);
   }
 
-  function selezionaPrompt(id: string) {
+  function selezionaPrompt(id: string, e?: MouseEvent) {
+    // Cmd/Ctrl+click = toggle nella selezione confronto, NON cambia il
+    // dettaglio aperto. Click semplice = comportamento legacy.
+    if (e && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      toggleSelezioneConfronto(id);
+      return;
+    }
     idSelezionato = id;
     caricaDettaglio(id);
   }
@@ -934,6 +961,25 @@
           <h2 class="lista-titolo">{titoloVista}</h2>
           <span class="lista-count">{conteggioVista}</span>
           <div class="lista-spacer"></div>
+          {#if selezioneConfronto.size > 0}
+            <Button
+              variante="ghost"
+              dimensione="sm"
+              onclick={svuotaSelezioneConfronto}
+              title="Svuota selezione confronto">×</Button
+            >
+            <Button
+              variante="ghost"
+              dimensione="sm"
+              disabled={selezioneConfronto.size < 2}
+              onclick={() => {
+                confrontoKey++;
+                mostraConfronto = true;
+              }}
+              title="Confronta i prompt selezionati (Cmd/Ctrl+click su più prompt)"
+              >Confronta ({selezioneConfronto.size})</Button
+            >
+          {/if}
           <Button
             variante="primary"
             dimensione="sm"
@@ -1002,8 +1048,9 @@
             <button
               class="prompt-card"
               class:prompt-card--sel={p.id === idSelezionato}
+              class:prompt-card--check={selezioneConfronto.has(p.id)}
               aria-selected={p.id === idSelezionato}
-              onclick={() => selezionaPrompt(p.id)}
+              onclick={(e) => selezionaPrompt(p.id, e)}
               draggable="true"
               ondragstart={(e) => dragStartPrompt(e, p.id)}
               type="button"
@@ -1262,6 +1309,15 @@
           onrollback={() => {
             caricaDati();
           }}
+        />
+      {/key}
+    {/if}
+
+    {#if mostraConfronto && selezioneConfronto.size >= 2}
+      {#key confrontoKey}
+        <ConfrontoPrompt
+          promptIds={Array.from(selezioneConfronto)}
+          onchiudi={() => (mostraConfronto = false)}
         />
       {/key}
     {/if}
@@ -1756,6 +1812,9 @@
   .prompt-card--sel {
     background: var(--bg-overlay);
     border-color: var(--border-default);
+  }
+  .prompt-card--check {
+    box-shadow: inset 3px 0 0 var(--accent-team);
   }
 
   .pc-head {
