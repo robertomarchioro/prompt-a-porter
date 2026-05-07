@@ -13,12 +13,19 @@
 //   valido per InputVars
 // - Soft-delete con `DeletedAt`, coerente col resto dello schema
 
+use regex::Regex;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 use tauri::State;
 
+use crate::embeddings::EmbeddingsState;
 use crate::errore::PapErrore;
+use crate::provider_ai::{AIProvider, OllamaProvider};
+use crate::similarity;
 use crate::vault::VaultState;
+
+const USER_LOCALE: &str = "usr-locale";
 
 const SIMILARITY_FN_VALIDE: &[&str] = &["cosine", "llm-judge", "exact-match", "regex"];
 
@@ -66,6 +73,10 @@ fn default_soglia() -> f64 {
 }
 
 fn genera_id() -> String {
+    genera_id_con_prefix("gld")
+}
+
+fn genera_id_con_prefix(prefix: &str) -> String {
     use rand::RngCore;
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -74,9 +85,36 @@ fn genera_id() -> String {
     let mut rnd = [0u8; 4];
     rand::rngs::OsRng.fill_bytes(&mut rnd);
     format!(
-        "gld-{:012x}{:02x}{:02x}{:02x}{:02x}",
+        "{prefix}-{:012x}{:02x}{:02x}{:02x}{:02x}",
         ts, rnd[0], rnd[1], rnd[2], rnd[3]
     )
+}
+
+fn re_segnaposto() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| Regex::new(r"\{\{\s*(\w+)\s*\}\}").unwrap())
+}
+
+/// Sostituisce i segnaposti `{{nome}}` nel `body` con i valori in
+/// `input_vars` (JSON object). Segnaposti senza match sono lasciati
+/// invariati. NON espande gli `{{import "..."}}` (la regex `\w+` non
+/// matcha le stringhe quotate).
+pub(crate) fn compila_per_golden(body: &str, input_vars_json: &str) -> Result<String, PapErrore> {
+    let vars: serde_json::Value = serde_json::from_str(input_vars_json)
+        .map_err(|e| PapErrore::Generico(format!("InputVars JSON invalido: {e}")))?;
+    let map = vars
+        .as_object()
+        .ok_or_else(|| PapErrore::Generico("InputVars deve essere un oggetto JSON".into()))?;
+    let re = re_segnaposto();
+    let result = re.replace_all(body, |caps: &regex::Captures| {
+        let name = &caps[1];
+        match map.get(name) {
+            Some(serde_json::Value::String(s)) => s.clone(),
+            Some(v) => v.to_string(),
+            None => caps[0].to_string(),
+        }
+    });
+    Ok(result.into_owned())
 }
 
 fn valida(input: &str, expected: &str, similarity_fn: &str, soglia: f64) -> Result<(), PapErrore> {
@@ -234,6 +272,199 @@ pub(crate) fn lista_pure(conn: &Connection, prompt_id: &str) -> Result<Vec<Golde
     Ok(rows)
 }
 
+// ─────────── Esecuzione golden + observations (Step 8d) ───────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Observation {
+    pub id: String,
+    pub prompt_version_id: String,
+    pub golden_id: Option<String>,
+    pub provider: String,
+    pub model: String,
+    pub actual_output: String,
+    pub similarita: Option<f64>,
+    pub passed: bool,
+    pub latenza_ms: Option<u64>,
+    pub tokens_used: Option<u32>,
+    pub costo_stimato: Option<f64>,
+    pub errore: Option<String>,
+    pub ran_at: String,
+    pub ran_by: String,
+}
+
+/// Restituisce l'`Id` di `PromptVersions` corrispondente alla `Version`
+/// corrente del prompt. Se non esiste ancora una row in `PromptVersions`
+/// (vault legacy senza versioning popolato), genera un id placeholder
+/// derivato da `prompt_id + version` per coerenza referenziale logica.
+fn current_version_id(conn: &Connection, prompt_id: &str) -> Result<String, PapErrore> {
+    let id: Option<String> = conn
+        .query_row(
+            "SELECT pv.Id FROM PromptVersions pv
+             JOIN Prompts p ON p.Id = pv.PromptId AND p.Version = pv.Version
+             WHERE pv.PromptId = ?1
+             ORDER BY pv.Version DESC
+             LIMIT 1",
+            [prompt_id],
+            |r| r.get(0),
+        )
+        .ok();
+    match id {
+        Some(v) => Ok(v),
+        None => Err(PapErrore::Generico(format!(
+            "PromptVersions vuoto per '{prompt_id}'. Salva il prompt almeno una volta prima di eseguire un golden."
+        ))),
+    }
+}
+
+fn carica_golden(conn: &Connection, golden_id: &str) -> Result<Golden, PapErrore> {
+    conn.query_row(
+        "SELECT Id, PromptId, Etichetta, InputVars, ExpectedOutput,
+                SimilarityFn, SoglieTolleranza, CreatedAt, UpdatedAt
+         FROM PromptGoldens
+         WHERE Id = ?1 AND DeletedAt IS NULL",
+        [golden_id],
+        |r| {
+            Ok(Golden {
+                id: r.get(0)?,
+                prompt_id: r.get(1)?,
+                etichetta: r.get(2)?,
+                input_vars: r.get(3)?,
+                expected_output: r.get(4)?,
+                similarity_fn: r.get(5)?,
+                soglia_tolleranza: r.get(6)?,
+                creato_a: r.get(7)?,
+                aggiornato_a: r.get(8)?,
+            })
+        },
+    )
+    .map_err(|_| PapErrore::Generico(format!("Golden '{golden_id}' non trovato")))
+}
+
+fn carica_prompt_body(conn: &Connection, prompt_id: &str) -> Result<String, PapErrore> {
+    conn.query_row(
+        "SELECT Body FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
+        [prompt_id],
+        |r| r.get(0),
+    )
+    .map_err(|_| PapErrore::Generico(format!("Prompt '{prompt_id}' non trovato")))
+}
+
+fn insert_observation(conn: &Connection, obs: &Observation) -> Result<(), PapErrore> {
+    conn.execute(
+        "INSERT INTO PromptRunObservations (
+            Id, PromptVersionId, GoldenId, Provider, Model, ActualOutput,
+            Similarita, Passed, LatenzaMs, TokensUsed, CostoStimato,
+            Errore, RanAt, RanBy
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        params![
+            obs.id,
+            obs.prompt_version_id,
+            obs.golden_id,
+            obs.provider,
+            obs.model,
+            obs.actual_output,
+            obs.similarita,
+            obs.passed as i64,
+            obs.latenza_ms.map(|v| v as i64),
+            obs.tokens_used.map(|v| v as i64),
+            obs.costo_stimato,
+            obs.errore,
+            obs.ran_at,
+            obs.ran_by,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Orchestrazione end-to-end di un golden: carica → compila body con
+/// input_vars → chiama provider → calcola similarità → salva observation.
+///
+/// Il caller passa `provider` come trait object così la funzione resta
+/// testabile con un mock provider senza spinning-up Ollama vero.
+///
+/// Errori del provider (HTTP, network, modello sconosciuto) vengono
+/// catturati e salvati come observation con `Errore` valorizzato e
+/// `Passed = false` — non bubbled-up al chiamante. Errori di lookup DB
+/// (golden inesistente, prompt eliminato) sono invece propagati.
+pub(crate) fn esegui_pure_con_provider(
+    conn: &Connection,
+    rt: Option<&EmbeddingsState>,
+    golden_id: &str,
+    provider: &dyn AIProvider,
+    model: &str,
+    user_id: &str,
+) -> Result<Observation, PapErrore> {
+    let golden = carica_golden(conn, golden_id)?;
+    let body = carica_prompt_body(conn, &golden.prompt_id)?;
+    let prompt_compilato = compila_per_golden(&body, &golden.input_vars)?;
+    let prompt_version_id = current_version_id(conn, &golden.prompt_id)?;
+
+    let ran_at: String = conn.query_row("SELECT datetime('now')", [], |r| r.get(0))?;
+    let id = genera_id_con_prefix("obs");
+
+    let observation = match provider.generate(&prompt_compilato, model) {
+        Ok(out) => {
+            let sim_result = similarity::calcola(
+                &golden.similarity_fn,
+                &golden.expected_output,
+                &out.content,
+                rt,
+            );
+            let (similarita, errore) = match sim_result {
+                Ok(s) => (Some(s), None),
+                Err(e) => (None, Some(format!("Similarity: {e}"))),
+            };
+            let passed = similarita
+                .map(|s| {
+                    similarity::is_passed(&golden.similarity_fn, s, golden.soglia_tolleranza)
+                })
+                .unwrap_or(false);
+            Observation {
+                id,
+                prompt_version_id,
+                golden_id: Some(golden.id.clone()),
+                provider: provider.name().to_string(),
+                model: out.model,
+                actual_output: out.content,
+                similarita,
+                passed,
+                latenza_ms: Some(out.latency_ms),
+                tokens_used: out.tokens_used,
+                costo_stimato: None,
+                errore,
+                ran_at,
+                ran_by: user_id.to_string(),
+            }
+        }
+        Err(e) => Observation {
+            id,
+            prompt_version_id,
+            golden_id: Some(golden.id.clone()),
+            provider: provider.name().to_string(),
+            model: model.to_string(),
+            actual_output: String::new(),
+            similarita: None,
+            passed: false,
+            latenza_ms: None,
+            tokens_used: None,
+            costo_stimato: None,
+            errore: Some(format!("Provider: {e}")),
+            ran_at,
+            ran_by: user_id.to_string(),
+        },
+    };
+
+    insert_observation(conn, &observation)?;
+    crate::audit::registra(
+        conn,
+        "golden.eseguito",
+        "Observation",
+        &observation.id,
+        Some(&golden.etichetta),
+    );
+    Ok(observation)
+}
+
 // ─────────── Tauri commands (delegano agli helper) ───────────
 
 #[tauri::command]
@@ -263,6 +494,33 @@ pub fn golden_lista(
     state: State<'_, VaultState>,
 ) -> Result<Vec<Golden>, PapErrore> {
     state.with_conn(|conn| lista_pure(conn, &prompt_id))
+}
+
+/// Esegue un golden via il provider scelto. Solo Ollama supportato in
+/// 8d (provider remote in 8f). `model` è il nome del modello come noto
+/// al provider (es. "llama3.2"). `base_url` è opzionale per override
+/// dell'endpoint Ollama (default `http://localhost:11434`).
+#[tauri::command]
+pub fn golden_esegui(
+    golden_id: String,
+    provider_kind: String,
+    model: String,
+    base_url: Option<String>,
+    state: State<'_, VaultState>,
+    rt_state: State<'_, EmbeddingsState>,
+) -> Result<Observation, PapErrore> {
+    if provider_kind != "ollama" {
+        return Err(PapErrore::Generico(format!(
+            "Provider '{provider_kind}' non supportato in v0.4 alpha (solo 'ollama'). Provider remote arrivano in 8f."
+        )));
+    }
+    let provider: OllamaProvider = match base_url {
+        Some(u) if !u.trim().is_empty() => OllamaProvider::new(u),
+        _ => OllamaProvider::default(),
+    };
+    state.with_conn(|conn| {
+        esegui_pure_con_provider(conn, Some(&rt_state), &golden_id, &provider, &model, USER_LOCALE)
+    })
 }
 
 #[cfg(test)]
@@ -586,6 +844,309 @@ mod test {
     fn lista_pure_db_vuoto_ritorna_vec_vuoto() {
         let conn = db_test();
         assert_eq!(lista_pure(&conn, "prm-1").unwrap().len(), 0);
+    }
+
+    // ─────────── Test compila_per_golden ───────────
+
+    #[test]
+    fn compila_sostituisce_segnaposto_stringa() {
+        let body = "Saluta {{nome}} con tono {{tono}}.";
+        let vars = r#"{"nome":"Luca","tono":"formale"}"#;
+        let r = compila_per_golden(body, vars).unwrap();
+        assert_eq!(r, "Saluta Luca con tono formale.");
+    }
+
+    #[test]
+    fn compila_segnaposto_non_trovato_lasciato_invariato() {
+        let body = "Hello {{ignoto}} world";
+        let vars = r#"{"altro":"x"}"#;
+        let r = compila_per_golden(body, vars).unwrap();
+        assert_eq!(r, "Hello {{ignoto}} world");
+    }
+
+    #[test]
+    fn compila_valore_numerico_serializzato() {
+        let body = "N = {{n}}";
+        let vars = r#"{"n":42}"#;
+        let r = compila_per_golden(body, vars).unwrap();
+        assert_eq!(r, "N = 42");
+    }
+
+    #[test]
+    fn compila_input_vars_invalido_e_errore() {
+        let r = compila_per_golden("x", "non-json");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn compila_input_vars_array_e_errore() {
+        // InputVars deve essere oggetto, non array.
+        let r = compila_per_golden("x", "[1,2,3]");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn compila_non_tocca_import_quotati() {
+        // Sentinel: il regex \w+ NON matcha {{import "..."}}.
+        let body = r#"{{import "ruolo"}} prefix {{nome}}"#;
+        let vars = r#"{"nome":"X"}"#;
+        let r = compila_per_golden(body, vars).unwrap();
+        assert_eq!(r, r#"{{import "ruolo"}} prefix X"#);
+    }
+
+    // ─────────── Test esegui_pure_con_provider con mock provider ───────────
+
+    /// Mock di AIProvider per i test offline.
+    struct MockProvider {
+        nome: &'static str,
+        risposta: String,
+        errore: Option<String>,
+        latency: u64,
+    }
+
+    impl crate::provider_ai::AIProvider for MockProvider {
+        fn name(&self) -> &'static str {
+            self.nome
+        }
+        fn generate(
+            &self,
+            _prompt: &str,
+            model: &str,
+        ) -> Result<crate::provider_ai::GenerateOutput, PapErrore> {
+            if let Some(err) = &self.errore {
+                return Err(PapErrore::Generico(err.clone()));
+            }
+            Ok(crate::provider_ai::GenerateOutput {
+                content: self.risposta.clone(),
+                latency_ms: self.latency,
+                tokens_used: Some(10),
+                provider: self.nome,
+                model: model.to_string(),
+            })
+        }
+    }
+
+    fn db_test_con_versione() -> (Connection, String) {
+        let conn = db_test();
+        // Snapshot v1 in PromptVersions per soddisfare current_version_id.
+        crate::versioning::snapshot_versione(&conn, "prm-1", "usr-locale").unwrap();
+        let v_id: String = conn
+            .query_row(
+                "SELECT Id FROM PromptVersions WHERE PromptId = 'prm-1' ORDER BY Version DESC LIMIT 1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        (conn, v_id)
+    }
+
+    #[test]
+    fn esegui_exact_match_passed_uno() {
+        let (conn, v_id) = db_test_con_versione();
+        let mut g = nuovo_default("prm-1", "lab");
+        g.expected_output = "ciao mondo".into();
+        g.similarity_fn = "exact-match".into();
+        let golden_id = crea_pure(&conn, &g).unwrap();
+
+        let provider = MockProvider {
+            nome: "ollama",
+            risposta: "ciao mondo".into(),
+            errore: None,
+            latency: 50,
+        };
+        let obs = esegui_pure_con_provider(
+            &conn,
+            None,
+            &golden_id,
+            &provider,
+            "llama3.2",
+            "usr-locale",
+        )
+        .unwrap();
+
+        assert!(obs.passed, "exact-match identico deve passare");
+        assert_eq!(obs.similarita, Some(1.0));
+        assert_eq!(obs.actual_output, "ciao mondo");
+        assert_eq!(obs.prompt_version_id, v_id);
+        assert_eq!(obs.provider, "ollama");
+        assert_eq!(obs.errore, None);
+    }
+
+    #[test]
+    fn esegui_exact_match_diverso_failed() {
+        let (conn, _) = db_test_con_versione();
+        let mut g = nuovo_default("prm-1", "lab");
+        g.expected_output = "atteso".into();
+        g.similarity_fn = "exact-match".into();
+        let golden_id = crea_pure(&conn, &g).unwrap();
+
+        let provider = MockProvider {
+            nome: "ollama",
+            risposta: "qualcos'altro".into(),
+            errore: None,
+            latency: 50,
+        };
+        let obs =
+            esegui_pure_con_provider(&conn, None, &golden_id, &provider, "x", "usr-locale")
+                .unwrap();
+
+        assert!(!obs.passed);
+        assert_eq!(obs.similarita, Some(0.0));
+        assert_eq!(obs.errore, None);
+    }
+
+    #[test]
+    fn esegui_provider_errore_persiste_observation_con_errore() {
+        let (conn, _) = db_test_con_versione();
+        let g = nuovo_default("prm-1", "lab");
+        let golden_id = crea_pure(&conn, &g).unwrap();
+
+        let provider = MockProvider {
+            nome: "ollama",
+            risposta: "".into(),
+            errore: Some("connessione rifiutata".into()),
+            latency: 0,
+        };
+        let obs = esegui_pure_con_provider(
+            &conn,
+            None,
+            &golden_id,
+            &provider,
+            "llama3.2",
+            "usr-locale",
+        )
+        .unwrap();
+
+        assert!(!obs.passed);
+        assert_eq!(obs.similarita, None);
+        assert!(obs.errore.is_some());
+        assert!(obs.errore.unwrap().contains("connessione rifiutata"));
+        // Observation persistita comunque.
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM PromptRunObservations WHERE Id = ?1",
+                [&obs.id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn esegui_regex_pattern_match() {
+        let (conn, _) = db_test_con_versione();
+        let mut g = nuovo_default("prm-1", "lab");
+        g.expected_output = r"^\d{3}-\d{4}$".into();
+        g.similarity_fn = "regex".into();
+        let golden_id = crea_pure(&conn, &g).unwrap();
+
+        let provider = MockProvider {
+            nome: "ollama",
+            risposta: "123-4567".into(),
+            errore: None,
+            latency: 10,
+        };
+        let obs = esegui_pure_con_provider(
+            &conn,
+            None,
+            &golden_id,
+            &provider,
+            "x",
+            "usr-locale",
+        )
+        .unwrap();
+
+        assert!(obs.passed);
+        assert_eq!(obs.similarita, Some(1.0));
+    }
+
+    #[test]
+    fn esegui_golden_inesistente_e_errore() {
+        let (conn, _) = db_test_con_versione();
+        let provider = MockProvider {
+            nome: "ollama",
+            risposta: "x".into(),
+            errore: None,
+            latency: 0,
+        };
+        let r = esegui_pure_con_provider(
+            &conn,
+            None,
+            "gld-fantasma",
+            &provider,
+            "x",
+            "usr-locale",
+        );
+        assert!(r.is_err());
+        assert!(r.unwrap_err().to_string().contains("non trovato"));
+    }
+
+    #[test]
+    fn esegui_senza_promptversions_e_errore() {
+        // Salto db_test_con_versione: PromptVersions vuoto.
+        let conn = db_test();
+        let golden_id = crea_pure(&conn, &nuovo_default("prm-1", "lab")).unwrap();
+        let provider = MockProvider {
+            nome: "ollama",
+            risposta: "x".into(),
+            errore: None,
+            latency: 0,
+        };
+        let r =
+            esegui_pure_con_provider(&conn, None, &golden_id, &provider, "x", "usr-locale");
+        assert!(r.is_err());
+        assert!(r.unwrap_err().to_string().contains("PromptVersions vuoto"));
+    }
+
+    #[test]
+    fn esegui_observation_persistita_correttamente() {
+        let (conn, v_id) = db_test_con_versione();
+        let mut g = nuovo_default("prm-1", "lab");
+        g.expected_output = "match".into();
+        g.similarity_fn = "exact-match".into();
+        let golden_id = crea_pure(&conn, &g).unwrap();
+
+        let provider = MockProvider {
+            nome: "ollama",
+            risposta: "match".into(),
+            errore: None,
+            latency: 123,
+        };
+        let obs = esegui_pure_con_provider(
+            &conn,
+            None,
+            &golden_id,
+            &provider,
+            "llama3.2",
+            "usr-locale",
+        )
+        .unwrap();
+
+        // Verifica persistenza completa.
+        let (db_passed, db_sim, db_lat, db_tokens, db_provider, db_model): (
+            i64,
+            Option<f64>,
+            Option<i64>,
+            Option<i64>,
+            String,
+            String,
+        ) = conn
+            .query_row(
+                "SELECT Passed, Similarita, LatenzaMs, TokensUsed, Provider, Model
+                 FROM PromptRunObservations WHERE Id = ?1",
+                [&obs.id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+            )
+            .unwrap();
+        assert_eq!(db_passed, 1);
+        assert_eq!(db_sim, Some(1.0));
+        assert_eq!(db_lat, Some(123));
+        assert_eq!(db_tokens, Some(10));
+        assert_eq!(db_provider, "ollama");
+        assert_eq!(db_model, "llama3.2");
+
+        // E che il PromptVersionId punti effettivamente alla versione corrente.
+        assert_eq!(obs.prompt_version_id, v_id);
     }
 
     #[test]

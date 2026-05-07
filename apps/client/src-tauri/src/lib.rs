@@ -344,6 +344,7 @@ pub fn run() {
             regression::golden_aggiorna,
             regression::golden_elimina,
             regression::golden_lista,
+            regression::golden_esegui,
             provider_ai::provider_ollama_genera,
             registra_hotkey,
         ])
