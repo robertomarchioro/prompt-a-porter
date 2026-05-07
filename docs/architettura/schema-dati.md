@@ -217,6 +217,91 @@ Grafo delle dipendenze fra prompt componibili. Una riga per ogni
 Popolata su crea/aggiorna del prompt parent. Permette query "chi
 importa X?" in O(1) invece di scansionare tutti i body.
 
+### PromptGoldens (Fase 4)
+Casi di test salvati su un prompt. Differenziatore strategico — vedi
+[`docs/utente/regression-testing.md`](../utente/regression-testing.md).
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `Id` | TEXT PK | `gld-<hex16>` |
+| `PromptId` | TEXT FK Prompts | |
+| `Etichetta` | TEXT | Nome leggibile (es. "caso comune") |
+| `InputVars` | TEXT | JSON delle variabili compilate |
+| `ExpectedOutput` | TEXT | |
+| `SimilarityFn` | TEXT CHECK | `cosine` \| `llm-judge` \| `exact-match` \| `regex` |
+| `SoglieTolleranza` | REAL CHECK [0,1] | Default 0.85 |
+| `CreatedAt`/`UpdatedAt` | TEXT | ISO 8601 |
+| `DeletedAt` | TEXT | Soft-delete |
+
+### PromptRunObservations (Fase 4)
+Storia delle esecuzioni. Append-only.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `Id` | TEXT PK | `obs-<hex16>` |
+| `PromptVersionId` | TEXT FK PromptVersions | Versione del prompt al momento del run |
+| `GoldenId` | TEXT? FK PromptGoldens | `NULL` per run liberi senza golden |
+| `Provider` | TEXT | `anthropic` \| `openai` \| `google` \| `ollama` \| `openai-compat` |
+| `Model` | TEXT | Nome modello (es. `claude-sonnet-4.6`) |
+| `ActualOutput` | TEXT | Risposta del modello |
+| `Similarita` | REAL? | [0,1] — `NULL` solo se errore di calcolo |
+| `Passed` | INTEGER | 1 se Similarita ≥ soglia |
+| `LatenzaMs`/`TokensUsed`/`CostoStimato` | INT/INT/REAL? | Metriche opzionali |
+| `Errore` | TEXT? | Messaggio errore se run fallito |
+| `RanAt`/`RanBy` | TEXT/TEXT | Timestamp ISO + UserId |
+
+### ProviderConfig (Fase 4)
+Configurazione provider AI per regression testing. Una row per
+provider noto. **API key in plaintext nel DB cifrato SQLCipher AES-256**
+(no doppia cifratura applicativa).
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `Provider` | TEXT PK CHECK | Set chiuso di kind validi |
+| `ApiKey` | TEXT? | NULL per Ollama (no key richiesta) |
+| `BaseUrl` | TEXT? | Override endpoint ufficiale |
+| `DefaultModel` | TEXT? | Suggerimento UI |
+| `Abilitato` | INTEGER | 0/1, default 1 |
+| `CreatedAt`/`UpdatedAt` | TEXT | ISO 8601 |
+
+UPSERT preserva la chiave esistente se l'utente non la passa
+(`api_key=None`) — utile per modificare solo `default_model`.
+
+### Prompts.ParentPromptId / VariantLabel / IsVariant (Fase 4)
+Aggiunte come colonne in `Prompts` (V011) per supportare le varianti
+A/B testing — vedi [`docs/utente/varianti-prompt.md`](../utente/varianti-prompt.md).
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `ParentPromptId` | TEXT? FK Prompts | NULL = prompt principale |
+| `VariantLabel` | TEXT? | "B"/"C"/.../"V<N>", NULL per il principale |
+| `IsVariant` | INTEGER | 0/1, redondante con `ParentPromptId IS NOT NULL` ma usato per indici |
+
+### Prompts.ForkOfPromptId (Fase 4)
+Aggiunta come colonna in `Prompts` (V012) per supportare i fork —
+vedi [`docs/utente/fork-prompt.md`](../utente/fork-prompt.md).
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `ForkOfPromptId` | TEXT? FK Prompts | NULL = non-fork. Resta valorizzato anche se l'originale è soft-deletato (tracciabilità storica > integrità referenziale) |
+
+### PromptRatings (Fase 4)
+Feedback discreto post-uso. Append-only — vedi
+[`docs/utente/rating-prompt.md`](../utente/rating-prompt.md).
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `Id` | TEXT PK | `rtg-<hex16>` |
+| `PromptId` | TEXT FK Prompts | |
+| `UserId` | TEXT FK Users | `usr-locale` in single-user |
+| `Rating` | INTEGER CHECK | `IN (-1, 0, 1)` |
+| `Note` | TEXT? | Whitespace-only → NULL |
+| `UsedWithModel` | TEXT? | Es. `claude-sonnet-4.6` |
+| `CreatedAt` | TEXT | DEFAULT `datetime('now')` |
+
+Aggregazione media + distribuzione pos/neu/neg via SQL on-the-fly,
+nessuna colonna denormalizzata in `Prompts`.
+
 ## Indici
 
 | Indice | Tabella | Colonne |
@@ -243,5 +328,11 @@ Sistema di migrazioni versionato. File SQL in `src-tauri/migrations/`, embedded 
 | V005 | embeddings | `PromptsEmbeddings` (vec0 sqlite-vec, 384 dim) |
 | V006 | tag_embeddings | `TagsEmbeddings` (vec0, 384 dim) |
 | V007 | prompt_imports | Tabella `PromptImports` (grafo dipendenze) |
+| V008 | prompt_goldens | Tabella `PromptGoldens` (Fase 4 Step 8) |
+| V009 | prompt_run_observations | Tabella `PromptRunObservations` |
+| V010 | provider_config | Tabella `ProviderConfig` (API keys) |
+| V011 | prompt_varianti | `Prompts.ParentPromptId/VariantLabel/IsVariant` (Fase 4 Step 1) |
+| V012 | prompt_fork | `Prompts.ForkOfPromptId` (Fase 4 Step 5) |
+| V013 | prompt_ratings | Tabella `PromptRatings` (Fase 4 Step 2) |
 
 Tabella `_Migrazioni` nel DB traccia le versioni applicate.

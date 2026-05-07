@@ -1,5 +1,65 @@
 # Changelog — Prompt a Porter
 
+## v0.4.0 — Workflow Avanzati & Quality Assurance (2026-05-07)
+
+> **Fase 4 client-first track chiusa.** 6/8 step atterrati (1, 2, 3, 4, 5, 8). Step 6 (approval workflow) e 7 (RBAC cartelle) rinviati a Fase 5: dipendono da workspace team in produzione e non danno valore aggiunto in single-user. Nessun breaking change su DB/format export rispetto a v0.3.x.
+
+### Highlights
+
+- **Golden examples + regression testing** ⭐ *differenziatore strategico*: trasforma il prompt da testo a contratto comportamentale verificabile. Crei un golden con `input_vars` + `expected_output` + similarity function (`cosine`/`exact-match`/`regex`/`llm-judge`), il client esegue il prompt contro un provider AI (Ollama locale o Anthropic/OpenAI/OpenAI-compat con API key), calcola la similarità, salva l'observation. Vista "Regressioni" in Libreria con tabella drift per (prompt × provider × model) e export CSV.
+- **Diff tra versioni** — pannello CronologiaPrompt mostra diff inline e side-by-side fra qualunque due versioni del prompt. Riusa jsdiff (BSD-3) con preserve dei segnaposti `{{...}}` come token unitari. Export Markdown via clipboard.
+- **Confronto fianco-a-fianco** di prompt diversi — Cmd/Ctrl+click in Libreria per selezionare 2+ prompt, modale con metadata + body in colonne. Toggle "Diff colorato" riusa il componente `VersionDiff` di Step 3.
+- **Varianti / A-B testing** — duplica un prompt come variante B/C/Z (auto-etichetta), ognuna con UseCount/rating/versioning indipendenti. Pillole varianti cliccabili nel detail pane. Riggancio automatico al grandparent (no chain transitive).
+- **Fork / Clone** con tracciabilità — clona un prompt team nel tuo workspace privato. Banner "Fork di X" cliccabile per navigare all'originale. Resiliente al soft-delete dell'originale.
+- **Rating dopo l'uso** — toast post-copy con 3 emoji (👎/😐/👍), append-only con timestamp. Aggregato % positivi nel detail pane con badge colorato (verde/giallo/rosso).
+
+### Quality gate Fase 4 (Step 9)
+
+- **Coverage globale 69.91% line + 74.30% function** (era 60.12%/67.64% post v0.3.0)
+- **Tutti i 6 moduli Fase 4 sopra il target ≥70%**: rating 95.24%, regression 91.27%, fork 91.14%, varianti 90.36%, similarity 86.13%, provider_ai 77.17%
+- 337 test backend (era 169 inizio Fase 4)
+- 7 stress test sentinel anti-regressione (varianti 100, fork 50, rating 100 misti)
+- CI gate `--fail-under-lines 60` invariato (margine prudente)
+
+### Schema DB (V008-V013)
+
+Tutte le migrazioni additive, vault esistenti vengono migrati al primo unlock:
+
+- **V008** `prompt_goldens` — casi di test salvati per prompt
+- **V009** `prompt_run_observations` — storia esecuzioni append-only
+- **V010** `provider_config` — API key in DB cifrato SQLCipher
+- **V011** `prompt_varianti` — `Prompts.ParentPromptId/VariantLabel/IsVariant`
+- **V012** `prompt_fork` — `Prompts.ForkOfPromptId`
+- **V013** `prompt_ratings` — feedback discreto -1/0/+1 con `Note?` + `UsedWithModel?`
+
+### Documentazione nuova
+
+- [`docs/utente/varianti-prompt.md`](docs/utente/varianti-prompt.md)
+- [`docs/utente/fork-prompt.md`](docs/utente/fork-prompt.md)
+- [`docs/utente/rating-prompt.md`](docs/utente/rating-prompt.md)
+- [`docs/utente/regression-testing.md`](docs/utente/regression-testing.md)
+- [`docs/architettura/schema-dati.md`](docs/architettura/schema-dati.md) esteso con V008-V013
+
+### Statistics
+
+- 14 PR mergiate dalla v0.3.0 (#58-#71): #58-#64 Step 8 (golden+regression), #65 Step 3, #66 Step 1, #67 Step 4, #68 Step 5, #69 Step 2, #70 doc roadmap, #71 quality gate
+- 337 unit test Rust totali (+154 da v0.3.0)
+- 0 errori type check, 0 vulnerabilità note
+
+### Out of scope (rinviato)
+
+- **Step 6 — Approval workflow** e **Step 7 — RBAC cartelle**: gate workspace team, naturalmente Fase 5 con server in produzione
+- **Provider Google (Gemini)**: 4 provider su 5 implementati. Quick win `v0.5.0`
+- **Modale "Aggiungi nota" su rating negativo**: campo `Note` già nello schema, manca solo UI
+- **Sort by quality** "Migliori prompt" in Libreria
+- **CLI `pap test`** + **MCP `pap_test_prompt`**: rinviati `v0.5.0`/Fase 5
+- **UI Provider Config in Impostazioni**: oggi via SQL/MCP
+- **"Esegui tutti i golden" batch**: quick win `v0.5.0`
+
+Tutti i punti deferiti tracciati in [`docs/roadmap/rinvii.md`](docs/roadmap/rinvii.md).
+
+---
+
 ## v0.3.0 — Intelligenza & Authoring (2026-05-06)
 
 > **Fase 3 chiusa.** Tutti gli 11 step della roadmap completati: ricerca semantica (sqlite-vec + ONNX), linting, cartelle, prompt componibili, statistiche, quality gate. Nessun breaking change su DB/format export rispetto a v0.2.x.

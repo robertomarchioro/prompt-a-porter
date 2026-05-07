@@ -299,26 +299,31 @@ CREATE INDEX idx_observations_model ON PromptRunObservations(Provider, Model, Pa
 
 ## Step 9 — Quality gate Fase 4
 
-- [ ] Test coverage ≥ 70% sui moduli varianti, rating, approval, fork, ACL cartelle, golden/regression
-- [ ] Test E2E flusso approvazione completo
-- [ ] Test sync workspace team con prompt in stato `pending_review` (deve essere visibile solo a chi di dovere)
-- [ ] Performance: diff su 50 versioni di un prompt grande < 200ms in lista
-- [ ] Smoke test manuale: variants × rating × approval × fork × ACL × regression
-- [ ] Test ACL cartelle: scenari complessi (admin/editor/user, inheritance on/off, override) tutti corretti
-- [ ] Test regression: pipeline mock con Ollama, verifica detect di drift simulato (modello restituisce output diverso)
+> ✅ Atterrato in PR #71 (2026-05-07). Vedi `docs/operativo/coverage.md` § "Moduli Fase 4 vs target Step 9".
+
+- [x] Coverage ≥ 70% sui moduli Fase 4: **rating 95.24%, regression 91.27%, fork 91.14%, varianti 90.36%, similarity 86.13%, provider_ai 77.17%**. Globale 69.91% line + 74.30% function
+- [x] Test regression con pipeline mock (Step 8d MockProvider in PR #61): copre detect di drift senza dipendere da Ollama live
+- [x] Performance diff: jsdiff su 50 versioni body 10k char misurato < 50 ms a runtime (PR #65) — bench formale rinviato a `v0.5.0`
+- [x] 7 stress test sentinel anti-regressione: 100 varianti / 50 fork / 100 rating misti
+- ⏸ E2E flusso approvazione + sync `pending_review` + ACL cartelle scenari → Fase 5 (Step 6+7 rinviati con server team)
+- ⏸ Smoke test manuale variants × rating × approval × fork × ACL × regression — manuale, no PR
 
 ## Step 10 — Documentazione e release
 
-- [ ] Aggiorna `docs/architettura/schema-dati.md` con nuove tabelle e colonne (varianti, rating, ACL cartelle, golden, observations)
-- [ ] Nuovo `docs/workflow-approvazione.md`
-- [ ] Nuovo `docs/varianti-prompt.md` con esempi pratici
-- [ ] Nuovo `docs/permessi-cartelle.md` con matrice di scenari
-- [ ] Nuovo `docs/regression-testing.md` con guida ai golden examples + provider setup
-- [ ] Aggiorna matrice RBAC in `docs/architettura/overview.md` con permessi nuovi (chi può approvare, chi può forkare, chi può gestire ACL cartelle)
-- [ ] Aggiorna `docs/utente/cli.md` con `pap test` e altri nuovi comandi
-- [ ] CHANGELOG `v0.4.0`
-- [ ] Aggiorna `docs/roadmap/fase-5-enterprise.md` (già esistente, già rivisto in linea con questa nuova roadmap)
-- [ ] Tag `v0.4.0`
+> ✅ Atterrato 2026-05-07. Tag `v0.4.0` rilasciato dopo questa PR.
+
+- [x] Schema-dati esteso con V008-V013 (PromptGoldens, PromptRunObservations, ProviderConfig, ParentPromptId/VariantLabel/IsVariant, ForkOfPromptId, PromptRatings)
+- [x] `docs/utente/varianti-prompt.md`
+- [x] `docs/utente/fork-prompt.md`
+- [x] `docs/utente/rating-prompt.md`
+- [x] `docs/utente/regression-testing.md`
+- [x] CHANGELOG `v0.4.0`
+- [x] Roadmap aggiornata: questo doc + `release-plan.md` + `rinvii.md` + cluster README (PR #70)
+- ⏸ `docs/workflow-approvazione.md` — rinviato con Step 6 a Fase 5
+- ⏸ `docs/permessi-cartelle.md` — rinviato con Step 7 a Fase 5
+- ⏸ Aggiornare `docs/utente/cli.md` con `pap test` — quick win `v0.5.0`
+- ⏸ Matrice RBAC in overview — rinviata con Step 7 a Fase 5
+- [x] Tag `v0.4.0` post-merge di questa PR
 
 ---
 
