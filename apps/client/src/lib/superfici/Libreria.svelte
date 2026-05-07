@@ -1402,6 +1402,13 @@
             mostraEditor = false;
             caricaDati();
           }}
+          oncreaVariante={async (nuovoId) => {
+            mostraEditor = false;
+            await caricaDati();
+            idSelezionato = nuovoId;
+            await caricaDettaglio(nuovoId);
+            await caricaVarianti();
+          }}
         />
       {/key}
     {/if}
