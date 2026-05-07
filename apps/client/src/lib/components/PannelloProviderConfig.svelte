@@ -16,7 +16,12 @@
     aggiornato_a: string;
   }
 
-  type ProviderKind = "anthropic" | "openai" | "ollama" | "openai-compat";
+  type ProviderKind =
+    | "anthropic"
+    | "openai"
+    | "ollama"
+    | "openai-compat"
+    | "gemini";
 
   interface ProviderMeta {
     kind: ProviderKind;
@@ -64,6 +69,15 @@
       placeholderModel: "modello-locale",
       placeholderBaseUrl: "http://localhost:1234/v1",
       richiedeApiKey: false,
+    },
+    {
+      kind: "gemini",
+      nome: "Google (Gemini)",
+      icona: "🔷",
+      descrizione: "Gemini (Flash, Pro) via aistudio.google.com/apikey",
+      placeholderModel: "gemini-2.5-flash",
+      placeholderBaseUrl: "https://generativelanguage.googleapis.com",
+      richiedeApiKey: true,
     },
   ];
 

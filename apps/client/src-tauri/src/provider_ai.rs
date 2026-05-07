@@ -29,6 +29,7 @@ const OLLAMA_DEFAULT_URL: &str = "http://localhost:11434";
 const ANTHROPIC_DEFAULT_URL: &str = "https://api.anthropic.com";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const OPENAI_DEFAULT_URL: &str = "https://api.openai.com";
+const GEMINI_DEFAULT_URL: &str = "https://generativelanguage.googleapis.com";
 
 /// Timeout HTTP generoso: i modelli Ollama locali su CPU possono
 /// impiegare 30-60s per generare una risposta lunga; gli endpoint
@@ -420,6 +421,154 @@ impl AIProvider for OpenAIProvider {
     }
 }
 
+// ─────────── Gemini (Google AI) ───────────
+
+#[derive(Debug, Clone)]
+pub struct GeminiProvider {
+    pub base_url: String,
+    pub api_key: String,
+}
+
+impl GeminiProvider {
+    pub fn new(api_key: impl Into<String>, base_url: Option<String>) -> Self {
+        Self {
+            base_url: base_url
+                .filter(|u| !u.trim().is_empty())
+                .unwrap_or_else(|| GEMINI_DEFAULT_URL.to_string()),
+            api_key: api_key.into(),
+        }
+    }
+
+    /// Endpoint `<base>/v1beta/models/<model>:generateContent`.
+    /// Il model è path-encoded direttamente nell'URL, niente body.
+    pub(crate) fn endpoint(&self, model: &str) -> String {
+        format!(
+            "{}/v1beta/models/{}:generateContent",
+            self.base_url.trim_end_matches('/'),
+            model
+        )
+    }
+}
+
+#[derive(Serialize)]
+struct GeminiPart<'a> {
+    text: &'a str,
+}
+
+#[derive(Serialize)]
+struct GeminiContent<'a> {
+    parts: Vec<GeminiPart<'a>>,
+}
+
+#[derive(Serialize)]
+struct GeminiRequest<'a> {
+    contents: Vec<GeminiContent<'a>>,
+}
+
+#[derive(Deserialize)]
+struct GeminiPartResp {
+    #[serde(default)]
+    text: String,
+}
+
+#[derive(Deserialize)]
+struct GeminiContentResp {
+    #[serde(default)]
+    parts: Vec<GeminiPartResp>,
+}
+
+#[derive(Deserialize)]
+struct GeminiCandidate {
+    content: GeminiContentResp,
+}
+
+#[derive(Deserialize, Default)]
+struct GeminiUsage {
+    #[serde(default, rename = "candidatesTokenCount")]
+    candidates_token_count: u32,
+    #[serde(default, rename = "totalTokenCount")]
+    total_token_count: u32,
+}
+
+#[derive(Deserialize)]
+struct GeminiResponse {
+    #[serde(default)]
+    candidates: Vec<GeminiCandidate>,
+    #[serde(default, rename = "usageMetadata")]
+    usage_metadata: GeminiUsage,
+}
+
+/// Estrae `(content, candidates_token_count)` dalla response generateContent.
+/// Concatena tutti i `parts` del primo `candidate` (di solito ce n'è uno).
+pub(crate) fn parse_gemini_response(json: &str) -> Result<(String, Option<u32>), PapErrore> {
+    let r: GeminiResponse = serde_json::from_str(json)
+        .map_err(|e| PapErrore::Generico(format!("Risposta Gemini malformata: {e}")))?;
+    let content: String = r
+        .candidates
+        .first()
+        .map(|c| {
+            c.content
+                .parts
+                .iter()
+                .map(|p| p.text.clone())
+                .collect::<Vec<_>>()
+                .join("")
+        })
+        .unwrap_or_default();
+    // Preferisci candidates_token_count (output) per coerenza con OpenAI.
+    let tokens = if r.usage_metadata.candidates_token_count > 0 {
+        Some(r.usage_metadata.candidates_token_count)
+    } else if r.usage_metadata.total_token_count > 0 {
+        Some(r.usage_metadata.total_token_count)
+    } else {
+        None
+    };
+    Ok((content, tokens))
+}
+
+impl AIProvider for GeminiProvider {
+    fn name(&self) -> &'static str {
+        "gemini"
+    }
+
+    fn generate(&self, prompt: &str, model: &str) -> Result<GenerateOutput, PapErrore> {
+        let req = GeminiRequest {
+            contents: vec![GeminiContent {
+                parts: vec![GeminiPart { text: prompt }],
+            }],
+        };
+        let body = serde_json::to_string(&req)
+            .map_err(|e| PapErrore::Generico(format!("serializzazione richiesta: {e}")))?;
+
+        let agent = ureq::AgentBuilder::new()
+            .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SEC))
+            .build();
+
+        let start = Instant::now();
+        let resp = agent
+            .post(&self.endpoint(model))
+            .set("x-goog-api-key", &self.api_key)
+            .set("content-type", "application/json")
+            .send_string(&body)
+            .map_err(|e| PapErrore::Generico(format!("Gemini HTTP: {e}")))?;
+        let latency_ms = start.elapsed().as_millis() as u64;
+
+        let json = resp
+            .into_string()
+            .map_err(|e| PapErrore::Generico(format!("Gemini body: {e}")))?;
+
+        let (content, tokens) = parse_gemini_response(&json)?;
+
+        Ok(GenerateOutput {
+            content,
+            latency_ms,
+            tokens_used: tokens,
+            provider: "gemini",
+            model: model.to_string(),
+        })
+    }
+}
+
 // ─────────── ProviderConfig storage (V010) ───────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -457,7 +606,13 @@ fn default_abilitato() -> bool {
     true
 }
 
-const PROVIDERS_VALIDI: &[&str] = &["anthropic", "openai", "ollama", "openai-compat"];
+const PROVIDERS_VALIDI: &[&str] = &[
+    "anthropic",
+    "openai",
+    "ollama",
+    "openai-compat",
+    "gemini",
+];
 
 fn valida_provider(name: &str) -> Result<(), PapErrore> {
     if !PROVIDERS_VALIDI.contains(&name) {
@@ -628,6 +783,15 @@ pub(crate) fn istanzia_provider(
                 ))
             })?;
             Ok(Box::new(OpenAIProvider::new(
+                key.clone(),
+                cfg.base_url.clone(),
+            )))
+        }
+        "gemini" => {
+            let key = cfg.api_key.as_ref().ok_or_else(|| {
+                PapErrore::Generico("Gemini richiede una API key configurata".into())
+            })?;
+            Ok(Box::new(GeminiProvider::new(
                 key.clone(),
                 cfg.base_url.clone(),
             )))
@@ -874,6 +1038,115 @@ mod test {
     fn openai_provider_name() {
         let p = OpenAIProvider::new("k", None);
         assert_eq!(p.name(), "openai");
+    }
+
+    // ─────────── Gemini ───────────
+
+    #[test]
+    fn gemini_endpoint_e_default_url() {
+        let p = GeminiProvider::new("k", None);
+        assert_eq!(
+            p.endpoint("gemini-2.5-flash"),
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        );
+        assert_eq!(p.api_key, "k");
+    }
+
+    #[test]
+    fn gemini_endpoint_custom_url() {
+        let p = GeminiProvider::new("k", Some("https://my-proxy.local/".into()));
+        assert_eq!(
+            p.endpoint("gemini-2.5-pro"),
+            "https://my-proxy.local/v1beta/models/gemini-2.5-pro:generateContent"
+        );
+    }
+
+    #[test]
+    fn gemini_endpoint_empty_url_usa_default() {
+        let p = GeminiProvider::new("k", Some("  ".into()));
+        assert_eq!(
+            p.endpoint("g"),
+            "https://generativelanguage.googleapis.com/v1beta/models/g:generateContent"
+        );
+    }
+
+    #[test]
+    fn parse_gemini_response_un_part() {
+        let json = r#"{"candidates":[{"content":{"parts":[{"text":"ciao"}]}}],"usageMetadata":{"promptTokenCount":3,"candidatesTokenCount":5,"totalTokenCount":8}}"#;
+        let (content, tokens) = parse_gemini_response(json).unwrap();
+        assert_eq!(content, "ciao");
+        assert_eq!(tokens, Some(5));
+    }
+
+    #[test]
+    fn parse_gemini_response_parts_multipli_concatena() {
+        let json = r#"{"candidates":[{"content":{"parts":[{"text":"prima"},{"text":" seconda"}]}}],"usageMetadata":{"candidatesTokenCount":7}}"#;
+        let (content, tokens) = parse_gemini_response(json).unwrap();
+        assert_eq!(content, "prima seconda");
+        assert_eq!(tokens, Some(7));
+    }
+
+    #[test]
+    fn parse_gemini_response_fallback_total_tokens() {
+        // Se candidatesTokenCount è 0/missing, usa totalTokenCount.
+        let json = r#"{"candidates":[{"content":{"parts":[{"text":"x"}]}}],"usageMetadata":{"totalTokenCount":12}}"#;
+        let (_, tokens) = parse_gemini_response(json).unwrap();
+        assert_eq!(tokens, Some(12));
+    }
+
+    #[test]
+    fn parse_gemini_response_no_usage_e_no_tokens() {
+        let json = r#"{"candidates":[{"content":{"parts":[{"text":"x"}]}}]}"#;
+        let (content, tokens) = parse_gemini_response(json).unwrap();
+        assert_eq!(content, "x");
+        assert_eq!(tokens, None);
+    }
+
+    #[test]
+    fn parse_gemini_response_no_candidates_content_vuoto() {
+        let json = r#"{"candidates":[]}"#;
+        let (content, _) = parse_gemini_response(json).unwrap();
+        assert_eq!(content, "");
+    }
+
+    #[test]
+    fn parse_gemini_response_json_invalido_e_errore() {
+        assert!(parse_gemini_response("non-json").is_err());
+    }
+
+    #[test]
+    fn gemini_provider_name() {
+        let p = GeminiProvider::new("k", None);
+        assert_eq!(p.name(), "gemini");
+    }
+
+    #[test]
+    fn istanzia_provider_gemini_richiede_api_key() {
+        let cfg = ProviderConfigItem {
+            provider: "gemini".to_string(),
+            api_key: None,
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+            creato_a: "2026-05-07T00:00:00Z".to_string(),
+            aggiornato_a: "2026-05-07T00:00:00Z".to_string(),
+        };
+        assert!(istanzia_provider(&cfg).is_err());
+    }
+
+    #[test]
+    fn istanzia_provider_gemini_con_api_key_ok() {
+        let cfg = ProviderConfigItem {
+            provider: "gemini".to_string(),
+            api_key: Some("test-key".to_string()),
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+            creato_a: "2026-05-07T00:00:00Z".to_string(),
+            aggiornato_a: "2026-05-07T00:00:00Z".to_string(),
+        };
+        let p = istanzia_provider(&cfg).unwrap();
+        assert_eq!(p.name(), "gemini");
     }
 
     // ─────────── ProviderConfig (storage) ───────────
