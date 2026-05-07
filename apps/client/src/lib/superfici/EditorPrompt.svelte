@@ -36,9 +36,30 @@
     prompt: PromptPerEditor | null;
     onchiudi: () => void;
     onsalvato: () => void;
+    oncreaVariante?: (nuovoId: string) => void;
   }
 
-  let { prompt, onchiudi, onsalvato }: Props = $props();
+  let { prompt, onchiudi, onsalvato, oncreaVariante }: Props = $props();
+
+  let creandoVariante = $state(false);
+  let erroreVariante = $state("");
+
+  async function creaVariante() {
+    if (!prompt) return;
+    creandoVariante = true;
+    erroreVariante = "";
+    try {
+      const nuovoId = await invoke<string>("prompt_crea_variante", {
+        parentId: prompt.id,
+        etichetta: null,
+      });
+      oncreaVariante?.(nuovoId);
+    } catch (e) {
+      erroreVariante = String(e);
+    } finally {
+      creandoVariante = false;
+    }
+  }
 
   const contenutoIniziale = prompt?.body ?? "";
 
@@ -482,8 +503,24 @@
   >
     <header class="modale-header">
       <h2>{prompt ? "Modifica prompt" : "Nuovo prompt"}</h2>
-      <Button variante="ghost" dimensione="sm" onclick={onchiudi}>✕</Button>
+      <div class="header-azioni">
+        {#if prompt && oncreaVariante}
+          <Button
+            variante="ghost"
+            dimensione="sm"
+            onclick={creaVariante}
+            disabled={creandoVariante}
+            title="Crea una variante (B/C/…) di questo prompt"
+          >
+            {creandoVariante ? "..." : "+ Variante"}
+          </Button>
+        {/if}
+        <Button variante="ghost" dimensione="sm" onclick={onchiudi}>✕</Button>
+      </div>
     </header>
+    {#if erroreVariante}
+      <div class="errore-variante" role="alert">{erroreVariante}</div>
+    {/if}
 
     <div class="modale-body">
       <!-- ── Colonna editor ── -->
@@ -958,6 +995,20 @@
     font-size: var(--fs-lg);
     font-weight: var(--fw-semibold);
     color: var(--text-strong);
+  }
+
+  .header-azioni {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+
+  .errore-variante {
+    padding: var(--sp-2) var(--sp-5);
+    color: var(--danger);
+    background: var(--danger-soft);
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: var(--fs-sm);
   }
 
   .modale-body {
