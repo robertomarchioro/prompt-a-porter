@@ -111,10 +111,10 @@ Pezzi di feature parzialmente atterrate, con il resto programmato per `v0.5.0` (
 - 📋 **Markdown export con front-matter `imports`** per riproducibilità
 
 ### Da Fase 3 Step 9 — Statistiche
-- 📋 **Prompt più importati** — Step 8 ora chiuso, si può atterrare in `v0.5.0`
+- ✅ **Prompt più importati** atterrato in v0.6.0 Step 4: `top_importati()` in `statistiche.rs` riusa `idx_imports_imported` (grafo inverso) con `COUNT(DISTINCT ParentPromptId)`, top 10 esposti in vista Insight.
 - 📋 **Distribuzione per cartella** — Step 7 chiuso, idem
 - 📋 **Distribuzione per autore** — Fase 5 (multi-user team)
-- 📋 **Lint health %** + top categorie — Step 5 chiuso, si può atterrare in `v0.5.0`
+- ✅ **Lint health %** + top categorie atterrato in v0.6.0 Step 4: `calcola_lint_health()` esegue `linting::analizza` body-only su tutti i prompt attivi, aggrega `prompt_senza_issue / totale * 100` + top 5 categorie per prefisso (`PH`, `PII`, `LEN`, `STY`).
 
 ### Da Fase 3 Step 10 — Quality gate
 - ✅ **Riload automatico Session post idle-unload** atterrato in v0.6.0 Step 2: nuova `assicura_session_caricata(rt_state, vault_state)` chiamata da `cerca_semantica` prima di `compute_embedding_opt`; refactor `init_session_pure` idempotente.
