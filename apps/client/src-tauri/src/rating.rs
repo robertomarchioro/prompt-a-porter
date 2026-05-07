@@ -414,4 +414,43 @@ mod test {
         assert_eq!(agg2.conteggio, 1);
         assert_eq!(agg2.negativi, 1);
     }
+
+    // ─────────── Stress test (Step 9 quality gate Fase 4) ───────────
+
+    #[test]
+    fn stress_100_rating_misti_aggregato_corretto() {
+        // 100 rating: 60 positivi, 30 neutri, 10 negativi.
+        // Media attesa = (60 - 10) / 100 = 0.5
+        let conn = db_test();
+        for _ in 0..60 {
+            aggiungi_pure(&conn, &nuovo_rating(1)).unwrap();
+        }
+        for _ in 0..30 {
+            aggiungi_pure(&conn, &nuovo_rating(0)).unwrap();
+        }
+        for _ in 0..10 {
+            aggiungi_pure(&conn, &nuovo_rating(-1)).unwrap();
+        }
+
+        let agg = aggregato_pure(&conn, "prm-1").unwrap();
+        assert_eq!(agg.conteggio, 100);
+        assert_eq!(agg.positivi, 60);
+        assert_eq!(agg.neutri, 30);
+        assert_eq!(agg.negativi, 10);
+        assert!((agg.media.unwrap() - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn stress_aggregato_solo_neutri_media_zero() {
+        let conn = db_test();
+        for _ in 0..50 {
+            aggiungi_pure(&conn, &nuovo_rating(0)).unwrap();
+        }
+        let agg = aggregato_pure(&conn, "prm-1").unwrap();
+        assert_eq!(agg.conteggio, 50);
+        assert_eq!(agg.neutri, 50);
+        assert_eq!(agg.positivi, 0);
+        assert_eq!(agg.negativi, 0);
+        assert!(agg.media.unwrap().abs() < 1e-9);
+    }
 }

@@ -462,4 +462,69 @@ mod test {
             .unwrap();
         assert_eq!(azione, "variante.creata");
     }
+
+    // ─────────── Stress test (Step 9 quality gate Fase 4) ───────────
+
+    #[test]
+    fn stress_25_varianti_riempie_tutte_le_lettere_b_z() {
+        // Sentinel: con etichetta=None il generatore deve produrre B,
+        // C, ..., Z (25 lettere). Esaurito Z, l'auto-generate deve
+        // passare al fallback "V<N>".
+        let conn = db_test();
+        for _ in 0..25 {
+            crea_variante_pure(&conn, "prm-parent", None).unwrap();
+        }
+        let l = lista_pure(&conn, "prm-parent").unwrap();
+        assert_eq!(l.len(), 25);
+        let labels: std::collections::HashSet<String> =
+            l.iter().map(|v| v.variant_label.clone()).collect();
+        // Tutte le lettere B-Z presenti, nessuna A (riservata al principale).
+        for c in b'B'..=b'Z' {
+            let lbl = (c as char).to_string();
+            assert!(labels.contains(&lbl), "etichetta '{lbl}' mancante");
+        }
+        assert!(!labels.contains(&"A".to_string()));
+    }
+
+    #[test]
+    fn stress_oltre_25_varianti_fallback_vN() {
+        let conn = db_test();
+        for _ in 0..25 {
+            crea_variante_pure(&conn, "prm-parent", None).unwrap();
+        }
+        // 26ª variante: nessuna lettera B-Z disponibile → "V<N>".
+        let id_extra = crea_variante_pure(&conn, "prm-parent", None).unwrap();
+        let label: Option<String> = conn
+            .query_row(
+                "SELECT VariantLabel FROM Prompts WHERE Id = ?1",
+                [&id_extra],
+                |r| r.get(0),
+            )
+            .unwrap();
+        // Format è "V<N>" con N = numero usate (25) + 1 = 26.
+        assert!(label.unwrap().starts_with('V'));
+    }
+
+    #[test]
+    fn stress_lista_grande_resta_ordinata() {
+        // 100 varianti con etichette custom ordinabili lessicograficamente.
+        let conn = db_test();
+        // Genero etichette pad-zero ("L001"..."L100") così l'ORDER BY
+        // ASC alfabetico è prevedibile.
+        for i in 0..100 {
+            let label = format!("L{:03}", i);
+            crea_variante_pure(&conn, "prm-parent", Some(&label)).unwrap();
+        }
+        let l = lista_pure(&conn, "prm-parent").unwrap();
+        assert_eq!(l.len(), 100);
+        // Verifica ordinamento monotono crescente.
+        for i in 1..l.len() {
+            assert!(
+                l[i - 1].variant_label <= l[i].variant_label,
+                "ordinamento non monotono fra {} e {}",
+                l[i - 1].variant_label,
+                l[i].variant_label
+            );
+        }
+    }
 }
