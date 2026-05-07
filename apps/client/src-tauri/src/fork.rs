@@ -448,4 +448,69 @@ mod test {
         let r = info_pure(&conn, "prm-fantasma").unwrap();
         assert!(r.is_none());
     }
+
+    // ─────────── Stress test (Step 9 quality gate Fase 4) ───────────
+
+    #[test]
+    fn stress_50_fork_dello_stesso_originale() {
+        // Sentinel: 50 fork dello stesso originale. Tutti puntano a
+        // `prm-orig`, tutti hanno snapshot v1, tutti hanno tag copiati.
+        let conn = db_test();
+        let mut ids = Vec::with_capacity(50);
+        for _ in 0..50 {
+            ids.push(fork_pure(&conn, "prm-orig").unwrap());
+        }
+
+        // Conteggio fork attivi via indice idx_prompts_fork_of (V012).
+        let n_fork: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Prompts
+                 WHERE ForkOfPromptId = 'prm-orig' AND DeletedAt IS NULL",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n_fork, 50);
+
+        // Sentinel: ogni fork ha esattamente 1 snapshot in PromptVersions.
+        for id in &ids {
+            let n_v: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM PromptVersions WHERE PromptId = ?1",
+                    [id],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(n_v, 1, "fork {id} senza snapshot v1");
+        }
+    }
+
+    #[test]
+    fn stress_chain_fork_resta_ad_un_livello() {
+        // Edge case: fork-of-fork-of-fork. Decisione di policy V012:
+        // ForkOfPromptId punta sempre al diretto "padre", no flatten
+        // transitivo. Verifichiamo la chain.
+        let conn = db_test();
+        let id_a = fork_pure(&conn, "prm-orig").unwrap();
+        let id_b = fork_pure(&conn, &id_a).unwrap();
+        let id_c = fork_pure(&conn, &id_b).unwrap();
+
+        let parent_b: Option<String> = conn
+            .query_row(
+                "SELECT ForkOfPromptId FROM Prompts WHERE Id = ?1",
+                [&id_b],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let parent_c: Option<String> = conn
+            .query_row(
+                "SELECT ForkOfPromptId FROM Prompts WHERE Id = ?1",
+                [&id_c],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(parent_b, Some(id_a.clone()));
+        assert_eq!(parent_c, Some(id_b.clone()));
+        // L'originale ha 1 fork diretto, A ha 1 fork (B), B ha 1 fork (C).
+    }
 }

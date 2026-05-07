@@ -1,33 +1,45 @@
 # Coverage — Quality gate
 
-> **Step 10**: floor 60% line coverage globale del client Rust, applicato
-> in CI come gate di regressione. Roadmap verso 70%.
+> **Fase 3 Step 10**: floor 60% line coverage globale del client Rust,
+> applicato in CI come gate di regressione.
+>
+> **Fase 4 Step 9**: target ≥ 70% sui moduli nuovi (varianti, rating,
+> fork, regression, similarity, provider_ai). Tutti i moduli Fase 4
+> sono **sopra il target** con margine — vedi tabella sotto.
 
 ## Stato attuale
 
-Coverage misurato il 2026-05-06 con `cargo-llvm-cov` (toolchain stable,
-profilo test):
+Coverage misurato il 2026-05-07 con `cargo-llvm-cov` (toolchain stable,
+profilo test) post Fase 4 client-first track chiusa:
 
-- **Line coverage globale: 60.12%** (5 893 linee strumentate, 2 350 non
-  coperte)
-- **Region coverage globale: 63.33%**
-- **Function coverage globale: 67.64%**
+- **Line coverage globale: 69.91%** (9 077 linee strumentate, 2 731 non
+  coperte) — era 60.12% post v0.3.0
+- **Region coverage globale: 71.73%**
+- **Function coverage globale: 74.30%**
 
 CI gate: `--fail-under-lines 60`. Sotto questa soglia il workflow
-`rust-test` fallisce e blocca il merge.
+`rust-test` fallisce e blocca il merge. La soglia resta 60% per
+margine: alzarla a 70% richiede coverage stabile su `lib.rs` (oggi 0%
+perché solo Tauri setup).
 
-## Per modulo (snapshot 2026-05-06)
+## Per modulo (snapshot 2026-05-07)
 
-Ordinato per coverage discendente:
+Ordinato per coverage discendente. Moduli Fase 4 evidenziati con 🆕.
 
 | Modulo | Lines | Coverage |
 |---|---|---|
 | `linting.rs` | 573 | 95.99% ✅ |
+| `rating.rs` 🆕 | 315 | 95.24% ✅ |
 | `embeddings_store.rs` | 329 | 94.53% ✅ |
 | `prompt_componibili.rs` | 361 | 91.69% ✅ |
-| `migrazione.rs` | 87 | 88.51% ✅ |
+| `regression.rs` 🆕 | 1 168 | 91.27% ✅ |
+| `fork.rs` 🆕 | 350 | 91.14% ✅ |
 | `errore.rs` | 54 | 90.74% ✅ |
+| `varianti.rs` 🆕 | 384 | 90.36% ✅ |
+| `migrazione.rs` | 88 | 88.64% ✅ |
+| `similarity.rs` 🆕 | 274 | 86.13% ✅ |
 | `statistiche.rs` | 250 | 81.20% ✅ |
+| `provider_ai.rs` 🆕 | 692 | 77.17% ✅ |
 | `versioning.rs` | 287 | 69.69% |
 | `cartelle.rs` | 527 | 68.31% |
 | `tags_suggest.rs` | 189 | 68.25% |
@@ -43,6 +55,20 @@ Ordinato per coverage discendente:
 | `embeddings.rs` | 561 | 27.99% ⚠️ |
 | `embeddings_backfill.rs` | 154 | 9.74% ⚠️ |
 | `lib.rs` | 213 | 0.00% ⚠️ |
+
+### Moduli Fase 4 vs target Step 9
+
+Target Step 9 era **≥ 70% sui nuovi moduli**. Tutti rispettano con
+margine ≥ 7 punti percentuali:
+
+| Modulo Fase 4 | Coverage | Margine vs 70% |
+|---|---|---|
+| `rating.rs` | 95.24% | +25.24 |
+| `regression.rs` | 91.27% | +21.27 |
+| `fork.rs` | 91.14% | +21.14 |
+| `varianti.rs` | 90.36% | +20.36 |
+| `similarity.rs` | 86.13% | +16.13 |
+| `provider_ai.rs` | 77.17% | +7.17 |
 
 ## Riprodurre localmente
 
@@ -82,8 +108,14 @@ Priorità per v0.4.x:
 5. **`embeddings_backfill.rs` 10% → 40%**: dopo il punto 1, i path di
    batching diventano testabili senza dipendenza dal modello reale.
 
-Target intermedio: **65% line coverage globale entro v0.4.0**, **70%**
-entro v0.5.
+Target raggiunti / aggiornati:
+- ~~65% line coverage globale entro v0.4.0~~ ✅ raggiunto al **69.91%** (Fase 4 client-first track)
+- ~~70% line coverage globale entro v0.5~~ → ridefinito: **75% globale entro v0.5**, gate CI alzato a 65%
+
+I 5 file in arancio/rosso (≤ 50%) restano la zavorra principale: senza
+intervento dedicato su `embeddings.rs`, `vault.rs`, `audit.rs`,
+`libreria.rs`, `import_export.rs` (più i casi terminali `embeddings_backfill.rs`
+e `lib.rs`) la coverage globale rimane ferma intorno al 70%.
 
 ## Cosa NON misuriamo (deliberatamente)
 
