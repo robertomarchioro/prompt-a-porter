@@ -213,6 +213,17 @@
     }
   }
 
+  /// v0.6.0 Step 5: apre la modale Confronto con principale + tutte le varianti
+  /// preselezionate. Riusa il componente ConfrontoPrompt esistente (Step 4
+  /// Fase 4) — UX side-by-side multicolonna senza nuovo componente.
+  function confrontaTutteLeVarianti() {
+    if (!promptDet || varianti.length === 0) return;
+    const ids = [promptDet.id, ...varianti.map((v) => v.id)];
+    selezioneConfronto = new Set(ids);
+    confrontoKey++;
+    mostraConfronto = true;
+  }
+
   async function aggiungiVariante() {
     if (!promptDet) return;
     creandoVariante = true;
@@ -1327,6 +1338,14 @@
                   {v.variant_label}
                 </button>
               {/each}
+              <button
+                type="button"
+                class="confronta-tutte-btn"
+                onclick={confrontaTutteLeVarianti}
+                title="Confronta principale e tutte le varianti fianco a fianco"
+              >
+                Confronta tutte
+              </button>
             </div>
           {/if}
           {#if erroreVariante}
@@ -2108,6 +2127,24 @@
     background: var(--accent-team);
     color: white;
     border-color: var(--accent-team);
+  }
+
+  .confronta-tutte-btn {
+    margin-left: var(--sp-2);
+    background: transparent;
+    border: 1px dashed var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 2px 10px;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all var(--motion-fast) var(--easing-standard);
+  }
+
+  .confronta-tutte-btn:hover {
+    border-style: solid;
+    color: var(--text-strong);
+    background: var(--bg-overlay);
   }
 
   .det-errore-variante {
