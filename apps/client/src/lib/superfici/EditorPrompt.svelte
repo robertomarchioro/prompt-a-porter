@@ -3,6 +3,11 @@
   import { EditorView } from "@codemirror/view";
   import { basicSetup } from "codemirror";
   import {
+    lintMarkers,
+    lintMarkersTheme,
+    setLintIssues,
+  } from "$lib/codemirror/lint-markers";
+  import {
     segnapostoHighlight,
     segnapostoTheme,
   } from "$lib/codemirror/placeholder-highlight";
@@ -353,6 +358,8 @@
     }, 600);
   });
 
+  let editorView = $state<EditorView | null>(null);
+
   $effect(() => {
     if (!editorEl) return;
     const view = new EditorView({
@@ -361,6 +368,8 @@
         basicSetup,
         segnapostoHighlight,
         segnapostoTheme,
+        lintMarkers,
+        lintMarkersTheme,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             body = update.state.doc.toString();
@@ -384,9 +393,22 @@
       ],
       parent: editorEl,
     });
+    editorView = view;
     return () => {
       view.destroy();
+      editorView = null;
     };
+  });
+
+  // v0.6.0 Step 3: dispatch dei marker linter ogni volta che lintIssues
+  // cambia. CodeMirror aggiorna le decoration in modo dichiarativo via
+  // StateEffect, senza ricreare il view.
+  $effect(() => {
+    const issues = lintIssues;
+    if (!editorView) return;
+    editorView.dispatch({
+      effects: setLintIssues.of(issues),
+    });
   });
 
   function pianificaAutosave() {
