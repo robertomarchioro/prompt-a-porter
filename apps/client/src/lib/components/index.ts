@@ -7,6 +7,7 @@ export { default as Input } from "./Input.svelte";
 export { default as Kbd } from "./Kbd.svelte";
 export { default as ListItem } from "./ListItem.svelte";
 export { default as NavItem } from "./NavItem.svelte";
+export { default as PannelloLinter } from "./PannelloLinter.svelte";
 export { default as PannelloProviderConfig } from "./PannelloProviderConfig.svelte";
 export { default as Placeholder } from "./Placeholder.svelte";
 export { default as ProfileCard } from "./ProfileCard.svelte";
