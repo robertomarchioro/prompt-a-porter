@@ -126,8 +126,10 @@ Vedi `docs/architettura/schema-dati.md` § V008-V010. Riassunto:
 
 ## Limiti noti / roadmap
 
-- **"Esegui tutti i golden" batch** con riassunto pass/fail —
-  quick win frontend per `v0.5.0`.
+- ✅ **"Esegui tutti i golden" batch** atterrato in `v0.5.0`:
+  bottone "Esegui tutti (N)" nel pannello Test dell'Editor.
+  Esecuzione sequenziale (no parallel per rate limit), progress
+  inline `Esecuzione X/Y…`, summary finale `✓ N passed · ✗ M failed`.
 - **CLI integration** `pap test <promptId>` per CI/CD —
   manca subcommand in `apps/cli`.
 - **MCP integration** `pap_test_prompt` come tool per agenti —
