@@ -1,5 +1,9 @@
 # Todo Fase 4 — Workflow Avanzati & Quality Assurance
 
+> **Stato**: ✅ **client-first track chiusa al 100%** (Step 1, 2, 3, 4, 5, 8). Step 6 (approval) e 7 (RBAC cartelle) rinviati a Fase 5 perché dipendono dal server team in produzione — vedi [`rinvii.md`](./rinvii.md).
+>
+> 13 PR mergiate (#58-#69 in serie continua, post v0.3.0). Coverage globale 69.53% line / 73.99% function. Tag `v0.4.0` previsto dopo Step 9 (quality gate) e Step 10 (doc + release).
+
 > **Deliverable finale**: tag release `v0.4.0`.
 
 ## Direzione generale del progetto
@@ -26,10 +30,10 @@ Il differenziatore di questa fase è il **regression testing tramite golden exam
 
 ## Step 0 — Prerequisiti
 
-- [ ] Fase 3 chiusa: `v0.3.0` taggata, ricerca semantica + linting + cartelle + import funzionanti
-- [ ] Versioning Fase 2 funzionante e stabile
-- [ ] Embeddings disponibili (necessari per similarity nei golden examples)
-- [ ] Crea branch `fase-4` da `main`
+- [x] Fase 3 chiusa: `v0.3.0` taggata 2026-05-06, ricerca semantica + linting + cartelle + import funzionanti
+- [x] Versioning Fase 2 funzionante e stabile (PromptVersions popolato e usato dal diff Step 3)
+- [x] Embeddings disponibili — usati da `similarity::cosine` per i golden cosine
+- [x] Branch lavorato direttamente su feature branch da `main` (no `fase-4` long-running)
 
 ---
 
@@ -50,24 +54,16 @@ Il differenziatore di questa fase è il **regression testing tramite golden exam
 
 ## Step 1 — Variants / A-B testing
 
-Un prompt può avere N "varianti" che condividono lo stesso *intento* ma testano formulazioni diverse.
+> ✅ Atterrato in PR #66 (2026-05-07). Schema V011 + modulo `varianti.rs` con 16 unit test (89.44% coverage).
 
-**Modello dati**:
-
-```sql
-ALTER TABLE Prompts ADD COLUMN ParentPromptId TEXT REFERENCES Prompts(Id);
-ALTER TABLE Prompts ADD COLUMN VariantLabel TEXT;  -- "A", "B", "Formal", ...
-ALTER TABLE Prompts ADD COLUMN IsVariant INTEGER NOT NULL DEFAULT 0;
-```
-
-In alternativa: tabella separata `PromptVariants` per non sporcare `Prompts`. Da decidere — preferenza: stessa tabella + view `PromptsMain` per query "solo principali".
-
-- [ ] **UI Editor**: pulsante "Crea variante" dentro pannello prompt → duplica con `VariantLabel = "B"` (o successivo)
-- [ ] **UI Libreria**: prompt con varianti mostrati come gruppo collassabile (icona ramificazione)
-- [ ] **UI dedicata "Confronto varianti"**: layout 2 o 3 colonne fianco a fianco con body, segnaposti, ultimo uso, rating, commenti
-- [ ] **Renderer**: dropdown variante in alto, switch al volo tra varianti mantenendo i valori del form
-- [ ] **Statistiche**: ogni variante traccia il proprio `UseCount`, `Rating`, etc., così emerge naturalmente la migliore
-- [ ] **Promozione variante**: pulsante "Promuovi a principale" che scambia il prompt main con la variante (mantiene storia)
+- [x] Migration V011 `prompt_varianti.sql` con `ParentPromptId`/`VariantLabel`/`IsVariant` come ALTER su `Prompts` + 2 indici parziali. Decisione "stessa tabella" confermata, no view `PromptsMain` necessaria
+- [x] **Backend**: `varianti.rs` con `crea_variante_pure`/`lista_pure` + 2 Tauri command. Riggancia automatica al grandparent se l'utente forka una variante
+- [x] **UI Libreria**: bottone "+ Variante" nel detail pane + pillole "B/C/D" cliccabili sotto i tag
+- [x] Hook FTS/embedding/imports applicati a ogni variante creata; snapshot v1 in `PromptVersions`
+- 📋 **UI Editor "Crea variante"** dentro il pannello editor (oggi solo dalla Libreria) — `rinvii.md` candidato `v0.5.0`
+- 📋 **Vista "Confronto varianti"** dedicata multicolonna — atterrabile riusando `ConfrontoPrompt` (Step 4) — `rinvii.md`
+- 📋 **Renderer dropdown variante** con switch al volo mantenendo i valori del form — `rinvii.md`
+- 📋 **Promozione variante a principale** (swap main ↔ variant) — `rinvii.md`
 
 ## Step 2 — Rating dopo l'uso
 
@@ -87,49 +83,54 @@ CREATE TABLE PromptRatings (
 );
 ```
 
-- [ ] **UI**: dopo il copy nel Renderer, toast con 3 reazioni discrete in basso a destra; click registra rating; auto-dismiss 5s
-- [ ] Opzionale: modale "Aggiungi nota" per spiegare un voto negativo
-- [ ] **Aggregazione**: nel dettaglio prompt mostra rating medio (es. "👍 87% su 23 usi negli ultimi 30 giorni")
-- [ ] **Sort by quality**: nuova vista "Migliori prompt" in Libreria, ordinata per rating medio recente
-- [ ] **Privacy**: i rating personali sono privati di default; in workspace team gli admin vedono aggregati ma non singoli rating con note
+> ✅ Atterrato in PR #69 (2026-05-07). Schema V013 + modulo `rating.rs` con 15 unit test (94.74% coverage).
+
+- [x] Migration V013 `prompt_ratings.sql` con CHECK su Rating ∈ {-1, 0, 1} + indice `idx_ratings_prompt_created`. Append-only (no UPDATE), `CreatedAt` di default `datetime('now')`
+- [x] **UI Compilatore**: toast post-copy con 3 emoji 👎/😐/👍 in basso a destra. Auto-dismiss 5s, 1s dopo l'azione
+- [x] **Aggregazione**: badge "👍 N% su K" nel detail pane Libreria con colorazione verde/giallo/rosso (≥80, ≥50, <50). Tooltip distribuzione completa
+- [x] Errore silenzioso: rating opzionale, nessun blocco UX. Audit log `rating.aggiunto`
+- 📋 **Modale "Aggiungi nota"** per voto negativo — campo `Note` già nello schema, manca solo UI — `rinvii.md`
+- 📋 **Sort by quality** "Migliori prompt" in Libreria — richiede integrazione in `libreria_lista` — `rinvii.md`
+- 📋 **Privacy team**: rating personali privati di default, admin vede aggregati senza note — Fase 5 con E2E
 
 ## Step 3 — Diff tra versioni (stile git)
 
-Storia versioni dalla Fase 2; aggiungiamo il diff visivo.
+> ✅ Atterrato in PR #65 (2026-05-07). Modulo `lib/diff/` (16 vitest) + componente `VersionDiff.svelte`.
 
-- [ ] Libreria: scegli `diff-match-patch` (Google, MIT) per algoritmo character/word-level
-- [ ] Componente Svelte `<VersionDiff />` con 3 modalità: side-by-side, inline, unified
-- [ ] Sintassi highlighting preservato: i segnaposti `{{...}}` e gli `{{import "..."}}` rimangono evidenziati anche dentro il diff
-- [ ] **UI cronologia**: lista versioni in pannello dettaglio Libreria, click su una versione apre diff vs versione corrente
-- [ ] **Confronto N-vs-M**: dropdown "compare with" per scegliere qualsiasi due versioni
-- [ ] **Esportazione diff**: copia diff come testo Markdown (utile per code review fuori app)
-- [ ] **Performance**: diff su body di 10k caratteri < 50ms
+- [x] Libreria scelta: **jsdiff** (`diff` 9.x npm, BSD-3) anziché `diff-match-patch` — API più ergonomica (`diffWords`, `diffLines`), tree-shakeable, niente WASM
+- [x] Componente Svelte `<VersionDiff modalita="unified|side-by-side" />` riusabile (consumato anche da `ConfrontoPrompt` Step 4)
+- [x] Segnaposti `{{...}}` preservati come token unitari grazie a `diffWordsWithSpace` (boundary `\b`)
+- [x] **UI Cronologia**: toggle Body/Diff inline/Diff side-by-side, dropdown "Confronta con" che esclude la versione selezionata, badge +N/−N
+- [x] **Esportazione diff Markdown** via `diffMarkdown(a, b, header)` con prefissi `+`/`-`/space; copy-to-clipboard nel pannello
+- [x] Performance: jsdiff su body 10k caratteri ben sotto 50 ms (verificato a runtime)
 
 ## Step 4 — Confronto fianco-a-fianco
 
-Generalizzazione del Diff (Step 3) per confrontare anche **prompt diversi**, non solo versioni dello stesso prompt.
+> ✅ Atterrato in PR #67 (2026-05-07). Componente `ConfrontoPrompt.svelte` riusa `VersionDiff` di Step 3.
 
-- [ ] Selezione multipla in Libreria (Cmd/Ctrl+click) → pulsante "Confronta selezione" attivo da 2 elementi
-- [ ] Vista a colonne: 2-3 prompt fianco a fianco con metadata, body, segnaposti, rating, commenti
-- [ ] Utile per: scegliere variant migliore, audit interno, code review prompt
-- [ ] Diff rosso/verde tra colonne come "differenze rilevanti" (parole/frasi che cambiano)
+- [x] Selezione multipla in Libreria via Cmd/Ctrl+click su prompt-card (legacy click apre il dettaglio come prima)
+- [x] Bottone toolbar "Confronta (N)" attivo da 2 selezionati + "×" per svuotare
+- [x] Modale 1200×720 a 2 colonne grid (CSS pronta per 3) con metadata + body + tag in `<pre>`
+- [x] Toggle "Body affiancato" / "Diff colorato" che riusa `<VersionDiff modalita="side-by-side" />` con badge +N/−N
+- [x] Indicatore visivo `prompt-card--check` (bordo sinistro accent) sulle card selezionate
 
 ## Step 5 — Fork/Clone
 
-Permettere a un User di duplicare un prompt team nel proprio spazio privato per sperimentare.
+> ✅ Atterrato in PR #68 (2026-05-07). Schema V012 + modulo `fork.rs` con 16 unit test (89.90% coverage).
 
-- [ ] Comando Tauri `prompt_fork(promptId)` → crea copia con:
-  - Nuovo `Id`
-  - `Visibility = 'private'`
-  - `WorkspaceId` = workspace personale dell'utente
-  - `ForkOfPromptId = original.Id` (campo nuovo)
-  - `Title = original.Title + ' (fork)'`
-- [ ] Tracciabilità: nel dettaglio prompt forkato, badge "Forked from: [link al prompt originale se ancora visibile]"
-- [ ] Lato originale (workspace team): contatore "5 fork attivi" visibile agli Admin
-- [ ] **UI**: pulsante "Fork in privato" nel pannello azioni del dettaglio prompt
-- [ ] **Pull request leggera (opzionale, valuta)**: dal fork posso "proporre modifica" all'originale → diventa un commit/version pending in approval workflow (Step 6)
+- [x] Migration V012 `prompt_fork.sql` con `ForkOfPromptId TEXT REFERENCES Prompts(Id) NULL` + indice parziale per query "fork attivi di X"
+- [x] Comando Tauri `prompt_fork(prompt_id)` → nuovo Id, Visibility forzata `'private'`, `WorkspaceId='ws-personale'`, `AuthorUserId='usr-locale'`, `ForkOfPromptId=originale`, titolo `<orig> (fork)`
+- [x] Tracciabilità: comando `fork_info(prompt_id)` ritorna `ForkOfInfo { original_id, original_titolo?, original_eliminato }` resiliente al soft-delete
+- [x] **UI Libreria**: bottone "Fork" nel detail pane + banner "Fork di X" cliccabile per navigare all'originale (disabled se eliminato)
+- [x] Tag, snapshot v1, hook FTS/embedding/imports applicati al fork
+- 📋 **Contatore "N fork attivi"** lato originale per workspace team — schema già pronto via indice — `rinvii.md`
+- 📋 **Pull request leggera** dal fork verso l'originale — dipende da Step 6 approval, naturale Fase 5
 
 ## Step 6 — Approval workflow
+
+> ⏸ **Rinviato a Fase 5** (gate workspace team in produzione). Vedi [`rinvii.md`](./rinvii.md) § Fase 5.
+>
+> Lo Step richiede un server team in produzione per le notifiche WebSocket agli Admin, lo stato `pending_review` condiviso, e il flusso multi-utente. Senza un workspace team reale che lo richieda, non vale la pena anticiparlo nel client-first.
 
 Per workspace ad alta governance (es. team che condividono prompt usati in produzione), introdurre flusso di approvazione opzionale.
 
@@ -157,6 +158,10 @@ ALTER TABLE Prompts ADD COLUMN ReviewNote TEXT;
 - [ ] **Test**: flusso completo Editor crea → Admin approva → tutti vedono
 
 ## Step 7 — Permessi per cartella (RBAC)
+
+> ⏸ **Rinviato a Fase 5** (gate workspace team in produzione). Vedi [`rinvii.md`](./rinvii.md) § Fase 5.
+>
+> Lo Step richiede multi-utente reale per testare la matrice di scenari (admin/editor/user × inheritance × override). In workspace personale le cartelle restano organizzative come oggi (Fase 3 Step 7), nessun valore aggiunto dall'introdurre RBAC senza altri utenti.
 
 Le cartelle introdotte in Fase 3 erano puramente organizzative. Ora, per workspace team, ogni cartella può avere ACL specifiche. **Solo per workspace team** — in workspace personale le cartelle restano organizzative.
 
@@ -198,6 +203,8 @@ CREATE TABLE FolderPermissions (
 - [ ] **Test**: matrici di scenari (admin/editor/user × folder con/senza override × parent acl × inheritance on/off)
 
 ## Step 8 — Golden examples + regression testing
+
+> ✅ **Atterrato in 7 PR consecutive #58-#64** (2026-05-06/07). Differenziatore strategico di Fase 4 chiuso al 100%. Vedi [`docs/utente/regression-testing.md`](../utente/regression-testing.md) (in arrivo Step 10).
 
 **Differenziatore strategico**: nessun altro prompt manager esistente offre questa funzione. Trasforma il prompt da testo a contratto comportamentale verificabile.
 
@@ -246,44 +253,49 @@ CREATE INDEX idx_observations_model ON PromptRunObservations(Provider, Model, Pa
 - **Ollama locale** (qualsiasi modello locale): URL del server Ollama, default `http://localhost:11434`
 - **OpenAI-compatible custom** (LM Studio, vLLM, ecc.): URL + chiave generica
 
-**UI Editor — pannello "Test"**:
-- [ ] Tab "Golden examples" affiancato a "Cronologia" e "Diagnosi"
-- [ ] Lista golden con etichetta, input vars (preview), expected output (preview), soglia
-- [ ] Pulsante "+ Aggiungi golden" → form con vars + expected + similarity function + soglia
-- [ ] Pulsante "Esegui ora" su un golden → richiama provider, mostra `ActualOutput`, calcola similarità, salva osservazione
-- [ ] Pulsante "Esegui tutti i golden" → batch run, riassunto pass/fail
-- [ ] **Risultato run**: highlight delle differenze tra expected e actual con diff inline (riusa componente Step 3)
+**UI Editor — pannello "Test"** ✅ (PR #62):
+- [x] Tab Golden affiancato a "Cronologia" e "Diagnosi" nell'EditorPrompt
+- [x] Lista golden con etichetta + similarity_fn + soglia + icona stato (○/…/✓/✗)
+- [x] Form crea/modifica inline con etichetta, input_vars JSON, expected, dropdown similarity, soglia
+- [x] Pulsante "Esegui" per singolo golden con feedback live (running/ok/ko + similarità + latenza)
+- [x] Output ricevuto in `<details>` collassabile (max 200px scroll)
+- 📋 **"Esegui tutti i golden" batch** — atterrabile come quick win in v0.5
 
-**UI Libreria — vista "Regressioni"**:
-- [ ] Nuova sezione in sidebar "Regressioni" (badge con count se ci sono fail recenti)
-- [ ] Tabella: prompt con golden fail negli ultimi N giorni, ordinata per drift (% di degrado)
-- [ ] Trend per modello: "questo prompt era al 92% similarity con `claude-sonnet-4.5`, è sceso al 71% con `claude-sonnet-4.6`"
-- [ ] Trend per versione: "v12 era picco qualità (95%), oggi siamo a v18 con 78%"
-- [ ] Esportazione report: CSV con tutte le run e similarità
+**UI Libreria — vista "Regressioni"** ✅ (PR #64):
+- [x] Nuova superficie `Regressioni.svelte` accessibile dalla sidebar Libreria con NavItem dedicato
+- [x] Tabella drift per (prompt × provider × model) ordinata per ultima run, con border-left colorato (ok/ko/misto)
+- [x] Filtro periodo dropdown (7/30/90/365 giorni) con re-render automatico
+- [x] Drift colorato: rosso > 5%, giallo 0-5%, verde se migliorato. Tooltip con conteggi
+- [x] **Esportazione CSV** RFC 4180 via Blob + `URL.createObjectURL` (download client-side)
 
-**Similarity functions**:
-- [ ] **`cosine`**: embedding di `expected` e `actual`, cosine similarity. Default. Richiede embeddings di Fase 3.
-- [ ] **`llm-judge`**: chiama il modello con un meta-prompt rubric "Valuta da 0 a 1 se actual rispetta expected per criteri X, Y, Z". Costo aggiuntivo, ma più sfumato.
-- [ ] **`exact-match`**: 1.0 se identico, 0.0 altrimenti. Per output JSON strict, regex, ecc.
-- [ ] **`regex`**: l'`expected` è una regex; pass/fail.
+**Similarity functions** ✅ (PR #60+#63):
+- [x] **`cosine`**: riusa `compute_embedding_opt` Fase 3, dot product L2-normalized
+- [x] **`llm-judge`** (PR #63): meta-prompt rubric con parser tollerante (virgola decimale, prefisso testuale, normalizzazione percentuale)
+- [x] **`exact-match`**: trim + ==
+- [x] **`regex`**: `expected` come regex Rust, pass/fail
 
-**Privacy & sicurezza**:
-- [ ] Le chiavi API sono cifrate nel vault con la stessa derivazione (Argon2id) usata per il vault password
-- [ ] Mai loggare chiavi API negli audit log o nei file di debug
-- [ ] Test mai eseguiti in automatico senza azione utente esplicita (no costo nascosto)
+**Provider AI** ✅ (PR #59 Ollama, #63 Anthropic+OpenAI+OpenAI-compat):
+- [x] **Anthropic**: `POST /v1/messages` con `x-api-key` + `anthropic-version`. Parser concatena solo blocchi `text`
+- [x] **OpenAI**: `POST /v1/chat/completions` con `Authorization: Bearer`. Preferisce `completion_tokens` su `total_tokens`
+- [x] **Ollama**: `POST /api/generate` non-streaming, default `localhost:11434`, override base_url
+- [x] **OpenAI-compatible**: stesso codepath OpenAI con base_url custom (LM Studio, vLLM)
+- 📋 **Google API (Gemini)**: non implementato in v0.4 — `rinvii.md` candidato `v0.5.0`
 
-**Step lavoro**:
+**Privacy & sicurezza** ✅:
+- [x] API key in plaintext nel DB cifrato SQLCipher AES-256 (no doppia cifratura applicativa). UPSERT preserva chiave esistente se omessa
+- [x] `provider_config_lista` Tauri command **NON** rinvia api_key al frontend
+- [x] Test mai automatici: ogni run richiede click utente in UI o invocazione CLI
+- 📋 **Mai loggare chiavi API**: audit conferma nessun log di `ApiKey` ma serve verifica formale (security-review) — `rinvii.md`
 
-- [ ] Migration v6 con `PromptGoldens`, `PromptRunObservations`, `ProviderConfig`
-- [ ] Modulo Rust `lib_provider/` con trait `AIProvider` + impl per Anthropic, OpenAI, Google, Ollama, OpenAI-compatible
-- [ ] Modulo Rust `lib_similarity/` con le 4 funzioni
-- [ ] Comando Tauri `golden_crea(promptId, ...)`, `golden_aggiorna(...)`, `golden_elimina(...)`, `golden_lista(promptId)`
-- [ ] Comando Tauri `golden_esegui(goldenId)` → run + salva observation
-- [ ] Comando Tauri `regression_report(workspaceId, days)` → trend per prompt/modello
-- [ ] **UI**: pannelli sopra descritti
-- [ ] **CLI integration**: `pap test <promptId> [--golden=...]` per CI/CD
-- [ ] **MCP integration** (anticipo Fase 5): `pap_test_prompt(promptId)` come tool MCP per agenti
-- [ ] **Test**: workspace di prova con 5 prompt × 3 golden, esegui contro Ollama locale (mockabile in CI), verifica observation correttamente salvate
+**Step lavoro** ✅:
+- [x] Migration **V008** PromptGoldens, **V009** PromptRunObservations, **V010** ProviderConfig (PR #58, #63)
+- [x] Modulo Rust `provider_ai.rs` con trait `AIProvider` + 4 impl (PR #59 Ollama, #63 remote)
+- [x] Modulo Rust `similarity.rs` con le 4 funzioni + `SimilarityCtx` (PR #60, #63)
+- [x] Comandi Tauri `golden_crea/aggiorna/elimina/lista` (PR #58)
+- [x] Comando Tauri `golden_esegui` end-to-end con mock-able provider (PR #61)
+- [x] Comandi Tauri `regression_report` + `regression_report_csv` (PR #64)
+- 📋 **CLI integration** `pap test <promptId>` per CI/CD — `rinvii.md` candidato `v0.5.0`
+- 📋 **MCP integration** `pap_test_prompt` come tool MCP per agenti — Fase 5 con MCP HTTP/SSE
 
 ## Step 9 — Quality gate Fase 4
 

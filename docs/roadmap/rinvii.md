@@ -2,7 +2,7 @@
 
 > Censimento unificato di **tutto ciò che è stato deliberatamente rinviato** durante lo sviluppo. Questo documento è la singola fonte di verità: nuovi rinvii vengono aggiunti qui ad ogni PR che li introduce, e gli item vengono rimossi/spuntati quando atterrano.
 >
-> **Stato**: aggiornato al 2026-05-06 dopo `v0.3.0` (Fase 3 chiusa).
+> **Stato**: aggiornato al 2026-05-07 dopo Fase 4 client-first chiusa (6/8 step). Tag `v0.4.0` in arrivo dopo Step 9-10.
 >
 > **Convenzioni**:
 > - 🔒 = bloccato da fattore esterno (cert, KYC, hardware, decisione di prodotto) → resta nel patch line di destinazione (es. `v0.2.x`)
@@ -120,6 +120,28 @@ Pezzi di feature parzialmente atterrate, con il resto programmato per `v0.5.0` (
 - 📋 **Riload automatico Session post idle-unload**. Oggi: dopo idle-unload la ricerca degrada a FTS-only fino al riavvio del client. Implementabile rendendo l'auto-init idempotente e chiamandolo on-demand al primo `compute_embedding_opt → None` post-drop
 - 📋 **Coverage line client Rust 60% → 70%** — gate CI già attivo, roadmap per file in `docs/operativo/coverage.md` (priorità: `embeddings.rs`, `vault.rs`, `audit.rs`, `import_export.rs`)
 
+### Da Fase 4 Step 1 — Varianti
+- 📋 **UI Editor "Crea variante"** (oggi solo dalla Libreria) — atterrabile come quick win in `v0.5.0`
+- 📋 **Vista "Confronto varianti" dedicata** multicolonna — riusabile da `ConfrontoPrompt` (Step 4 atterrato)
+- 📋 **Renderer dropdown variante** con switch al volo mantenendo i valori del form
+- 📋 **Promuovi variante a principale** (swap main ↔ variant con preservazione storia)
+
+### Da Fase 4 Step 2 — Rating
+- 📋 **Modale "Aggiungi nota" su voto negativo** — campo `Note` già nello schema V013, manca solo UI prompt modale
+- 📋 **Sort by quality** "Migliori prompt" in Libreria — nuova vista che ordina per rating medio recente
+- 📋 **Privacy team su rating personali** — admin vede aggregati ma non singole note. Naturale Fase 5 con E2E
+
+### Da Fase 4 Step 5 — Fork
+- 📋 **Contatore "N fork attivi"** lato originale per workspace team — schema già pronto via `idx_prompts_fork_of`
+- 📋 **Pull request leggera** dal fork verso l'originale — dipende da Step 6 approval, naturale Fase 5
+
+### Da Fase 4 Step 8 — Golden + regression
+- 📋 **"Esegui tutti i golden" batch** con riassunto pass/fail — quick win frontend in `v0.5.0`
+- 📋 **Provider Google API (Gemini)** — non implementato in v0.4 (4 provider su 5 pianificati: Anthropic, OpenAI, OpenAI-compat, Ollama)
+- 📋 **CLI integration** `pap test <promptId> [--golden=...]` per CI/CD — `apps/cli` esistente, manca subcommand
+- 📋 **MCP integration** `pap_test_prompt(promptId)` come tool MCP per agenti — Fase 5 con MCP HTTP/SSE
+- 📋 **Audit security** chiavi API: nessun log evidente, ma serve verifica formale (security-review agent)
+
 ---
 
 ## 7. Fase 5 — enterprise, domanda-driven
@@ -128,9 +150,11 @@ Pezzi di feature parzialmente atterrate, con il resto programmato per `v0.5.0` (
 |---|---|
 | **Step 0a — Server Go cross-OS senza Docker** (pure-Go SQLite, single binary, Windows Service nativo + systemd unit, .deb/.rpm/NSIS server) | spostato da Fase 2 Step 6 |
 | Sync server in produzione | gate per Fase 5 + tutti i feature server-side multi-user |
-| `/sync/folders` endpoint | da Step 7 cartelle |
-| `?target=` filter su endpoint search | da Step 6 |
-| Distribuzione statistiche per autore | da Step 9 |
+| `/sync/folders` endpoint | da Step 7 cartelle (Fase 3) |
+| `?target=` filter su endpoint search | da Step 6 modello target (Fase 3) |
+| Distribuzione statistiche per autore | da Step 9 (Fase 3) |
+| **Step 6 Fase 4 — Approval workflow** (status `pending_review`, ReviewedByUserId, notifiche WS) | spostato da Fase 4 Step 6 — richiede multi-utente reale |
+| **Step 7 Fase 4 — RBAC cartelle** (FolderPermissions con additive permissions, inheritance) | spostato da Fase 4 Step 7 — richiede multi-utente reale |
 
 Tutti questi atterrano se e solo se c'è un workspace team in produzione che li richiede (Fase 5 è esplicitamente "domanda-driven").
 
@@ -179,6 +203,18 @@ Tutti questi atterrano se e solo se c'è un workspace team in produzione che li 
 | ✅ Tag `v0.3.0` con build cross-OS (8 asset) | 2026-05-06 | Linux deb/rpm/AppImage, macOS arm64, Windows NSIS/MSI/portable |
 | ✅ Bumpare versione `Cargo.toml`/`tauri.conf.json` 0.1.0 → 0.3.0 | PR #55 / v0.3.0 | Allineamento al tag, debt tecnico chiuso |
 | ✅ CI Rust client coverage report numerico | PR #53 / v0.3.0 | cargo-llvm-cov nel workflow rust-test, gate 60% line, doc in `docs/operativo/coverage.md` |
+| ✅ Step 8a Fase 4 — Schema golden + run observations + CRUD | PR #58 (post v0.3.0) | V008/V009 + modulo `regression.rs`, 22 test |
+| ✅ Step 8b Fase 4 — Provider abstraction + Ollama | PR #59 | trait `AIProvider` + `OllamaProvider`, 10 test |
+| ✅ Step 8c Fase 4 — Similarity functions base | PR #60 | cosine + exact-match + regex, 25 test |
+| ✅ Step 8d Fase 4 — `golden_esegui` end-to-end | PR #61 | dispatch mock-able provider, 10 test |
+| ✅ Step 8e Fase 4 — UI Editor pannello Test | PR #62 | tab Golden CRUD + Esegui in EditorPrompt |
+| ✅ Step 8f Fase 4 — Provider Anthropic + OpenAI + llm-judge | PR #63 | V010 ProviderConfig + 47 test |
+| ✅ Step 8g Fase 4 — UI Libreria vista Regressioni | PR #64 | tabella drift + export CSV RFC 4180, 10 test |
+| ✅ Step 3 Fase 4 — Diff tra versioni in CronologiaPrompt | PR #65 | jsdiff + `VersionDiff.svelte`, 16 vitest |
+| ✅ Step 1 Fase 4 — Varianti A/B testing | PR #66 | V011 + modulo `varianti.rs`, 16 test |
+| ✅ Step 4 Fase 4 — Confronto fianco-a-fianco di prompt diversi | PR #67 | `ConfrontoPrompt.svelte` riusa VersionDiff |
+| ✅ Step 5 Fase 4 — Fork / Clone con tracciabilità | PR #68 | V012 + modulo `fork.rs`, 16 test |
+| ✅ Step 2 Fase 4 — Rating discreto post-uso | PR #69 | V013 + modulo `rating.rs`, 15 test (toast 👎/😐/👍 + badge %) |
 
 ---
 

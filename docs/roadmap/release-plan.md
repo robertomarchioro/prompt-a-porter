@@ -2,7 +2,7 @@
 
 > **Fonte autorevole** della pianificazione di rilascio. Una sola tabella per tutta la vita del progetto, dalla v0.1 alla v1.0+. Aggiornato a ogni tag o decisione di rinvio.
 >
-> **Aggiornato al**: 2026-05-06 (post-tag `v0.3.0`).
+> **Aggiornato al**: 2026-05-07 (Fase 4 client-first track chiusa, tag `v0.4.0` in arrivo dopo Step 9-10).
 
 ## Concetti
 
@@ -27,7 +27,7 @@ Una fase può ospitare 0..N rilasci; un rilascio può attraversare 0..N fasi.
 | `v0.2.1-fix1` | 2026-05-05 | patch fix | Bug 1 vault loop portable + bug 2 parziale tray icon | ✅ prerelease | (fix branch) |
 | `v0.2.x` | TBD | patch line | **Step 5 — Auto-update silenzioso** (NSIS per-user, Tauri Updater, Authenticode signing) | 🔒 bloccato cert Certum (KYC in corso) | [`fase-2-foundations.md`](./fase-2-foundations.md) Step 5 deferred |
 | `v0.3.0` | 2026-05-06 | fase | Intelligenza & Authoring — embeddings ONNX locali, ricerca ibrida FTS+vettoriale, linting, cartelle, prompt componibili `{{import}}`, statistiche, idle-unload | ✅ rilasciato (11/11 step) | [`fase-3-intelligence.md`](./fase-3-intelligence.md) |
-| `v0.4.0` | TBD | fase | Workflow Avanzati & Quality Assurance — varianti, approval workflow, ACL cartelle, regression testing | 📋 pianificata | [`fase-4-workflow.md`](./fase-4-workflow.md) |
+| `v0.4.0` | TBD | fase (parziale) | Workflow Avanzati & Quality Assurance — golden+regression (differenziatore), varianti, diff, confronto, fork, rating. Step 6 (approval) e 7 (RBAC cartelle) → Fase 5 | 🚧 client-first chiusa (6/8 step), pending Step 9 quality gate + Step 10 doc | [`fase-4-workflow.md`](./fase-4-workflow.md) |
 | **`v0.5.0`** | TBD | **rilascio speciale** | **Recupero ritardi** — paga il debito accumulato in v0.1-v0.4 (item da `rinvii.md`). Stabilizzazione pre-1.0 | 📋 pianificata | sezione [Rilascio v0.5.0](#rilascio-v050--recupero-ritardi) |
 | **`v0.6.0`** | TBD | **rilascio speciale** | **Pulizia interfaccia grafica** — pass cosmetico cross-cutting su tutte le superfici, niente nuove capability | 📋 pianificata | sezione [Rilascio v0.6.0](#rilascio-v060--pulizia-interfaccia-grafica) |
 | `v1.0.0` | TBD | fase | Ecosistema Enterprise — SSO, E2E encryption, server cross-OS senza Docker, web app, browser extension. Uscita beta | 📋 pianificata, domanda-driven | [`fase-5-enterprise.md`](./fase-5-enterprise.md) |
