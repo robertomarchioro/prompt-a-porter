@@ -8,6 +8,7 @@ pub mod embeddings;
 pub mod embeddings_backfill;
 pub mod embeddings_store;
 pub mod errore;
+pub mod fork;
 pub mod import_export;
 pub mod libreria;
 pub mod linting;
@@ -354,6 +355,8 @@ pub fn run() {
             provider_ai::provider_config_elimina,
             varianti::prompt_crea_variante,
             varianti::varianti_lista,
+            fork::prompt_fork,
+            fork::fork_info,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())

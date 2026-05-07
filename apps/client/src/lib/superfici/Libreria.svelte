@@ -114,6 +114,48 @@
   let creandoVariante = $state(false);
   let erroreVariante = $state("");
 
+  // ─── Fork / Clone (Fase 4 Step 5) ───
+  interface ForkOfInfo {
+    original_id: string;
+    original_titolo: string | null;
+    original_eliminato: boolean;
+  }
+  let forkOf = $state<ForkOfInfo | null>(null);
+  let forkando = $state(false);
+  let erroreFork = $state("");
+
+  async function caricaForkInfo() {
+    if (!promptDet) {
+      forkOf = null;
+      return;
+    }
+    try {
+      forkOf = await invoke<ForkOfInfo | null>("fork_info", {
+        promptId: promptDet.id,
+      });
+    } catch {
+      forkOf = null;
+    }
+  }
+
+  async function eseguiFork() {
+    if (!promptDet) return;
+    forkando = true;
+    erroreFork = "";
+    try {
+      const nuovoId = await invoke<string>("prompt_fork", {
+        promptId: promptDet.id,
+      });
+      await caricaDati();
+      idSelezionato = nuovoId;
+      await caricaDettaglio(nuovoId);
+    } catch (e) {
+      erroreFork = String(e);
+    } finally {
+      forkando = false;
+    }
+  }
+
   // ─── Confronto fianco-a-fianco (Fase 4 Step 4) ───
   let selezioneConfronto = $state<Set<string>>(new Set());
   let mostraConfronto = $state(false);
@@ -488,6 +530,7 @@
       if (idSelezionato === id) {
         promptDet = det;
         await caricaVarianti();
+        await caricaForkInfo();
       }
     } catch {
       /* prompt non trovato */
@@ -1153,6 +1196,14 @@
                 disabled={creandoVariante}>+ Variante</Button
               >
               <Button
+                variante="ghost"
+                dimensione="sm"
+                onclick={eseguiFork}
+                disabled={forkando}
+                title="Crea una copia privata di questo prompt per sperimentare"
+                >Fork</Button
+              >
+              <Button
                 variante="primary"
                 dimensione="sm"
                 onclick={() => {
@@ -1188,6 +1239,37 @@
                 <Tag colore={tag.colore}>{tag.nome}</Tag>
               {/each}
             </div>
+          {/if}
+          {#if forkOf}
+            <div class="det-fork-banner">
+              {#if forkOf.original_titolo}
+                <button
+                  type="button"
+                  class="fork-link"
+                  onclick={() => {
+                    if (!forkOf?.original_eliminato) {
+                      idSelezionato = forkOf!.original_id;
+                      caricaDettaglio(forkOf!.original_id);
+                    }
+                  }}
+                  disabled={forkOf.original_eliminato}
+                  title={forkOf.original_eliminato
+                    ? "Originale eliminato"
+                    : "Apri il prompt originale"}
+                >
+                  Fork di "{forkOf.original_titolo}"{forkOf.original_eliminato
+                    ? " (eliminato)"
+                    : ""}
+                </button>
+              {:else}
+                <span class="fork-link fork-link--orphan"
+                  >Fork di un prompt non più disponibile</span
+                >
+              {/if}
+            </div>
+          {/if}
+          {#if erroreFork}
+            <p class="det-errore-variante">{erroreFork}</p>
           {/if}
           {#if varianti.length > 0}
             <div class="det-varianti" aria-label="Varianti del prompt">
@@ -1986,6 +2068,41 @@
     margin: var(--sp-1) 0 0;
     font-size: var(--fs-xs);
     color: var(--danger);
+  }
+
+  .det-fork-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+
+  .fork-link {
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 2px 8px;
+    font-family: inherit;
+    font-size: var(--fs-xs);
+    color: var(--text-default);
+    cursor: pointer;
+  }
+
+  .fork-link:not(:disabled):hover {
+    background: var(--accent-team-soft);
+    border-color: var(--accent-team);
+  }
+
+  .fork-link:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    text-decoration: line-through;
+  }
+
+  .fork-link--orphan {
+    cursor: default;
+    opacity: 0.6;
   }
 
   .det-body {
