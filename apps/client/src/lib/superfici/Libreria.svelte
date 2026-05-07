@@ -14,6 +14,7 @@
   import EditorPrompt from "./EditorPrompt.svelte";
   import Impostazioni from "./Impostazioni.svelte";
   import Insight from "./Insight.svelte";
+  import Regressioni from "./Regressioni.svelte";
   import AuthLogin from "./AuthLogin.svelte";
   import AuthResetPassword from "./AuthResetPassword.svelte";
   import AuthRecuperaWorkspace from "./AuthRecuperaWorkspace.svelte";
@@ -98,6 +99,7 @@
   let cronologiaKey = $state(0);
   let mostraImpostazioni = $state(false);
   let mostraInsight = $state(false);
+  let mostraRegressioni = $state(false);
   let mostraLogin = $state(false);
   let mostraResetPassword = $state(false);
   let mostraRecuperaWorkspace = $state(false);
@@ -814,6 +816,22 @@
           {/snippet}
           Insight
         </NavItem>
+        <NavItem onclick={() => (mostraRegressioni = true)}>
+          {#snippet icona()}
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              ><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg
+            >
+          {/snippet}
+          Regressioni
+        </NavItem>
         <NavItem onclick={() => (mostraImpostazioni = true)}>
           {#snippet icona()}
             <svg
@@ -1183,6 +1201,10 @@
 
     {#if mostraInsight}
       <Insight onchiudi={() => (mostraInsight = false)} />
+    {/if}
+
+    {#if mostraRegressioni}
+      <Regressioni onchiudi={() => (mostraRegressioni = false)} />
     {/if}
 
     {#if mostraLogin}
