@@ -82,9 +82,10 @@ nuovo voto, e l'aggregato media le entry più recenti.
   👎 o 😐 si apre una modale con textarea opzionale (max 500
   caratteri). 👍 salva subito senza friction. "Salta" memorizza il
   voto senza nota.
-- **Sort by quality** "Migliori prompt" in Libreria — richiede
-  integrazione in `libreria_lista` con left join all'aggregato.
-  `rinvii.md`.
+- ✅ **Sort by quality "Migliori prompt"** atterrato in `v0.5.0`:
+  nuova option "Migliori" nel dropdown ordine della Libreria.
+  Ordina per `AVG(Rating)` ultimi 90 giorni (DESC), prompt senza
+  rating in fondo. Tie-breaker su `UseCount` + `UpdatedAt`.
 - **Privacy team**: oggi `usr-locale` (single-user). Nel workspace
   team gli admin vedono aggregati ma non singoli rating con note
   — scope Fase 5 con E2E.

@@ -153,6 +153,19 @@ pub fn libreria_lista(
         let ordine = match filtro.ordine.as_str() {
             "popolare" => "p.UseCount DESC, p.UpdatedAt DESC",
             "alfabetico" => "p.Title COLLATE NOCASE ASC",
+            // Migliori: rating medio degli ultimi 90 giorni (decrescente).
+            // Prompt senza rating finiscono in fondo (COALESCE = -2,
+            // sotto al minimo possibile -1). Tie-breaker su UseCount +
+            // UpdatedAt per stabilità.
+            "qualita" => {
+                "COALESCE(
+                    (SELECT AVG(CAST(r.Rating AS REAL))
+                     FROM PromptRatings r
+                     WHERE r.PromptId = p.Id
+                       AND r.CreatedAt >= datetime('now', '-90 days')),
+                    -2
+                 ) DESC, p.UseCount DESC, p.UpdatedAt DESC"
+            }
             _ => "COALESCE(p.LastUsedAt, p.UpdatedAt) DESC",
         };
 
@@ -472,5 +485,110 @@ mod test {
             )
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn ordine_qualita_ordina_per_rating_medio_no_rated_in_fondo() {
+        // Step 5 v0.5.0: ordine "qualita" usa AVG(Rating) ultimi 90 giorni.
+        // Prompt senza rating finiscono in fondo (COALESCE -2).
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+
+        // 3 prompt con rating diversi.
+        // prm-top: 2 rating positivi → media 1.0
+        // prm-mid: rating misti −1, +1 → media 0.0
+        // prm-no:  nessun rating → COALESCE -2
+        for (id, titolo) in [
+            ("prm-top", "Top"),
+            ("prm-mid", "Mid"),
+            ("prm-no", "NoRating"),
+        ] {
+            conn.execute(
+                "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body,
+                 Visibility, Version, CreatedAt, UpdatedAt)
+                 VALUES (?1, 'ws-personale', 'usr-locale', ?2, 'body', 'private', 1,
+                 datetime('now'), datetime('now'))",
+                rusqlite::params![id, titolo],
+            )
+            .unwrap();
+        }
+
+        // Rating per prm-top (+1, +1).
+        for (i, voto) in [1i64, 1i64].iter().enumerate() {
+            conn.execute(
+                "INSERT INTO PromptRatings (Id, PromptId, UserId, Rating, CreatedAt)
+                 VALUES (?1, 'prm-top', 'usr-locale', ?2, datetime('now'))",
+                rusqlite::params![format!("rtg-top-{}", i), voto],
+            )
+            .unwrap();
+        }
+        // Rating per prm-mid (-1, +1).
+        for (i, voto) in [-1i64, 1i64].iter().enumerate() {
+            conn.execute(
+                "INSERT INTO PromptRatings (Id, PromptId, UserId, Rating, CreatedAt)
+                 VALUES (?1, 'prm-mid', 'usr-locale', ?2, datetime('now'))",
+                rusqlite::params![format!("rtg-mid-{}", i), voto],
+            )
+            .unwrap();
+        }
+
+        // Esegue la stessa query SQL del ramo "qualita" per verificare l'ordine.
+        let mut stmt = conn
+            .prepare(
+                "SELECT p.Id FROM Prompts p
+                 WHERE p.DeletedAt IS NULL
+                 GROUP BY p.Id
+                 ORDER BY COALESCE(
+                     (SELECT AVG(CAST(r.Rating AS REAL))
+                      FROM PromptRatings r
+                      WHERE r.PromptId = p.Id
+                        AND r.CreatedAt >= datetime('now', '-90 days')),
+                     -2
+                 ) DESC, p.UseCount DESC, p.UpdatedAt DESC",
+            )
+            .unwrap();
+        let ids: Vec<String> = stmt
+            .query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        assert_eq!(ids, vec!["prm-top", "prm-mid", "prm-no"]);
+    }
+
+    #[test]
+    fn ordine_qualita_esclude_rating_oltre_90_giorni() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body,
+             Visibility, Version, CreatedAt, UpdatedAt)
+             VALUES ('prm-vecchio', 'ws-personale', 'usr-locale', 'Vecchio', 'b',
+             'private', 1, datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        // Rating fuori dalla finestra (180 giorni fa) — deve essere ignorato.
+        conn.execute(
+            "INSERT INTO PromptRatings (Id, PromptId, UserId, Rating, CreatedAt)
+             VALUES ('rtg-old', 'prm-vecchio', 'usr-locale', 1, datetime('now', '-180 days'))",
+            [],
+        )
+        .unwrap();
+
+        let media: Option<f64> = conn
+            .query_row(
+                "SELECT AVG(CAST(r.Rating AS REAL))
+                 FROM PromptRatings r
+                 WHERE r.PromptId = 'prm-vecchio'
+                   AND r.CreatedAt >= datetime('now', '-90 days')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        // Nessun rating dentro la finestra → AVG ritorna NULL.
+        assert!(media.is_none());
     }
 }

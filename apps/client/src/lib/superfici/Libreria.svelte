@@ -1064,6 +1064,7 @@
           >
             <option value="recente">Recenti</option>
             <option value="popolare">Popolari</option>
+            <option value="qualita">Migliori</option>
             <option value="alfabetico">A-Z</option>
           </select>
         </div>
