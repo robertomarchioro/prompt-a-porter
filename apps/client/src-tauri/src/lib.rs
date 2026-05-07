@@ -15,6 +15,7 @@ pub mod migrazione;
 pub mod preferenze;
 pub mod prompt;
 pub mod prompt_componibili;
+pub mod provider_ai;
 pub mod regression;
 pub mod ricerca_ibrida;
 pub mod statistiche;
@@ -342,6 +343,7 @@ pub fn run() {
             regression::golden_aggiorna,
             regression::golden_elimina,
             regression::golden_lista,
+            provider_ai::provider_ollama_genera,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())
