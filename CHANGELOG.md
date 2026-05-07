@@ -1,5 +1,43 @@
 # Changelog — Prompt a Porter
 
+## v0.5.0 — Quick wins UX + 5° provider AI (2026-05-07)
+
+> **Sprint v0.5.0 chiuso 6/6 step.** Polish UX su feature di Fase 4 (varianti, rating, golden, sort) e completamento del set provider AI con Google Gemini. Schema DB invariato, nessun breaking change.
+
+### Highlights
+
+- **Pannello Provider AI in Impostazioni** — sezione dedicata 🤖 con card per ognuno dei 5 provider supportati (Anthropic, OpenAI, OpenAI-compat, Ollama, Gemini). Form modale con API key write-only (placeholder "Lascia vuoto per non modificare"), base URL, modello default, switch abilitato. Sblocca utenti che dovevano configurare provider via SQL diretto.
+- **Bottone "+ Variante" nell'Editor** — crea varianti A/B direttamente dall'editor del prompt corrente, senza dover tornare alla Libreria. Auto-naviga al detail pane della nuova variante.
+- **Modale "Aggiungi nota" su rating 👎/😐** — il campo `Note` (V013, già nello schema) ora viene popolato. 👍 salva subito senza friction; per voti negativo/neutro si apre una modale opzionale con textarea (max 500 caratteri).
+- **"Esegui tutti i golden" batch** — bottone "Esegui tutti (N)" nel pannello Test esegue tutti i golden in sequenza con progress inline `Esecuzione X/Y…` e summary finale colorato `✓ N passed · ✗ M failed · ⚠ K errore`.
+- **Sort "Migliori" by rating medio** — nuovo ordinamento nel dropdown della Libreria. Ordina per `AVG(Rating)` ultimi 90 giorni; prompt senza rating in fondo (COALESCE -2). Tie-breaker `UseCount` + `UpdatedAt`.
+- **Provider Google Gemini** — 5° e ultimo provider pianificato per Fase 4. Endpoint `/v1beta/models/{model}:generateContent`, auth via header `x-goog-api-key`, parser concatena `candidates[0].content.parts[*].text`, tokens da `candidatesTokenCount`. Modelli supportati: `gemini-2.5-flash`, `gemini-2.5-pro`.
+
+### Numeri
+
+- 351 unit test backend (era 339 post-v0.4.0, +12 nuovi: 12 su Gemini, 2 su libreria sort qualita)
+- 6 PR mergiate (#74-#79), tutte con CI verde su lint-and-test + rust-test
+- 0 breaking change su schema DB (V013 invariato, nessuna nuova migrazione)
+- 0 svelte-check errors
+
+### Documentazione aggiornata
+
+- `docs/utente/regression-testing.md` § Setup provider include riga Google (Gemini); § Limiti noti marcati ✅ atterrati: UI Provider Config, batch golden, Gemini
+- `docs/utente/rating-prompt.md` § Limiti noti marcati ✅ atterrati: modale nota, sort qualità
+
+### Out of scope (rinviato)
+
+- **Vista "Confronto varianti" dedicata** multicolonna — riusabile via Confronto fianco-a-fianco esistente
+- **Promozione variante a principale** (swap main ↔ variant) — nessuna domanda forte, in attesa
+- **CLI `pap test`** + **MCP `pap_test_prompt`** — Fase 5 con MCP HTTP/SSE
+- **Inline marker CodeMirror** sul linter — quick win futuro
+- **Statistiche "Prompt più importati" / "Lint health %"** — atterrabili in v0.6
+- **Signing Authenticode Windows** — decisione costo aperta
+
+Tutti i punti deferiti tracciati in [`docs/roadmap/rinvii.md`](docs/roadmap/rinvii.md).
+
+---
+
 ## v0.4.0 — Workflow Avanzati & Quality Assurance (2026-05-07)
 
 > **Fase 4 client-first track chiusa.** 6/8 step atterrati (1, 2, 3, 4, 5, 8). Step 6 (approval workflow) e 7 (RBAC cartelle) rinviati a Fase 5: dipendono da workspace team in produzione e non danno valore aggiunto in single-user. Nessun breaking change su DB/format export rispetto a v0.3.x.
