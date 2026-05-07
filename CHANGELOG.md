@@ -1,5 +1,49 @@
 # Changelog — Prompt a Porter
 
+## v0.6.0 — Hardening + secondo sprint quick wins (2026-05-07)
+
+> **Sprint v0.6.0 chiuso 6/6 step.** Mix di hardening (coverage push, riload Session, gate CI) e quick wins UX dai rinvii Fase 3/4 (inline marker linter, statistiche prompt più importati + lint health, vista Confronto varianti, configurazione per-categoria linter). Schema DB invariato.
+
+### Highlights
+
+- **Coverage push 60→65 gate** — alzato il floor CI da 60% a 65% line coverage; coverage globale **71.02%** post-step. Aggiunti 17 unit test edge case su `vault.rs` (43.50% → 50.44%), `audit.rs` (51.89%) e `libreria.rs` (59.28%).
+- **Riload automatico Session post idle-unload** — risolve il limite Fase 3 Step 10: dopo idle-unload (default 5min) la ricerca semantica non degrada più a FTS-only. Nuova `assicura_session_caricata(rt, vault)` chiamata da `cerca_semantica` prima di `compute_embedding_opt`. Refactor `init_session_pure` idempotente.
+- **Inline marker CodeMirror sul linter** — gli issue PH/PII/IMP/STY/LEN ora compaiono inline nel body con underline wavy colorato per severità + tooltip nativo `code: messaggio`. Nuovo `lib/codemirror/lint-markers.ts` con `StateField<DecorationSet>` + `setLintIssues` effect.
+- **Statistiche "Prompt più importati" + "Lint health %"** — vista Insight estesa con 2 nuove metriche: top 10 prompt importati da altri (grafo inverso `PromptImports`) + percentuale prompt senza issue + breakdown top 5 categorie. Tutto client-side, no dati escono.
+- **Vista "Confronto varianti" multicolonna** — bottone "Confronta tutte" nella riga delle pillole varianti del detail pane: apre `ConfrontoPrompt` (Step 4 Fase 4) preselezionando principale + tutte le varianti. Riuso completo del componente esistente.
+- **Configurazione per-categoria linter** — nuova sezione **Impostazioni → Linter** ✏️ con 5 toggle (LEN/PH/PII/STY/IMP), persistenza in `localStorage`. Backend `prompt_lint` accetta `categorie_disabilitate: Option<Vec<String>>` e filtra a posteriori.
+
+### Numeri
+
+- **382 unit test backend** (era 351 a inizio sprint, +31 nuovi: 17 Step 1 + 3 Step 2 + 7 Step 4 + 4 Step 6)
+- **7 nuovi vitest frontend** (Step 3 lint-markers)
+- **Coverage globale 71.02% line / 75.61% function** (era 70.27%/75.05%)
+- **CI gate alzato da 60% a 65%** line coverage
+- 0 svelte-check errors
+- 6 PR mergiate (#81-#86), tutte con CI verde su `lint-and-test` + `rust-test`
+
+### Documentazione aggiornata
+
+- `docs/operativo/coverage.md` — nuovo snapshot, target ridefinito a 75% globale entro v0.7
+- `docs/roadmap/rinvii.md` — 4 item Fase 3 atterrati (Riload Session, Inline marker, Stats import+lint health, Linter per-categoria) + 1 item Fase 4 atterrato (Confronto varianti multicolonna)
+
+### Out of scope (rinviato)
+
+- **`embeddings.rs` / `import_export.rs`** sotto 50% coverage — refactor con HTTP mock + scenari round-trip JSON/CSV, target v0.7
+- **Promozione variante a principale** (swap main ↔ variant) — nessuna domanda forte, in attesa
+- **CLI `pap test`** + **MCP `pap_test_prompt`** — Fase 5 con MCP HTTP/SSE
+- **Custom free-text target model** — quick win futuro
+- **Esporta singola cartella** — quick win futuro
+- **Editor doppia vista Sorgente/Compilato integrata** — quick win futuro
+- **Hover preview import** + **Ctrl+click navigazione** — quick win futuro
+- **Cross-prompt linting** (chi importa X) — quick win futuro
+- **Markdown export con front-matter imports** — quick win futuro
+- **Signing Authenticode Windows** — decisione costo aperta
+
+Tutti i punti deferiti tracciati in [`docs/roadmap/rinvii.md`](docs/roadmap/rinvii.md).
+
+---
+
 ## v0.5.0 — Quick wins UX + 5° provider AI (2026-05-07)
 
 > **Sprint v0.5.0 chiuso 6/6 step.** Polish UX su feature di Fase 4 (varianti, rating, golden, sort) e completamento del set provider AI con Google Gemini. Schema DB invariato, nessun breaking change.
