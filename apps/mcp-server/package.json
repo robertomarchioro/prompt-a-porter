@@ -1,7 +1,7 @@
 {
   "name": "@pap/mcp-server",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "description": "Prompt a Porter — MCP server (Model Context Protocol) per esporre il vault prompt a Claude Desktop, Cursor e altri agenti AI",
   "license": "AGPL-3.0-only",
