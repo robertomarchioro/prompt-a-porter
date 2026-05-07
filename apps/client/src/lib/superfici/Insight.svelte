@@ -38,6 +38,19 @@
     conteggio: number;
   }
 
+  interface PromptImportato {
+    id: string;
+    titolo: string;
+    conteggio_importatori: number;
+  }
+
+  interface LintHealth {
+    totale_prompt: number;
+    prompt_senza_issue: number;
+    percentuale_health: number;
+    top_categorie: DistribuzioneStringa[];
+  }
+
   interface Statistiche {
     totali: Totali;
     top_usati: PromptUsato[];
@@ -45,6 +58,8 @@
     per_tag: DistribuzioneTag[];
     per_target_model: DistribuzioneStringa[];
     per_visibilita: DistribuzioneStringa[];
+    top_importati: PromptImportato[];
+    lint_health: LintHealth;
   }
 
   interface Props {
@@ -255,6 +270,70 @@
           {/if}
         </section>
 
+        <!-- ── Prompt più importati (v0.6.0 Step 4) ── -->
+        <section class="sezione">
+          <h3>Prompt più importati</h3>
+          {#if dati.top_importati.length === 0}
+            <p class="vuoto">
+              Nessun prompt è ancora importato da altri via
+              <code>{`{{`}import "..."{`}}`}</code>.
+            </p>
+          {:else}
+            {@const maxImp = Math.max(
+              ...dati.top_importati.map((p) => p.conteggio_importatori),
+            )}
+            <ul class="bar-list">
+              {#each dati.top_importati as p (p.id)}
+                <li class="bar-row">
+                  <div class="bar-label" title={p.titolo}>{p.titolo}</div>
+                  <div class="bar-track">
+                    <div
+                      class="bar-fill bar-fill--imp"
+                      style:width="{(p.conteggio_importatori / maxImp) * 100}%"
+                    ></div>
+                  </div>
+                  <div class="bar-num">{p.conteggio_importatori}</div>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </section>
+
+        <!-- ── Lint health (v0.6.0 Step 4) ── -->
+        <section class="sezione">
+          <h3>Lint health</h3>
+          {#if dati.lint_health.totale_prompt === 0}
+            <p class="vuoto">Nessun prompt da analizzare.</p>
+          {:else}
+            <div class="lint-health-summary">
+              <div class="lint-health-percent">
+                {dati.lint_health.percentuale_health.toFixed(1)}%
+              </div>
+              <div class="lint-health-label">
+                {dati.lint_health.prompt_senza_issue} su {dati.lint_health
+                  .totale_prompt} prompt senza issue
+              </div>
+            </div>
+            {#if dati.lint_health.top_categorie.length > 0}
+              {@const maxCat = maxConteggio(dati.lint_health.top_categorie)}
+              <ul class="bar-list">
+                {#each dati.lint_health.top_categorie as c (c.valore)}
+                  <li class="bar-row">
+                    <div class="bar-label">{c.valore}</div>
+                    <div class="bar-track">
+                      <div
+                        class="bar-fill bar-fill--lint"
+                        style:width="{(c.conteggio / maxCat) * 100}%"
+                      ></div>
+                    </div>
+                    <div class="bar-num">{c.conteggio}</div>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          {/if}
+        </section>
+
         <p class="privacy-nota">
           Tutte le statistiche sono calcolate localmente sul vault. Nessun dato
           esce dal tuo computer.
@@ -407,6 +486,33 @@
 
   .bar-fill--vis {
     background: var(--text-subtle);
+  }
+
+  .bar-fill--imp {
+    background: var(--accent-team);
+  }
+
+  .bar-fill--lint {
+    background: var(--warning, #f59e0b);
+  }
+
+  .lint-health-summary {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-3);
+  }
+
+  .lint-health-percent {
+    font-size: 2rem;
+    font-weight: var(--fw-semibold);
+    color: var(--text-strong);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .lint-health-label {
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
   }
 
   .bar-num {
