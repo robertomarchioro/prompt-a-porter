@@ -32,19 +32,29 @@
   let formato = $state<"testo" | "markdown" | "json">("testo");
   let toastVisibile = $state(false);
 
-  // ─── Rating post-uso (Fase 4 Step 2) ───
+  // ─── Rating post-uso (Fase 4 Step 2 + v0.5.0 Step 3) ───
   let mostraRating = $state(false);
   let ratingDato = $state<-1 | 0 | 1 | null>(null);
   let timerRating: ReturnType<typeof setTimeout> | null = null;
 
-  async function aggiungiRating(valore: -1 | 0 | 1) {
+  // Modale "Aggiungi nota" su voto negativo/neutro (v0.5.0 Step 3).
+  // Per 👍 salviamo subito senza friction; per 👎/😐 chiediamo
+  // opzionalmente una nota per capire perché.
+  let mostraModaleNota = $state(false);
+  let notaTesto = $state("");
+  let votoPending = $state<-1 | 0 | null>(null);
+
+  async function salvaRatingBackend(
+    valore: -1 | 0 | 1,
+    nota: string | null,
+  ) {
     ratingDato = valore;
     try {
       await invoke<string>("rating_aggiungi", {
         nuovo: {
           prompt_id: prompt.id,
           rating: valore,
-          nota: null,
+          nota,
           used_with_model: prompt.target_model || null,
         },
       });
@@ -57,6 +67,39 @@
       mostraRating = false;
       ratingDato = null;
     }, 1000);
+  }
+
+  async function aggiungiRating(valore: -1 | 0 | 1) {
+    // 👍 (+1): salva subito senza chiedere nota (no friction).
+    if (valore === 1) {
+      await salvaRatingBackend(1, null);
+      return;
+    }
+    // 👎 / 😐: apre modale nota opzionale.
+    votoPending = valore;
+    notaTesto = "";
+    mostraModaleNota = true;
+    // Cancella il timer del toast principale: la modale è bloccante.
+    if (timerRating) clearTimeout(timerRating);
+  }
+
+  async function confermaConNota() {
+    if (votoPending === null) return;
+    const trimmed = notaTesto.trim();
+    await salvaRatingBackend(votoPending, trimmed.length > 0 ? trimmed : null);
+    chiudiModaleNota();
+  }
+
+  async function saltaNota() {
+    if (votoPending === null) return;
+    await salvaRatingBackend(votoPending, null);
+    chiudiModaleNota();
+  }
+
+  function chiudiModaleNota() {
+    mostraModaleNota = false;
+    votoPending = null;
+    notaTesto = "";
   }
 
   // ─── Espansione import (Fase 3 Step 8) ───
@@ -345,6 +388,49 @@
         aria-label="Positivo"
         title="Ottimo risultato">👍</button
       >
+    </div>
+  </div>
+{/if}
+
+{#if mostraModaleNota}
+  <div
+    class="nota-backdrop"
+    onclick={saltaNota}
+    onkeydown={(e) => e.key === "Escape" && saltaNota()}
+    role="presentation"
+  >
+    <div
+      class="nota-modale"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="nota-titolo"
+      tabindex="-1"
+    >
+      <h3 id="nota-titolo" class="nota-titolo">
+        {votoPending === -1 ? "👎" : "😐"}
+        Cosa è andato storto? <span class="opt">(opzionale)</span>
+      </h3>
+      <p class="nota-desc">
+        Una breve nota ci aiuta a capire come migliorare il prompt.
+      </p>
+      <textarea
+        class="nota-textarea"
+        bind:value={notaTesto}
+        placeholder="Es. output troppo verboso, ha ignorato la richiesta di formato JSON…"
+        rows="4"
+        maxlength="500"
+        autofocus
+      ></textarea>
+      <div class="nota-azioni">
+        <Button variante="ghost" dimensione="sm" onclick={saltaNota}>
+          Salta
+        </Button>
+        <Button variante="primary" dimensione="sm" onclick={confermaConNota}>
+          Salva con nota
+        </Button>
+      </div>
     </div>
   </div>
 {/if}
@@ -714,6 +800,65 @@
   }
 
   /* ── Toast rating (Fase 4 Step 2) ── */
+  .nota-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+  }
+  .nota-modale {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: var(--sp-4);
+    width: min(28rem, 90vw);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    box-shadow: var(--shadow-3);
+  }
+  .nota-titolo {
+    margin: 0;
+    font-size: var(--fs-base);
+    font-weight: var(--fw-semibold);
+    color: var(--text-strong);
+  }
+  .nota-titolo .opt {
+    font-weight: var(--fw-regular);
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+  }
+  .nota-desc {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+    line-height: 1.4;
+  }
+  .nota-textarea {
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+    color: var(--text-strong);
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: var(--sp-2) var(--sp-3);
+    resize: vertical;
+    min-height: 80px;
+  }
+  .nota-textarea:focus {
+    outline: none;
+    border-color: var(--accent-team);
+    box-shadow: 0 0 0 3px var(--accent-team-soft);
+  }
+  .nota-azioni {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--sp-2);
+  }
+
   .rating-toast {
     position: fixed;
     bottom: var(--sp-4);
