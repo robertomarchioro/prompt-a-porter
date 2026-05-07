@@ -7,6 +7,7 @@
     lintMarkersTheme,
     setLintIssues,
   } from "$lib/codemirror/lint-markers";
+  import { leggiCategorieDisabilitate } from "$lib/preferenze-linter";
   import {
     segnapostoHighlight,
     segnapostoTheme,
@@ -345,9 +346,13 @@
       return;
     }
     timerLint = setTimeout(() => {
+      // v0.6.0 Step 6: legge le categorie disattivate dall'utente da
+      // Impostazioni → Linter (localStorage) e le passa al backend.
+      const categorieDisabilitate = leggiCategorieDisabilitate();
       invoke<LintIssue[]>("prompt_lint", {
         body: corrente,
         promptId: idCorrente,
+        categorieDisabilitate,
       })
         .then((issues) => {
           lintIssues = issues;

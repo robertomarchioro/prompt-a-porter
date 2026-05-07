@@ -3,6 +3,7 @@
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import {
     Button,
+    PannelloLinter,
     PannelloProviderConfig,
     Switch,
     Toast,
@@ -58,6 +59,7 @@
     | "vault"
     | "ricerca"
     | "provider"
+    | "linter"
     | "audit"
     | "lingua"
     | "info";
@@ -70,6 +72,7 @@
     { id: "vault", etichetta: "Vault", icona: "🔒" },
     { id: "ricerca", etichetta: "Ricerca semantica", icona: "🔎" },
     { id: "provider", etichetta: "Provider AI", icona: "🤖" },
+    { id: "linter", etichetta: "Linter", icona: "✏️" },
     { id: "audit", etichetta: "Registro attività", icona: "📋" },
     { id: "lingua", etichetta: "Lingua", icona: "🌐" },
     { id: "info", etichetta: "Informazioni", icona: "ℹ" },
@@ -1172,6 +1175,10 @@
         {:else if sezione === "provider"}
           <div class="sez">
             <PannelloProviderConfig />
+          </div>
+        {:else if sezione === "linter"}
+          <div class="sez">
+            <PannelloLinter />
           </div>
         {:else if sezione === "audit"}
           <div class="sez">

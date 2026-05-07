@@ -502,10 +502,36 @@ pub fn analizza_completo(
 /// è aperto, aggiunge anche le regole IMP. Se il vault non è
 /// disponibile (login non ancora effettuato) il fallback è silenzioso —
 /// il lint rimane utile anche con db chiuso.
+/// Filtra un Vec<Issue> escludendo quelli il cui prefisso lettere del code
+/// è nelle categorie disabilitate (es. `["IMP", "PII"]` skippa IMP001,
+/// PII001, ecc.). v0.6.0 Step 6.
+pub(crate) fn filtra_categorie(
+    issues: Vec<Issue>,
+    disabilitate: &[String],
+) -> Vec<Issue> {
+    if disabilitate.is_empty() {
+        return issues;
+    }
+    let set: std::collections::HashSet<&str> =
+        disabilitate.iter().map(|s| s.as_str()).collect();
+    issues
+        .into_iter()
+        .filter(|i| {
+            let prefisso: String = i
+                .code
+                .chars()
+                .take_while(|c| c.is_ascii_alphabetic())
+                .collect();
+            !set.contains(prefisso.as_str())
+        })
+        .collect()
+}
+
 #[tauri::command]
 pub fn prompt_lint(
     body: String,
     prompt_id: Option<String>,
+    categorie_disabilitate: Option<Vec<String>>,
     state: State<'_, VaultState>,
 ) -> Result<Vec<Issue>, PapErrore> {
     let mut out = analizza(&body);
@@ -515,6 +541,9 @@ pub fn prompt_lint(
         Ok(buf)
     }) {
         out.extend(imp);
+    }
+    if let Some(disable) = categorie_disabilitate {
+        out = filtra_categorie(out, &disable);
     }
     Ok(out)
 }
@@ -813,5 +842,61 @@ mod test {
         let body = r#"{{import "A"}}"#;
         let issues = analizza_completo(&conn, body, None);
         assert!(ha_codice(&issues, "IMP002"));
+    }
+
+    // ─────────── v0.6.0 Step 6: filtra_categorie ───────────
+
+    fn issue_di(code: &'static str) -> Issue {
+        Issue {
+            code,
+            severita: Severita::Warning,
+            messaggio: "test".into(),
+            linea: None,
+            colonna: None,
+        }
+    }
+
+    #[test]
+    fn filtra_categorie_lista_vuota_no_op() {
+        let issues = vec![issue_di("PH001"), issue_di("PII001"), issue_di("LEN001")];
+        let r = super::filtra_categorie(issues.clone(), &[]);
+        assert_eq!(r.len(), 3);
+    }
+
+    #[test]
+    fn filtra_categorie_skippa_prefisso_pii() {
+        let issues = vec![
+            issue_di("PH001"),
+            issue_di("PII001"),
+            issue_di("PII003"),
+            issue_di("LEN001"),
+        ];
+        let r = super::filtra_categorie(issues, &["PII".to_string()]);
+        assert_eq!(r.len(), 2);
+        assert!(r.iter().all(|i| !i.code.starts_with("PII")));
+    }
+
+    #[test]
+    fn filtra_categorie_disabilita_multiple() {
+        let issues = vec![
+            issue_di("PH001"),
+            issue_di("PH003"),
+            issue_di("IMP001"),
+            issue_di("IMP002"),
+            issue_di("LEN001"),
+        ];
+        let r = super::filtra_categorie(
+            issues,
+            &["PH".to_string(), "IMP".to_string()],
+        );
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].code, "LEN001");
+    }
+
+    #[test]
+    fn filtra_categorie_categoria_inesistente_no_op() {
+        let issues = vec![issue_di("PH001"), issue_di("LEN001")];
+        let r = super::filtra_categorie(issues, &["FOO".to_string()]);
+        assert_eq!(r.len(), 2);
     }
 }

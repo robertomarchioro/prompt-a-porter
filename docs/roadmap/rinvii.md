@@ -87,7 +87,7 @@ Pezzi di feature parzialmente atterrate, con il resto programmato per `v0.5.0` (
 
 ### Da Fase 3 Step 5 — Linting
 - ✅ **Inline marker CodeMirror 6** atterrati in v0.6.0 Step 3: `lib/codemirror/lint-markers.ts` con `StateField<DecorationSet>` + `setLintIssues` effect; underline wavy colorato per severità (error/warning/info) + tooltip nativo `code: messaggio`.
-- 📋 **Configurazione per-categoria** in Impostazioni (abilita/disabilita LEN/PH/PII/STY/IMP). Oggi sempre attive
+- ✅ **Configurazione per-categoria** atterrato in v0.6.0 Step 6: nuova sezione **Impostazioni → Linter** ✏️ con 5 toggle (LEN/PH/PII/STY/IMP), persistenza locale in `localStorage`. Backend `prompt_lint` accetta `categorie_disabilitate: Option<Vec<String>>` e filtra a posteriori via `filtra_categorie()`.
 - ⛔ **PH002** (segnaposto dichiarato non usato) — semantica ambigua, scelta di non implementare in v0.3
 - ⛔ **PII002** (codice fiscale italiano) — regex complessa low-priority, scelta di non implementare in v0.3
 - ⛔ **STY002** (mancanza istruzioni chiare) — richiede NLP IT/EN troppo fragile a regex, scelta di non implementare in v0.3
