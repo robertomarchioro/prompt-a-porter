@@ -86,7 +86,7 @@ Pezzi di feature parzialmente atterrate, con il resto programmato per `v0.5.0` (
 - 📋 **Comandi `login` / `new` / `import` / `export`** — richiedono server API o IPC client desktop
 
 ### Da Fase 3 Step 5 — Linting
-- 📋 **Inline marker CodeMirror 6** sui punti incriminati (decoration). Oggi solo pannello Diagnosi
+- ✅ **Inline marker CodeMirror 6** atterrati in v0.6.0 Step 3: `lib/codemirror/lint-markers.ts` con `StateField<DecorationSet>` + `setLintIssues` effect; underline wavy colorato per severità (error/warning/info) + tooltip nativo `code: messaggio`.
 - 📋 **Configurazione per-categoria** in Impostazioni (abilita/disabilita LEN/PH/PII/STY/IMP). Oggi sempre attive
 - ⛔ **PH002** (segnaposto dichiarato non usato) — semantica ambigua, scelta di non implementare in v0.3
 - ⛔ **PII002** (codice fiscale italiano) — regex complessa low-priority, scelta di non implementare in v0.3
