@@ -78,9 +78,10 @@ nuovo voto, e l'aggregato media le entry più recenti.
 
 ## Limiti noti / roadmap
 
-- **Modale "Aggiungi nota"**: il campo `Note` è già nello schema ma
-  l'UI non la chiede. Naturale per voto negativo (perché non ha
-  funzionato?). Quick win `v0.5.0`.
+- ✅ **Modale "Aggiungi nota"** atterrata in `v0.5.0`: dopo voto
+  👎 o 😐 si apre una modale con textarea opzionale (max 500
+  caratteri). 👍 salva subito senza friction. "Salta" memorizza il
+  voto senza nota.
 - **Sort by quality** "Migliori prompt" in Libreria — richiede
   integrazione in `libreria_lista` con left join all'aggregato.
   `rinvii.md`.
