@@ -130,7 +130,24 @@ fn valida_modalita(s: &str) -> Result<(), PapErrore> {
 /// Helper "pure" (no Tauri State) per costruire l'`ExportV1` da una
 /// connection. Esposto pub(crate) per testabilità diretta senza dover
 /// montare uno State Tauri. v0.7.0 Step 1 refactor.
+///
+/// Wrapper che chiama `export_pure_filter(conn, None)` → esporta tutto.
 pub(crate) fn export_pure(conn: &Connection) -> Result<ExportV1, PapErrore> {
+    export_pure_filter(conn, None)
+}
+
+/// Variante con filtro per `folder_id`: se `Some(id)`, esporta solo i
+/// prompt del sotto-albero della cartella (matching su `Folders.Path`
+/// con LIKE prefix). Se `None`, esporta tutti i prompt attivi.
+/// v0.7.0 Step 2.
+///
+/// Nota: le `folders` nel payload restano `Vec::new()` per coerenza
+/// con il flusso di import attuale che non le gestisce. Il roundtrip
+/// folders è scope v0.8.
+pub(crate) fn export_pure_filter(
+    conn: &Connection,
+    folder_id: Option<&str>,
+) -> Result<ExportV1, PapErrore> {
     let workspace: WorkspaceMeta = conn.query_row(
         "SELECT Id, Name, Type FROM Workspaces LIMIT 1",
         [],
@@ -143,25 +160,62 @@ pub(crate) fn export_pure(conn: &Connection) -> Result<ExportV1, PapErrore> {
         },
     )?;
 
-    let mut stmt_prompts = conn.prepare(
-        "SELECT Id, Title, Description, Body, Visibility, TargetModel,
-                IsFavorite, UseCount, LastUsedAt, Version, CreatedAt, UpdatedAt
-         FROM Prompts
-         WHERE DeletedAt IS NULL
-         ORDER BY CreatedAt ASC",
-    )?;
-    let prompts_raw: Vec<(String, String, Option<String>, String, String,
-                          Option<String>, i64, i64, Option<String>, i64,
-                          String, String)> = stmt_prompts
-        .query_map([], |r| {
-            Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?,
-                r.get(5)?, r.get::<_, i64>(6)?, r.get(7)?, r.get(8)?,
-                r.get(9)?, r.get(10)?, r.get(11)?,
-            ))
-        })?
-        .filter_map(|r| r.ok())
-        .collect();
+    // Costruzione query Prompts. Se folder_id specificato, risolvi il
+    // Path della folder e filtra i prompt nel sotto-albero (path esatto
+    // OR path LIKE "<folder_path>/%").
+    type PromptRaw = (String, String, Option<String>, String, String,
+                     Option<String>, Option<String>, i64, i64,
+                     Option<String>, i64, String, String);
+
+    fn collect_row(r: &rusqlite::Row) -> rusqlite::Result<PromptRaw> {
+        Ok((
+            r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?,
+            r.get(5)?, r.get(6)?, r.get::<_, i64>(7)?, r.get(8)?,
+            r.get(9)?, r.get(10)?, r.get(11)?, r.get(12)?,
+        ))
+    }
+
+    let prompts_raw: Vec<PromptRaw> = if let Some(fid) = folder_id {
+        let folder_path: String = conn.query_row(
+            "SELECT Path FROM Folders WHERE Id = ?1 AND DeletedAt IS NULL",
+            [fid],
+            |r| r.get(0),
+        ).map_err(|e| PapErrore::Generico(format!("Cartella '{fid}' non trovata: {e}")))?;
+        let prefix_like = format!("{folder_path}/%");
+
+        let mut stmt = conn.prepare(
+            "SELECT p.Id, p.Title, p.Description, p.Body, p.Visibility, p.TargetModel,
+                    p.FolderId, p.IsFavorite, p.UseCount, p.LastUsedAt, p.Version,
+                    p.CreatedAt, p.UpdatedAt
+             FROM Prompts p
+             JOIN Folders f ON f.Id = p.FolderId
+             WHERE p.DeletedAt IS NULL
+               AND f.DeletedAt IS NULL
+               AND (f.Path = ?1 OR f.Path LIKE ?2)
+             ORDER BY p.CreatedAt ASC",
+        )?;
+        let mut rows = stmt.query(rusqlite::params![folder_path, prefix_like])?;
+        let mut acc: Vec<PromptRaw> = Vec::new();
+        while let Some(row) = rows.next()? {
+            acc.push(collect_row(row)?);
+        }
+        acc
+    } else {
+        let mut stmt = conn.prepare(
+            "SELECT Id, Title, Description, Body, Visibility, TargetModel,
+                    FolderId, IsFavorite, UseCount, LastUsedAt, Version,
+                    CreatedAt, UpdatedAt
+             FROM Prompts
+             WHERE DeletedAt IS NULL
+             ORDER BY CreatedAt ASC",
+        )?;
+        let mut rows = stmt.query([])?;
+        let mut acc: Vec<PromptRaw> = Vec::new();
+        while let Some(row) = rows.next()? {
+            acc.push(collect_row(row)?);
+        }
+        acc
+    };
 
     let mut prompts: Vec<PromptExport> = Vec::with_capacity(prompts_raw.len());
     for p in prompts_raw {
@@ -180,13 +234,13 @@ pub(crate) fn export_pure(conn: &Connection) -> Result<ExportV1, PapErrore> {
             body: p.3,
             visibility: p.4,
             target_model: p.5,
-            folder_id: None,
-            is_favorite: p.6 != 0,
-            use_count: p.7,
-            last_used_at: p.8,
-            version: p.9,
-            created_at: p.10,
-            updated_at: p.11,
+            folder_id: p.6,
+            is_favorite: p.7 != 0,
+            use_count: p.8,
+            last_used_at: p.9,
+            version: p.10,
+            created_at: p.11,
+            updated_at: p.12,
             tag_ids,
         });
     }
@@ -259,6 +313,33 @@ pub fn vault_export_json(state: State<'_, VaultState>) -> Result<String, PapErro
                 "{} prompts, {} versioni, {} tag",
                 export.prompts.len(),
                 export.versions.len(),
+                export.tags.len()
+            )),
+        );
+
+        Ok(json)
+    })
+}
+
+/// Tauri command: esporta solo i prompt del sotto-albero della cartella
+/// indicata (incluse sotto-cartelle). v0.7.0 Step 2.
+#[tauri::command]
+pub fn vault_export_folder_json(
+    folder_id: String,
+    state: State<'_, VaultState>,
+) -> Result<String, PapErrore> {
+    state.with_conn(|conn| {
+        let export = export_pure_filter(conn, Some(&folder_id))?;
+        let json = serde_json::to_string_pretty(&export)?;
+
+        crate::audit::registra(
+            conn,
+            "vault.exported.folder",
+            "Folder",
+            &folder_id,
+            Some(&format!(
+                "{} prompts (sotto-albero), {} tag",
+                export.prompts.len(),
                 export.tags.len()
             )),
         );
@@ -789,6 +870,95 @@ mod test {
         assert_eq!(exp2.prompts.len(), 1);
         assert_eq!(exp2.prompts[0].id, "prm-1");
         assert_eq!(exp2.prompts[0].title, "Test");
+    }
+
+    // ─────────── v0.7.0 Step 2: export_pure_filter (cartella) ───────────
+
+    fn inserisci_folder(conn: &Connection, id: &str, name: &str, path: &str, parent: Option<&str>) {
+        conn.execute(
+            "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path, CreatedAt, UpdatedAt)
+             VALUES (?1, 'ws-personale', ?2, ?3, ?4, datetime('now'), datetime('now'))",
+            rusqlite::params![id, parent, name, path],
+        )
+        .unwrap();
+    }
+
+    fn inserisci_prompt_in_folder(conn: &Connection, id: &str, titolo: &str, folder_id: Option<&str>) {
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility,
+             Version, FolderId, CreatedAt, UpdatedAt)
+             VALUES (?1, 'ws-personale', 'usr-locale', ?2, 'body', 'private', 1,
+             ?3, datetime('now'), datetime('now'))",
+            rusqlite::params![id, titolo, folder_id],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn export_pure_filter_none_equivale_a_export_pure() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "A", "body");
+        let a = export_pure(&conn).unwrap();
+        let b = export_pure_filter(&conn, None).unwrap();
+        assert_eq!(a.prompts.len(), b.prompts.len());
+        assert_eq!(a.prompts[0].id, b.prompts[0].id);
+    }
+
+    #[test]
+    fn export_pure_filter_folder_inesistente_ritorna_errore() {
+        let conn = db_test();
+        let r = export_pure_filter(&conn, Some("fld-fantasma"));
+        assert!(r.is_err());
+        let msg = format!("{:?}", r.unwrap_err());
+        assert!(msg.contains("non trovata"));
+    }
+
+    #[test]
+    fn export_pure_filter_solo_prompt_della_cartella() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-mkt", "marketing", "/marketing", None);
+        inserisci_folder(&conn, "fld-dev", "dev", "/dev", None);
+        inserisci_prompt_in_folder(&conn, "prm-mkt", "Marketing", Some("fld-mkt"));
+        inserisci_prompt_in_folder(&conn, "prm-dev", "Dev", Some("fld-dev"));
+        inserisci_prompt_in_folder(&conn, "prm-root", "Root", None);
+
+        let exp = export_pure_filter(&conn, Some("fld-mkt")).unwrap();
+        assert_eq!(exp.prompts.len(), 1);
+        assert_eq!(exp.prompts[0].id, "prm-mkt");
+        assert_eq!(exp.prompts[0].folder_id.as_deref(), Some("fld-mkt"));
+    }
+
+    #[test]
+    fn export_pure_filter_include_sotto_cartelle() {
+        let conn = db_test();
+        // /marketing
+        // /marketing/email
+        // /marketing/social
+        inserisci_folder(&conn, "fld-mkt", "marketing", "/marketing", None);
+        inserisci_folder(&conn, "fld-email", "email", "/marketing/email", Some("fld-mkt"));
+        inserisci_folder(&conn, "fld-social", "social", "/marketing/social", Some("fld-mkt"));
+
+        inserisci_prompt_in_folder(&conn, "prm-top", "Top", Some("fld-mkt"));
+        inserisci_prompt_in_folder(&conn, "prm-email", "Email", Some("fld-email"));
+        inserisci_prompt_in_folder(&conn, "prm-social", "Social", Some("fld-social"));
+
+        let exp = export_pure_filter(&conn, Some("fld-mkt")).unwrap();
+        assert_eq!(exp.prompts.len(), 3, "Atteso il prompt root + 2 sub-folder");
+        let ids: Vec<&str> = exp.prompts.iter().map(|p| p.id.as_str()).collect();
+        assert!(ids.contains(&"prm-top"));
+        assert!(ids.contains(&"prm-email"));
+        assert!(ids.contains(&"prm-social"));
+    }
+
+    #[test]
+    fn export_pure_popola_folder_id_dal_db() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-x", "x", "/x", None);
+        inserisci_prompt_in_folder(&conn, "prm-1", "Test", Some("fld-x"));
+
+        let exp = export_pure(&conn).unwrap();
+        assert_eq!(exp.prompts.len(), 1);
+        assert_eq!(exp.prompts[0].folder_id.as_deref(), Some("fld-x"));
     }
 
     #[test]
