@@ -338,6 +338,7 @@ pub fn run() {
             tags_suggest::tags_suggest,
             linting::prompt_lint,
             prompt_componibili::prompt_compila,
+            prompt_componibili::prompt_resolve_import_preview,
             cartelle::folder_lista,
             cartelle::folder_crea,
             cartelle::folder_rinomina,

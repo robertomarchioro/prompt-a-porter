@@ -1458,6 +1458,14 @@
             await caricaDettaglio(nuovoId);
             await caricaVarianti();
           }}
+          onapriPrompt={async (promptId) => {
+            // v0.7.0 Step 4: Ctrl/Cmd+click su {{import "..."}}.
+            mostraEditor = false;
+            await caricaDati();
+            idSelezionato = promptId;
+            await caricaDettaglio(promptId);
+            await caricaVarianti();
+          }}
         />
       {/key}
     {/if}

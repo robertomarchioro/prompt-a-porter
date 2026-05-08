@@ -8,6 +8,7 @@
     setLintIssues,
   } from "$lib/codemirror/lint-markers";
   import { leggiCategorieDisabilitate } from "$lib/preferenze-linter";
+  import { importTokens } from "$lib/codemirror/import-tokens";
   import {
     segnapostoHighlight,
     segnapostoTheme,
@@ -43,9 +44,13 @@
     onchiudi: () => void;
     onsalvato: () => void;
     oncreaVariante?: (nuovoId: string) => void;
+    /// v0.7.0 Step 4: invocato su Ctrl/Cmd+click su un token
+    /// `{{import "..."}}` per aprire il prompt importato.
+    onapriPrompt?: (promptId: string) => void;
   }
 
-  let { prompt, onchiudi, onsalvato, oncreaVariante }: Props = $props();
+  let { prompt, onchiudi, onsalvato, oncreaVariante, onapriPrompt }: Props =
+    $props();
 
   let creandoVariante = $state(false);
   let erroreVariante = $state("");
@@ -375,6 +380,11 @@
         segnapostoTheme,
         lintMarkers,
         lintMarkersTheme,
+        importTokens({
+          onapri: (promptId) => {
+            onapriPrompt?.(promptId);
+          },
+        }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             body = update.state.doc.toString();

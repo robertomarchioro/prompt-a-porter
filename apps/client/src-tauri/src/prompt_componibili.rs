@@ -209,6 +209,44 @@ pub fn prompt_compila(
     })
 }
 
+/// Preview di un prompt importato per hover/Ctrl+click nell'editor.
+/// v0.7.0 Step 4: risolve il `path` dichiarato nel `{{import "path"}}`
+/// e ritorna i metadati essenziali per il tooltip (id, titolo, body).
+/// Il `body` non è espanso (quindi può contenere `{{import}}` interni).
+#[derive(Debug, serde::Serialize)]
+pub struct ImportPreview {
+    pub id: String,
+    pub titolo: String,
+    pub body: String,
+}
+
+#[tauri::command]
+pub fn prompt_resolve_import_preview(
+    path: String,
+    state: State<'_, VaultState>,
+) -> Result<Option<ImportPreview>, PapErrore> {
+    state.with_conn(|conn| resolve_import_preview_pure(conn, &path))
+}
+
+/// Helper testabile senza Tauri State.
+pub(crate) fn resolve_import_preview_pure(
+    conn: &Connection,
+    path: &str,
+) -> Result<Option<ImportPreview>, PapErrore> {
+    let id_opt = resolve_path(conn, path)?;
+    let Some(id) = id_opt else {
+        return Ok(None);
+    };
+    let row: Option<(String, String)> = conn
+        .query_row(
+            "SELECT Title, Body FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
+            [&id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .ok();
+    Ok(row.map(|(titolo, body)| ImportPreview { id, titolo, body }))
+}
+
 /// Popola/aggiorna la tabella `PromptImports` per il prompt dato.
 /// Chiamato da editor::prompt_crea / prompt_aggiorna come hook.
 pub fn aggiorna_imports(
