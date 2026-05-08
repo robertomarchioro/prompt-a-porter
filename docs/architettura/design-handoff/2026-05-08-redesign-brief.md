@@ -55,11 +55,17 @@ in modo organico.
 
 ## 3. Pain points specifici
 
-> _**Da compilare dall'utente.**_
+- layout a colonne fisse: deve essere possibile nascondere la colonna di sinistra o ridimensionarla
+- non è possibile collassare le categorie nella colonna di sinistra (a.e. TAG, Modello Target, Cartelle)
+- seconda colonna "elenco prompt" poco amichevole, introdurre opzione da "impostazioni" per vedere solo titolo del prompt e tag oppure anche anteprima delle prime "n" righe del prompt stesso
+- area di lavoro a destra poco utile con funzioni elencate in alto a destra ma in maniera anonima
+- funzioni di creazione o modifica che si realizano in una modale troppo piccola e poco adatta a scrivere e gestire prompt anche lunghi e complessi: se possibile eliminare la modale e integrare tutte le funzioni di modifica enlla colonna di destra
+- sfruttare la barra di stato della finistra per inserire qualche informazione sul prompt
+- in tutte le cronologie di versioni manca l'autore della modifica
 
 ## 4. Goal e successo del redesign
 
-> _**Da compilare dall'utente.**_
+- il nuovo redesign deve usare meglio lo spazio dando priorità alla semplicità di utilizzo del sistema e alla superficie dedicata a gestire i testi dei prompt e alle funzioni di ottimizzazione, lasciare uso delle modali solo alle funzioni per cui ha un senso, come impostazioni, insights e quello che riterrai più opportuno
 
 ## 5. Architettura di massima
 
