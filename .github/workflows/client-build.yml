@@ -2,7 +2,7 @@ name: Client Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/redesign-v08]
     paths:
       - "apps/client/**"
       - "packages/**"
@@ -14,7 +14,7 @@ on:
       - "!apps/client/**/LICENSE"
       - "!packages/**/*.md"
   pull_request:
-    branches: [main]
+    branches: [main, feat/redesign-v08]
     paths:
       - "apps/client/**"
       - "packages/**"
