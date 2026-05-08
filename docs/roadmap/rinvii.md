@@ -98,7 +98,7 @@ Pezzi di feature parzialmente atterrate, con il resto programmato per `v0.5.0` (
 - 📋 **Server endpoint `?target=...`** — Fase 5
 
 ### Da Fase 3 Step 7 — Cartelle
-- 📋 **Esporta singola cartella** (oggi solo intero vault)
+- ✅ **Esporta singola cartella** atterrato in v0.7.0 Step 2: nuova `export_pure_filter(conn, folder_id)` in `import_export.rs` filtra Prompts via `Folders.Path` LIKE prefix (sotto-albero incluso). Comando Tauri `vault_export_folder_json(folder_id)`. UI: bottone ⬇ nel sb-folder-actions della sidebar Libreria. Folders nel payload restano `Vec::new()` per coerenza con import attuale (roundtrip folders → v0.8).
 - 📋 **Server endpoint `/sync/folders`** — Fase 5
 
 ### Da Fase 3 Step 8 — Prompt componibili

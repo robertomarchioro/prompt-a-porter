@@ -224,6 +224,27 @@
     mostraConfronto = true;
   }
 
+  // v0.7.0 Step 2: esporta singola cartella (sotto-albero) come JSON.
+  async function esportaFolder(c: Cartella) {
+    try {
+      const json = await invoke<string>("vault_export_folder_json", {
+        folderId: c.id,
+      });
+      const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const safeName = c.nome.replace(/[^a-z0-9-_]/gi, "_").toLowerCase();
+      a.download = `pap-folder-${safeName}-${ts}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      // No toast in Libreria; messaggio in alert come fallback minimale.
+      alert(`Errore esportazione cartella: ${String(e)}`);
+    }
+  }
+
   async function aggiungiVariante() {
     if (!promptDet) return;
     creandoVariante = true;
@@ -896,6 +917,14 @@
                     e.stopPropagation();
                     avviaRinomina(c);
                   }}>✎</button
+                >
+                <button
+                  class="sb-icon-btn"
+                  title="Esporta cartella (JSON)"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    esportaFolder(c);
+                  }}>⬇</button
                 >
                 <button
                   class="sb-icon-btn sb-icon-btn--danger"

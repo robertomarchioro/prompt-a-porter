@@ -327,6 +327,7 @@ pub fn run() {
             audit::audit_export_csv,
             audit::audit_cleanup_oltre_giorni,
             import_export::vault_export_json,
+            import_export::vault_export_folder_json,
             import_export::vault_import_json,
             statistiche::statistiche_query,
             embeddings::embeddings_status,
