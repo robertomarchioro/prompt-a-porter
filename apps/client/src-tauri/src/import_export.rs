@@ -127,121 +127,127 @@ fn valida_modalita(s: &str) -> Result<(), PapErrore> {
     }
 }
 
+/// Helper "pure" (no Tauri State) per costruire l'`ExportV1` da una
+/// connection. Esposto pub(crate) per testabilità diretta senza dover
+/// montare uno State Tauri. v0.7.0 Step 1 refactor.
+pub(crate) fn export_pure(conn: &Connection) -> Result<ExportV1, PapErrore> {
+    let workspace: WorkspaceMeta = conn.query_row(
+        "SELECT Id, Name, Type FROM Workspaces LIMIT 1",
+        [],
+        |r| {
+            Ok(WorkspaceMeta {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                workspace_type: r.get(2)?,
+            })
+        },
+    )?;
+
+    let mut stmt_prompts = conn.prepare(
+        "SELECT Id, Title, Description, Body, Visibility, TargetModel,
+                IsFavorite, UseCount, LastUsedAt, Version, CreatedAt, UpdatedAt
+         FROM Prompts
+         WHERE DeletedAt IS NULL
+         ORDER BY CreatedAt ASC",
+    )?;
+    let prompts_raw: Vec<(String, String, Option<String>, String, String,
+                          Option<String>, i64, i64, Option<String>, i64,
+                          String, String)> = stmt_prompts
+        .query_map([], |r| {
+            Ok((
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?,
+                r.get(5)?, r.get::<_, i64>(6)?, r.get(7)?, r.get(8)?,
+                r.get(9)?, r.get(10)?, r.get(11)?,
+            ))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let mut prompts: Vec<PromptExport> = Vec::with_capacity(prompts_raw.len());
+    for p in prompts_raw {
+        let mut stmt_tags = conn.prepare(
+            "SELECT TagId FROM PromptTags WHERE PromptId = ?1 ORDER BY TagId ASC",
+        )?;
+        let tag_ids: Vec<String> = stmt_tags
+            .query_map([&p.0], |r| r.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        prompts.push(PromptExport {
+            id: p.0,
+            title: p.1,
+            description: p.2,
+            body: p.3,
+            visibility: p.4,
+            target_model: p.5,
+            folder_id: None,
+            is_favorite: p.6 != 0,
+            use_count: p.7,
+            last_used_at: p.8,
+            version: p.9,
+            created_at: p.10,
+            updated_at: p.11,
+            tag_ids,
+        });
+    }
+
+    let mut stmt_v = conn.prepare(
+        "SELECT Id, PromptId, Version, Title, Description, Body, Visibility,
+                TargetModel, CreatedAt, CreatedByUserId
+         FROM PromptVersions
+         ORDER BY PromptId ASC, Version ASC",
+    )?;
+    let versions: Vec<VersioneExport> = stmt_v
+        .query_map([], |r| {
+            Ok(VersioneExport {
+                id: r.get(0)?,
+                prompt_id: r.get(1)?,
+                version: r.get(2)?,
+                title: r.get(3)?,
+                description: r.get(4)?,
+                body: r.get(5)?,
+                visibility: r.get(6)?,
+                target_model: r.get(7)?,
+                created_at: r.get(8)?,
+                created_by_user_id: r.get(9)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let mut stmt_t = conn.prepare(
+        "SELECT Id, Name, Color, CreatedAt FROM Tags
+         WHERE DeletedAt IS NULL
+         ORDER BY CreatedAt ASC",
+    )?;
+    let tags: Vec<TagExport> = stmt_t
+        .query_map([], |r| {
+            Ok(TagExport {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                color: r.get(2)?,
+                created_at: r.get(3)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(ExportV1 {
+        schema_version: SCHEMA_VERSION,
+        exported_at: ora_iso(),
+        workspace,
+        prompts,
+        versions,
+        tags,
+        folders: Vec::new(),
+    })
+}
+
 /// Tauri command: esporta l'intero workspace come JSON serializzato.
 #[tauri::command]
 pub fn vault_export_json(state: State<'_, VaultState>) -> Result<String, PapErrore> {
     state.with_conn(|conn| {
-        let workspace: WorkspaceMeta = conn.query_row(
-            "SELECT Id, Name, Type FROM Workspaces LIMIT 1",
-            [],
-            |r| {
-                Ok(WorkspaceMeta {
-                    id: r.get(0)?,
-                    name: r.get(1)?,
-                    workspace_type: r.get(2)?,
-                })
-            },
-        )?;
-
-        let mut stmt_prompts = conn.prepare(
-            "SELECT Id, Title, Description, Body, Visibility, TargetModel,
-                    IsFavorite, UseCount, LastUsedAt, Version, CreatedAt, UpdatedAt
-             FROM Prompts
-             WHERE DeletedAt IS NULL
-             ORDER BY CreatedAt ASC",
-        )?;
-        let prompts_raw: Vec<(String, String, Option<String>, String, String,
-                              Option<String>, i64, i64, Option<String>, i64,
-                              String, String)> = stmt_prompts
-            .query_map([], |r| {
-                Ok((
-                    r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?,
-                    r.get(5)?, r.get::<_, i64>(6)?, r.get(7)?, r.get(8)?,
-                    r.get(9)?, r.get(10)?, r.get(11)?,
-                ))
-            })?
-            .filter_map(|r| r.ok())
-            .collect();
-
-        let mut prompts: Vec<PromptExport> = Vec::with_capacity(prompts_raw.len());
-        for p in prompts_raw {
-            let mut stmt_tags = conn.prepare(
-                "SELECT TagId FROM PromptTags WHERE PromptId = ?1 ORDER BY TagId ASC",
-            )?;
-            let tag_ids: Vec<String> = stmt_tags
-                .query_map([&p.0], |r| r.get(0))?
-                .filter_map(|r| r.ok())
-                .collect();
-
-            prompts.push(PromptExport {
-                id: p.0,
-                title: p.1,
-                description: p.2,
-                body: p.3,
-                visibility: p.4,
-                target_model: p.5,
-                folder_id: None,
-                is_favorite: p.6 != 0,
-                use_count: p.7,
-                last_used_at: p.8,
-                version: p.9,
-                created_at: p.10,
-                updated_at: p.11,
-                tag_ids,
-            });
-        }
-
-        let mut stmt_v = conn.prepare(
-            "SELECT Id, PromptId, Version, Title, Description, Body, Visibility,
-                    TargetModel, CreatedAt, CreatedByUserId
-             FROM PromptVersions
-             ORDER BY PromptId ASC, Version ASC",
-        )?;
-        let versions: Vec<VersioneExport> = stmt_v
-            .query_map([], |r| {
-                Ok(VersioneExport {
-                    id: r.get(0)?,
-                    prompt_id: r.get(1)?,
-                    version: r.get(2)?,
-                    title: r.get(3)?,
-                    description: r.get(4)?,
-                    body: r.get(5)?,
-                    visibility: r.get(6)?,
-                    target_model: r.get(7)?,
-                    created_at: r.get(8)?,
-                    created_by_user_id: r.get(9)?,
-                })
-            })?
-            .filter_map(|r| r.ok())
-            .collect();
-
-        let mut stmt_t = conn.prepare(
-            "SELECT Id, Name, Color, CreatedAt FROM Tags
-             WHERE DeletedAt IS NULL
-             ORDER BY CreatedAt ASC",
-        )?;
-        let tags: Vec<TagExport> = stmt_t
-            .query_map([], |r| {
-                Ok(TagExport {
-                    id: r.get(0)?,
-                    name: r.get(1)?,
-                    color: r.get(2)?,
-                    created_at: r.get(3)?,
-                })
-            })?
-            .filter_map(|r| r.ok())
-            .collect();
-
-        let export = ExportV1 {
-            schema_version: SCHEMA_VERSION,
-            exported_at: ora_iso(),
-            workspace,
-            prompts,
-            versions,
-            tags,
-            folders: Vec::new(),
-        };
-
+        let export = export_pure(conn)?;
         let json = serde_json::to_string_pretty(&export)?;
 
         crate::audit::registra(
@@ -261,7 +267,192 @@ pub fn vault_export_json(state: State<'_, VaultState>) -> Result<String, PapErro
     })
 }
 
-/// Tauri command: importa un export JSON applicando la modalità di gestione conflitti.
+/// Helper "pure" (no Tauri State) per applicare un `ExportV1` parsato
+/// sulla connection con la modalità di gestione conflitti specificata.
+/// Riusabile dai test e dal Tauri command `vault_import_json`.
+/// v0.7.0 Step 1 refactor.
+///
+/// `modalita` valida: `"skip"`, `"overwrite"`, `"rename"`. Validare
+/// prima di chiamare (vedi `valida_modalita`).
+pub(crate) fn import_pure(
+    conn: &Connection,
+    export: &ExportV1,
+    modalita: &str,
+) -> Result<ImportReport, PapErrore> {
+    let mut report = ImportReport {
+        nuovi: 0,
+        aggiornati: 0,
+        conflitti: 0,
+        errori: Vec::new(),
+    };
+
+    // Tags prima.
+    for tag in &export.tags {
+        let esiste: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM Tags WHERE Id = ?1)",
+                [&tag.id],
+                |r| r.get(0),
+            )
+            .unwrap_or(false);
+
+        match (esiste, modalita) {
+            (false, _) => {
+                if let Err(e) = conn.execute(
+                    "INSERT INTO Tags (Id, WorkspaceId, Name, Color, CreatedAt, UpdatedAt)
+                     VALUES (?1, 'ws-personale', ?2, ?3, ?4, ?4)",
+                    rusqlite::params![tag.id, tag.name, tag.color, tag.created_at],
+                ) {
+                    report.errori.push(format!("Tag {}: {}", tag.id, e));
+                } else {
+                    report.nuovi += 1;
+                }
+            }
+            (true, "skip") | (true, "rename") => {
+                report.conflitti += 1;
+            }
+            (true, "overwrite") => {
+                if let Err(e) = conn.execute(
+                    "UPDATE Tags SET Name = ?1, Color = ?2, UpdatedAt = datetime('now')
+                     WHERE Id = ?3",
+                    rusqlite::params![tag.name, tag.color, tag.id],
+                ) {
+                    report.errori.push(format!("Tag {}: {}", tag.id, e));
+                } else {
+                    report.aggiornati += 1;
+                }
+            }
+            _ => unreachable!("modalita validata in ingresso"),
+        }
+    }
+
+    // Prompts.
+    for prompt in &export.prompts {
+        let esiste: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM Prompts WHERE Id = ?1)",
+                [&prompt.id],
+                |r| r.get(0),
+            )
+            .unwrap_or(false);
+
+        let id_effettivo = match (esiste, modalita) {
+            (false, _) => prompt.id.clone(),
+            (true, "skip") => {
+                report.conflitti += 1;
+                continue;
+            }
+            (true, "overwrite") => prompt.id.clone(),
+            (true, "rename") => format!("{}-imp", prompt.id),
+            _ => unreachable!(),
+        };
+
+        let title = if id_effettivo == prompt.id {
+            prompt.title.clone()
+        } else {
+            format!("{} (importato)", prompt.title)
+        };
+
+        let esito = if esiste && modalita == "overwrite" {
+            conn.execute(
+                "UPDATE Prompts SET Title = ?1, Description = ?2, Body = ?3,
+                        Visibility = ?4, TargetModel = ?5, IsFavorite = ?6,
+                        UseCount = ?7, LastUsedAt = ?8, Version = ?9,
+                        UpdatedAt = datetime('now')
+                 WHERE Id = ?10",
+                rusqlite::params![
+                    title,
+                    prompt.description,
+                    prompt.body,
+                    prompt.visibility,
+                    prompt.target_model,
+                    prompt.is_favorite as i64,
+                    prompt.use_count,
+                    prompt.last_used_at,
+                    prompt.version,
+                    prompt.id
+                ],
+            )
+            .map(|_| "agg")
+        } else {
+            conn.execute(
+                "INSERT INTO Prompts
+                    (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
+                     Visibility, TargetModel, IsFavorite, UseCount, LastUsedAt,
+                     Version, CreatedAt, UpdatedAt)
+                 VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, ?4, ?5, ?6,
+                         ?7, ?8, ?9, ?10, ?11, ?12)",
+                rusqlite::params![
+                    id_effettivo,
+                    title,
+                    prompt.description,
+                    prompt.body,
+                    prompt.visibility,
+                    prompt.target_model,
+                    prompt.is_favorite as i64,
+                    prompt.use_count,
+                    prompt.last_used_at,
+                    prompt.version,
+                    prompt.created_at,
+                    prompt.updated_at
+                ],
+            )
+            .map(|_| "new")
+        };
+
+        match esito {
+            Ok("new") => report.nuovi += 1,
+            Ok("agg") => report.aggiornati += 1,
+            Err(e) => {
+                report.errori.push(format!("Prompt {}: {}", prompt.id, e));
+                continue;
+            }
+            _ => continue,
+        }
+
+        // Riassocia tag.
+        let _ = conn.execute(
+            "DELETE FROM PromptTags WHERE PromptId = ?1",
+            [&id_effettivo],
+        );
+        for tag_id in &prompt.tag_ids {
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO PromptTags (PromptId, TagId) VALUES (?1, ?2)",
+                rusqlite::params![id_effettivo, tag_id],
+            );
+        }
+    }
+
+    // Versioni storiche (best-effort, INSERT OR IGNORE per UNIQUE constraint).
+    for ver in &export.versions {
+        let _ = conn.execute(
+            "INSERT OR IGNORE INTO PromptVersions
+                (Id, PromptId, Version, Title, Description, Body, Visibility,
+                 TargetModel, CreatedAt, CreatedByUserId)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            rusqlite::params![
+                ver.id,
+                ver.prompt_id,
+                ver.version,
+                ver.title,
+                ver.description,
+                ver.body,
+                ver.visibility,
+                ver.target_model,
+                ver.created_at,
+                ver.created_by_user_id,
+            ],
+        );
+    }
+
+    crate::editor::ricostruisci_fts(conn)?;
+
+    Ok(report)
+}
+
+/// Tauri command: importa un export JSON applicando la modalità di
+/// gestione conflitti. Wrapper di `import_pure` con parsing JSON,
+/// validazione modalità + schemaVersion, audit log.
 #[tauri::command]
 pub fn vault_import_json(
     json: String,
@@ -281,173 +472,7 @@ pub fn vault_import_json(
     }
 
     state.with_conn(|conn| {
-        let mut report = ImportReport {
-            nuovi: 0,
-            aggiornati: 0,
-            conflitti: 0,
-            errori: Vec::new(),
-        };
-
-        // Tags prima.
-        for tag in &export.tags {
-            let esiste: bool = conn
-                .query_row(
-                    "SELECT EXISTS(SELECT 1 FROM Tags WHERE Id = ?1)",
-                    [&tag.id],
-                    |r| r.get(0),
-                )
-                .unwrap_or(false);
-
-            match (esiste, modalita.as_str()) {
-                (false, _) => {
-                    if let Err(e) = conn.execute(
-                        "INSERT INTO Tags (Id, WorkspaceId, Name, Color, CreatedAt, UpdatedAt)
-                         VALUES (?1, 'ws-personale', ?2, ?3, ?4, ?4)",
-                        rusqlite::params![tag.id, tag.name, tag.color, tag.created_at],
-                    ) {
-                        report.errori.push(format!("Tag {}: {}", tag.id, e));
-                    } else {
-                        report.nuovi += 1;
-                    }
-                }
-                (true, "skip") | (true, "rename") => {
-                    report.conflitti += 1;
-                }
-                (true, "overwrite") => {
-                    if let Err(e) = conn.execute(
-                        "UPDATE Tags SET Name = ?1, Color = ?2, UpdatedAt = datetime('now')
-                         WHERE Id = ?3",
-                        rusqlite::params![tag.name, tag.color, tag.id],
-                    ) {
-                        report.errori.push(format!("Tag {}: {}", tag.id, e));
-                    } else {
-                        report.aggiornati += 1;
-                    }
-                }
-                _ => unreachable!("modalita validata in ingresso"),
-            }
-        }
-
-        // Prompts.
-        for prompt in &export.prompts {
-            let esiste: bool = conn
-                .query_row(
-                    "SELECT EXISTS(SELECT 1 FROM Prompts WHERE Id = ?1)",
-                    [&prompt.id],
-                    |r| r.get(0),
-                )
-                .unwrap_or(false);
-
-            let id_effettivo = match (esiste, modalita.as_str()) {
-                (false, _) => prompt.id.clone(),
-                (true, "skip") => {
-                    report.conflitti += 1;
-                    continue;
-                }
-                (true, "overwrite") => prompt.id.clone(),
-                (true, "rename") => format!("{}-imp", prompt.id),
-                _ => unreachable!(),
-            };
-
-            let title = if id_effettivo == prompt.id {
-                prompt.title.clone()
-            } else {
-                format!("{} (importato)", prompt.title)
-            };
-
-            let esito = if esiste && modalita == "overwrite" {
-                conn.execute(
-                    "UPDATE Prompts SET Title = ?1, Description = ?2, Body = ?3,
-                            Visibility = ?4, TargetModel = ?5, IsFavorite = ?6,
-                            UseCount = ?7, LastUsedAt = ?8, Version = ?9,
-                            UpdatedAt = datetime('now')
-                     WHERE Id = ?10",
-                    rusqlite::params![
-                        title,
-                        prompt.description,
-                        prompt.body,
-                        prompt.visibility,
-                        prompt.target_model,
-                        prompt.is_favorite as i64,
-                        prompt.use_count,
-                        prompt.last_used_at,
-                        prompt.version,
-                        prompt.id
-                    ],
-                )
-                .map(|_| "agg")
-            } else {
-                conn.execute(
-                    "INSERT INTO Prompts
-                        (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
-                         Visibility, TargetModel, IsFavorite, UseCount, LastUsedAt,
-                         Version, CreatedAt, UpdatedAt)
-                     VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, ?4, ?5, ?6,
-                             ?7, ?8, ?9, ?10, ?11, ?12)",
-                    rusqlite::params![
-                        id_effettivo,
-                        title,
-                        prompt.description,
-                        prompt.body,
-                        prompt.visibility,
-                        prompt.target_model,
-                        prompt.is_favorite as i64,
-                        prompt.use_count,
-                        prompt.last_used_at,
-                        prompt.version,
-                        prompt.created_at,
-                        prompt.updated_at
-                    ],
-                )
-                .map(|_| "new")
-            };
-
-            match esito {
-                Ok("new") => report.nuovi += 1,
-                Ok("agg") => report.aggiornati += 1,
-                Err(e) => {
-                    report.errori.push(format!("Prompt {}: {}", prompt.id, e));
-                    continue;
-                }
-                _ => continue,
-            }
-
-            // Riassocia tag.
-            let _ = conn.execute(
-                "DELETE FROM PromptTags WHERE PromptId = ?1",
-                [&id_effettivo],
-            );
-            for tag_id in &prompt.tag_ids {
-                let _ = conn.execute(
-                    "INSERT OR IGNORE INTO PromptTags (PromptId, TagId) VALUES (?1, ?2)",
-                    rusqlite::params![id_effettivo, tag_id],
-                );
-            }
-        }
-
-        // Versioni storiche (best-effort, INSERT OR IGNORE per UNIQUE constraint).
-        for ver in &export.versions {
-            let _ = conn.execute(
-                "INSERT OR IGNORE INTO PromptVersions
-                    (Id, PromptId, Version, Title, Description, Body, Visibility,
-                     TargetModel, CreatedAt, CreatedByUserId)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-                rusqlite::params![
-                    ver.id,
-                    ver.prompt_id,
-                    ver.version,
-                    ver.title,
-                    ver.description,
-                    ver.body,
-                    ver.visibility,
-                    ver.target_model,
-                    ver.created_at,
-                    ver.created_by_user_id,
-                ],
-            );
-        }
-
-        crate::editor::ricostruisci_fts(conn)?;
+        let report = import_pure(conn, &export, &modalita)?;
 
         crate::audit::registra(
             conn,
@@ -559,5 +584,237 @@ mod test {
         let json = r#"{"schemaVersion":99,"exportedAt":"2026-01-01T00:00:00Z","workspace":{"id":"x","name":"x","type":"personal"},"prompts":[],"versions":[],"tags":[]}"#;
         let parsed: ExportV1 = serde_json::from_str(json).unwrap();
         assert!(parsed.schema_version > SCHEMA_VERSION);
+    }
+
+    // ─────────── v0.7.0 Step 1: export_pure / import_pure ───────────
+
+    fn db_test() -> Connection {
+        crate::embeddings_store::registra_auto_extension();
+        let conn = Connection::open_in_memory().unwrap();
+        crate::migrazione::esegui_migrazioni(&conn).unwrap();
+        crate::libreria::assicura_dati_base(&conn).unwrap();
+        conn
+    }
+
+    fn inserisci_prompt(conn: &Connection, id: &str, titolo: &str, body: &str) {
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility,
+             Version, CreatedAt, UpdatedAt)
+             VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, 'private', 1,
+             datetime('now'), datetime('now'))",
+            rusqlite::params![id, titolo, body],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn export_pure_db_solo_dati_base_zero_prompt() {
+        let conn = db_test();
+        let exp = export_pure(&conn).unwrap();
+        assert_eq!(exp.schema_version, SCHEMA_VERSION);
+        assert_eq!(exp.workspace.id, "ws-personale");
+        assert!(exp.prompts.is_empty());
+        assert!(exp.tags.is_empty());
+        assert!(exp.versions.is_empty());
+    }
+
+    #[test]
+    fn export_pure_include_prompt_attivi() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-a", "Alfa", "body alfa");
+        inserisci_prompt(&conn, "prm-b", "Bravo", "body bravo");
+        let exp = export_pure(&conn).unwrap();
+        assert_eq!(exp.prompts.len(), 2);
+        let ids: Vec<&str> = exp.prompts.iter().map(|p| p.id.as_str()).collect();
+        assert!(ids.contains(&"prm-a"));
+        assert!(ids.contains(&"prm-b"));
+    }
+
+    #[test]
+    fn export_pure_esclude_prompt_eliminati() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-attivo", "Attivo", "body");
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility,
+             Version, CreatedAt, UpdatedAt, DeletedAt)
+             VALUES ('prm-elim', 'ws-personale', 'usr-locale', 'Eliminato', 'b', 'private', 1,
+             datetime('now'), datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        let exp = export_pure(&conn).unwrap();
+        assert_eq!(exp.prompts.len(), 1);
+        assert_eq!(exp.prompts[0].id, "prm-attivo");
+    }
+
+    #[test]
+    fn export_pure_include_tag_associati_al_prompt() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "Test", "body");
+        conn.execute(
+            "INSERT INTO Tags (Id, WorkspaceId, Name, CreatedAt, UpdatedAt)
+             VALUES ('tag-x', 'ws-personale', 'x', datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO PromptTags (PromptId, TagId) VALUES ('prm-1', 'tag-x')",
+            [],
+        )
+        .unwrap();
+        let exp = export_pure(&conn).unwrap();
+        assert_eq!(exp.prompts[0].tag_ids, vec!["tag-x"]);
+        assert_eq!(exp.tags.len(), 1);
+        assert_eq!(exp.tags[0].id, "tag-x");
+    }
+
+    fn payload_minimo(prompt_id: &str, titolo: &str) -> ExportV1 {
+        ExportV1 {
+            schema_version: 1,
+            exported_at: "2026-05-07T00:00:00Z".to_string(),
+            workspace: WorkspaceMeta {
+                id: "ws-personale".into(),
+                name: "Personale".into(),
+                workspace_type: "personal".into(),
+            },
+            prompts: vec![PromptExport {
+                id: prompt_id.into(),
+                title: titolo.into(),
+                description: None,
+                body: "body".into(),
+                visibility: "private".into(),
+                target_model: None,
+                folder_id: None,
+                is_favorite: false,
+                use_count: 0,
+                last_used_at: None,
+                version: 1,
+                created_at: "2026-05-07T00:00:00Z".into(),
+                updated_at: "2026-05-07T00:00:00Z".into(),
+                tag_ids: vec![],
+            }],
+            versions: vec![],
+            tags: vec![],
+            folders: vec![],
+        }
+    }
+
+    #[test]
+    fn import_pure_db_vuoto_inserisce_prompt_come_nuovo() {
+        let conn = db_test();
+        let payload = payload_minimo("prm-new", "Nuovo");
+        let report = import_pure(&conn, &payload, "skip").unwrap();
+        assert_eq!(report.nuovi, 1);
+        assert_eq!(report.aggiornati, 0);
+        assert_eq!(report.conflitti, 0);
+        assert!(report.errori.is_empty());
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM Prompts", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn import_pure_modalita_skip_su_id_esistente_incrementa_conflitti() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "Originale", "body");
+        let payload = payload_minimo("prm-1", "Da-import");
+        let report = import_pure(&conn, &payload, "skip").unwrap();
+        assert_eq!(report.nuovi, 0);
+        assert_eq!(report.conflitti, 1);
+
+        // Verifica che il titolo originale sia preservato.
+        let title: String = conn
+            .query_row("SELECT Title FROM Prompts WHERE Id = 'prm-1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(title, "Originale");
+    }
+
+    #[test]
+    fn import_pure_modalita_overwrite_aggiorna_record() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "Originale", "body-vecchio");
+        let payload = payload_minimo("prm-1", "Aggiornato");
+        let report = import_pure(&conn, &payload, "overwrite").unwrap();
+        assert_eq!(report.nuovi, 0);
+        assert_eq!(report.aggiornati, 1);
+        assert_eq!(report.conflitti, 0);
+
+        let title: String = conn
+            .query_row("SELECT Title FROM Prompts WHERE Id = 'prm-1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(title, "Aggiornato");
+    }
+
+    #[test]
+    fn import_pure_modalita_rename_crea_id_suffix_imp() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "Originale", "body");
+        let payload = payload_minimo("prm-1", "Da-rinominare");
+        let report = import_pure(&conn, &payload, "rename").unwrap();
+        // Tag conflict → conteggio nuovi sul prompt rinominato.
+        assert_eq!(report.nuovi, 1);
+
+        // Verifica che esista il record con id rinominato.
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Prompts WHERE Id = 'prm-1-imp'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+
+        // Originale preservato.
+        let title_orig: String = conn
+            .query_row("SELECT Title FROM Prompts WHERE Id = 'prm-1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(title_orig, "Originale");
+    }
+
+    #[test]
+    fn import_pure_round_trip_export_pure() {
+        // Inserisci dati, esporta, importa su DB pulito, esporta di nuovo,
+        // verifica equivalenza essenziale (id prompt e tag).
+        let conn1 = db_test();
+        inserisci_prompt(&conn1, "prm-1", "Test", "body");
+        let exp1 = export_pure(&conn1).unwrap();
+
+        let conn2 = db_test();
+        let report = import_pure(&conn2, &exp1, "skip").unwrap();
+        assert_eq!(report.nuovi, 1);
+
+        let exp2 = export_pure(&conn2).unwrap();
+        assert_eq!(exp2.prompts.len(), 1);
+        assert_eq!(exp2.prompts[0].id, "prm-1");
+        assert_eq!(exp2.prompts[0].title, "Test");
+    }
+
+    #[test]
+    fn import_pure_tag_skip_su_id_esistente() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO Tags (Id, WorkspaceId, Name, CreatedAt, UpdatedAt)
+             VALUES ('tag-x', 'ws-personale', 'OriginaleNome', datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let mut payload = payload_minimo("prm-x", "x");
+        payload.tags = vec![TagExport {
+            id: "tag-x".into(),
+            name: "NuovoNome".into(),
+            color: None,
+            created_at: "2026-05-07T00:00:00Z".into(),
+        }];
+
+        let report = import_pure(&conn, &payload, "skip").unwrap();
+        assert_eq!(report.conflitti, 1);
+
+        let nome: String = conn
+            .query_row("SELECT Name FROM Tags WHERE Id = 'tag-x'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(nome, "OriginaleNome", "skip non deve modificare tag esistente");
     }
 }
