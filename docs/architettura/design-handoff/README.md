@@ -217,3 +217,21 @@ Apri `design/index.html` per partire dall'hub navigabile.
 5. **Stato sempre on-screen** — sync, autosave, conteggi, mai sorprese silenziose.
 6. **Dark first, light parità** — stessi tokens, due mappature, AA in entrambi.
 7. **Niente effetti AI-pattern** — evitare ring brillanti, gradienti animati, pulse continui. Feedback minimal, funzionale, statico dove possibile.
+
+---
+
+## Redesign post-v0.7 (in corso)
+
+Dopo 7 release minor (`v0.1` → `v0.7`) il prodotto si è stratificato e
+viene avviato un nuovo round di design organico. Brief per il designer:
+
+- [`2026-05-08-redesign-brief.md`](./2026-05-08-redesign-brief.md) —
+  sintesi prodotto, persona target, architettura, soluzione tecnica,
+  elenco feature v0.7 (14 macro-aree), mappa schermate (IA),
+  differenziatori strategici, constraint, numeri rilevanti. Sezioni
+  "pain points" e "goal del redesign" da rifinire dall'utente prima
+  della consegna al designer.
+
+Gli asset Fase 1 sopra (HTML statici, `tokens.css`, `app.css`) restano
+**reference storica**: utili per capire la baseline visuale ma NON
+riflettono il prodotto v0.7.
