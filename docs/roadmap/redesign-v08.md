@@ -649,7 +649,8 @@ Per evitare di perdere dettagli specifici durante i 6-7 sprint, ogni fase ha un 
 
 | Blueprint | Stato | Contenuto chiave |
 |---|---|---|
-| `docs/roadmap/redesign-v08/blueprint-F0.md` | DA CREARE | Tokens override #4 (chip color-mix, mono `#1A1F2C`, accent-private `#7C3AED`, border `#E2E5EB`), font self-hosting subset latin, store preferences.ts schema, $effect data-theme/data-tone, fallback prefers-color-scheme |
+| `docs/roadmap/redesign-v08/blueprint-F0.md` | 🟢 Esistente | Tokens override #4 (chip color-mix, mono `#1A1F2C`, accent-private `#7C3AED`, border `#E2E5EB`), font self-hosting subset latin, store preferences.ts schema, $effect data-theme/data-tone, fallback prefers-color-scheme |
+| `docs/roadmap/redesign-v08/blueprint-backend-v014.md` | 🟢 Esistente | Migrazione V014 SortOrder + backfill, cmd `folder_riordina`/`prompt_riordina` con re-pack atomico, extend `VersioneStorica` con autore display+email, extend `Statistiche` con `token_medi` proxy `LENGTH/4`, 9 test nuovi |
 | `docs/roadmap/redesign-v08/blueprint-F1.md` | DA CREARE | CSS grid spec esatta, paneforge integrazione, resizer clamp 180-360/0-480/220-480, hit-area 7px |
 | `docs/roadmap/redesign-v08/blueprint-F2.md` | DA CREARE | Workspace switcher placeholder con avatar hash, NavGroup collassabili, sidebar-mini 44px stack icone 32×32 |
 | `docs/roadmap/redesign-v08/blueprint-F3.md` | DA CREARE | Drag-reorder glow box-shadow esatto, auto-espansione 600ms, ESC annulla, multi-select ⌘+click per Diff libero |
