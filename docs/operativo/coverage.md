@@ -10,16 +10,17 @@
 ## Stato attuale
 
 Coverage misurato il 2026-05-07 con `cargo-llvm-cov` (toolchain stable,
-profilo test) post v0.6.0 Step 1 (hardening):
+profilo test) post v0.7.0 Step 1 (coverage push):
 
-- **Line coverage globale: 71.02%** (9 525 linee strumentate, 2 760 non
-  coperte) — era 70.27% post v0.5.0, 60.12% post v0.3.0
-- **Region coverage globale: 72.81%**
-- **Function coverage globale: 75.61%**
+- **Line coverage globale: 74.14%** (10 073 linee strumentate, 2 605 non
+  coperte) — era 71.02% post v0.6.0, 70.27% post v0.5.0, 60.12% post v0.3.0
+- **Region coverage globale: 75.56%**
+- **Function coverage globale: 77.69%**
 
-CI gate: `--fail-under-lines 65` (alzato da 60 in v0.6.0 Step 1). Sotto
-questa soglia il workflow `rust-test` fallisce e blocca il merge.
-Margine corrente vs gate: ~+6 punti, sicuro contro regressioni.
+CI gate: `--fail-under-lines 70` (alzato da 65 in v0.7.0 Step 1; era 60
+fino a v0.6 e 65 fino a v0.7). Sotto questa soglia il workflow
+`rust-test` fallisce e blocca il merge. Margine corrente vs gate:
+~+4 punti, sicuro contro regressioni.
 
 ## Per modulo (snapshot 2026-05-07)
 
@@ -84,34 +85,25 @@ cargo llvm-cov --lib --html
 cargo llvm-cov --lib --summary-only --no-clean linting::
 ```
 
-## Roadmap verso 75%
+## Roadmap verso 78%
 
-I 2 file ancora sotto 50% pesano ~940 linee (10% del totale strumentato).
-Portarli a 60% recupererebbe ~150 linee → +1.5% globale.
+Solo `embeddings.rs` resta sotto 50% (40.61% post v0.7 Step 1) come
+zavorra significativa. Il path completo richiede HTTP mock per la
+logica di download, scope dedicato di v0.8.
 
-Priorità per v0.6.x → v0.7:
+Priorità per v0.8:
 
-1. **`embeddings.rs` 28% → 50%**: estrarre helper testabili dalla logica
-   di download (`scarica_modello`, `scarica_runtime`) con HTTP mockato,
-   testare `mean_pooling`/`l2_normalize` con tensori sintetici. Stima
-   +250 linee.
-2. **`import_export.rs` 29% → 50%**: scenari di round-trip JSON/CSV
-   con segnaposti complessi, gestione versione schema mismatch.
-   Stima +75 linee.
-3. **`embeddings_backfill.rs` 10% → 40%**: dopo il punto 1, i path di
+1. **`embeddings.rs` 41% → 70%**: estrarre helper testabili dalla logica
+   di download (`scarica_modello`, `scarica_runtime`) con HTTP mockato
+   (libreria mock-server o fixture file). Stima +180 linee, +2pt globale.
+2. **`embeddings_backfill.rs` 10% → 50%**: dopo il punto 1, i path di
    batching diventano testabili senza dipendenza dal modello reale.
-4. **`libreria.rs` 59% → 72%** ⏳ in progresso v0.6 Step 1:
-   filtri vista (preferiti, privati, team), ordinamento, ricerca testo.
 
 Target raggiunti / aggiornati:
 - ~~65% line coverage globale entro v0.4.0~~ ✅ raggiunto al **69.91%** (Fase 4 client-first track)
 - ~~70% line coverage globale entro v0.5~~ ✅ raggiunto al **70.27%** (v0.5.0 Step 6 Gemini test)
-- **75% globale entro v0.7**, gate CI ora a **65%** (alzato in v0.6 Step 1)
-
-I 5 file in arancio/rosso (≤ 50%) restano la zavorra principale: senza
-intervento dedicato su `embeddings.rs`, `vault.rs`, `audit.rs`,
-`libreria.rs`, `import_export.rs` (più i casi terminali `embeddings_backfill.rs`
-e `lib.rs`) la coverage globale rimane ferma intorno al 70%.
+- ~~75% globale entro v0.7~~ ✅ sostanzialmente raggiunto al **74.14%** (v0.7 Step 1, refactor `import_export` 29%→79%)
+- **78% globale entro v0.8**, gate CI ora a **70%** (alzato in v0.7 Step 1)
 
 ## Cosa NON misuriamo (deliberatamente)
 

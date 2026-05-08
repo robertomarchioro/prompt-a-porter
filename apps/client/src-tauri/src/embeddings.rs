@@ -909,4 +909,93 @@ mod test {
         // reale; la regressione si manifesterebbe come errore quando atteso.
         // Sentinel: la versione corrente mantiene l'early-return at lock guard.
     }
+
+    // ─────────── v0.7.0 Step 1: edge case pure functions ───────────
+
+    #[test]
+    fn mean_pooling_tutti_token_attivi_media_uniforme() {
+        // 3 token tutti attivi (mask=1), hidden=2.
+        // Atteso: media element-wise sui 3 token.
+        let emb = Array2::from_shape_vec(
+            (3, 2),
+            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
+        )
+        .unwrap();
+        let mask = Array1::from_vec(vec![1, 1, 1]);
+        let pooled = mean_pooling(&emb, &mask);
+        // Media: (1+2+3)/3 = 2.0; (4+5+6)/3 = 5.0
+        assert!((pooled[0] - 2.0).abs() < 1e-6);
+        assert!((pooled[1] - 5.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn mean_pooling_mask_tutta_zero_ritorna_zero() {
+        // Edge case: tutti i token mascherati → count=0, sum=0, no division.
+        let emb = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+        let mask = Array1::from_vec(vec![0, 0]);
+        let pooled = mean_pooling(&emb, &mask);
+        assert_eq!(pooled.to_vec(), vec![0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn l2_normalize_vettore_zero_no_panic() {
+        // Edge case: vettore zero → norm=0 → guard `> 1e-12` evita divisione.
+        let mut v = Array1::from_vec(vec![0.0, 0.0, 0.0]);
+        l2_normalize(&mut v);
+        // Resta zero (no NaN/Inf).
+        assert_eq!(v.to_vec(), vec![0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn l2_normalize_vettore_unitario_invariato() {
+        // [1, 0, 0] è già unitario → resta uguale.
+        let mut v = Array1::from_vec(vec![1.0, 0.0, 0.0]);
+        l2_normalize(&mut v);
+        assert!((v[0] - 1.0).abs() < 1e-6);
+        assert!(v[1].abs() < 1e-6);
+        assert!(v[2].abs() < 1e-6);
+    }
+
+    #[test]
+    fn l2_normalize_vettore_negativo_norma_corretta() {
+        // [-3, 4] ha norma 5 → normalizzato [-0.6, 0.8].
+        let mut v = Array1::from_vec(vec![-3.0, 4.0]);
+        l2_normalize(&mut v);
+        assert!((v[0] + 0.6).abs() < 1e-6);
+        assert!((v[1] - 0.8).abs() < 1e-6);
+    }
+
+    #[test]
+    fn dim_cartella_mb_directory_vuota() {
+        // Directory esistente ma senza file → 0 MB.
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(dim_cartella_mb(dir.path()), 0);
+    }
+
+    #[test]
+    fn dim_cartella_mb_con_file() {
+        // Crea 1 file da 2 MB → dim_cartella_mb deve ritornare 2.
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("test.bin");
+        let bytes = vec![0u8; 2 * 1024 * 1024];
+        std::fs::write(&file_path, &bytes).unwrap();
+        assert_eq!(dim_cartella_mb(dir.path()), 2);
+    }
+
+    #[test]
+    fn modello_completo_solo_un_file_no() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("model.onnx"), b"x").unwrap();
+        // Manca tokenizer.json → false.
+        assert!(!modello_completo(dir.path()));
+    }
+
+    #[test]
+    fn ort_release_filename_versione_consistente() {
+        // Sentinel: il filename ritorna la stessa ORT_VERSION (no drift).
+        let r = ort_release_filename().unwrap();
+        let (filename, _sub) = r;
+        // Filename contiene sempre la versione configurata.
+        assert!(filename.contains(ORT_VERSION));
+    }
 }
