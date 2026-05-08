@@ -1,5 +1,47 @@
 # Changelog — Prompt a Porter
 
+## v0.7.0 — Refactor coverage + sprint quick wins import/cartelle (2026-05-08)
+
+> **Sprint v0.7.0 chiuso 6/6 step.** Mix di hardening (refactor `import_export.rs` per testabilità, coverage push 71→74%, gate CI 65→70) e quick wins su flussi di cartelle, import componibili, target model custom. Schema DB invariato, no breaking change.
+
+### Highlights
+
+- **Coverage push 71→74% + gate CI 65→70** — refactor `import_export.rs` estrae `export_pure(conn)` e `import_pure(conn, &ExportV1, modalita)` come helper testabili senza Tauri State. `import_export.rs` 28.95% → 78.87% (+49.92pt). +19 test (10 import_export + 9 embeddings edge case).
+- **Esporta singola cartella** — bottone ⬇ nel sb-folder-actions della sidebar Libreria. Filtra Prompts via `Folders.Path` LIKE prefix per il sotto-albero. Comando `vault_export_folder_json(folder_id)`. Folders nel payload restano `Vec::new()` (roundtrip → v0.8).
+- **Custom free-text target model** — `<Select>` dei 9 preset sostituito con `<input list>` + `<datalist>` HTML5 nativo. Modelli custom (`claude-opus-5`, `gpt-6`, locali) accettati. Backend `Prompts.TargetModel` invariato.
+- **Hover preview import + Ctrl+click navigazione** — i token `{{import "..."}}` nell'editor hanno highlight + tooltip nativo CodeMirror (titolo + snippet body 240 char) + Ctrl/Cmd+click per aprire il prompt target. Nuovo modulo `lib/codemirror/import-tokens.ts` + comando `prompt_resolve_import_preview(path)`.
+- **Cross-prompt linting (IMP004)** — nuova regola Info-level che mostra "Questo prompt è importato da N altri" usando `PromptImports` come grafo inverso. Skip se prompt non salvato.
+- **Markdown export con YAML front-matter** — bottone "Esporta MD" nel detail pane. Front-matter compatibile Jekyll/Hugo include `title`, `description?`, `target_model?`, `visibility`, `version`, `created_at`, `updated_at`, **`imports: [...]`** parsati dal body (riproducibilità).
+
+### Numeri
+
+- **416 unit test backend** (era 382 a inizio sprint, +34 nuovi: 19 Step 1, +5 Step 2, +10 Step 4 vitest, +4 Step 5, +6 Step 6)
+- **17 vitest frontend** (era 7, +10 nuovi su import-tokens parser)
+- **Coverage globale 74.14% line / 77.69% function** (era 71.02%/75.61%)
+- **CI gate alzato da 65% a 70%** (margine +4pt)
+- 6 PR mergiate (#89-#94), tutte con CI verde su `lint-and-test` + `rust-test`
+
+### Documentazione aggiornata
+
+- `docs/operativo/coverage.md` — nuovo snapshot 74.14%, target ridefinito a 78% globale entro v0.8
+- `docs/roadmap/rinvii.md` — 6 item Fase 3 atterrati: Esporta cartella, Custom target model, Hover preview import, Ctrl+click navigazione, Cross-prompt linting, Markdown export con front-matter
+- `docs/operativo/release-signing-macos.md` — runbook Apple Developer notarization (creato pre-sprint, attesa enrollment KYC)
+
+### Out of scope (rinviato)
+
+- **`embeddings.rs` 41% → 70%** — refactor con HTTP mock per logica di download, target v0.8 (sblocca coverage 78% globale)
+- **`embeddings_backfill.rs` 10% → 50%** — dipende da Step embeddings refactor
+- **Roundtrip cartelle export/import** (popolare `folders` nel payload + ricreare al target con conflict resolution) — scope v0.8
+- **Filtro Libreria sidebar per modelli custom** — query `DISTINCT TargetModel` dal DB invece di iterare i preset
+- **UI declutter generale** — sessione dedicata anticipata dall'utente (post-v0.7)
+- **Promozione variante a principale** (swap main↔variant) — rivedere col declutter UI
+- **CLI `pap test`** + **MCP `pap_test_prompt`** — Fase 5 con MCP HTTP/SSE
+- **Signing Authenticode Windows** + **Apple notarization macOS** — gate amministrativo, runbook esistente
+
+Tutti i punti deferiti tracciati in [`docs/roadmap/rinvii.md`](docs/roadmap/rinvii.md).
+
+---
+
 ## v0.6.0 — Hardening + secondo sprint quick wins (2026-05-07)
 
 > **Sprint v0.6.0 chiuso 6/6 step.** Mix di hardening (coverage push, riload Session, gate CI) e quick wins UX dai rinvii Fase 3/4 (inline marker linter, statistiche prompt più importati + lint health, vista Confronto varianti, configurazione per-categoria linter). Schema DB invariato.
