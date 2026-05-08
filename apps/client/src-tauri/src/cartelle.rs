@@ -59,6 +59,18 @@ pub struct SpostaPrompt {
     pub folder_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct RiordinaFolder {
+    pub id: String,
+    pub new_sort: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RiordinaPrompt {
+    pub prompt_id: String,
+    pub new_sort: i64,
+}
+
 fn genera_id() -> String {
     use rand::RngCore;
     let ts = std::time::SystemTime::now()
@@ -290,6 +302,161 @@ pub fn folder_sposta(
             sposta_cascata(c, &dati.id, dati.nuovo_parent_id.as_deref())
         })?;
         crate::audit::registra(conn, "folder.spostato", "Folder", &dati.id, None);
+        Ok(())
+    })
+}
+
+/// Re-pack atomico SortOrder dei siblings di una cartella.
+/// Estratta come `pub(crate)` per testabilità diretta su `&Connection`.
+pub(crate) fn riordina_folder_inner(
+    conn: &Connection,
+    id: &str,
+    new_sort: i64,
+) -> Result<(), PapErrore> {
+    atomicamente(conn, |c| {
+        let (workspace_id, parent_folder_id, current_sort): (String, Option<String>, i64) = c
+            .query_row(
+                "SELECT WorkspaceId, ParentFolderId, SortOrder
+                 FROM Folders WHERE Id = ?1 AND DeletedAt IS NULL",
+                params![id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .map_err(|_| PapErrore::Generico(format!("Cartella {id} non trovata")))?;
+
+        let sibling_count: i64 = c.query_row(
+            "SELECT COUNT(*) FROM Folders
+             WHERE WorkspaceId = ?1
+               AND COALESCE(ParentFolderId, '') = COALESCE(?2, '')
+               AND DeletedAt IS NULL
+               AND Id != ?3",
+            params![&workspace_id, &parent_folder_id, id],
+            |r| r.get(0),
+        )?;
+        let target_sort = new_sort.clamp(0, sibling_count);
+
+        if target_sort == current_sort {
+            return Ok(()); // No-op: già al posto giusto
+        }
+
+        if target_sort < current_sort {
+            // Spostiamo verso l'alto: shift +1 i siblings tra [target_sort, current_sort-1]
+            c.execute(
+                "UPDATE Folders SET SortOrder = SortOrder + 1
+                 WHERE WorkspaceId = ?1
+                   AND COALESCE(ParentFolderId, '') = COALESCE(?2, '')
+                   AND DeletedAt IS NULL
+                   AND Id != ?3
+                   AND SortOrder >= ?4 AND SortOrder < ?5",
+                params![&workspace_id, &parent_folder_id, id, target_sort, current_sort],
+            )?;
+        } else {
+            // Spostiamo verso il basso: shift -1 i siblings tra [current_sort+1, target_sort]
+            c.execute(
+                "UPDATE Folders SET SortOrder = SortOrder - 1
+                 WHERE WorkspaceId = ?1
+                   AND COALESCE(ParentFolderId, '') = COALESCE(?2, '')
+                   AND DeletedAt IS NULL
+                   AND Id != ?3
+                   AND SortOrder > ?4 AND SortOrder <= ?5",
+                params![&workspace_id, &parent_folder_id, id, current_sort, target_sort],
+            )?;
+        }
+
+        c.execute(
+            "UPDATE Folders SET SortOrder = ?1, UpdatedAt = datetime('now') WHERE Id = ?2",
+            params![target_sort, id],
+        )?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn folder_riordina(
+    dati: RiordinaFolder,
+    state: State<'_, VaultState>,
+) -> Result<(), PapErrore> {
+    state.with_conn(|conn| {
+        riordina_folder_inner(conn, &dati.id, dati.new_sort)?;
+        crate::audit::registra(conn, "folder.riordinato", "Folder", &dati.id, None);
+        log::info!("folder_riordina id={} new_sort={}", dati.id, dati.new_sort);
+        Ok(())
+    })
+}
+
+/// Re-pack atomico SortOrder dei siblings di un prompt.
+pub(crate) fn riordina_prompt_inner(
+    conn: &Connection,
+    prompt_id: &str,
+    new_sort: i64,
+) -> Result<(), PapErrore> {
+    atomicamente(conn, |c| {
+        let (workspace_id, folder_id, current_sort): (String, Option<String>, i64) = c
+            .query_row(
+                "SELECT WorkspaceId, FolderId, SortOrder
+                 FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
+                params![prompt_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .map_err(|_| PapErrore::Generico(format!("Prompt {prompt_id} non trovato")))?;
+
+        let sibling_count: i64 = c.query_row(
+            "SELECT COUNT(*) FROM Prompts
+             WHERE WorkspaceId = ?1
+               AND COALESCE(FolderId, '') = COALESCE(?2, '')
+               AND DeletedAt IS NULL
+               AND Id != ?3",
+            params![&workspace_id, &folder_id, prompt_id],
+            |r| r.get(0),
+        )?;
+        let target_sort = new_sort.clamp(0, sibling_count);
+
+        if target_sort == current_sort {
+            return Ok(());
+        }
+
+        if target_sort < current_sort {
+            c.execute(
+                "UPDATE Prompts SET SortOrder = SortOrder + 1
+                 WHERE WorkspaceId = ?1
+                   AND COALESCE(FolderId, '') = COALESCE(?2, '')
+                   AND DeletedAt IS NULL
+                   AND Id != ?3
+                   AND SortOrder >= ?4 AND SortOrder < ?5",
+                params![&workspace_id, &folder_id, prompt_id, target_sort, current_sort],
+            )?;
+        } else {
+            c.execute(
+                "UPDATE Prompts SET SortOrder = SortOrder - 1
+                 WHERE WorkspaceId = ?1
+                   AND COALESCE(FolderId, '') = COALESCE(?2, '')
+                   AND DeletedAt IS NULL
+                   AND Id != ?3
+                   AND SortOrder > ?4 AND SortOrder <= ?5",
+                params![&workspace_id, &folder_id, prompt_id, current_sort, target_sort],
+            )?;
+        }
+
+        c.execute(
+            "UPDATE Prompts SET SortOrder = ?1, UpdatedAt = datetime('now') WHERE Id = ?2",
+            params![target_sort, prompt_id],
+        )?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn prompt_riordina(
+    dati: RiordinaPrompt,
+    state: State<'_, VaultState>,
+) -> Result<(), PapErrore> {
+    state.with_conn(|conn| {
+        riordina_prompt_inner(conn, &dati.prompt_id, dati.new_sort)?;
+        crate::audit::registra(conn, "prompt.riordinato", "Prompt", &dati.prompt_id, None);
+        log::info!(
+            "prompt_riordina id={} new_sort={}",
+            dati.prompt_id,
+            dati.new_sort
+        );
         Ok(())
     })
 }
@@ -729,5 +896,114 @@ mod test {
             )
             .unwrap();
         assert_eq!(count, 2);
+    }
+
+    // ─────────────────── V014 — drag-reorder ───────────────────
+
+    /// Crea una folder con SortOrder esplicito (per test riordino).
+    fn crea_con_sort(conn: &Connection, nome: &str, parent: Option<&str>, sort: i64) -> String {
+        let id = genera_id();
+        let path = calcola_path(conn, parent, nome).unwrap();
+        conn.execute(
+            "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path, SortOrder)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, WORKSPACE_ID, parent, nome, path, sort],
+        )
+        .unwrap();
+        id
+    }
+
+    fn get_sort(conn: &Connection, id: &str) -> i64 {
+        conn.query_row(
+            "SELECT SortOrder FROM Folders WHERE Id = ?1",
+            [id],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn folder_riordina_no_op_se_stessa_posizione() {
+        let conn = db_test();
+        let f1 = crea_con_sort(&conn, "a", None, 0);
+        let f2 = crea_con_sort(&conn, "b", None, 1);
+        riordina_folder_inner(&conn, &f1, 0).unwrap();
+        assert_eq!(get_sort(&conn, &f1), 0);
+        assert_eq!(get_sort(&conn, &f2), 1);
+    }
+
+    #[test]
+    fn folder_riordina_sposta_giu_shifta_siblings_su() {
+        // f1=0, f2=1, f3=2. Sposta f1 a 2 → f2→0, f3→1, f1→2
+        let conn = db_test();
+        let f1 = crea_con_sort(&conn, "a", None, 0);
+        let f2 = crea_con_sort(&conn, "b", None, 1);
+        let f3 = crea_con_sort(&conn, "c", None, 2);
+        riordina_folder_inner(&conn, &f1, 2).unwrap();
+        assert_eq!(get_sort(&conn, &f2), 0, "f2 deve shiftare a 0");
+        assert_eq!(get_sort(&conn, &f3), 1, "f3 deve shiftare a 1");
+        assert_eq!(get_sort(&conn, &f1), 2, "f1 deve essere al target");
+    }
+
+    #[test]
+    fn folder_riordina_sposta_su_shifta_siblings_giu() {
+        // f1=0, f2=1, f3=2. Sposta f3 a 0 → f3→0, f1→1, f2→2
+        let conn = db_test();
+        let f1 = crea_con_sort(&conn, "a", None, 0);
+        let f2 = crea_con_sort(&conn, "b", None, 1);
+        let f3 = crea_con_sort(&conn, "c", None, 2);
+        riordina_folder_inner(&conn, &f3, 0).unwrap();
+        assert_eq!(get_sort(&conn, &f3), 0, "f3 al target");
+        assert_eq!(get_sort(&conn, &f1), 1, "f1 shifta giù");
+        assert_eq!(get_sort(&conn, &f2), 2, "f2 shifta giù");
+    }
+
+    #[test]
+    fn folder_riordina_clamp_oltre_range() {
+        // 3 sibling, sibling_count escludendo target = 2. new_sort=999 → 2.
+        let conn = db_test();
+        let f1 = crea_con_sort(&conn, "a", None, 0);
+        let _f2 = crea_con_sort(&conn, "b", None, 1);
+        let _f3 = crea_con_sort(&conn, "c", None, 2);
+        riordina_folder_inner(&conn, &f1, 999).unwrap();
+        assert_eq!(get_sort(&conn, &f1), 2, "clamp all'ultimo posto");
+    }
+
+    #[test]
+    fn folder_riordina_id_inesistente_errore() {
+        let conn = db_test();
+        let res = riordina_folder_inner(&conn, "ghost", 0);
+        assert!(matches!(res, Err(PapErrore::Generico(_))));
+    }
+
+    #[test]
+    fn prompt_riordina_smoke() {
+        // Pattern identico a folder_riordina; smoke test sufficiente.
+        let conn = db_test();
+        // Inseriamo 3 prompt fittizi nello stesso scope (FolderId NULL)
+        // sfruttando lo schema esistente.
+        for (i, id) in ["p1", "p2", "p3"].iter().enumerate() {
+            conn.execute(
+                "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body,
+                                      Visibility, CreatedAt, UpdatedAt, SortOrder, Version)
+                 VALUES (?1, ?2, 'usr-locale', 'titolo', 'body',
+                         'private', datetime('now'), datetime('now'), ?3, 1)",
+                params![id, WORKSPACE_ID, i as i64],
+            )
+            .unwrap();
+        }
+        riordina_prompt_inner(&conn, "p1", 2).unwrap();
+        let p1_sort: i64 = conn.query_row(
+            "SELECT SortOrder FROM Prompts WHERE Id = 'p1'", [], |r| r.get(0)
+        ).unwrap();
+        let p2_sort: i64 = conn.query_row(
+            "SELECT SortOrder FROM Prompts WHERE Id = 'p2'", [], |r| r.get(0)
+        ).unwrap();
+        let p3_sort: i64 = conn.query_row(
+            "SELECT SortOrder FROM Prompts WHERE Id = 'p3'", [], |r| r.get(0)
+        ).unwrap();
+        assert_eq!(p1_sort, 2);
+        assert_eq!(p2_sort, 0);
+        assert_eq!(p3_sort, 1);
     }
 }

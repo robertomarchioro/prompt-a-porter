@@ -76,6 +76,11 @@ static MIGRAZIONI: &[Migrazione] = &[
         nome: "prompt_ratings",
         sql: include_str!("../migrations/V013__prompt_ratings.sql"),
     },
+    Migrazione {
+        versione: 14,
+        nome: "sort_order",
+        sql: include_str!("../migrations/V014__sort_order.sql"),
+    },
 ];
 
 /// Crea la tabella di tracking se non esiste.
@@ -150,10 +155,10 @@ mod test {
         let conn = Connection::open_in_memory().unwrap();
         let n = esegui_migrazioni(&conn).unwrap();
         assert!(
-            n >= 13,
-            "Tutte le migrazioni devono essere applicate (almeno 13)"
+            n >= 14,
+            "Tutte le migrazioni devono essere applicate (almeno 14)"
         );
-        assert_eq!(versione_corrente(&conn).unwrap(), 13);
+        assert_eq!(versione_corrente(&conn).unwrap(), 14);
     }
 
     #[test]
@@ -198,5 +203,91 @@ mod test {
                 "Tabella {t} mancante. Trovate: {tabelle:?}"
             );
         }
+    }
+
+    #[test]
+    fn v014_aggiunge_colonne_sortorder() {
+        crate::embeddings_store::registra_auto_extension();
+        let conn = Connection::open_in_memory().unwrap();
+        esegui_migrazioni(&conn).unwrap();
+
+        let folders_cols: Vec<String> = conn
+            .prepare("PRAGMA table_info(Folders)")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        assert!(
+            folders_cols.contains(&"SortOrder".to_string()),
+            "Folders.SortOrder mancante. Colonne: {folders_cols:?}"
+        );
+
+        let prompts_cols: Vec<String> = conn
+            .prepare("PRAGMA table_info(Prompts)")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        assert!(
+            prompts_cols.contains(&"SortOrder".to_string()),
+            "Prompts.SortOrder mancante. Colonne: {prompts_cols:?}"
+        );
+    }
+
+    #[test]
+    fn v014_backfill_sortorder_stabile_per_creato_at() {
+        crate::embeddings_store::registra_auto_extension();
+        let conn = Connection::open_in_memory().unwrap();
+        esegui_migrazioni(&conn).unwrap();
+
+        // Setup minimale: workspace + 3 folder con CreatedAt distinti
+        conn.execute(
+            "INSERT INTO Workspaces (Id, Name, Type, CreatedAt, UpdatedAt) VALUES ('ws1','test','personal','2026-01-01','2026-01-01')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path, CreatedAt, UpdatedAt) VALUES ('f1','ws1',NULL,'A','/A','2026-01-01','2026-01-01')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path, CreatedAt, UpdatedAt) VALUES ('f2','ws1',NULL,'B','/B','2026-01-02','2026-01-02')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path, CreatedAt, UpdatedAt) VALUES ('f3','ws1',NULL,'C','/C','2026-01-03','2026-01-03')",
+            [],
+        )
+        .unwrap();
+
+        // Re-applica il backfill V014 inline (idempotente: ricalcola SortOrder
+        // sulla base del CreatedAt corrente, indipendente da run precedenti).
+        conn.execute(
+            "UPDATE Folders SET SortOrder = (
+                SELECT COUNT(*) FROM Folders f2
+                WHERE f2.WorkspaceId = Folders.WorkspaceId
+                  AND COALESCE(f2.ParentFolderId, '') = COALESCE(Folders.ParentFolderId, '')
+                  AND f2.CreatedAt < Folders.CreatedAt
+            )",
+            [],
+        )
+        .unwrap();
+
+        let f1: i64 = conn
+            .query_row("SELECT SortOrder FROM Folders WHERE Id='f1'", [], |r| r.get(0))
+            .unwrap();
+        let f2: i64 = conn
+            .query_row("SELECT SortOrder FROM Folders WHERE Id='f2'", [], |r| r.get(0))
+            .unwrap();
+        let f3: i64 = conn
+            .query_row("SELECT SortOrder FROM Folders WHERE Id='f3'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(f1, 0, "f1 (creata per prima) deve avere SortOrder=0");
+        assert_eq!(f2, 1, "f2 (seconda) deve avere SortOrder=1");
+        assert_eq!(f3, 2, "f3 (terza) deve avere SortOrder=2");
     }
 }

@@ -22,6 +22,11 @@ pub struct VersioneStorica {
     pub target_model: Option<String>,
     pub creato_a: String,
     pub creato_da_user_id: String,
+    /// V014: nome dell'autore della versione (JOIN su Users.DisplayName).
+    pub autore_display_name: String,
+    /// V014: email dell'autore (NULL se non impostata). Usato lato UI per
+    /// generare avatar deterministici (hash SHA1+HSL).
+    pub autore_email: Option<String>,
 }
 
 fn genera_version_id() -> String {
@@ -126,6 +131,43 @@ fn pulisci_versioni_eccedenti(conn: &Connection, prompt_id: &str) -> Result<(), 
     Ok(())
 }
 
+/// Helper interno per `prompt_get_history`. Estratto come `pub(crate)` per
+/// testabilità diretta su `&Connection` senza passare dallo State Tauri.
+pub(crate) fn prompt_get_history_inner(
+    conn: &Connection,
+    prompt_id: &str,
+) -> Result<Vec<VersioneStorica>, PapErrore> {
+    let mut stmt = conn.prepare(
+        "SELECT pv.Id, pv.PromptId, pv.Version, pv.Title, pv.Description, pv.Body,
+                pv.Visibility, pv.TargetModel, pv.CreatedAt, pv.CreatedByUserId,
+                u.DisplayName, u.Email
+         FROM PromptVersions pv
+         JOIN Users u ON u.Id = pv.CreatedByUserId
+         WHERE pv.PromptId = ?1
+         ORDER BY pv.Version DESC",
+    )?;
+    let versioni: Vec<VersioneStorica> = stmt
+        .query_map([prompt_id], |row| {
+            Ok(VersioneStorica {
+                id: row.get(0)?,
+                prompt_id: row.get(1)?,
+                version: row.get(2)?,
+                titolo: row.get(3)?,
+                descrizione: row.get(4)?,
+                body: row.get(5)?,
+                visibilita: row.get(6)?,
+                target_model: row.get(7)?,
+                creato_a: row.get(8)?,
+                creato_da_user_id: row.get(9)?,
+                autore_display_name: row.get(10)?,
+                autore_email: row.get(11)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(versioni)
+}
+
 /// Tauri command: ritorna la storia completa delle versioni di un prompt,
 /// ordinate dalla più recente alla più vecchia.
 #[tauri::command]
@@ -133,33 +175,7 @@ pub fn prompt_get_history(
     prompt_id: String,
     state: State<'_, VaultState>,
 ) -> Result<Vec<VersioneStorica>, PapErrore> {
-    state.with_conn(|conn| {
-        let mut stmt = conn.prepare(
-            "SELECT Id, PromptId, Version, Title, Description, Body,
-                    Visibility, TargetModel, CreatedAt, CreatedByUserId
-             FROM PromptVersions
-             WHERE PromptId = ?1
-             ORDER BY Version DESC",
-        )?;
-        let versioni: Vec<VersioneStorica> = stmt
-            .query_map([&prompt_id], |row| {
-                Ok(VersioneStorica {
-                    id: row.get(0)?,
-                    prompt_id: row.get(1)?,
-                    version: row.get(2)?,
-                    titolo: row.get(3)?,
-                    descrizione: row.get(4)?,
-                    body: row.get(5)?,
-                    visibilita: row.get(6)?,
-                    target_model: row.get(7)?,
-                    creato_a: row.get(8)?,
-                    creato_da_user_id: row.get(9)?,
-                })
-            })?
-            .filter_map(|r| r.ok())
-            .collect();
-        Ok(versioni)
-    })
+    state.with_conn(|conn| prompt_get_history_inner(conn, &prompt_id))
 }
 
 /// Tauri command: applica una versione storica come nuova testa del prompt.
@@ -423,5 +439,40 @@ mod test {
             )
             .unwrap();
         assert_eq!(min_version, 7);
+    }
+
+    #[test]
+    fn prompt_get_history_include_autore() {
+        // V014: il cmd deve restituire DisplayName + Email dell'autore via
+        // JOIN Users.
+        let conn = db_test();
+        // Aggiorna l'utente di default con un'email per testare il path Some(_).
+        conn.execute(
+            "UPDATE Users SET Email = 'roberto@example.com' WHERE Id = 'usr-locale'",
+            [],
+        )
+        .unwrap();
+        crea_prompt_test(&conn, "prm-aut", "body");
+        snapshot_versione(&conn, "prm-aut", "usr-locale").unwrap();
+
+        let versioni = prompt_get_history_inner(&conn, "prm-aut").unwrap();
+        assert_eq!(versioni.len(), 1);
+        assert_eq!(versioni[0].autore_display_name, "Utente locale");
+        assert_eq!(
+            versioni[0].autore_email,
+            Some("roberto@example.com".to_string())
+        );
+    }
+
+    #[test]
+    fn prompt_get_history_email_none_se_non_settata() {
+        // Default user post `assicura_dati_base` ha Email NULL.
+        let conn = db_test();
+        crea_prompt_test(&conn, "prm-noemail", "body");
+        snapshot_versione(&conn, "prm-noemail", "usr-locale").unwrap();
+
+        let versioni = prompt_get_history_inner(&conn, "prm-noemail").unwrap();
+        assert_eq!(versioni.len(), 1);
+        assert_eq!(versioni[0].autore_email, None);
     }
 }
