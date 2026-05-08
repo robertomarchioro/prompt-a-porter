@@ -978,15 +978,23 @@
 
         <div class="meta-sezione">
           <h3>Modello target</h3>
-          <Select
-            bind:valore={targetModel}
-            onchange={() => pianificaAutosave()}
-          >
-            <option value="">Non specificato</option>
+          <!-- v0.7.0 Step 3: combo input free-text + datalist preset.
+               Sostituisce il vecchio Select per consentire modelli custom
+               (es. claude-opus-5, gpt-6, modelli locali) oltre ai preset. -->
+          <input
+            class="meta-target-model-input"
+            type="text"
+            list="modelli-target-preset"
+            bind:value={targetModel}
+            oninput={() => pianificaAutosave()}
+            placeholder="Preset o nome custom (es. claude-opus, gpt-4o, llama3.2…)"
+            autocomplete="off"
+          />
+          <datalist id="modelli-target-preset">
             {#each MODELLI_TARGET as m (m.value)}
               <option value={m.value}>{m.label}</option>
             {/each}
-          </Select>
+          </datalist>
         </div>
 
         <div class="meta-sezione">
@@ -1197,6 +1205,28 @@
     display: flex;
     align-items: center;
     gap: var(--sp-2);
+  }
+
+  .meta-target-model-input {
+    height: 34px;
+    padding: 8px 12px;
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+    color: var(--text-strong);
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    transition:
+      border-color var(--motion-fast),
+      box-shadow var(--motion-fast);
+  }
+  .meta-target-model-input:hover {
+    border-color: var(--border-strong);
+  }
+  .meta-target-model-input:focus {
+    outline: none;
+    border-color: var(--accent-team);
+    box-shadow: 0 0 0 3px var(--accent-team-soft);
   }
 
   .meta-count {

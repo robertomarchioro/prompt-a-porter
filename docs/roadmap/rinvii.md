@@ -94,7 +94,7 @@ Pezzi di feature parzialmente atterrate, con il resto programmato per `v0.5.0` (
 - 📋 **Linting PII block-by-default** (oggi warn-only). Per workspace ad alta sensibilità, naturale in Fase 5 con E2E
 
 ### Da Fase 3 Step 6 — Modello target
-- 📋 **Custom free-text target model** (oggi solo i 9 preset)
+- ✅ **Custom free-text target model** atterrato in v0.7.0 Step 3: `<Select>` nell'EditorPrompt sostituito con `<input list="modelli-target-preset">` + `<datalist>` HTML5 nativo. Preset come autocomplete, free-text accettato. Backend `Prompts.TargetModel` invariato (già accettava qualunque stringa). Limite noto: filtro Libreria sidebar resta sui preset, modelli custom non filtrabili (futuro item: lista DISTINCT TargetModel dal DB).
 - 📋 **Server endpoint `?target=...`** — Fase 5
 
 ### Da Fase 3 Step 7 — Cartelle
