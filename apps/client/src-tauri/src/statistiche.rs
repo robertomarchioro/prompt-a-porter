@@ -26,6 +26,10 @@ pub struct Statistiche {
     /// v0.6.0 Step 4: percentuale di prompt senza issue + breakdown
     /// per categoria. Lint body-only (no IMP), aggregato.
     pub lint_health: LintHealth,
+    /// V014: media char-count del Body dei prompt attivi divisa per 4
+    /// (proxy token cl100k). 0 se nessun prompt attivo. UI mostra come
+    /// "~N token medi". Sostituibile in futuro con tokenizer reale.
+    pub token_medi: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -329,6 +333,20 @@ pub(crate) fn calcola_lint_health(conn: &Connection) -> Result<LintHealth, PapEr
     })
 }
 
+/// V014: media char-count del Body dei prompt attivi divisa per 4
+/// (proxy heuristic OpenAI cl100k: 1 token ≈ 4 chars). `LENGTH(Body)`
+/// in SQLite è char-count UTF-8 (NON byte-count): consistente per body
+/// con caratteri multi-byte. 0 se nessun prompt attivo.
+pub(crate) fn calcola_token_medi(conn: &Connection) -> Result<i64, PapErrore> {
+    let avg_chars: f64 = conn.query_row(
+        "SELECT COALESCE(AVG(CAST(LENGTH(Body) AS REAL)), 0.0)
+         FROM Prompts WHERE DeletedAt IS NULL",
+        [],
+        |r| r.get(0),
+    )?;
+    Ok((avg_chars / 4.0).round() as i64)
+}
+
 #[tauri::command]
 pub fn statistiche_query(state: State<'_, VaultState>) -> Result<Statistiche, PapErrore> {
     state.with_conn(|conn| {
@@ -341,6 +359,7 @@ pub fn statistiche_query(state: State<'_, VaultState>) -> Result<Statistiche, Pa
             per_visibilita: distribuzione_visibilita(conn)?,
             top_importati: top_importati(conn)?,
             lint_health: calcola_lint_health(conn)?,
+            token_medi: calcola_token_medi(conn)?,
         })
     })
 }
@@ -594,5 +613,38 @@ mod test {
         assert_eq!(h.prompt_senza_issue, 1);
         assert_eq!(h.percentuale_health, 50.0);
         assert!(h.top_categorie.iter().any(|c| c.valore == "PII"));
+    }
+
+    #[test]
+    fn token_medi_proxy_chars_diviso_4() {
+        // 3 prompt: body length 16, 32, 48 chars → AVG=32 → token_medi=8.
+        let conn = db_test();
+        inserisci_prompt_con_body(&conn, "p1", &"a".repeat(16));
+        inserisci_prompt_con_body(&conn, "p2", &"b".repeat(32));
+        inserisci_prompt_con_body(&conn, "p3", &"c".repeat(48));
+
+        assert_eq!(super::calcola_token_medi(&conn).unwrap(), 8);
+    }
+
+    #[test]
+    fn token_medi_zero_se_nessun_prompt() {
+        let conn = db_test();
+        assert_eq!(super::calcola_token_medi(&conn).unwrap(), 0);
+    }
+
+    #[test]
+    fn token_medi_ignora_prompt_eliminati() {
+        // Prompt soft-deleted non contribuisce alla media.
+        let conn = db_test();
+        inserisci_prompt_con_body(&conn, "p-attivo", &"x".repeat(40));
+        inserisci_prompt_con_body(&conn, "p-deleted", &"y".repeat(400));
+        conn.execute(
+            "UPDATE Prompts SET DeletedAt = datetime('now') WHERE Id = 'p-deleted'",
+            [],
+        )
+        .unwrap();
+
+        // AVG = 40, /4 = 10
+        assert_eq!(super::calcola_token_medi(&conn).unwrap(), 10);
     }
 }
