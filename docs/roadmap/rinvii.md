@@ -105,8 +105,7 @@ Pezzi di feature parzialmente atterrate, con il resto programmato per `v0.5.0` (
 - 📋 **Sintassi `{{import "x" with k=v}}`** per variabili scopate per import. Schema decodifica già pensato, manca parser
 - 📋 **Pinning a versione storica** `{{import "x" version=N}}` — schema `PromptVersions` già pronto, manca solo parser + lookup. Naturale in Fase 4
 - 📋 **Editor doppia vista Sorgente/Compilato** integrata (oggi separato in `CompilatorePrompt` standalone)
-- 📋 **Hover preview import** sul body con tooltip del prompt importato
-- 📋 **Ctrl+click "Vai al prompt importato"** dentro l'editor
+- ✅ **Hover preview import + Ctrl+click "Vai al prompt importato"** atterrati in v0.7.0 Step 4: nuova CodeMirror extension `lib/codemirror/import-tokens.ts` (highlight + `hoverTooltip` async + `domEventHandlers` click). Backend: comando `prompt_resolve_import_preview(path)` che riusa `resolve_path` + SELECT Title/Body. Tooltip mostra titolo + snippet 240 char + hint "Ctrl/Cmd+click per aprire". Click chiude editor e apre il target via callback `onapriPrompt(id)`.
 - 📋 **Cross-prompt linting** — quando si modifica un prompt, mostra "questo prompt è importato da N altri" usando `PromptImports` come grafo inverso
 - 📋 **Markdown export con front-matter `imports`** per riproducibilità
 
