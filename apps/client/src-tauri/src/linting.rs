@@ -14,6 +14,7 @@
 //   - IMP001: import non risolto
 //   - IMP002: ciclo di import
 //   - IMP003: profondità di import oltre il limite
+//   - IMP004: prompt importato da altri (info, cross-prompt linting v0.7 Step 5)
 //
 // Skippate per ora (motivo nello spec / PR successive):
 //   - PH002 (segnaposto dichiarato non usato): semantica ambigua, il
@@ -389,17 +390,53 @@ fn walk_dfs(
     WalkExit::Ok
 }
 
-/// Analizza gli import del body e genera issue IMP001/002/003.
+/// Analizza gli import del body e genera issue IMP001/002/003/004.
 ///
 /// `parent_id_opt` è l'id del prompt che si sta linting (None se non è
 /// ancora stato salvato): quando presente, viene seminato nel set di
-/// visitati per rilevare cicli che includono il root.
+/// visitati per rilevare cicli che includono il root, e usato per
+/// IMP004 (cross-prompt linting: chi importa questo prompt).
 fn regole_imp(
     conn: &Connection,
     body: &str,
     parent_id_opt: Option<&str>,
     out: &mut Vec<Issue>,
 ) {
+    // IMP004 (v0.7.0 Step 5): se questo prompt è target di altri prompt
+    // via {{import "..."}}, mostra info "importato da N altri".
+    // Skip se parent_id non noto (prompt non ancora salvato).
+    if let Some(self_id) = parent_id_opt {
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(DISTINCT ParentPromptId) FROM PromptImports
+                 WHERE ImportedPromptId = ?1",
+                [self_id],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        if count > 0 {
+            let plurale = if count == 1 { "prompt" } else { "prompt" };
+            let messaggio = if count == 1 {
+                format!(
+                    "Questo prompt è importato da 1 altro {plurale}. \
+                     Modifiche al body si propagano alla compilazione di chi lo importa."
+                )
+            } else {
+                format!(
+                    "Questo prompt è importato da {count} altri {plurale}. \
+                     Modifiche al body si propagano alla compilazione di chi lo importa."
+                )
+            };
+            out.push(Issue {
+                code: "IMP004",
+                severita: Severita::Info,
+                messaggio,
+                linea: None,
+                colonna: None,
+            });
+        }
+    }
+
     for imp in parse_imports(body) {
         let (linea, colonna) = pos_a_linea_col(body, imp.byte_start);
         let target_id = match resolve_path(conn, &imp.path) {
@@ -898,5 +935,67 @@ mod test {
         let issues = vec![issue_di("PH001"), issue_di("LEN001")];
         let r = super::filtra_categorie(issues, &["FOO".to_string()]);
         assert_eq!(r.len(), 2);
+    }
+
+    // ─────────── v0.7.0 Step 5: IMP004 cross-prompt linting ───────────
+
+    #[test]
+    fn imp004_assente_se_parent_id_none() {
+        // Senza parent_id (prompt non salvato), IMP004 non si attiva.
+        let conn = db_test();
+        let issues = analizza_completo(&conn, "ciao mondo abbastanza lungo", None);
+        assert!(!ha_codice(&issues, "IMP004"));
+    }
+
+    #[test]
+    fn imp004_assente_se_nessuno_importa_il_prompt() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-solo", "Solo", "body lungo abbastanza per LEN");
+        let issues = analizza_completo(&conn, "body senza import abbastanza lungo", Some("prm-solo"));
+        assert!(!ha_codice(&issues, "IMP004"));
+    }
+
+    #[test]
+    fn imp004_attivato_se_un_prompt_importa_il_target() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-target", "Target", "body target abbastanza lungo");
+        inserisci_prompt(&conn, "prm-a", "A", r#"{{import "Target"}}"#);
+        // Aggiorna PromptImports per simulare la scrittura post-save.
+        crate::prompt_componibili::aggiorna_imports(
+            &conn,
+            "prm-a",
+            r#"{{import "Target"}}"#,
+        )
+        .unwrap();
+
+        let issues = analizza_completo(
+            &conn,
+            "body target abbastanza lungo",
+            Some("prm-target"),
+        );
+        assert!(ha_codice(&issues, "IMP004"));
+        let imp004 = issues.iter().find(|i| i.code == "IMP004").unwrap();
+        assert!(matches!(imp004.severita, Severita::Info));
+        assert!(imp004.messaggio.contains("1 altro"));
+    }
+
+    #[test]
+    fn imp004_conta_distinct_parent() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-target", "Target", "body target abbastanza lungo");
+        inserisci_prompt(&conn, "prm-a", "A", r#"{{import "Target"}}"#);
+        inserisci_prompt(&conn, "prm-b", "B", r#"{{import "Target"}}"#);
+        crate::prompt_componibili::aggiorna_imports(&conn, "prm-a", r#"{{import "Target"}}"#)
+            .unwrap();
+        crate::prompt_componibili::aggiorna_imports(&conn, "prm-b", r#"{{import "Target"}}"#)
+            .unwrap();
+
+        let issues = analizza_completo(
+            &conn,
+            "body target abbastanza lungo",
+            Some("prm-target"),
+        );
+        let imp004 = issues.iter().find(|i| i.code == "IMP004").unwrap();
+        assert!(imp004.messaggio.contains("2 altri"));
     }
 }
