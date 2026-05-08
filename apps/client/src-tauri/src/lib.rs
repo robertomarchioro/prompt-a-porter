@@ -329,6 +329,7 @@ pub fn run() {
             import_export::vault_export_json,
             import_export::vault_export_folder_json,
             import_export::vault_import_json,
+            import_export::prompt_export_markdown,
             statistiche::statistiche_query,
             embeddings::embeddings_status,
             embeddings::embeddings_download,

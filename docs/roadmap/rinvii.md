@@ -107,7 +107,7 @@ Pezzi di feature parzialmente atterrate, con il resto programmato per `v0.5.0` (
 - 📋 **Editor doppia vista Sorgente/Compilato** integrata (oggi separato in `CompilatorePrompt` standalone)
 - ✅ **Hover preview import + Ctrl+click "Vai al prompt importato"** atterrati in v0.7.0 Step 4: nuova CodeMirror extension `lib/codemirror/import-tokens.ts` (highlight + `hoverTooltip` async + `domEventHandlers` click). Backend: comando `prompt_resolve_import_preview(path)` che riusa `resolve_path` + SELECT Title/Body. Tooltip mostra titolo + snippet 240 char + hint "Ctrl/Cmd+click per aprire". Click chiude editor e apre il target via callback `onapriPrompt(id)`.
 - ✅ **Cross-prompt linting** atterrato in v0.7.0 Step 5: nuova regola **IMP004** (Info-level) in `linting.rs::regole_imp`. Query `COUNT(DISTINCT ParentPromptId) FROM PromptImports WHERE ImportedPromptId = parent_id`. Visibile nel pannello Diagnosi e via marker CodeMirror. Skip se `parent_id_opt = None` (prompt non salvato).
-- 📋 **Markdown export con front-matter `imports`** per riproducibilità
+- ✅ **Markdown export con front-matter `imports`** atterrato in v0.7.0 Step 6: nuovo `prompt_export_markdown_pure(conn, id)` in `import_export.rs` + comando Tauri `prompt_export_markdown(prompt_id)`. Front-matter YAML con `title`, `description?`, `target_model?`, `visibility`, `version`, `created_at`, `updated_at`, `imports: [...]` (parsati dal body). Compatibile Jekyll/Hugo. UI: bottone "Esporta MD" nel detail pane Libreria.
 
 ### Da Fase 3 Step 9 — Statistiche
 - ✅ **Prompt più importati** atterrato in v0.6.0 Step 4: `top_importati()` in `statistiche.rs` riusa `idx_imports_imported` (grafo inverso) con `COUNT(DISTINCT ParentPromptId)`, top 10 esposti in vista Insight.

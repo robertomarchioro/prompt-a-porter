@@ -224,6 +224,27 @@
     mostraConfronto = true;
   }
 
+  // v0.7.0 Step 6: esporta un singolo prompt come Markdown con
+  // YAML front-matter (imports inclusi).
+  async function esportaPromptMarkdown(promptId: string, titolo: string) {
+    try {
+      const md = await invoke<string>("prompt_export_markdown", {
+        promptId,
+      });
+      const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const safeName = titolo.replace(/[^a-z0-9-_]/gi, "_").toLowerCase();
+      a.download = `pap-${safeName}-${ts}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(`Errore esportazione Markdown: ${String(e)}`);
+    }
+  }
+
   // v0.7.0 Step 2: esporta singola cartella (sotto-albero) come JSON.
   async function esportaFolder(c: Cartella) {
     try {
@@ -1268,6 +1289,13 @@
                 disabled={forkando}
                 title="Crea una copia privata di questo prompt per sperimentare"
                 >Fork</Button
+              >
+              <Button
+                variante="ghost"
+                dimensione="sm"
+                onclick={() => esportaPromptMarkdown(promptDet!.id, promptDet!.titolo)}
+                title="Esporta come file .md con YAML front-matter"
+                >Esporta MD</Button
               >
               <Button
                 variante="primary"
