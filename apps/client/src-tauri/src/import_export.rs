@@ -348,6 +348,106 @@ pub fn vault_export_folder_json(
     })
 }
 
+/// Esporta un singolo prompt in formato Markdown con YAML front-matter.
+/// Front-matter compatibile con Jekyll/Hugo, include la lista degli
+/// `imports` parsati dal body (riproducibilità).
+///
+/// v0.7.0 Step 6.
+pub(crate) fn prompt_export_markdown_pure(
+    conn: &Connection,
+    prompt_id: &str,
+) -> Result<String, PapErrore> {
+    #[derive(Debug)]
+    struct PromptRow {
+        title: String,
+        description: Option<String>,
+        body: String,
+        visibility: String,
+        target_model: Option<String>,
+        version: i64,
+        created_at: String,
+        updated_at: String,
+    }
+
+    let p = conn.query_row(
+        "SELECT Title, Description, Body, Visibility, TargetModel, Version, CreatedAt, UpdatedAt
+         FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
+        [prompt_id],
+        |r| {
+            Ok(PromptRow {
+                title: r.get(0)?,
+                description: r.get(1)?,
+                body: r.get(2)?,
+                visibility: r.get(3)?,
+                target_model: r.get(4)?,
+                version: r.get(5)?,
+                created_at: r.get(6)?,
+                updated_at: r.get(7)?,
+            })
+        },
+    ).map_err(|e| PapErrore::Generico(format!("Prompt '{prompt_id}' non trovato: {e}")))?;
+
+    let imports = crate::prompt_componibili::parse_imports(&p.body);
+
+    let mut fm = String::new();
+    fm.push_str("---\n");
+    fm.push_str(&format!("title: {}\n", yaml_quote(&p.title)));
+    if let Some(d) = &p.description {
+        if !d.trim().is_empty() {
+            fm.push_str(&format!("description: {}\n", yaml_quote(d)));
+        }
+    }
+    if let Some(m) = &p.target_model {
+        if !m.trim().is_empty() {
+            fm.push_str(&format!("target_model: {}\n", yaml_quote(m)));
+        }
+    }
+    fm.push_str(&format!("visibility: {}\n", p.visibility));
+    fm.push_str(&format!("version: {}\n", p.version));
+    fm.push_str(&format!("created_at: {}\n", p.created_at));
+    fm.push_str(&format!("updated_at: {}\n", p.updated_at));
+    if !imports.is_empty() {
+        fm.push_str("imports:\n");
+        for imp in &imports {
+            fm.push_str(&format!("  - {}\n", yaml_quote(&imp.path)));
+        }
+    }
+    fm.push_str("---\n\n");
+    fm.push_str(&p.body);
+
+    Ok(fm)
+}
+
+/// Helper: emette una stringa YAML quotata in modo sicuro.
+/// Usa double-quote + escape minimal: backslash e double-quote.
+/// Sicuro per la maggior parte dei casi (nessun YAML anchor o tag);
+/// per casi pathologic (newline embed, controlli) consigliato Jinja
+/// block scalar, ma scope contenuto: usiamo escape minimale.
+fn yaml_quote(s: &str) -> String {
+    let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("\"{escaped}\"")
+}
+
+/// Tauri command: esporta un prompt in formato Markdown con
+/// YAML front-matter. v0.7.0 Step 6.
+#[tauri::command]
+pub fn prompt_export_markdown(
+    prompt_id: String,
+    state: State<'_, VaultState>,
+) -> Result<String, PapErrore> {
+    state.with_conn(|conn| {
+        let md = prompt_export_markdown_pure(conn, &prompt_id)?;
+        crate::audit::registra(
+            conn,
+            "prompt.exported.markdown",
+            "Prompt",
+            &prompt_id,
+            None,
+        );
+        Ok(md)
+    })
+}
+
 /// Helper "pure" (no Tauri State) per applicare un `ExportV1` parsato
 /// sulla connection con la modalità di gestione conflitti specificata.
 /// Riusabile dai test e dal Tauri command `vault_import_json`.
@@ -986,5 +1086,66 @@ mod test {
             .query_row("SELECT Name FROM Tags WHERE Id = 'tag-x'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(nome, "OriginaleNome", "skip non deve modificare tag esistente");
+    }
+
+    // ─────────── v0.7.0 Step 6: prompt_export_markdown ───────────
+
+    #[test]
+    fn yaml_quote_escapa_double_quote_e_backslash() {
+        assert_eq!(super::yaml_quote("semplice"), "\"semplice\"");
+        assert_eq!(super::yaml_quote("con \"virgolette\""), "\"con \\\"virgolette\\\"\"");
+        assert_eq!(super::yaml_quote("path\\back"), "\"path\\\\back\"");
+    }
+
+    #[test]
+    fn export_markdown_prompt_inesistente_errore() {
+        let conn = db_test();
+        let r = super::prompt_export_markdown_pure(&conn, "prm-fantasma");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn export_markdown_genera_front_matter_minimo() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "Marketing Email", "Riformula in tono formale.");
+        let md = super::prompt_export_markdown_pure(&conn, "prm-1").unwrap();
+        assert!(md.starts_with("---\n"));
+        assert!(md.contains("title: \"Marketing Email\""));
+        assert!(md.contains("visibility: private"));
+        assert!(md.contains("version: 1"));
+        // Body separato dal front-matter da \n\n.
+        assert!(md.contains("---\n\nRiformula in tono formale."));
+    }
+
+    #[test]
+    fn export_markdown_include_imports_dal_body() {
+        let conn = db_test();
+        inserisci_prompt(
+            &conn,
+            "prm-comp",
+            "Composto",
+            r#"Body con {{import "header"}} e {{import "footer/std"}}."#,
+        );
+        let md = super::prompt_export_markdown_pure(&conn, "prm-comp").unwrap();
+        assert!(md.contains("imports:"));
+        assert!(md.contains("  - \"header\""));
+        assert!(md.contains("  - \"footer/std\""));
+    }
+
+    #[test]
+    fn export_markdown_no_imports_se_body_pulito() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-pulito", "Pulito", "Body senza alcun import.");
+        let md = super::prompt_export_markdown_pure(&conn, "prm-pulito").unwrap();
+        assert!(!md.contains("imports:"));
+    }
+
+    #[test]
+    fn export_markdown_skippa_description_vuota() {
+        let conn = db_test();
+        // inserisci_prompt non setta Description, NULL → skip.
+        inserisci_prompt(&conn, "prm-1", "Title", "Body abbastanza lungo per il test.");
+        let md = super::prompt_export_markdown_pure(&conn, "prm-1").unwrap();
+        assert!(!md.contains("description:"));
     }
 }
