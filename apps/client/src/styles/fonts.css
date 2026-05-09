@@ -1,0 +1,21 @@
+/* =========================================================================
+   Prompt a Porter — Font self-hosting (V0.8 F0 Foundation)
+   -------------------------------------------------------------------------
+   Inter + JetBrains Mono via @fontsource/* (subset latin, woff2).
+   Nessun CDN: i font sono bundled da Vite, coerente con il vincolo
+   local-first (vedi brief §8 privacy/network).
+
+   Pesi caricati:
+   - Inter: 400 (regular), 500 (medium), 600 (semibold), 700 (bold)
+   - JetBrains Mono: 400 (regular), 500 (medium)
+
+   Bundle stimato: ~30 KB gzip totali (subset latin only).
+   ========================================================================= */
+
+@import url('@fontsource/inter/400.css');
+@import url('@fontsource/inter/500.css');
+@import url('@fontsource/inter/600.css');
+@import url('@fontsource/inter/700.css');
+
+@import url('@fontsource/jetbrains-mono/400.css');
+@import url('@fontsource/jetbrains-mono/500.css');
