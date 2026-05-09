@@ -290,6 +290,20 @@
 }
 
 /* =========================================================================
+   Focus indicator unificato (F10 PR-A — a11y baseline)
+   ========================================================================= *
+
+   `:where()` ha specificità 0, quindi questo selettore globale può essere
+   sovrascritto facilmente da qualsiasi regola locale dei component senza
+   bisogno di `!important`. Si applica solo a focus-visible (no focus mouse).
+*/
+:where(button, [role="button"], a, input, textarea, select, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+/* =========================================================================
    Reduced motion
    ========================================================================= */
 @media (prefers-reduced-motion: reduce) {
