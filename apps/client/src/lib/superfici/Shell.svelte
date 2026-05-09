@@ -240,6 +240,9 @@
 
   .shell-body {
     overflow: hidden;
+    /* F11 PR-D: contain layout/paint riduce lo scope di reflow durante
+       drag-resize dei Pane → meno lavoro layout in target ≤16ms/frame */
+    contain: layout paint style;
   }
 
   .placeholder-pane {
@@ -272,5 +275,12 @@
   :global(.resizer:hover),
   :global(.resizer[data-resize-handle-active]) {
     background: var(--accent-team);
+  }
+
+  /* F11 PR-D: feedback visivo immediato su mousedown senza attendere
+     transition (perceived latency < 16ms) */
+  :global(.resizer:active) {
+    background: var(--accent-team);
+    transition: none;
   }
 </style>
