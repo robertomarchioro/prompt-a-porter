@@ -10,6 +10,7 @@
   import DiffLibero from "$lib/superfici/DiffLibero.svelte";
   import CompilaModal from "$lib/superfici/CompilaModal.svelte";
   import InsightModal from "$lib/superfici/InsightModal.svelte";
+  import RegressioniModal from "$lib/superfici/RegressioniModal.svelte";
   import {
     statoModale,
     chiudiModale,
@@ -105,7 +106,7 @@
           <SidebarMini
             onApriExpand={() => (stato.sidebarCollapsed = false)}
             onApriInsight={() => apriModale({ tipo: "insight" })}
-            onApriRegressioni={() => console.log("F8 modale Regressioni")}
+            onApriRegressioni={() => apriModale({ tipo: "regressioni" })}
           />
         </Pane>
       {:else}
@@ -122,7 +123,7 @@
             onSelezionaModelTarget={(m) => (modelTargetSelezionato = m)}
             onApriCollapse={() => (stato.sidebarCollapsed = true)}
             onApriInsight={() => apriModale({ tipo: "insight" })}
-            onApriRegressioni={() => console.log("F8 modale Regressioni")}
+            onApriRegressioni={() => apriModale({ tipo: "regressioni" })}
           />
         </Pane>
       {/if}
@@ -182,6 +183,10 @@
 
 {#if statoModale.attiva?.tipo === "insight"}
   <InsightModal onChiudi={chiudiModale} />
+{/if}
+
+{#if statoModale.attiva?.tipo === "regressioni"}
+  <RegressioniModal onChiudi={chiudiModale} />
 {/if}
 
 <style>
