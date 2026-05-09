@@ -6,6 +6,7 @@
   import DemoComponenti from "$lib/superfici/DemoComponenti.svelte";
   import Libreria from "$lib/superfici/Libreria.svelte";
   import OnboardingWizard from "$lib/superfici/OnboardingWizard.svelte";
+  import Shell from "$lib/superfici/Shell.svelte";
   import {
     statoTema,
     caricaTemaTono,
@@ -14,7 +15,9 @@
 
   const finestra = getCurrentWindow();
   const etichetta = finestra.label;
-  const mostraDemo = new URLSearchParams(window.location.search).has("demo");
+  const params = new URLSearchParams(window.location.search);
+  const mostraDemo = params.has("demo");
+  const mostraRedesignShell = params.has("redesign-shell");
 
   let onboardingCompletato = $state<boolean | null>(null);
 
@@ -77,7 +80,9 @@
 
 </script>
 
-{#if mostraDemo}
+{#if mostraRedesignShell}
+  <Shell />
+{:else if mostraDemo}
   <DemoComponenti />
 {:else if etichetta === "palette"}
   <CommandPalette />
