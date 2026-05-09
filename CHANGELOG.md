@@ -1,5 +1,24 @@
 # Changelog — Prompt a Porter
 
+## v0.8.1 — Bugfix patch redesign UI (2026-05-09)
+
+> Patch immediata su v0.8.0 per 3 bug post-rilascio segnalati in issue. Nessun cambiamento funzionale, solo fix di rendering layout, controllo collassa colonna lista, e display shortcut OS-aware.
+
+### Fix
+
+- **#132 layout root sizing** — TitleBar e StatusBar non si ridimensionavano correttamente su massimizzazione finestra Win11 (l'utente vedeva le barre tronche rispetto al main grid). Aggiunto `html, body, #app { width: 100%; height: 100% }` in `app.css`: `.shell-root` (height 100vh) ora ha parent stretch corretto e tutti i grid items (TitleBar / shell-body / StatusBar) si stretchano alla piena width.
+- **#133 ListPane collapse non funzionante** — bottone `>>` in ListPane chiamava un placeholder `console.log`. Ora `Shell.svelte` espone `listPaneRef` con API paneforge (`collapse / expand / isCollapsed / resize`), `<Pane>` ListPane ha `collapsible` + `collapsedSize={0}`. Riapertura via drag PaneResizer adiacente.
+- **#134 shortcut display OS-aware** — i glifi macOS-only (⌘ ⌃ ⇧ ↵) erano hardcoded nei `title` e `<kbd>` di TitleBar/StatusBar/PaletteModal/CompilaModal, visibili anche su Windows/Linux. Nuova utility `lib/util/shortcut.ts` con `fmtShortcut(combo)` che rileva piattaforma da `navigator.platform` e ritorna stringa formattata (mac: `⌘K`, `⌃⇧P`, `⌃↵`; win/linux: `Ctrl+K`, `Ctrl+Shift+P`, `Ctrl+Enter`). Frecce ↑↓←→ ed Esc restano universali.
+
+### Numeri
+
+- 1 PR (#135) merge squash, 3 commit (1 per issue)
+- **113 vitest pass** (era 98 in v0.8.0, +15 nuovi test su `fmtShortcut` con mock `navigator.platform`)
+- 0 errors svelte-check (3741 files)
+- Closes #132 #133 #134
+
+---
+
 ## v0.8.0 — Redesign UI completo (2026-05-09)
 
 > **Fasi F8-F11 chiuse, 17 sub-PR mergiate**, redesign v0.8 completo. Nuova Shell 3-pannelli + 5 modali primitive-driven + Onboarding consolidato + a11y WCAG 2.1 AA. Net **−7 249 righe codice** vs v0.7.0 nonostante 6 superfici nuove. Schema DB invariato, no breaking change utente.
