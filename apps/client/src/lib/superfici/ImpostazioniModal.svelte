@@ -1,0 +1,1432 @@
+<script lang="ts">
+  /**
+   * F8 PR-D1 — Modale Impostazioni (scaffold + 4 macro + Avanzate placeholder).
+   *
+   * Layout 2 colonne: nav sezioni (sx) + dettaglio (dx). ⌘K cerca filtra
+   * le voci nav. Sub-sezioni Avanzate (Provider AI, Embeddings, Audit, Sync,
+   * Hotkey) arrivano in PR-D2.
+   *
+   * Riferimenti:
+   * - Blueprint: docs/roadmap/redesign-v08/blueprint-F8.md §4 (decisione #12)
+   */
+  import { invoke } from "@tauri-apps/api/core";
+  import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+  import { onMount, onDestroy } from "svelte";
+  import {
+    Palette,
+    List as ListIcon,
+    Pencil,
+    Lock,
+    Sliders,
+    Search,
+    Check,
+    Copy,
+    ChevronDown,
+    ChevronRight,
+    Bot,
+    Sparkles,
+    ScrollText,
+    RefreshCw,
+    Keyboard,
+    Download,
+  } from "lucide-svelte";
+  import Modale from "$lib/components/Modale.svelte";
+  import PannelloProviderConfig from "$lib/components/PannelloProviderConfig.svelte";
+  import HotkeyInput from "$lib/components/HotkeyInput.svelte";
+  import {
+    statoTema,
+    salvaTemaTono,
+  } from "$lib/stores/preferenze.svelte";
+  import {
+    caricaStato as caricaStatoLista,
+    salvaStato as salvaStatoLista,
+    type Densita,
+    type StatoLista,
+  } from "$lib/stores/densita";
+  import {
+    syncGetState,
+    syncOnChange,
+    syncOra,
+    syncLogout,
+    type SyncState,
+  } from "$lib/sync";
+
+  type SezioneId = "aspetto" | "vista" | "editor" | "sicurezza" | "avanzate";
+  type SubSezioneId =
+    | "provider"
+    | "embeddings"
+    | "audit"
+    | "sync"
+    | "hotkey";
+
+  interface VoceSezione {
+    id: SezioneId;
+    label: string;
+    keywords: string[];
+  }
+
+  interface VoceSubSezione {
+    id: SubSezioneId;
+    label: string;
+    keywords: string[];
+  }
+
+  interface Props {
+    onChiudi: () => void;
+    sezioneIniziale?: SezioneId;
+  }
+
+  let { onChiudi, sezioneIniziale = "aspetto" }: Props = $props();
+
+  let sezione = $state<SezioneId>(sezioneIniziale);
+  let query = $state("");
+  let subSezioneAperta = $state<SubSezioneId | null>(null);
+
+  const subSezioni: VoceSubSezione[] = [
+    {
+      id: "provider",
+      label: "Provider AI",
+      keywords: [
+        "provider",
+        "ai",
+        "anthropic",
+        "openai",
+        "ollama",
+        "openai-compat",
+        "gemini",
+        "api key",
+        "endpoint",
+        "modello",
+      ],
+    },
+    {
+      id: "embeddings",
+      label: "Ricerca & Embeddings",
+      keywords: [
+        "ricerca",
+        "semantica",
+        "embeddings",
+        "minilm",
+        "alpha",
+        "ibrida",
+        "reindex",
+        "vettore",
+      ],
+    },
+    {
+      id: "audit",
+      label: "Audit log AI",
+      keywords: ["audit", "log", "csv", "export", "cleanup", "retention"],
+    },
+    {
+      id: "sync",
+      label: "Sync",
+      keywords: ["sync", "sincronizza", "logout", "stato", "remoto"],
+    },
+    {
+      id: "hotkey",
+      label: "Hotkey",
+      keywords: ["hotkey", "scorciatoia", "tasti", "palette", "ctrl", "shift"],
+    },
+  ];
+
+  const sezioni: VoceSezione[] = [
+    {
+      id: "aspetto",
+      label: "Aspetto",
+      keywords: [
+        "tema",
+        "dark",
+        "light",
+        "auto",
+        "tono",
+        "palette",
+        "zinc",
+        "slate",
+        "stone",
+        "colori",
+      ],
+    },
+    {
+      id: "vista",
+      label: "Vista lista",
+      keywords: [
+        "densità",
+        "compatta",
+        "comoda",
+        "anteprima",
+        "righe",
+        "preview",
+        "lista",
+      ],
+    },
+    {
+      id: "editor",
+      label: "Editor",
+      keywords: ["editor", "autosave", "wrap", "wrapping", "tasti", "code"],
+    },
+    {
+      id: "sicurezza",
+      label: "Sicurezza",
+      keywords: [
+        "vault",
+        "password",
+        "master",
+        "key",
+        "lock",
+        "blocca",
+        "cifratura",
+      ],
+    },
+    {
+      id: "avanzate",
+      label: "Avanzate",
+      keywords: [
+        "provider",
+        "ai",
+        "anthropic",
+        "openai",
+        "ollama",
+        "gemini",
+        "embeddings",
+        "ricerca",
+        "audit",
+        "log",
+        "sync",
+        "hotkey",
+        "scorciatoia",
+      ],
+    },
+  ];
+
+  const sezioniFiltrate = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return sezioni;
+    const matchesPerSezione = sezioni.filter((s) => {
+      if (s.label.toLowerCase().includes(q)) return true;
+      return s.keywords.some((k) => k.includes(q));
+    });
+    const matchSub = subSezioni.find(
+      (s) =>
+        s.label.toLowerCase().includes(q) ||
+        s.keywords.some((k) => k.includes(q)),
+    );
+    if (matchSub) {
+      const avanzate = sezioni.find((s) => s.id === "avanzate");
+      if (avanzate && !matchesPerSezione.find((s) => s.id === "avanzate")) {
+        return [...matchesPerSezione, avanzate];
+      }
+    }
+    return matchesPerSezione;
+  });
+
+  const subSezioniFiltrate = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return subSezioni;
+    return subSezioni.filter(
+      (s) =>
+        s.label.toLowerCase().includes(q) ||
+        s.keywords.some((k) => k.includes(q)),
+    );
+  });
+
+  $effect(() => {
+    if (
+      sezioniFiltrate.length > 0 &&
+      !sezioniFiltrate.find((s) => s.id === sezione)
+    ) {
+      sezione = sezioniFiltrate[0].id;
+    }
+  });
+
+  $effect(() => {
+    const q = query.trim().toLowerCase();
+    if (q && subSezioniFiltrate.length > 0 && sezione === "avanzate") {
+      if (
+        !subSezioneAperta ||
+        !subSezioniFiltrate.find((s) => s.id === subSezioneAperta)
+      ) {
+        subSezioneAperta = subSezioniFiltrate[0].id;
+      }
+    }
+  });
+
+  // ─── Aspetto ───
+  function cambiaTema(nuovo: string): void {
+    statoTema.tema = nuovo;
+    void salvaTemaTono(nuovo, statoTema.tono);
+  }
+
+  function cambiaTono(nuovo: string): void {
+    statoTema.tono = nuovo;
+    void salvaTemaTono(statoTema.tema, nuovo);
+  }
+
+  // ─── Vista lista ───
+  let statoVista = $state<StatoLista>(caricaStatoLista());
+
+  function aggiornaDensita(d: Densita): void {
+    statoVista = { ...statoVista, densita: d };
+    salvaStatoLista(statoVista);
+    notificaListaCambio();
+  }
+
+  function aggiornaRighePreview(n: number): void {
+    statoVista = { ...statoVista, righePreview: n };
+    salvaStatoLista(statoVista);
+    notificaListaCambio();
+  }
+
+  function notificaListaCambio(): void {
+    window.dispatchEvent(new CustomEvent("pap:lista-densita-cambiata"));
+  }
+
+  // ─── Sicurezza ───
+  let vaultPath = $state<string>("");
+  let copiato = $state(false);
+  let mostraCambioPassword = $state(false);
+  let vecchiaPassword = $state("");
+  let nuovaPassword = $state("");
+  let confermaPassword = $state("");
+  let errorePassword = $state("");
+  let statoOpPassword = $state<"" | "in_corso" | "ok">("");
+
+  $effect(() => {
+    void caricaVaultPath();
+  });
+
+  async function caricaVaultPath(): Promise<void> {
+    try {
+      vaultPath = await invoke<string>("vault_percorso");
+    } catch (e) {
+      console.error("[impostazioni] vault_percorso", e);
+    }
+  }
+
+  async function copiaPath(): Promise<void> {
+    if (!vaultPath) return;
+    try {
+      await navigator.clipboard.writeText(vaultPath);
+      copiato = true;
+      setTimeout(() => (copiato = false), 1500);
+    } catch (e) {
+      console.error("[impostazioni] copia path", e);
+    }
+  }
+
+  async function bloccaVault(): Promise<void> {
+    try {
+      await invoke("vault_lock");
+      onChiudi();
+    } catch (e) {
+      console.error("[impostazioni] vault_lock", e);
+    }
+  }
+
+  // ─── Avanzate: state ───
+  type StatoEmbeddings =
+    | { stato: "non_scaricato"; model_id: string; path_atteso: string }
+    | { stato: "pronto"; model_id: string; path: string; size_mb: number }
+    | { stato: "caricato"; model_id: string; dimensione: number };
+
+  interface PreferenzeFull {
+    profilo: string;
+    hotkey: string;
+    tema: string;
+    tono: string;
+    lingua: string;
+    onboarding_completato: boolean;
+    crea_prompt_esempio: boolean;
+    sync_server_url: string;
+    sync_email: string;
+    sync_token: string;
+    sync_intervallo_sec: number;
+    sync_abilitato: boolean;
+    ricerca_semantica_abilitata: boolean;
+    ricerca_alpha: number;
+    idle_unload_secondi: number;
+  }
+
+  let prefsFull = $state<PreferenzeFull | null>(null);
+  let embStatus = $state<StatoEmbeddings | null>(null);
+  let embErrore = $state("");
+  let embOpInCorso = $state<"" | "download" | "init">("");
+  let embProgressDownload = $state<{
+    file: string;
+    bytes: number;
+    total: number | null;
+  } | null>(null);
+  let embUnlistenDownload: UnlistenFn | null = null;
+
+  let auditCleanupGiorni = $state(365);
+  let auditExportInCorso = $state(false);
+  let auditCleanupInCorso = $state(false);
+  let auditMessaggio = $state("");
+
+  let syncState = $state<SyncState>(syncGetState());
+  let syncOraInCorso = $state(false);
+
+  let hotkeyValore = $state("Ctrl+Shift+P");
+  let hotkeySalvata = $state(false);
+
+  async function caricaPrefsFull(): Promise<void> {
+    try {
+      prefsFull = await invoke<PreferenzeFull>("preferenze_carica");
+      hotkeyValore = prefsFull.hotkey || "Ctrl+Shift+P";
+    } catch (e) {
+      console.error("[impostazioni] preferenze_carica", e);
+    }
+  }
+
+  async function caricaEmbStatus(): Promise<void> {
+    embErrore = "";
+    try {
+      embStatus = await invoke<StatoEmbeddings>("embeddings_status");
+    } catch (e) {
+      embErrore = String(e);
+    }
+  }
+
+  async function scaricaModello(): Promise<void> {
+    embErrore = "";
+    embOpInCorso = "download";
+    try {
+      await invoke("embeddings_download");
+      await caricaEmbStatus();
+    } catch (e) {
+      embErrore = String(e);
+    } finally {
+      embOpInCorso = "";
+      embProgressDownload = null;
+    }
+  }
+
+  async function inizializzaModello(): Promise<void> {
+    embErrore = "";
+    embOpInCorso = "init";
+    try {
+      await invoke("embeddings_init");
+      await caricaEmbStatus();
+    } catch (e) {
+      embErrore = String(e);
+    } finally {
+      embOpInCorso = "";
+    }
+  }
+
+  async function aggiornaAlpha(nuovo: number): Promise<void> {
+    if (!prefsFull) return;
+    prefsFull = { ...prefsFull, ricerca_alpha: nuovo };
+    try {
+      await invoke("preferenze_salva", { preferenze: prefsFull });
+    } catch (e) {
+      console.error("[impostazioni] alpha", e);
+    }
+  }
+
+  async function toggleRicercaSemantica(): Promise<void> {
+    if (!prefsFull) return;
+    prefsFull = {
+      ...prefsFull,
+      ricerca_semantica_abilitata: !prefsFull.ricerca_semantica_abilitata,
+    };
+    try {
+      await invoke("preferenze_salva", { preferenze: prefsFull });
+    } catch (e) {
+      console.error("[impostazioni] toggle ricerca", e);
+    }
+  }
+
+  async function esportaAudit(): Promise<void> {
+    auditMessaggio = "";
+    auditExportInCorso = true;
+    try {
+      const csv = await invoke<string>("audit_export_csv", { filtro: null });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `audit-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      auditMessaggio = "Esportato.";
+    } catch (e) {
+      auditMessaggio = `Errore: ${String(e)}`;
+    } finally {
+      auditExportInCorso = false;
+    }
+  }
+
+  async function eseguiAuditCleanup(): Promise<void> {
+    auditMessaggio = "";
+    auditCleanupInCorso = true;
+    try {
+      const eliminate = await invoke<number>("audit_cleanup_oltre_giorni", {
+        giorni: auditCleanupGiorni,
+      });
+      auditMessaggio = `Eliminate ${eliminate} voci più vecchie di ${auditCleanupGiorni} giorni.`;
+    } catch (e) {
+      auditMessaggio = `Errore: ${String(e)}`;
+    } finally {
+      auditCleanupInCorso = false;
+    }
+  }
+
+  async function avviaSyncOra(): Promise<void> {
+    syncOraInCorso = true;
+    try {
+      await syncOra();
+    } finally {
+      syncOraInCorso = false;
+    }
+  }
+
+  async function eseguiSyncLogout(): Promise<void> {
+    try {
+      await syncLogout();
+    } catch (e) {
+      console.error("[impostazioni] sync logout", e);
+    }
+  }
+
+  async function salvaHotkey(): Promise<void> {
+    if (!prefsFull) return;
+    prefsFull = { ...prefsFull, hotkey: hotkeyValore };
+    try {
+      await invoke("preferenze_salva", { preferenze: prefsFull });
+      hotkeySalvata = true;
+      setTimeout(() => (hotkeySalvata = false), 1500);
+    } catch (e) {
+      console.error("[impostazioni] hotkey", e);
+    }
+  }
+
+  function toggleSubSezione(id: SubSezioneId): void {
+    subSezioneAperta = subSezioneAperta === id ? null : id;
+  }
+
+  $effect(() => {
+    if (sezione === "avanzate" && prefsFull === null) {
+      void caricaPrefsFull();
+    }
+  });
+
+  $effect(() => {
+    if (subSezioneAperta === "embeddings" && embStatus === null) {
+      void caricaEmbStatus();
+    }
+  });
+
+  onMount(() => {
+    syncOnChange(() => {
+      syncState = syncGetState();
+    });
+    void (async () => {
+      embUnlistenDownload = await listen<{
+        file: string;
+        bytes: number;
+        total: number | null;
+      }>("embeddings:download:progress", (e) => {
+        embProgressDownload = e.payload;
+      });
+    })();
+  });
+
+  onDestroy(() => {
+    embUnlistenDownload?.();
+  });
+
+  async function cambiaPassword(): Promise<void> {
+    errorePassword = "";
+    if (!vecchiaPassword || !nuovaPassword) {
+      errorePassword = "Compila vecchia e nuova password.";
+      return;
+    }
+    if (nuovaPassword.length < 8) {
+      errorePassword =
+        "La nuova password deve essere lunga almeno 8 caratteri.";
+      return;
+    }
+    if (nuovaPassword !== confermaPassword) {
+      errorePassword = "La conferma non corrisponde alla nuova password.";
+      return;
+    }
+    statoOpPassword = "in_corso";
+    try {
+      await invoke("vault_cambia_password", {
+        vecchia: vecchiaPassword,
+        nuova: nuovaPassword,
+      });
+      statoOpPassword = "ok";
+      vecchiaPassword = "";
+      nuovaPassword = "";
+      confermaPassword = "";
+      setTimeout(() => {
+        statoOpPassword = "";
+        mostraCambioPassword = false;
+      }, 1500);
+    } catch (e) {
+      statoOpPassword = "";
+      errorePassword = String(e);
+    }
+  }
+</script>
+
+<Modale titolo="Impostazioni" larghezza="xl" {onChiudi}>
+  <div class="layout">
+    <aside class="nav-pane">
+      <div class="search-box">
+        <Search size={14} />
+        <input
+          type="search"
+          placeholder="Cerca…"
+          bind:value={query}
+          aria-label="Cerca impostazioni"
+        />
+      </div>
+      <nav>
+        <ul>
+          {#each sezioniFiltrate as s (s.id)}
+            <li>
+              <button
+                type="button"
+                class:attiva={sezione === s.id}
+                onclick={() => (sezione = s.id)}
+              >
+                {#if s.id === "aspetto"}<Palette size={14} />
+                {:else if s.id === "vista"}<ListIcon size={14} />
+                {:else if s.id === "editor"}<Pencil size={14} />
+                {:else if s.id === "sicurezza"}<Lock size={14} />
+                {:else}<Sliders size={14} />{/if}
+                <span>{s.label}</span>
+              </button>
+            </li>
+          {/each}
+          {#if sezioniFiltrate.length === 0}
+            <li class="vuoto-nav">Nessuna voce</li>
+          {/if}
+        </ul>
+      </nav>
+    </aside>
+
+    <section class="dettaglio">
+      {#if sezione === "aspetto"}
+        <h3>Aspetto</h3>
+        <div class="campo">
+          <span class="campo-label">Tema</span>
+          <div class="seg-control" role="radiogroup" aria-label="Tema">
+            {#each ["auto", "light", "dark"] as t (t)}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={statoTema.tema === t}
+                class:attivo={statoTema.tema === t}
+                onclick={() => cambiaTema(t)}
+              >
+                {t === "auto" ? "Auto" : t === "light" ? "Chiaro" : "Scuro"}
+              </button>
+            {/each}
+          </div>
+          <p class="hint">
+            "Auto" segue le impostazioni del sistema operativo.
+          </p>
+        </div>
+
+        <div class="campo">
+          <span class="campo-label">Tono palette</span>
+          <div class="seg-control" role="radiogroup" aria-label="Tono palette">
+            {#each ["zinc", "slate", "stone"] as t (t)}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={statoTema.tono === t}
+                class:attivo={statoTema.tono === t}
+                onclick={() => cambiaTono(t)}
+              >
+                {t}
+              </button>
+            {/each}
+          </div>
+          <p class="hint">
+            Variazione neutra dei grigi (effetto sottile sui background).
+          </p>
+        </div>
+      {:else if sezione === "vista"}
+        <h3>Vista lista</h3>
+        <div class="campo">
+          <span class="campo-label">Densità default</span>
+          <div class="seg-control" role="radiogroup">
+            {#each ["compatta", "comoda", "anteprima"] as d (d)}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={statoVista.densita === d}
+                class:attivo={statoVista.densita === d}
+                onclick={() => aggiornaDensita(d as Densita)}
+              >
+                {d}
+              </button>
+            {/each}
+          </div>
+          <p class="hint">
+            "Compatta" mostra solo titolo; "comoda" titolo + meta; "anteprima"
+            include un estratto del body.
+          </p>
+        </div>
+
+        <div
+          class="campo"
+          class:disabilitato={statoVista.densita !== "anteprima"}
+        >
+          <span class="campo-label">
+            Righe preview
+            <strong class="num">{statoVista.righePreview}</strong>
+          </span>
+          <input
+            type="range"
+            min="1"
+            max="8"
+            bind:value={statoVista.righePreview}
+            onchange={() => aggiornaRighePreview(statoVista.righePreview)}
+            disabled={statoVista.densita !== "anteprima"}
+            aria-label="Righe preview"
+          />
+          <p class="hint">
+            Numero di righe del body mostrate quando densità = anteprima.
+          </p>
+        </div>
+      {:else if sezione === "editor"}
+        <h3>Editor</h3>
+        <div class="placeholder-card">
+          <strong>Configurazione editor</strong>
+          <p>
+            Le opzioni di editing (autosave delay, line wrapping, indent)
+            saranno disponibili in una prossima release. Per ora l'editor
+            usa i default.
+          </p>
+        </div>
+      {:else if sezione === "sicurezza"}
+        <h3>Sicurezza</h3>
+
+        <div class="campo">
+          <span class="campo-label">Posizione vault</span>
+          <div class="path-row">
+            <code class="path-code" title={vaultPath}>{vaultPath || "—"}</code>
+            <button
+              type="button"
+              class="btn-ghost"
+              onclick={copiaPath}
+              disabled={!vaultPath}
+              title="Copia percorso"
+            >
+              {#if copiato}<Check size={14} />{:else}<Copy size={14} />{/if}
+            </button>
+          </div>
+          <p class="hint">
+            Database SQLite cifrato (SQLCipher) salvato localmente.
+          </p>
+        </div>
+
+        <div class="campo">
+          <span class="campo-label">Blocca vault</span>
+          <button type="button" class="btn-warn" onclick={bloccaVault}>
+            Blocca ora
+          </button>
+          <p class="hint">
+            Richiede la master password al prossimo accesso. La modale viene
+            chiusa automaticamente.
+          </p>
+        </div>
+
+        <div class="campo">
+          <span class="campo-label">Master password</span>
+          {#if !mostraCambioPassword}
+            <button
+              type="button"
+              class="btn-ghost"
+              onclick={() => (mostraCambioPassword = true)}
+            >
+              Cambia password
+            </button>
+          {:else}
+            <div class="form-pwd">
+              <input
+                type="password"
+                placeholder="Vecchia password"
+                bind:value={vecchiaPassword}
+                autocomplete="current-password"
+              />
+              <input
+                type="password"
+                placeholder="Nuova password (≥ 8 caratteri)"
+                bind:value={nuovaPassword}
+                autocomplete="new-password"
+              />
+              <input
+                type="password"
+                placeholder="Conferma nuova"
+                bind:value={confermaPassword}
+                autocomplete="new-password"
+              />
+              {#if errorePassword}
+                <p class="msg-err">{errorePassword}</p>
+              {/if}
+              {#if statoOpPassword === "ok"}
+                <p class="msg-ok">Password aggiornata.</p>
+              {/if}
+              <div class="riga-azioni">
+                <button
+                  type="button"
+                  class="btn-primary"
+                  onclick={cambiaPassword}
+                  disabled={statoOpPassword === "in_corso"}
+                >
+                  {statoOpPassword === "in_corso" ? "Aggiorno…" : "Aggiorna"}
+                </button>
+                <button
+                  type="button"
+                  class="btn-ghost"
+                  onclick={() => {
+                    mostraCambioPassword = false;
+                    vecchiaPassword = "";
+                    nuovaPassword = "";
+                    confermaPassword = "";
+                    errorePassword = "";
+                  }}
+                >
+                  Annulla
+                </button>
+              </div>
+            </div>
+          {/if}
+        </div>
+      {:else if sezione === "avanzate"}
+        <h3>Avanzate</h3>
+        <div class="accordion">
+          {#each subSezioniFiltrate as sub (sub.id)}
+            {@const aperta = subSezioneAperta === sub.id}
+            <div class="acc-item" class:aperta>
+              <button
+                type="button"
+                class="acc-head"
+                onclick={() => toggleSubSezione(sub.id)}
+                aria-expanded={aperta}
+              >
+                <span class="acc-icon">
+                  {#if sub.id === "provider"}<Bot size={14} />
+                  {:else if sub.id === "embeddings"}<Sparkles size={14} />
+                  {:else if sub.id === "audit"}<ScrollText size={14} />
+                  {:else if sub.id === "sync"}<RefreshCw size={14} />
+                  {:else}<Keyboard size={14} />{/if}
+                </span>
+                <span class="acc-label">{sub.label}</span>
+                <span class="acc-chev">
+                  {#if aperta}<ChevronDown size={14} />{:else}<ChevronRight
+                      size={14}
+                    />{/if}
+                </span>
+              </button>
+              {#if aperta}
+                <div class="acc-body">
+                  {#if sub.id === "provider"}
+                    <PannelloProviderConfig />
+                  {:else if sub.id === "embeddings"}
+                    {#if embStatus === null && !embErrore}
+                      <p class="hint">Caricamento stato modello…</p>
+                    {:else if embErrore}
+                      <p class="msg-err">{embErrore}</p>
+                    {:else if embStatus}
+                      <div class="campo">
+                        <span class="campo-label">Stato modello (MiniLM)</span>
+                        {#if embStatus.stato === "non_scaricato"}
+                          <p class="hint">
+                            Modello non scaricato. Path atteso:
+                            <code>{embStatus.path_atteso}</code>
+                          </p>
+                          <button
+                            type="button"
+                            class="btn-primary"
+                            onclick={scaricaModello}
+                            disabled={embOpInCorso !== ""}
+                          >
+                            {embOpInCorso === "download"
+                              ? "Scarico…"
+                              : "Scarica modello"}
+                          </button>
+                          {#if embProgressDownload}
+                            <p class="hint">
+                              {embProgressDownload.file}:
+                              {embProgressDownload.bytes} /
+                              {embProgressDownload.total ?? "?"} byte
+                            </p>
+                          {/if}
+                        {:else if embStatus.stato === "pronto"}
+                          <p class="hint">
+                            Pronto ({embStatus.size_mb} MB) — non ancora
+                            caricato in memoria.
+                          </p>
+                          <button
+                            type="button"
+                            class="btn-primary"
+                            onclick={inizializzaModello}
+                            disabled={embOpInCorso !== ""}
+                          >
+                            {embOpInCorso === "init"
+                              ? "Inizializzo…"
+                              : "Inizializza"}
+                          </button>
+                        {:else}
+                          <p class="hint">
+                            Caricato in memoria (dim {embStatus.dimensione}).
+                          </p>
+                        {/if}
+                      </div>
+                    {/if}
+
+                    {#if prefsFull}
+                      <div class="campo">
+                        <label class="campo-row">
+                          <span>Ricerca semantica abilitata</span>
+                          <input
+                            type="checkbox"
+                            checked={prefsFull.ricerca_semantica_abilitata}
+                            onchange={() => void toggleRicercaSemantica()}
+                          />
+                        </label>
+                        <p class="hint">
+                          Quando attiva, la ricerca usa anche embeddings
+                          vettoriali (richiede modello inizializzato).
+                        </p>
+                      </div>
+                      <div class="campo">
+                        <span class="campo-label">
+                          Hybrid alpha (lessicale ↔ semantico)
+                          <strong class="num">
+                            {prefsFull.ricerca_alpha.toFixed(2)}
+                          </strong>
+                        </span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={prefsFull.ricerca_alpha}
+                          onchange={(e) =>
+                            void aggiornaAlpha(
+                              parseFloat(
+                                (e.currentTarget as HTMLInputElement).value,
+                              ),
+                            )}
+                        />
+                        <p class="hint">
+                          0 = solo BM25 lessicale · 1 = solo coseno semantico ·
+                          0.5 bilanciato.
+                        </p>
+                      </div>
+                    {/if}
+                  {:else if sub.id === "audit"}
+                    <div class="campo">
+                      <span class="campo-label">Esporta cronologia</span>
+                      <button
+                        type="button"
+                        class="btn-ghost"
+                        onclick={esportaAudit}
+                        disabled={auditExportInCorso}
+                      >
+                        <Download size={14} />
+                        <span>
+                          {auditExportInCorso ? "Esporto…" : "Esporta CSV"}
+                        </span>
+                      </button>
+                      <p class="hint">
+                        Tutte le voci audit del vault in CSV.
+                      </p>
+                    </div>
+                    <div class="campo">
+                      <span class="campo-label">Cleanup retention</span>
+                      <div class="riga-inline">
+                        <input
+                          type="number"
+                          min="1"
+                          max="3650"
+                          bind:value={auditCleanupGiorni}
+                          class="num-input"
+                          aria-label="Giorni retention"
+                        />
+                        <span class="hint">giorni</span>
+                        <button
+                          type="button"
+                          class="btn-warn"
+                          onclick={eseguiAuditCleanup}
+                          disabled={auditCleanupInCorso}
+                        >
+                          {auditCleanupInCorso ? "Eseguo…" : "Elimina più vecchi"}
+                        </button>
+                      </div>
+                      <p class="hint">
+                        Rimuove voci audit antecedenti al numero di giorni
+                        indicato. Operazione irreversibile.
+                      </p>
+                    </div>
+                    {#if auditMessaggio}
+                      <p
+                        class="msg-info"
+                        class:msg-err={auditMessaggio.startsWith("Errore")}
+                      >
+                        {auditMessaggio}
+                      </p>
+                    {/if}
+                  {:else if sub.id === "sync"}
+                    <div class="campo">
+                      <span class="campo-label">Stato</span>
+                      <p class="hint">
+                        <strong>{syncState.stato}</strong>
+                        {#if syncState.ultimoSync}
+                          · ultimo sync {syncState.ultimoSync.slice(0, 16)}
+                        {/if}
+                        {#if syncState.conflitti > 0}
+                          · {syncState.conflitti} conflitti
+                        {/if}
+                      </p>
+                      {#if syncState.errore}
+                        <p class="msg-err">{syncState.errore}</p>
+                      {/if}
+                    </div>
+                    <div class="campo">
+                      <div class="riga-azioni">
+                        <button
+                          type="button"
+                          class="btn-primary"
+                          onclick={avviaSyncOra}
+                          disabled={syncOraInCorso ||
+                            syncState.stato === "non_configurato"}
+                        >
+                          {syncOraInCorso ? "Sincronizzo…" : "Sincronizza ora"}
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-ghost"
+                          onclick={eseguiSyncLogout}
+                          disabled={syncState.stato === "non_configurato"}
+                        >
+                          Logout
+                        </button>
+                      </div>
+                      {#if syncState.stato === "non_configurato"}
+                        <p class="hint">
+                          Sync non configurata. Per configurare login al server
+                          remoto usa la superficie legacy
+                          <em>Impostazioni → Sincronizzazione</em>.
+                          Configurazione redesign-first prevista in v0.9.
+                        </p>
+                      {/if}
+                    </div>
+                  {:else if sub.id === "hotkey"}
+                    <div class="campo">
+                      <span class="campo-label">Apri palette globale</span>
+                      <HotkeyInput bind:valore={hotkeyValore} />
+                      <div class="riga-azioni">
+                        <button
+                          type="button"
+                          class="btn-primary"
+                          onclick={salvaHotkey}
+                        >
+                          {hotkeySalvata ? "Salvato ✓" : "Salva"}
+                        </button>
+                      </div>
+                      <p class="hint">
+                        Registrato a livello sistema. La modifica diventa
+                        effettiva al prossimo riavvio dell'app.
+                      </p>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+          {/each}
+          {#if subSezioniFiltrate.length === 0}
+            <p class="hint">Nessuna sub-sezione corrisponde alla ricerca.</p>
+          {/if}
+        </div>
+      {/if}
+    </section>
+  </div>
+</Modale>
+
+<style>
+  .layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: var(--sp-3);
+    min-height: 480px;
+  }
+
+  .nav-pane {
+    border-right: 1px solid var(--border-subtle);
+    padding-right: var(--sp-2);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+
+  .search-box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px var(--sp-2);
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+  }
+
+  .search-box input {
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: var(--text-default);
+    font-size: var(--fs-sm);
+    outline: none;
+  }
+
+  nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  nav button {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    width: 100%;
+    padding: 6px var(--sp-2);
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    text-align: left;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+  }
+
+  nav button:hover {
+    background: var(--bg-overlay);
+    color: var(--text-default);
+  }
+
+  nav button.attiva {
+    background: var(--bg-input);
+    color: var(--text-strong);
+    font-weight: var(--fw-medium);
+  }
+
+  .vuoto-nav {
+    padding: var(--sp-2);
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+    font-style: italic;
+  }
+
+  .dettaglio {
+    padding: 0 var(--sp-2);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+  }
+
+  .dettaglio h3 {
+    margin: 0 0 var(--sp-1) 0;
+    font-size: var(--fs-md);
+    font-weight: var(--fw-semibold);
+    color: var(--text-strong);
+  }
+
+  .campo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .campo.disabilitato {
+    opacity: 0.55;
+  }
+
+  .campo-label {
+    font-size: var(--fs-sm);
+    color: var(--text-default);
+    font-weight: var(--fw-medium);
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-strong);
+  }
+
+  .seg-control {
+    display: inline-flex;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    align-self: flex-start;
+  }
+
+  .seg-control button {
+    padding: 6px var(--sp-3);
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    border-right: 1px solid var(--border-subtle);
+  }
+
+  .seg-control button:last-child {
+    border-right: 0;
+  }
+
+  .seg-control button:hover {
+    background: var(--bg-overlay);
+  }
+
+  .seg-control button.attivo {
+    background: var(--accent-team);
+    color: var(--accent-team-on);
+  }
+
+  .hint {
+    margin: 0;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+
+  .placeholder-card {
+    padding: var(--sp-3);
+    background: var(--bg-input);
+    border: 1px dashed var(--border-subtle);
+    border-radius: var(--radius-md);
+  }
+
+  .placeholder-card strong {
+    display: block;
+    color: var(--text-strong);
+    margin-bottom: 4px;
+    font-size: var(--fs-md);
+  }
+
+  .placeholder-card p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+  }
+
+  input[type="range"] {
+    accent-color: var(--accent-team);
+    max-width: 320px;
+  }
+
+  .path-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .path-code {
+    flex: 1;
+    padding: 6px var(--sp-2);
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-default);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .btn-ghost,
+  .btn-primary,
+  .btn-warn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px var(--sp-3);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    align-self: flex-start;
+  }
+
+  .btn-ghost {
+    background: var(--bg-input);
+    color: var(--text-default);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--bg-overlay);
+  }
+
+  .btn-ghost:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--accent-team);
+    color: var(--accent-team-on);
+    border-color: transparent;
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn-warn {
+    background: transparent;
+    color: var(--accent-warning, var(--warning, #d2a85f));
+    border-color: var(--accent-warning, var(--warning, #d2a85f));
+  }
+
+  .btn-warn:hover {
+    background: var(--accent-warning, var(--warning, #d2a85f));
+    color: var(--bg-canvas);
+  }
+
+  .form-pwd {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 360px;
+  }
+
+  .form-pwd input[type="password"] {
+    padding: 6px var(--sp-2);
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-default);
+    font-size: var(--fs-sm);
+  }
+
+  .msg-err {
+    margin: 0;
+    color: var(--accent-danger, #d9534f);
+    font-size: var(--fs-xs);
+  }
+
+  .msg-ok {
+    margin: 0;
+    color: var(--accent-success, #6cb86c);
+    font-size: var(--fs-xs);
+  }
+
+  .riga-azioni {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  /* ── Accordion Avanzate (D2) ── */
+  .accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .acc-item {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--bg-input);
+  }
+
+  .acc-head {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    width: 100%;
+    padding: var(--sp-2) var(--sp-3);
+    border: 0;
+    background: transparent;
+    color: var(--text-default);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .acc-head:hover {
+    background: var(--bg-overlay);
+  }
+
+  .acc-icon {
+    color: var(--text-muted);
+    display: inline-flex;
+  }
+
+  .acc-label {
+    flex: 1;
+  }
+
+  .acc-chev {
+    color: var(--text-muted);
+    display: inline-flex;
+  }
+
+  .acc-item.aperta .acc-head {
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-overlay);
+  }
+
+  .acc-body {
+    padding: var(--sp-3);
+    background: var(--bg-canvas);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+
+  .campo-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    font-size: var(--fs-sm);
+  }
+
+  .num-input {
+    width: 80px;
+    padding: 4px var(--sp-2);
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-default);
+    font-size: var(--fs-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .riga-inline {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    flex-wrap: wrap;
+  }
+
+  .msg-info {
+    margin: 0;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+</style>

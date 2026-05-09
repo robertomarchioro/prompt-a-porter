@@ -1,0 +1,44 @@
+/* =========================================================================
+   Prompt a Porter — Override token tema chiaro (V0.8 designer review #4)
+   -------------------------------------------------------------------------
+   Override applicati esclusivamente quando [data-theme="light"] matcha.
+   Caricati DOPO tokens.css per shadowing dei valori base.
+
+   Pattern color-mix(in oklch, ...) richiede CSS Color Module Level 5
+   (Chrome 111+, Safari 16.4+, Firefox 113+). Tauri 2 minimum req
+   Win10 1809+/macOS 10.15+ usa WebView2/WKWebView con supporto nativo.
+
+   Riferimento: docs/architettura/redesign/decisioni-designer.md (#4)
+   Riferimento: docs/roadmap/redesign-v08/blueprint-F0.md §3
+   ========================================================================= */
+
+[data-theme="light"] {
+  /* Mono editor body — contrast 8.9:1 (era 5.2:1 con #3B3F49) */
+  --bg-canvas: #FCFCFD;
+  --text-default: #1A1F2C;
+
+  /* Border subtle — meno invisibile (era #EEF0F4) */
+  --border-subtle: #E2E5EB;
+
+  /* Accent privato — passa AA su white (era #A78BFA) */
+  --accent-private: #7C3AED;
+}
+
+/* Chip tinted — passa AA a 4.7:1 (era 3.1:1).
+   Le classi .chip.warn/info/success non esistono ancora in v0.7:
+   saranno usate da PromptCard meta-row (F3), DetailPane meta-row (F4),
+   Status bar (F7), modali F8. Override dormiente fino ad allora. */
+[data-theme="light"] .chip.warn {
+  background: color-mix(in oklch, var(--warning) 14%, white);
+  color: color-mix(in oklch, var(--warning) 70%, black);
+}
+
+[data-theme="light"] .chip.info {
+  background: color-mix(in oklch, var(--info) 14%, white);
+  color: color-mix(in oklch, var(--info) 70%, black);
+}
+
+[data-theme="light"] .chip.success {
+  background: color-mix(in oklch, var(--success) 14%, white);
+  color: color-mix(in oklch, var(--success) 70%, black);
+}

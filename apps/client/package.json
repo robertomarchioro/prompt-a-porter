@@ -1,7 +1,7 @@
 {
   "name": "@pap/client",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.8.0",
   "type": "module",
   "description": "Prompt a Porter — Client desktop Tauri + Svelte",
   "license": "AGPL-3.0-only",
@@ -19,20 +19,27 @@
   "dependencies": {
     "@codemirror/autocomplete": "^6.0.0",
     "@codemirror/commands": "^6.0.0",
+    "@codemirror/lang-markdown": "^6",
     "@codemirror/language": "^6.0.0",
+    "@codemirror/search": "^6",
     "@codemirror/state": "^6.0.0",
     "@codemirror/view": "^6.0.0",
+    "@fontsource/inter": "^5.1",
+    "@fontsource/jetbrains-mono": "^5.1",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-global-shortcut": "^2.0.0",
     "@types/diff": "^8.0.0",
     "codemirror": "^6.0.0",
     "diff": "^9.0.0",
-    "lucide-svelte": "^0.460.0"
+    "diff2html": "^3",
+    "lucide-svelte": "^0.460.0",
+    "paneforge": "^1.0.2"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@tauri-apps/cli": "^2.0.0",
     "@testing-library/svelte": "^5.0.0",
+    "jsdom": "^29.1.1",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
     "tslib": "^2.8.0",
