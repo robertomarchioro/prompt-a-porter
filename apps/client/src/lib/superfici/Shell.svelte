@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy, onMount } from "svelte";
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import TitleBar from "$lib/components/TitleBar.svelte";
   import StatusBar from "$lib/components/StatusBar.svelte";
@@ -46,6 +47,23 @@
         new CustomEvent("pap:save-stato", { detail: { stato: null } }),
       );
     }
+  });
+
+  // F5 PR-E + F6: navigazione cross-prompt via custom event
+  // (Import composti, Varianti A/B/C → click apre nel detail)
+  function onApriPrompt(e: Event): void {
+    const id = (e as CustomEvent<string>).detail;
+    if (typeof id === "string" && id) {
+      promptSelezionato = id;
+    }
+  }
+
+  onMount(() => {
+    window.addEventListener("pap:apri-prompt", onApriPrompt);
+  });
+
+  onDestroy(() => {
+    window.removeEventListener("pap:apri-prompt", onApriPrompt);
   });
 </script>
 
