@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { ChevronsLeft, BarChart3, AlertTriangle } from "lucide-svelte";
   import NavGroup from "./NavGroup.svelte";
   import NavItem from "./NavItem.svelte";
@@ -74,7 +74,7 @@
   let tags = $state<TagInfo[]>([]);
   let cartelle = $state<Cartella[]>([]);
 
-  onMount(async () => {
+  async function caricaDati(): Promise<void> {
     try {
       const [c, t, f] = await Promise.all([
         invoke<ConteggiViste>("libreria_conteggi"),
@@ -87,6 +87,15 @@
     } catch (e) {
       console.error("[sidebar] caricamento dati fallito", e);
     }
+  }
+
+  onMount(() => {
+    void caricaDati();
+    window.addEventListener("pap:lista-mutata", caricaDati);
+  });
+
+  onDestroy(() => {
+    window.removeEventListener("pap:lista-mutata", caricaDati);
   });
 </script>
 
