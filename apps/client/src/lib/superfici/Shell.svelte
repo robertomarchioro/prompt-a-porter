@@ -5,6 +5,7 @@
   import Sidebar from "$lib/components/Sidebar.svelte";
   import SidebarMini from "$lib/components/SidebarMini.svelte";
   import ListPane from "$lib/components/ListPane.svelte";
+  import DetailPane from "$lib/superfici/DetailPane.svelte";
   import {
     caricaStato,
     salvaStato,
@@ -86,9 +87,16 @@
       </Pane>
       <PaneResizer class="resizer" />
       <Pane defaultSize={54}>
-        <div class="placeholder-pane detail-placeholder">
-          <p>Detail / Editor (F4) + Right-rail (F6)</p>
-        </div>
+        {#if promptSelezionato}
+          <DetailPane
+            promptId={promptSelezionato}
+            onChiudi={() => (promptSelezionato = null)}
+          />
+        {:else}
+          <div class="placeholder-pane detail-placeholder">
+            <p>Seleziona un prompt dalla lista</p>
+          </div>
+        {/if}
       </Pane>
     </PaneGroup>
   </main>
