@@ -11,6 +11,16 @@
   padding: 0;
 }
 
+/* Fix #132: root sizing esplicito perché .shell-root usa height: 100vh
+   ma senza width esplicita non si stretcha al viewport su massimizzazione
+   in alcune configurazioni Tauri Win11. Pattern Tauri canonical. */
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+}
+
 html {
   font-size: var(--fs-base);
   line-height: var(--lh-normal);

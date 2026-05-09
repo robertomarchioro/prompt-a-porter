@@ -3,6 +3,7 @@
   import { onMount, onDestroy } from "svelte";
   import { Lock, Users } from "lucide-svelte";
   import { apriModale } from "$lib/stores/modale.svelte";
+  import { fmtShortcut } from "$lib/util/shortcut";
 
   type StatoSalvataggio = "salvato" | "dirty" | "salvando" | "errore";
 
@@ -134,10 +135,12 @@
       class="seg clickable"
       type="button"
       onclick={() => apriModale({ tipo: "palette" })}
-      title="Apri command palette (⌘K / ⌃⇧P)"
+      title="Apri command palette ({fmtShortcut('mod+k')} / {fmtShortcut(
+        'ctrl+shift+p',
+      )})"
       aria-label="Apri command palette"
     >
-      <kbd>⌃⇧P</kbd>
+      <kbd>{fmtShortcut("ctrl+shift+p")}</kbd>
       <span class="muted">cerca</span>
     </button>
   </div>

@@ -52,6 +52,16 @@
   let selezioneMultipla = $state<Set<string>>(new Set());
   let mostraDiffLibero = $state(false);
 
+  // Fix #133: ref al Pane ListPane per .collapse() programmatic via API
+  // paneforge (collapse/expand/resize/isCollapsed) — il bottone ">>" in
+  // ListPane chiama listPaneRef?.collapse() invece del placeholder.
+  let listPaneRef = $state<{
+    collapse: () => void;
+    expand: () => void;
+    isCollapsed: () => boolean;
+    resize: (size: number) => void;
+  }>();
+
   function toggleSelezione(id: string): void {
     const next = new Set(selezioneMultipla);
     if (next.has(id)) next.delete(id);
@@ -150,7 +160,14 @@
         </Pane>
       {/if}
       <PaneResizer class="resizer" />
-      <Pane defaultSize={26} minSize={0} maxSize={40}>
+      <Pane
+        bind:this={listPaneRef}
+        defaultSize={26}
+        minSize={12}
+        maxSize={40}
+        collapsible
+        collapsedSize={0}
+      >
         <ListPane
           {vistaCorrente}
           {folderSelezionato}
@@ -163,7 +180,7 @@
           onSelezionaPrompt={(id) => {
             promptSelezionato = id;
           }}
-          onApriCollapse={() => console.log("F3.x list collapse")}
+          onApriCollapse={() => listPaneRef?.collapse()}
           {selezioneMultipla}
           onToggleSelezione={toggleSelezione}
           onPulisciSelezione={pulisciSelezione}
