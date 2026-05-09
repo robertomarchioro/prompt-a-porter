@@ -9,7 +9,12 @@
   import DetailPane from "$lib/superfici/DetailPane.svelte";
   import DiffLibero from "$lib/superfici/DiffLibero.svelte";
   import CompilaModal from "$lib/superfici/CompilaModal.svelte";
-  import { statoModale, chiudiModale } from "$lib/stores/modale.svelte";
+  import InsightModal from "$lib/superfici/InsightModal.svelte";
+  import {
+    statoModale,
+    chiudiModale,
+    apriModale,
+  } from "$lib/stores/modale.svelte";
   import {
     caricaStato,
     salvaStato,
@@ -99,7 +104,7 @@
         <Pane defaultSize={4} minSize={4} maxSize={4}>
           <SidebarMini
             onApriExpand={() => (stato.sidebarCollapsed = false)}
-            onApriInsight={() => console.log("F8 modale Insight")}
+            onApriInsight={() => apriModale({ tipo: "insight" })}
             onApriRegressioni={() => console.log("F8 modale Regressioni")}
           />
         </Pane>
@@ -116,7 +121,7 @@
             onSelezionaTag={(id) => (tagSelezionato = id)}
             onSelezionaModelTarget={(m) => (modelTargetSelezionato = m)}
             onApriCollapse={() => (stato.sidebarCollapsed = true)}
-            onApriInsight={() => console.log("F8 modale Insight")}
+            onApriInsight={() => apriModale({ tipo: "insight" })}
             onApriRegressioni={() => console.log("F8 modale Regressioni")}
           />
         </Pane>
@@ -173,6 +178,10 @@
     promptId={statoModale.attiva.promptId}
     onChiudi={chiudiModale}
   />
+{/if}
+
+{#if statoModale.attiva?.tipo === "insight"}
+  <InsightModal onChiudi={chiudiModale} />
 {/if}
 
 <style>
