@@ -11,6 +11,7 @@
   import RightRail from "$lib/components/RightRail.svelte";
   import AnteprimaTab from "$lib/components/AnteprimaTab.svelte";
   import DiagnosiTab from "$lib/components/DiagnosiTab.svelte";
+  import GoldenTab from "$lib/components/GoldenTab.svelte";
 
   const META_KEY = "pap.detail.meta-collapsed";
   function caricaMetaCollapsed(): boolean {
@@ -80,6 +81,7 @@
   let salvatoTs = $state<string | null>(null);
   let metaCollapsed = $state(caricaMetaCollapsed());
   let diagnosiCount = $state(0);
+  let goldenCount = $state(0);
 
   let timerAutosave: ReturnType<typeof setTimeout> | undefined;
 
@@ -363,7 +365,7 @@
 
       <DetailTabs
         {tabAttivo}
-        badge={{ diagnosi: diagnosiCount }}
+        badge={{ diagnosi: diagnosiCount, golden: goldenCount }}
         onSeleziona={(t) => (tabAttivo = t)}
       />
     </header>
@@ -396,6 +398,11 @@
               {promptId}
               {body}
               onConteggio={(n) => (diagnosiCount = n)}
+            />
+          {:else if tabAttivo === "golden"}
+            <GoldenTab
+              {promptId}
+              onConteggio={(n) => (goldenCount = n)}
             />
           {:else}
             <div class="tab-placeholder">
