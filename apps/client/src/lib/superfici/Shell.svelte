@@ -4,6 +4,7 @@
   import StatusBar from "$lib/components/StatusBar.svelte";
   import Sidebar from "$lib/components/Sidebar.svelte";
   import SidebarMini from "$lib/components/SidebarMini.svelte";
+  import ListPane from "$lib/components/ListPane.svelte";
   import {
     caricaStato,
     salvaStato,
@@ -15,9 +16,6 @@
 
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
-    // Trigger di reattività su tutti i campi che vogliamo persistere.
-    // Lettura esplicita per Svelte runes; il valore non serve, conta solo
-    // la dipendenza tracciata.
     void stato.sidebarCollapsed;
     void stato.gruppi.viste;
     void stato.gruppi.visibilita;
@@ -28,11 +26,14 @@
     saveTimer = setTimeout(() => salvaStato(stato), 200);
   });
 
-  // F2: stub state filtri. F3 li userà per popolare il list pane.
+  // Stato filtri condivisi Sidebar ↔ ListPane (F2 + F3).
   let vistaCorrente = $state("recenti");
   let folderSelezionato = $state<string | null>(null);
   let tagSelezionato = $state<string | null>(null);
   let modelTargetSelezionato = $state("");
+  let promptSelezionato = $state<string | null>(null);
+  // Nota: cross-folder drop (drag prompt → cartella sidebar) sarà F3.x.
+  // F3 PR-A copre solo drag-reorder dentro la lista.
 </script>
 
 <div class="shell-root">
@@ -67,9 +68,21 @@
       {/if}
       <PaneResizer class="resizer" />
       <Pane defaultSize={26} minSize={0} maxSize={40}>
-        <div class="placeholder-pane list-placeholder">
-          <p>List pane (F3)</p>
-        </div>
+        <ListPane
+          {vistaCorrente}
+          {folderSelezionato}
+          {tagSelezionato}
+          {modelTargetSelezionato}
+          {promptSelezionato}
+          onRimuoviFolder={() => (folderSelezionato = null)}
+          onRimuoviTag={() => (tagSelezionato = null)}
+          onRimuoviModelTarget={() => (modelTargetSelezionato = "")}
+          onSelezionaPrompt={(id) => {
+            promptSelezionato = id;
+            console.log("F4 detail", id);
+          }}
+          onApriCollapse={() => console.log("F3.x list collapse")}
+        />
       </Pane>
       <PaneResizer class="resizer" />
       <Pane defaultSize={54}>
@@ -103,12 +116,6 @@
     justify-content: center;
     color: var(--text-muted);
     font-size: var(--fs-sm);
-  }
-
-  .list-placeholder {
-    background: var(--bg-canvas);
-    border-left: 1px solid var(--border-subtle);
-    border-right: 1px solid var(--border-subtle);
   }
 
   .detail-placeholder {
