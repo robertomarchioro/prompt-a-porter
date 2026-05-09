@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, onDestroy } from "svelte";
-  import { ChevronsRight, Search, Plus, X } from "lucide-svelte";
+  import { ChevronsLeft, Search, Plus, X } from "lucide-svelte";
   import PromptCard from "./PromptCard.svelte";
   import {
     caricaStato,
@@ -268,7 +268,7 @@
         title="Comprimi"
         onclick={onApriCollapse}
       >
-        <ChevronsRight size={14} />
+        <ChevronsLeft size={14} />
       </button>
     </div>
 
