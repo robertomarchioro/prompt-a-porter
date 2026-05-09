@@ -13,6 +13,7 @@
   import DiagnosiTab from "$lib/components/DiagnosiTab.svelte";
   import GoldenTab from "$lib/components/GoldenTab.svelte";
   import CronologiaTab from "$lib/components/CronologiaTab.svelte";
+  import ImportVarTab from "$lib/components/ImportVarTab.svelte";
 
   const META_KEY = "pap.detail.meta-collapsed";
   function caricaMetaCollapsed(): boolean {
@@ -84,6 +85,7 @@
   let diagnosiCount = $state(0);
   let goldenCount = $state(0);
   let cronologiaCount = $state(0);
+  let importVarCount = $state(0);
 
   let timerAutosave: ReturnType<typeof setTimeout> | undefined;
 
@@ -371,6 +373,7 @@
           diagnosi: diagnosiCount,
           golden: goldenCount,
           cronologia: cronologiaCount,
+          importVar: importVarCount,
         }}
         onSeleziona={(t) => (tabAttivo = t)}
       />
@@ -414,6 +417,12 @@
             <CronologiaTab
               {promptId}
               onConteggio={(n) => (cronologiaCount = n)}
+            />
+          {:else if tabAttivo === "import-var"}
+            <ImportVarTab
+              {promptId}
+              {body}
+              onConteggio={(n) => (importVarCount = n)}
             />
           {:else}
             <div class="tab-placeholder">
