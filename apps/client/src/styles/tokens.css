@@ -150,7 +150,8 @@
 
   --text-strong:   oklch(0.18 0.012 250);
   --text-default:  oklch(0.28 0.012 250);
-  --text-muted:    oklch(0.48 0.012 250);
+  /* F10 PR-C: scurito da 0.48 → 0.42 per contrast ≥ 4.5:1 vs bg-canvas */
+  --text-muted:    oklch(0.42 0.012 250);
   --text-subtle:   oklch(0.62 0.012 250);
   --text-disabled: oklch(0.74 0.010 250);
 
@@ -159,8 +160,9 @@
   --accent-private-soft:   oklch(0.62 0.14 70 / 0.16);
   --accent-private-on:     oklch(0.99 0.005 70);
 
-  --accent-team:           oklch(0.55 0.20 290);
-  --accent-team-strong:    oklch(0.48 0.21 290);
+  /* F10 PR-C: scurito da 0.55 → 0.48 per contrast ≥ 4.5:1 con white text-on */
+  --accent-team:           oklch(0.48 0.20 290);
+  --accent-team-strong:    oklch(0.42 0.21 290);
   --accent-team-soft:      oklch(0.55 0.20 290 / 0.14);
   --accent-team-on:        oklch(0.99 0.005 290);
 
@@ -209,7 +211,8 @@
 
   --text-strong:   oklch(0.18 0.010 60);
   --text-default:  oklch(0.28 0.010 60);
-  --text-muted:    oklch(0.48 0.010 60);
+  /* F10 PR-C: scurito da 0.48 → 0.42 per contrast ≥ 4.5:1 vs bg-canvas */
+  --text-muted:    oklch(0.42 0.010 60);
   --text-subtle:   oklch(0.62 0.010 60);
   --text-disabled: oklch(0.74 0.008 60);
 
@@ -218,8 +221,9 @@
   --accent-private-soft:   oklch(0.62 0.14 70 / 0.16);
   --accent-private-on:     oklch(0.99 0.005 70);
 
-  --accent-team:           oklch(0.55 0.20 290);
-  --accent-team-strong:    oklch(0.48 0.21 290);
+  /* F10 PR-C: scurito da 0.55 → 0.48 per contrast ≥ 4.5:1 con white text-on */
+  --accent-team:           oklch(0.48 0.20 290);
+  --accent-team-strong:    oklch(0.42 0.21 290);
   --accent-team-soft:      oklch(0.55 0.20 290 / 0.14);
   --accent-team-on:        oklch(0.99 0.005 290);
 
@@ -270,7 +274,8 @@
 
   --text-strong:   oklch(0.18 0.002 270);
   --text-default:  oklch(0.28 0.002 270);
-  --text-muted:    oklch(0.48 0.003 270);
+  /* F10 PR-C: scurito da 0.48 → 0.42 per contrast ≥ 4.5:1 vs bg-canvas */
+  --text-muted:    oklch(0.42 0.003 270);
   --text-subtle:   oklch(0.62 0.003 270);
   --text-disabled: oklch(0.74 0.002 270);
 
@@ -279,8 +284,9 @@
   --accent-private-soft:   oklch(0.62 0.14 70 / 0.16);
   --accent-private-on:     oklch(0.99 0.005 70);
 
-  --accent-team:           oklch(0.55 0.20 290);
-  --accent-team-strong:    oklch(0.48 0.21 290);
+  /* F10 PR-C: scurito da 0.55 → 0.48 per contrast ≥ 4.5:1 con white text-on */
+  --accent-team:           oklch(0.48 0.20 290);
+  --accent-team-strong:    oklch(0.42 0.21 290);
   --accent-team-soft:      oklch(0.55 0.20 290 / 0.14);
   --accent-team-on:        oklch(0.99 0.005 290);
 
