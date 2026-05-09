@@ -1,10 +1,16 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { onMount } from "svelte";
   import CommandPalette from "$lib/superfici/CommandPalette.svelte";
   import DemoComponenti from "$lib/superfici/DemoComponenti.svelte";
   import Libreria from "$lib/superfici/Libreria.svelte";
   import OnboardingWizard from "$lib/superfici/OnboardingWizard.svelte";
+  import {
+    statoTema,
+    caricaTemaTono,
+    applicaThemeTone,
+  } from "$lib/stores/preferenze.svelte";
 
   const finestra = getCurrentWindow();
   const etichetta = finestra.label;
@@ -35,6 +41,37 @@
   $effect(() => {
     if (etichetta === "libreria" && !mostraDemo) {
       caricaPreferenze();
+    }
+  });
+
+  // F0 PR-B: cascade reattiva tema/tono su <html> per tutte le finestre
+  // (libreria, palette, demo). Carica una volta dal backend al mount,
+  // applica ad ogni cambio nello store, e ascolta prefers-color-scheme
+  // quando tema === "auto" per adeguarsi al sistema in tempo reale.
+  onMount(() => {
+    void caricaTemaTono();
+
+    let mq: MediaQueryList | null = null;
+    let onSystemChange: ((e: MediaQueryListEvent) => void) | null = null;
+    if (typeof window !== "undefined" && window.matchMedia) {
+      mq = window.matchMedia("(prefers-color-scheme: dark)");
+      onSystemChange = () => {
+        if (statoTema.tema === "auto") {
+          applicaThemeTone(statoTema.tema, statoTema.tono);
+        }
+      };
+      mq.addEventListener("change", onSystemChange);
+    }
+    return () => {
+      if (mq && onSystemChange) {
+        mq.removeEventListener("change", onSystemChange);
+      }
+    };
+  });
+
+  $effect(() => {
+    if (statoTema.caricato) {
+      applicaThemeTone(statoTema.tema, statoTema.tono);
     }
   });
 
