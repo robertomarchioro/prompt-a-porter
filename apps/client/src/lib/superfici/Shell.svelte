@@ -2,19 +2,69 @@
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import TitleBar from "$lib/components/TitleBar.svelte";
   import StatusBar from "$lib/components/StatusBar.svelte";
-  // F1: shell strutturale. F2/F3/F4/F6 sostituiranno i placeholder
-  // con i propri component (Sidebar, ListPane, DetailPane, RightRail).
+  import Sidebar from "$lib/components/Sidebar.svelte";
+  import SidebarMini from "$lib/components/SidebarMini.svelte";
+  import {
+    caricaStato,
+    salvaStato,
+    type StatoSidebar,
+  } from "$lib/stores/sidebar-collapsed";
+
+  // F2: stato collapsed sidebar + gruppi NavGroup, persistito in localStorage.
+  let stato = $state<StatoSidebar>(caricaStato());
+
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => {
+    // Trigger di reattività su tutti i campi che vogliamo persistere.
+    // Lettura esplicita per Svelte runes; il valore non serve, conta solo
+    // la dipendenza tracciata.
+    void stato.sidebarCollapsed;
+    void stato.gruppi.viste;
+    void stato.gruppi.visibilita;
+    void stato.gruppi.cartelle;
+    void stato.gruppi.tag;
+    void stato.gruppi.modelTarget;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => salvaStato(stato), 200);
+  });
+
+  // F2: stub state filtri. F3 li userà per popolare il list pane.
+  let vistaCorrente = $state("recenti");
+  let folderSelezionato = $state<string | null>(null);
+  let tagSelezionato = $state<string | null>(null);
+  let modelTargetSelezionato = $state("");
 </script>
 
 <div class="shell-root">
   <TitleBar />
   <main class="shell-body">
     <PaneGroup direction="horizontal" autoSaveId="redesign-shell-v08">
-      <Pane defaultSize={20} minSize={14} maxSize={30}>
-        <div class="placeholder-pane sidebar-placeholder">
-          <p>Sidebar (F2)</p>
-        </div>
-      </Pane>
+      {#if stato.sidebarCollapsed}
+        <Pane defaultSize={4} minSize={4} maxSize={4}>
+          <SidebarMini
+            onApriExpand={() => (stato.sidebarCollapsed = false)}
+            onApriInsight={() => console.log("F8 modale Insight")}
+            onApriRegressioni={() => console.log("F8 modale Regressioni")}
+          />
+        </Pane>
+      {:else}
+        <Pane defaultSize={20} minSize={14} maxSize={30}>
+          <Sidebar
+            {vistaCorrente}
+            {folderSelezionato}
+            {tagSelezionato}
+            {modelTargetSelezionato}
+            bind:gruppi={stato.gruppi}
+            onSelezionaVista={(id) => (vistaCorrente = id)}
+            onSelezionaFolder={(id) => (folderSelezionato = id)}
+            onSelezionaTag={(id) => (tagSelezionato = id)}
+            onSelezionaModelTarget={(m) => (modelTargetSelezionato = m)}
+            onApriCollapse={() => (stato.sidebarCollapsed = true)}
+            onApriInsight={() => console.log("F8 modale Insight")}
+            onApriRegressioni={() => console.log("F8 modale Regressioni")}
+          />
+        </Pane>
+      {/if}
       <PaneResizer class="resizer" />
       <Pane defaultSize={26} minSize={0} maxSize={40}>
         <div class="placeholder-pane list-placeholder">
@@ -53,10 +103,6 @@
     justify-content: center;
     color: var(--text-muted);
     font-size: var(--fs-sm);
-  }
-
-  .sidebar-placeholder {
-    background: var(--bg-surface);
   }
 
   .list-placeholder {
