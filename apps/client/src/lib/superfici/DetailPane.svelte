@@ -10,6 +10,7 @@
   import MarkdownToolbar from "$lib/components/MarkdownToolbar.svelte";
   import RightRail from "$lib/components/RightRail.svelte";
   import AnteprimaTab from "$lib/components/AnteprimaTab.svelte";
+  import DiagnosiTab from "$lib/components/DiagnosiTab.svelte";
 
   const META_KEY = "pap.detail.meta-collapsed";
   function caricaMetaCollapsed(): boolean {
@@ -78,6 +79,7 @@
   let erroreCaricamento = $state<string | null>(null);
   let salvatoTs = $state<string | null>(null);
   let metaCollapsed = $state(caricaMetaCollapsed());
+  let diagnosiCount = $state(0);
 
   let timerAutosave: ReturnType<typeof setTimeout> | undefined;
 
@@ -123,16 +125,38 @@
     void caricaDettaglio(promptId);
   });
 
+  function onGotoLine(e: Event): void {
+    const linea = (e as CustomEvent<number>).detail;
+    if (typeof linea !== "number" || linea < 1) return;
+    tabAttivo = "editor";
+    // Scroll dell'editor alla riga (cross-tab navigation da F5 PR-B Diagnosi).
+    // Defer al next tick per dare tempo al tab di rimontare l'EditorTab.
+    setTimeout(() => {
+      const view = editorView;
+      if (!view) return;
+      const lineCount = view.state.doc.lines;
+      const target = Math.min(Math.max(linea, 1), lineCount);
+      const lineObj = view.state.doc.line(target);
+      view.dispatch({
+        selection: { anchor: lineObj.from, head: lineObj.to },
+        scrollIntoView: true,
+      });
+      view.focus();
+    }, 50);
+  }
+
   onMount(async () => {
     try {
       cartelleCache = await invoke<Cartella[]>("folder_lista");
     } catch {
       /* ignore */
     }
+    window.addEventListener("pap:goto-line", onGotoLine);
   });
 
   onDestroy(() => {
     if (timerAutosave) clearTimeout(timerAutosave);
+    window.removeEventListener("pap:goto-line", onGotoLine);
   });
 
   function pianificaAutosave(): void {
@@ -337,7 +361,11 @@
         </span>
       </div>
 
-      <DetailTabs {tabAttivo} onSeleziona={(t) => (tabAttivo = t)} />
+      <DetailTabs
+        {tabAttivo}
+        badge={{ diagnosi: diagnosiCount }}
+        onSeleziona={(t) => (tabAttivo = t)}
+      />
     </header>
 
     <PaneGroup
@@ -363,6 +391,12 @@
             <EditorIndicator {statoSalvataggio} {righe} {colonna} {chars} />
           {:else if tabAttivo === "anteprima"}
             <AnteprimaTab {body} />
+          {:else if tabAttivo === "diagnosi"}
+            <DiagnosiTab
+              {promptId}
+              {body}
+              onConteggio={(n) => (diagnosiCount = n)}
+            />
           {:else}
             <div class="tab-placeholder">
               <p>Tab "{tabAttivo}" — implementazione in F5</p>
