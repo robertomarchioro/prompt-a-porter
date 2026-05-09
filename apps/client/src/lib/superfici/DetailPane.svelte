@@ -57,6 +57,7 @@
   let chars = $state(0);
   let cartelleCache = $state<Cartella[]>([]);
   let erroreCaricamento = $state<string | null>(null);
+  let salvatoTs = $state<string | null>(null);
 
   let timerAutosave: ReturnType<typeof setTimeout> | undefined;
 
@@ -69,12 +70,30 @@
       descrizione = d.descrizione;
       body = d.body;
       statoSalvataggio = "salvato";
+      salvatoTs = d.aggiornato_a; // ultimo save noto: timestamp backend
+      // F7: notifica StatusBar del prompt corrente
+      window.dispatchEvent(
+        new CustomEvent("pap:prompt-corrente", {
+          detail: { id: d.id, titolo: d.titolo, visibilita: d.visibilita },
+        }),
+      );
     } catch (e) {
       console.error("[detail] caricaDettaglio", e);
       dettaglio = null;
       erroreCaricamento = "Prompt non trovato";
     }
   }
+
+  // F7: dispatch save-stato ad ogni cambio per StatusBar
+  $effect(() => {
+    void statoSalvataggio;
+    void salvatoTs;
+    window.dispatchEvent(
+      new CustomEvent("pap:save-stato", {
+        detail: { stato: statoSalvataggio, salvatoA: salvatoTs ?? undefined },
+      }),
+    );
+  });
 
   $effect(() => {
     void caricaDettaglio(promptId);
@@ -116,6 +135,7 @@
         },
       });
       statoSalvataggio = "salvato";
+      salvatoTs = new Date().toISOString();
       window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
     } catch (e) {
       console.error("[detail] save", e);

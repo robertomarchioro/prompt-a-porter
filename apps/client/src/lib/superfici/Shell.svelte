@@ -35,6 +35,18 @@
   let promptSelezionato = $state<string | null>(null);
   // Nota: cross-folder drop (drag prompt → cartella sidebar) sarà F3.x.
   // F3 PR-A copre solo drag-reorder dentro la lista.
+
+  // F7: notifica StatusBar quando il prompt viene deselezionato
+  $effect(() => {
+    if (promptSelezionato === null) {
+      window.dispatchEvent(
+        new CustomEvent("pap:prompt-corrente", { detail: null }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("pap:save-stato", { detail: { stato: null } }),
+      );
+    }
+  });
 </script>
 
 <div class="shell-root">
