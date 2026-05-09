@@ -44,6 +44,11 @@
     promptSelezionato: string | null;
     onSelezionaPrompt: (id: string) => void;
     onApriCollapse?: () => void;
+    /** F5 PR-F: set di prompt selezionati per Diff libero (Cmd/Ctrl+click) */
+    selezioneMultipla?: Set<string>;
+    onToggleSelezione?: (id: string) => void;
+    onPulisciSelezione?: () => void;
+    onConfronta?: () => void;
   }
 
   let {
@@ -57,7 +62,15 @@
     promptSelezionato,
     onSelezionaPrompt,
     onApriCollapse,
+    selezioneMultipla,
+    onToggleSelezione,
+    onPulisciSelezione,
+    onConfronta,
   }: Props = $props();
+
+  // Cmd/Ctrl+click su card è gestito inline con onclickcapture sul
+  // div .card-wrap (vedi template); il click "normale" arriva al
+  // <PromptCard onclick={...}> tramite event bubble standard.
 
   let stato = $state<StatoLista>(caricaStato());
   let prompts = $state<PromptCardData[]>([]);
@@ -355,11 +368,19 @@
           class:drop-after={dropTargetIndex === idx &&
             dropPosition === "after"}
           class:dragging={draggedId === p.id}
+          class:selezionata-multi={selezioneMultipla?.has(p.id) || undefined}
           draggable="true"
           ondragstart={(e) => gestDragStart(e, p.id)}
           ondragover={(e) => gestDragOverCard(e, idx)}
           ondrop={(e) => gestDropCard(e, idx)}
           ondragend={gestDragEnd}
+          onclickcapture={(e) => {
+            if ((e.metaKey || e.ctrlKey) && onToggleSelezione) {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleSelezione(p.id);
+            }
+          }}
           role="presentation"
         >
           <PromptCard
@@ -380,6 +401,32 @@
       {/each}
     {/if}
   </div>
+
+  {#if selezioneMultipla && selezioneMultipla.size >= 2}
+    <footer class="multi-toolbar" role="toolbar" aria-label="Selezione multipla">
+      <span class="multi-info">
+        {selezioneMultipla.size} prompt selezionati
+      </span>
+      <button
+        class="btn-secondary"
+        type="button"
+        onclick={onPulisciSelezione}
+      >
+        Annulla
+      </button>
+      <button
+        class="btn-primary"
+        type="button"
+        onclick={onConfronta}
+        disabled={selezioneMultipla.size > 4}
+        title={selezioneMultipla.size > 4
+          ? "Massimo 4 prompt confrontabili"
+          : "Apri confronto libero"}
+      >
+        Confronta
+      </button>
+    </footer>
+  {/if}
 </section>
 
 <style>
@@ -641,5 +688,63 @@
 
   .card-wrap.drop-after::after {
     bottom: -1px;
+  }
+
+  /* F5 PR-F: visual indicator selezione multipla per Diff libero */
+  .card-wrap.selezionata-multi {
+    background: var(--accent-team-soft);
+    box-shadow: inset 3px 0 0 var(--accent-team);
+  }
+
+  .multi-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-2);
+    border-top: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+  }
+
+  .multi-info {
+    flex: 1;
+    font-size: var(--fs-sm);
+    color: var(--text-default);
+    font-weight: var(--fw-medium);
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    cursor: pointer;
+    font-family: var(--font-ui);
+  }
+
+  .btn-primary {
+    background: var(--accent-team);
+    color: var(--accent-team-on);
+    border: 0;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent-team-strong);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .btn-secondary:hover {
+    background: var(--bg-overlay);
+    color: var(--text-default);
   }
 </style>
