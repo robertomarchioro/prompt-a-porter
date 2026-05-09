@@ -14,6 +14,7 @@
   import GoldenTab from "$lib/components/GoldenTab.svelte";
   import CronologiaTab from "$lib/components/CronologiaTab.svelte";
   import ImportVarTab from "$lib/components/ImportVarTab.svelte";
+  import { apriModale } from "$lib/stores/modale.svelte";
 
   const META_KEY = "pap.detail.meta-collapsed";
   function caricaMetaCollapsed(): boolean {
@@ -325,8 +326,8 @@
           <button
             class="primary"
             type="button"
-            title="Compila (F8)"
-            onclick={() => console.log("F8 compila")}
+            title="Compila (apre modale)"
+            onclick={() => apriModale({ tipo: "compila", promptId })}
           >
             Compila
           </button>
