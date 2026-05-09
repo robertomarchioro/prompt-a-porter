@@ -11,6 +11,7 @@
   import CompilaModal from "$lib/superfici/CompilaModal.svelte";
   import InsightModal from "$lib/superfici/InsightModal.svelte";
   import RegressioniModal from "$lib/superfici/RegressioniModal.svelte";
+  import ImpostazioniModal from "$lib/superfici/ImpostazioniModal.svelte";
   import {
     statoModale,
     chiudiModale,
@@ -88,12 +89,22 @@
     }
   }
 
+  // F8 PR-D1: Cmd/Ctrl+, apre Impostazioni globalmente
+  function onShortcutImpostazioni(e: KeyboardEvent): void {
+    if ((e.metaKey || e.ctrlKey) && e.key === ",") {
+      e.preventDefault();
+      apriModale({ tipo: "impostazioni" });
+    }
+  }
+
   onMount(() => {
     window.addEventListener("pap:apri-prompt", onApriPrompt);
+    window.addEventListener("keydown", onShortcutImpostazioni);
   });
 
   onDestroy(() => {
     window.removeEventListener("pap:apri-prompt", onApriPrompt);
+    window.removeEventListener("keydown", onShortcutImpostazioni);
   });
 </script>
 
@@ -187,6 +198,19 @@
 
 {#if statoModale.attiva?.tipo === "regressioni"}
   <RegressioniModal onChiudi={chiudiModale} />
+{/if}
+
+{#if statoModale.attiva?.tipo === "impostazioni"}
+  <ImpostazioniModal
+    sezioneIniziale={statoModale.attiva.sezione as
+      | "aspetto"
+      | "vista"
+      | "editor"
+      | "sicurezza"
+      | "avanzate"
+      | undefined}
+    onChiudi={chiudiModale}
+  />
 {/if}
 
 <style>
