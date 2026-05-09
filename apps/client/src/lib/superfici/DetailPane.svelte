@@ -9,6 +9,7 @@
   import EditorIndicator from "$lib/components/EditorIndicator.svelte";
   import MarkdownToolbar from "$lib/components/MarkdownToolbar.svelte";
   import RightRail from "$lib/components/RightRail.svelte";
+  import AnteprimaTab from "$lib/components/AnteprimaTab.svelte";
 
   const META_KEY = "pap.detail.meta-collapsed";
   function caricaMetaCollapsed(): boolean {
@@ -360,6 +361,8 @@
               bind:editorView
             />
             <EditorIndicator {statoSalvataggio} {righe} {colonna} {chars} />
+          {:else if tabAttivo === "anteprima"}
+            <AnteprimaTab {body} />
           {:else}
             <div class="tab-placeholder">
               <p>Tab "{tabAttivo}" — implementazione in F5</p>
