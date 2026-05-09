@@ -1,12 +1,30 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, onDestroy } from "svelte";
+  import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import { Star, GitFork, Download, PanelRight } from "lucide-svelte";
   import type { EditorView } from "@codemirror/view";
   import DetailTabs, { type TabId } from "$lib/components/DetailTabs.svelte";
   import EditorTab from "$lib/components/EditorTab.svelte";
   import EditorIndicator from "$lib/components/EditorIndicator.svelte";
   import MarkdownToolbar from "$lib/components/MarkdownToolbar.svelte";
+  import RightRail from "$lib/components/RightRail.svelte";
+
+  const META_KEY = "pap.detail.meta-collapsed";
+  function caricaMetaCollapsed(): boolean {
+    try {
+      return localStorage.getItem(META_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+  function salvaMetaCollapsed(v: boolean): void {
+    try {
+      localStorage.setItem(META_KEY, v ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }
 
   interface TagInfo {
     id: string;
@@ -58,8 +76,13 @@
   let cartelleCache = $state<Cartella[]>([]);
   let erroreCaricamento = $state<string | null>(null);
   let salvatoTs = $state<string | null>(null);
+  let metaCollapsed = $state(caricaMetaCollapsed());
 
   let timerAutosave: ReturnType<typeof setTimeout> | undefined;
+
+  $effect(() => {
+    salvaMetaCollapsed(metaCollapsed);
+  });
 
   async function caricaDettaglio(id: string): Promise<void> {
     erroreCaricamento = null;
@@ -180,6 +203,21 @@
     editorView.focus();
   }
 
+  function aggiungiTag(nome: string): void {
+    if (!dettaglio || dettaglio.tags.some((t) => t.nome === nome)) return;
+    dettaglio.tags = [
+      ...dettaglio.tags,
+      { id: `tmp-${nome}`, nome, colore: "" },
+    ];
+    pianificaAutosave();
+  }
+
+  function rimuoviTag(id: string): void {
+    if (!dettaglio) return;
+    dettaglio.tags = dettaglio.tags.filter((t) => t.id !== id);
+    pianificaAutosave();
+  }
+
   function tempoRelativo(iso: string): string {
     if (!iso) return "";
     try {
@@ -264,9 +302,9 @@
           <button
             class="ico meta-toggle"
             type="button"
-            title="Meta (F6)"
-            aria-label="Meta"
-            onclick={() => console.log("F6 right-rail")}
+            title={metaCollapsed ? "Mostra metadata" : "Nascondi metadata"}
+            aria-label="Toggle metadata"
+            onclick={() => (metaCollapsed = !metaCollapsed)}
           >
             <PanelRight size={14} />
           </button>
@@ -301,27 +339,64 @@
       <DetailTabs {tabAttivo} onSeleziona={(t) => (tabAttivo = t)} />
     </header>
 
-    <div class="detail-body">
-      {#if tabAttivo === "editor"}
-        <MarkdownToolbar
-          view={editorView}
-          onInserisciVariabile={inserisciVariabile}
-          onInserisciImport={inserisciImport}
-        />
-        <EditorTab
-          {body}
-          onChangeBody={onBodyChange}
-          {onSelectionChange}
-          {promptId}
-          bind:editorView
-        />
-        <EditorIndicator {statoSalvataggio} {righe} {colonna} {chars} />
-      {:else}
-        <div class="tab-placeholder">
-          <p>Tab "{tabAttivo}" — implementazione in F5</p>
+    <PaneGroup
+      direction="horizontal"
+      autoSaveId="detail-rail-v08"
+      class="detail-pane-group"
+    >
+      <Pane defaultSize={70} minSize={50}>
+        <div class="detail-body">
+          {#if tabAttivo === "editor"}
+            <MarkdownToolbar
+              view={editorView}
+              onInserisciVariabile={inserisciVariabile}
+              onInserisciImport={inserisciImport}
+            />
+            <EditorTab
+              {body}
+              onChangeBody={onBodyChange}
+              {onSelectionChange}
+              {promptId}
+              bind:editorView
+            />
+            <EditorIndicator {statoSalvataggio} {righe} {colonna} {chars} />
+          {:else}
+            <div class="tab-placeholder">
+              <p>Tab "{tabAttivo}" — implementazione in F5</p>
+            </div>
+          {/if}
         </div>
+      </Pane>
+      {#if !metaCollapsed}
+        <PaneResizer class="resizer" />
+        <Pane defaultSize={30} minSize={20} maxSize={40}>
+          <RightRail
+            {promptId}
+            {titolo}
+            {body}
+            visibilita={dettaglio.visibilita}
+            targetModel={dettaglio.target_model}
+            folderId={dettaglio.folder_id}
+            tags={dettaglio.tags}
+            onCambiaVisibilita={(v) => {
+              if (dettaglio) dettaglio.visibilita = v;
+              pianificaAutosave();
+            }}
+            onCambiaTarget={(t) => {
+              if (dettaglio) dettaglio.target_model = t;
+              pianificaAutosave();
+            }}
+            onCambiaFolder={(f) => {
+              if (dettaglio) dettaglio.folder_id = f;
+              pianificaAutosave();
+            }}
+            onAggiungiTag={aggiungiTag}
+            onRimuoviTag={rimuoviTag}
+            onApriTabImportVar={() => (tabAttivo = "import-var")}
+          />
+        </Pane>
       {/if}
-    </div>
+    </PaneGroup>
   </article>
 {:else}
   <div class="caricamento">
