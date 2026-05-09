@@ -1,11 +1,16 @@
 <script lang="ts">
   import { statoTema, salvaTemaTono } from "$lib/stores/preferenze.svelte";
-  import { Sun, Moon } from "lucide-svelte";
+  import { apriModale } from "$lib/stores/modale.svelte";
+  import { Sun, Moon, Settings } from "lucide-svelte";
 
   function toggleTema(): void {
     const successivo = statoTema.tema === "dark" ? "light" : "dark";
     statoTema.tema = successivo;
     void salvaTemaTono(successivo, statoTema.tono);
+  }
+
+  function apriImpostazioni(): void {
+    apriModale({ tipo: "impostazioni" });
   }
 </script>
 
@@ -27,6 +32,15 @@
       {:else}
         <Moon size={16} />
       {/if}
+    </button>
+    <button
+      type="button"
+      class="icon-button"
+      aria-label="Impostazioni"
+      title="Impostazioni (⌘,)"
+      onclick={apriImpostazioni}
+    >
+      <Settings size={16} />
     </button>
   </div>
 </header>

@@ -133,6 +133,12 @@
   }
 
   // Cartelle in cache per label chip "Cartella: <nome>"
+  // F8 PR-D1: ricarica stato densita/righePreview quando ImpostazioniModal
+  // dispatcha pap:lista-densita-cambiata. Evita reload manuale.
+  function onDensitaCambiata(): void {
+    stato = caricaStato();
+  }
+
   onMount(async () => {
     try {
       cartelle = await invoke<Cartella[]>("folder_lista");
@@ -140,10 +146,12 @@
       /* ignore */
     }
     window.addEventListener("pap:lista-mutata", caricaLista);
+    window.addEventListener("pap:lista-densita-cambiata", onDensitaCambiata);
   });
 
   onDestroy(() => {
     window.removeEventListener("pap:lista-mutata", caricaLista);
+    window.removeEventListener("pap:lista-densita-cambiata", onDensitaCambiata);
   });
 
   const titoloVista = $derived.by(() => {
