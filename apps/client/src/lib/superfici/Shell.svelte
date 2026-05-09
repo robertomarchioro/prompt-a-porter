@@ -12,6 +12,7 @@
   import InsightModal from "$lib/superfici/InsightModal.svelte";
   import RegressioniModal from "$lib/superfici/RegressioniModal.svelte";
   import ImpostazioniModal from "$lib/superfici/ImpostazioniModal.svelte";
+  import PaletteModal from "$lib/superfici/PaletteModal.svelte";
   import {
     statoModale,
     chiudiModale,
@@ -89,22 +90,32 @@
     }
   }
 
-  // F8 PR-D1: Cmd/Ctrl+, apre Impostazioni globalmente
-  function onShortcutImpostazioni(e: KeyboardEvent): void {
-    if ((e.metaKey || e.ctrlKey) && e.key === ",") {
+  // F8 PR-D1/PR-E: shortcut globali per modali ricorrenti
+  // - ⌘/Ctrl+,            → Impostazioni
+  // - ⌘/Ctrl+K            → Palette
+  // - ⌘/Ctrl+Shift+P      → Palette (alias VS Code-style)
+  function onShortcutGlobale(e: KeyboardEvent): void {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    if (e.key === ",") {
       e.preventDefault();
       apriModale({ tipo: "impostazioni" });
+    } else if (e.key === "k" || e.key === "K") {
+      e.preventDefault();
+      apriModale({ tipo: "palette" });
+    } else if (e.shiftKey && (e.key === "P" || e.key === "p")) {
+      e.preventDefault();
+      apriModale({ tipo: "palette" });
     }
   }
 
   onMount(() => {
     window.addEventListener("pap:apri-prompt", onApriPrompt);
-    window.addEventListener("keydown", onShortcutImpostazioni);
+    window.addEventListener("keydown", onShortcutGlobale);
   });
 
   onDestroy(() => {
     window.removeEventListener("pap:apri-prompt", onApriPrompt);
-    window.removeEventListener("keydown", onShortcutImpostazioni);
+    window.removeEventListener("keydown", onShortcutGlobale);
   });
 </script>
 
@@ -211,6 +222,10 @@
       | undefined}
     onChiudi={chiudiModale}
   />
+{/if}
+
+{#if statoModale.attiva?.tipo === "palette"}
+  <PaletteModal onChiudi={chiudiModale} />
 {/if}
 
 <style>

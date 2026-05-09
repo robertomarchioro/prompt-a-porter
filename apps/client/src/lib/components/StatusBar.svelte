@@ -2,6 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, onDestroy } from "svelte";
   import { Lock, Users } from "lucide-svelte";
+  import { apriModale } from "$lib/stores/modale.svelte";
 
   type StatoSalvataggio = "salvato" | "dirty" | "salvando" | "errore";
 
@@ -132,8 +133,8 @@
     <button
       class="seg clickable"
       type="button"
-      onclick={() => console.log("F8 palette")}
-      title="Apri command palette (F8)"
+      onclick={() => apriModale({ tipo: "palette" })}
+      title="Apri command palette (⌘K / ⌃⇧P)"
     >
       <kbd>⌃⇧P</kbd>
       <span class="muted">cerca</span>
