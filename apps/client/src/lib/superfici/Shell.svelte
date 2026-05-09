@@ -7,6 +7,7 @@
   import SidebarMini from "$lib/components/SidebarMini.svelte";
   import ListPane from "$lib/components/ListPane.svelte";
   import DetailPane from "$lib/superfici/DetailPane.svelte";
+  import DiffLibero from "$lib/superfici/DiffLibero.svelte";
   import {
     caricaStato,
     salvaStato,
@@ -36,6 +37,27 @@
   let promptSelezionato = $state<string | null>(null);
   // Nota: cross-folder drop (drag prompt → cartella sidebar) sarà F3.x.
   // F3 PR-A copre solo drag-reorder dentro la lista.
+
+  // F5 PR-F: selezione multipla per Diff libero (Cmd/Ctrl+click in ListPane)
+  let selezioneMultipla = $state<Set<string>>(new Set());
+  let mostraDiffLibero = $state(false);
+
+  function toggleSelezione(id: string): void {
+    const next = new Set(selezioneMultipla);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    selezioneMultipla = next;
+  }
+
+  function pulisciSelezione(): void {
+    selezioneMultipla = new Set();
+  }
+
+  function apriDiffLibero(): void {
+    if (selezioneMultipla.size >= 2 && selezioneMultipla.size <= 4) {
+      mostraDiffLibero = true;
+    }
+  }
 
   // F7: notifica StatusBar quando il prompt viene deselezionato
   $effect(() => {
@@ -110,9 +132,12 @@
           onRimuoviModelTarget={() => (modelTargetSelezionato = "")}
           onSelezionaPrompt={(id) => {
             promptSelezionato = id;
-            console.log("F4 detail", id);
           }}
           onApriCollapse={() => console.log("F3.x list collapse")}
+          {selezioneMultipla}
+          onToggleSelezione={toggleSelezione}
+          onPulisciSelezione={pulisciSelezione}
+          onConfronta={apriDiffLibero}
         />
       </Pane>
       <PaneResizer class="resizer" />
@@ -132,6 +157,13 @@
   </main>
   <StatusBar />
 </div>
+
+{#if mostraDiffLibero}
+  <DiffLibero
+    idPrompts={Array.from(selezioneMultipla)}
+    onChiudi={() => (mostraDiffLibero = false)}
+  />
+{/if}
 
 <style>
   .shell-root {
