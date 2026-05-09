@@ -8,6 +8,8 @@
   import ListPane from "$lib/components/ListPane.svelte";
   import DetailPane from "$lib/superfici/DetailPane.svelte";
   import DiffLibero from "$lib/superfici/DiffLibero.svelte";
+  import CompilaModal from "$lib/superfici/CompilaModal.svelte";
+  import { statoModale, chiudiModale } from "$lib/stores/modale.svelte";
   import {
     caricaStato,
     salvaStato,
@@ -162,6 +164,14 @@
   <DiffLibero
     idPrompts={Array.from(selezioneMultipla)}
     onChiudi={() => (mostraDiffLibero = false)}
+  />
+{/if}
+
+<!-- F8: modali globali (apertura via apriModale dal store) -->
+{#if statoModale.attiva?.tipo === "compila"}
+  <CompilaModal
+    promptId={statoModale.attiva.promptId}
+    onChiudi={chiudiModale}
   />
 {/if}
 
