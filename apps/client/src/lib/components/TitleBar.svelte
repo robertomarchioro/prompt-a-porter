@@ -1,6 +1,7 @@
 <script lang="ts">
   import { statoTema, salvaTemaTono } from "$lib/stores/preferenze.svelte";
   import { apriModale } from "$lib/stores/modale.svelte";
+  import { fmtShortcut } from "$lib/util/shortcut";
   import { Sun, Moon, Settings } from "lucide-svelte";
 
   function toggleTema(): void {
@@ -37,7 +38,7 @@
       type="button"
       class="icon-button"
       aria-label="Impostazioni"
-      title="Impostazioni (⌘,)"
+      title="Impostazioni ({fmtShortcut('mod+,')})"
       onclick={apriImpostazioni}
     >
       <Settings size={16} />

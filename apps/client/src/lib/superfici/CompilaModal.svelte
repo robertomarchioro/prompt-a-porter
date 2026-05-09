@@ -15,6 +15,7 @@
   import { Frown, Meh, Smile, Copy, Check } from "lucide-svelte";
   import { estraiSegnaposti, compila, contaCompilati } from "$lib/template";
   import Modale from "$lib/components/Modale.svelte";
+  import { fmtShortcut } from "$lib/util/shortcut";
 
   interface PromptDettaglio {
     id: string;
@@ -189,7 +190,7 @@
             class="copia"
             type="button"
             onclick={copiaOutput}
-            title="Copia (⌃↵)"
+            title="Copia ({fmtShortcut('ctrl+enter')})"
           >
             {#if copiato}
               <Check size={12} />
@@ -258,7 +259,7 @@
 
   {#snippet footer()}
     <span class="footer-hint">
-      <kbd>⌃↵</kbd> Compila & copia
+      <kbd>{fmtShortcut("ctrl+enter")}</kbd> Compila & copia
     </span>
     <button class="btn-secondary" type="button" onclick={onChiudi}>
       Chiudi

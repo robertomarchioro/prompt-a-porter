@@ -24,6 +24,7 @@
   import { ChevronDown, ChevronRight, Search } from "lucide-svelte";
   import Modale from "$lib/components/Modale.svelte";
   import { apriModale } from "$lib/stores/modale.svelte";
+  import { fmtShortcut } from "$lib/util/shortcut";
 
   interface PromptRisultato {
     id: string;
@@ -212,7 +213,7 @@
         filtriAperti = !filtriAperti;
         salvaFiltriAperti();
       }}
-      title="Filtri avanzati (⌘.)"
+      title="Filtri avanzati ({fmtShortcut('mod+.')})"
     >
       {#if filtriAperti}<ChevronDown size={14} />{:else}<ChevronRight
           size={14}
@@ -293,9 +294,9 @@
 
   <footer class="hint-bar">
     <span><kbd>↑</kbd> <kbd>↓</kbd> naviga</span>
-    <span><kbd>↵</kbd> compila</span>
-    <span><kbd>⌘.</kbd> filtri</span>
-    <span><kbd>esc</kbd> chiudi</span>
+    <span><kbd>{fmtShortcut("enter")}</kbd> compila</span>
+    <span><kbd>{fmtShortcut("mod+.")}</kbd> filtri</span>
+    <span><kbd>{fmtShortcut("esc")}</kbd> chiudi</span>
   </footer>
 </Modale>
 
