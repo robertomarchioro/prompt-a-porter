@@ -25,5 +25,30 @@ export default defineConfig({
     target: "esnext",
     minify: "esbuild",
     sourcemap: process.env.NODE_ENV === "development",
+    // F11 PR-C: codemirror chunk legittimamente > 500 kB raw (185 kB
+    // gzip, scomponibile solo con feature-flag dev/markdown). Warning
+    // disattivato per evitare falso positivo CI.
+    chunkSizeWarningLimit: 600,
+    // F11 PR-C: manualChunks per cache vendor cross-deploy.
+    // Splitta i dep più grossi in bundle separati così che app code
+    // updates non invalidano la cache del browser per codemirror/etc.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          codemirror: [
+            "codemirror",
+            "@codemirror/state",
+            "@codemirror/view",
+            "@codemirror/language",
+            "@codemirror/lang-markdown",
+            "@codemirror/autocomplete",
+            "@codemirror/commands",
+            "@codemirror/search",
+          ],
+          diff: ["diff2html"],
+          icons: ["lucide-svelte"],
+        },
+      },
+    },
   },
 });
