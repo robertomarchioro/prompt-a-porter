@@ -135,6 +135,7 @@
       type="button"
       onclick={() => apriModale({ tipo: "palette" })}
       title="Apri command palette (⌘K / ⌃⇧P)"
+      aria-label="Apri command palette"
     >
       <kbd>⌃⇧P</kbd>
       <span class="muted">cerca</span>
