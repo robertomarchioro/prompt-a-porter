@@ -12,6 +12,7 @@
   import AnteprimaTab from "$lib/components/AnteprimaTab.svelte";
   import DiagnosiTab from "$lib/components/DiagnosiTab.svelte";
   import GoldenTab from "$lib/components/GoldenTab.svelte";
+  import CronologiaTab from "$lib/components/CronologiaTab.svelte";
 
   const META_KEY = "pap.detail.meta-collapsed";
   function caricaMetaCollapsed(): boolean {
@@ -82,6 +83,7 @@
   let metaCollapsed = $state(caricaMetaCollapsed());
   let diagnosiCount = $state(0);
   let goldenCount = $state(0);
+  let cronologiaCount = $state(0);
 
   let timerAutosave: ReturnType<typeof setTimeout> | undefined;
 
@@ -365,7 +367,11 @@
 
       <DetailTabs
         {tabAttivo}
-        badge={{ diagnosi: diagnosiCount, golden: goldenCount }}
+        badge={{
+          diagnosi: diagnosiCount,
+          golden: goldenCount,
+          cronologia: cronologiaCount,
+        }}
         onSeleziona={(t) => (tabAttivo = t)}
       />
     </header>
@@ -403,6 +409,11 @@
             <GoldenTab
               {promptId}
               onConteggio={(n) => (goldenCount = n)}
+            />
+          {:else if tabAttivo === "cronologia"}
+            <CronologiaTab
+              {promptId}
+              onConteggio={(n) => (cronologiaCount = n)}
             />
           {:else}
             <div class="tab-placeholder">
