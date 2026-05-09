@@ -34,21 +34,65 @@
     footer,
   }: Props = $props();
 
-  function onKeydown(e: KeyboardEvent): void {
+  // F10 PR-B: focus trap manuale (no bits-ui dep) + restore focus al
+  // trigger su unmount.
+  let containerEl: HTMLDivElement | undefined = $state();
+  let previouslyFocused: HTMLElement | null = null;
+
+  function getFocusables(): HTMLElement[] {
+    if (!containerEl) return [];
+    return Array.from(
+      containerEl.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => el.offsetParent !== null);
+  }
+
+  function onWindowKeydown(e: KeyboardEvent): void {
     if (e.key === "Escape") {
       e.preventDefault();
       onChiudi();
     }
   }
 
+  function onContainerKeydown(e: KeyboardEvent): void {
+    if (e.key === "Tab") {
+      const focusables = getFocusables();
+      if (focusables.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    // Evita che gli shortcut globali della Shell (⌘K, ⌘,) si attivino
+    // mentre l'utente è dentro la modale.
+    e.stopPropagation();
+  }
+
   onMount(() => {
-    window.addEventListener("keydown", onKeydown);
+    previouslyFocused = document.activeElement as HTMLElement | null;
+    window.addEventListener("keydown", onWindowKeydown);
     document.body.style.overflow = "hidden";
+    // Focus al primo elemento focusable dopo il render del container.
+    setTimeout(() => {
+      const focusables = getFocusables();
+      focusables[0]?.focus();
+    }, 0);
   });
 
   onDestroy(() => {
-    window.removeEventListener("keydown", onKeydown);
+    window.removeEventListener("keydown", onWindowKeydown);
     document.body.style.overflow = "";
+    previouslyFocused?.focus();
   });
 </script>
 
@@ -58,13 +102,14 @@
   onclick={onChiudi}
 >
   <div
+    bind:this={containerEl}
     class="container"
     data-w={larghezza}
     role="dialog"
     aria-modal="true"
     aria-labelledby="modale-titolo"
     onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
+    onkeydown={onContainerKeydown}
   >
     <header class="header">
       <div class="titoli">
