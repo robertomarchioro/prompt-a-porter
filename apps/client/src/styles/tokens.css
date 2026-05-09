@@ -310,12 +310,31 @@
 }
 
 /* =========================================================================
-   Reduced motion
-   ========================================================================= */
+   Reduced motion (F10 PR-D — audit completo)
+   ========================================================================= *
+
+   Doppia copertura per WCAG 2.3.3 (Animation from Interactions):
+   1. Token --motion-* azzerati (copre tutti i transition/animation che
+      usano `var(--motion-fast/normal/slow)`)
+   2. Override globale W3C-pattern (https://www.w3.org/WAI/WCAG21/
+      Techniques/css/C39) che sopprime durata + iteration-count anche
+      per i valori hardcoded (es. `pulse 1s infinite`, `skel 1.4s linear
+      infinite`, `pop-in 200ms`, ecc.) — copre i casi residui non
+      mappati ai token, inclusi keyframes legacy.
+*/
 @media (prefers-reduced-motion: reduce) {
   :root {
     --motion-fast: 1ms;
     --motion-normal: 1ms;
     --motion-slow: 1ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
