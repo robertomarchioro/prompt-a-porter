@@ -1,5 +1,53 @@
 # Changelog — Prompt a Porter
 
+## v0.8.0 — Redesign UI completo (2026-05-09)
+
+> **Fasi F8-F11 chiuse, 17 sub-PR mergiate**, redesign v0.8 completo. Nuova Shell 3-pannelli + 5 modali primitive-driven + Onboarding consolidato + a11y WCAG 2.1 AA. Net **−7 249 righe codice** vs v0.7.0 nonostante 6 superfici nuove. Schema DB invariato, no breaking change utente.
+
+### Highlights
+
+- **Nuova Shell 3-pannelli + 5 modali** (F8) — Sidebar / ListPane / DetailPane via `paneforge` resizer; modali Compila / Insight / Regressioni / Impostazioni / Palette tutte basate su una primitive `Modale.svelte` riusabile (backdrop scrim + ESC + click-outside + body-scroll-lock + focus trap manuale). Store globale `modale.svelte.ts` discriminated union per stato singleton.
+- **Routing semplificato a 2 stati** (F9) — `App.svelte` riscritta: `Onboarding` (caricamento / setup wizard / sblocco vault cifrato) → `Shell`. Default UI è ora la nuova Shell, non più `Libreria`. Cancellate `Libreria.svelte` (2418 righe) + 4 superfici `Auth*` + `DemoComponenti` + 8 superfici legacy orfane (CompilatorePrompt / ConfrontoPrompt / CronologiaPrompt / EditorPrompt / Impostazioni / Insight / Regressioni / ConflittoSync) — totale **−10 749 righe legacy**.
+- **WCAG 2.1 AA + 2.3.3** (F10) — focus indicator unificato `:focus-visible` con `--focus-ring` token, focus trap manuale in Modale (Tab/Shift+Tab cycling + return-to-trigger), aria-label su tutti gli icon-only button, contrast tema chiaro 4.5:1+ (`--text-muted` 0.48→0.42, `--accent-team` 0.55→0.48 nei 3 toni), reduced-motion override globale W3C C39 pattern.
+- **⌘K Palette globale** + **⌘, Impostazioni** (F8 PR-D1/E) — shortcut globali registrati in Shell. Palette interna sostituisce la window separata legacy (mantenuta per hotkey OS-level). Filtri avanzati slider hybrid alpha persistiti in localStorage.
+- **Bundle vendor chunks** (F11 PR-C) — `vite.config.ts` `manualChunks` splitta `codemirror` (185 kB gzip) / `lucide-svelte` (23 kB) / `diff2html` (12 kB) come chunk vendor stabili. App update ora re-scarica solo `index.js` (67.60 kB gzip) invece del monolite (288 kB gzip).
+- **Token medi (V014)** in InsightModal — proxy char-count Body / 4 ≈ token cl100k come 7° KPI in Panoramica.
+
+### Numeri
+
+- **17 sub-PR** mergiate F8-F11 (#113-#129)
+- **~10 749 righe** legacy cancellate (Libreria + Auth* + Demo + 8 superfici orfane)
+- **~3 500 righe** nuove (Shell + 5 modali + Onboarding + Modale primitive + store + tokens)
+- **Net: −7 249 righe codice**
+- **6 modali nuove** (Compila / Insight / Regressioni / Impostazioni / Palette + primitive)
+- **98 vitest pass** (era 88 in v0.7.0, +10 sidebar-collapsed)
+- **Bundle gzip total: ~320 kB** (on-target ≤ +100 kB delta vs v0.7.0)
+  - `index.js` app: **67.60 kB** (era 287.59 kB pre-split)
+  - `codemirror.js`: 184.93 kB (vendor cache)
+  - `icons.js`: 23.00 kB (vendor cache)
+  - `diff.js`: 12.21 kB (vendor cache)
+  - `index.css`: 32.69 kB
+- **WCAG 2.1 AA** (contrast text ≥ 4.5:1, UI ≥ 3:1) + **2.3.3** (Animation from Interactions) raggiunti
+
+### Documentazione aggiornata
+
+- `docs/roadmap/redesign-v08/blueprint-F8.md` — primitive Modale + 5 sub-PR modali
+- `docs/roadmap/redesign-v08/blueprint-F9.md` — routing/cleanup + Onboarding consolidato
+- `docs/roadmap/redesign-v08/blueprint-F10.md` — a11y baseline + keyboard nav + tema chiaro contrast + reduced-motion
+- `docs/roadmap/redesign-v08/blueprint-F11.md` — cleanup finale + test + bundle + perf
+
+### Out of scope (rinviato)
+
+- **Profiling Chrome DevTools manuale** drag-resize 60fps + first-paint DetailPane ≤ 300ms — ottimizzazioni preventive applicate (CSS containment + active feedback resizer); profilo dedicato richiede sessione browser interattiva
+- **Setup `vitest-plugin-svelte`** per testare runes Svelte 5 + render() su Modale/Onboarding — richiede dep ~30KB, deferito post-release
+- **DELETE `OnboardingWizard.svelte`** (assorbito da `Onboarding.svelte` come step "setup") + **DELETE `CommandPalette.svelte`** (window legacy per hotkey OS-level) — refactor architetturale post-v0.8.0
+- **E2E test Playwright** + **screen reader smoke** (NVDA/VoiceOver) — manuale, suite non esistente
+- **Workspace switcher login/logout funzionale** (placeholder F2 mantenuto)
+
+Tutti i punti deferiti tracciati in [`docs/roadmap/rinvii.md`](docs/roadmap/rinvii.md).
+
+---
+
 ## v0.7.0 — Refactor coverage + sprint quick wins import/cartelle (2026-05-08)
 
 > **Sprint v0.7.0 chiuso 6/6 step.** Mix di hardening (refactor `import_export.rs` per testabilità, coverage push 71→74%, gate CI 65→70) e quick wins su flussi di cartelle, import componibili, target model custom. Schema DB invariato, no breaking change.
