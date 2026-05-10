@@ -31,7 +31,7 @@ pub mod versioning;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager,
+    Emitter, Manager,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -182,6 +182,17 @@ pub fn run() {
     embeddings_store::registra_auto_extension();
 
     tauri::Builder::default()
+        // Issue #144: single-instance DEVE essere il primo plugin
+        // registrato (vedi docs Tauri 2). Quando una seconda istanza
+        // viene lanciata, il callback focusa la finestra già attiva
+        // e la seconda istanza si chiude → no più doppia tray icon.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(finestra) = app.get_webview_window("libreria") {
+                let _ = finestra.show();
+                let _ = finestra.unminimize();
+                let _ = finestra.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             let data_dir = app
@@ -238,20 +249,41 @@ pub fn run() {
                         }
                     }
                 })
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "apri_palette" => {
-                        toggle_palette(app);
-                    }
-                    "nuovo_prompt" | "mostra_libreria" | "impostazioni" => {
+                .on_menu_event(|app, event| {
+                    // Issue #146: gli item "nuovo_prompt" e "impostazioni"
+                    // facevano solo show+focus della finestra senza
+                    // notificare l'azione al webview → utente vedeva la
+                    // finestra ma niente accadeva. Ora dopo show+focus
+                    // emette un event Tauri che il client ascolta in
+                    // Shell.svelte e traduce in apriModale / dispatch
+                    // pap:nuovo-prompt.
+                    let mostra_libreria = || {
                         if let Some(finestra) = app.get_webview_window("libreria") {
                             let _ = finestra.show();
+                            let _ = finestra.unminimize();
                             let _ = finestra.set_focus();
                         }
+                    };
+                    match event.id.as_ref() {
+                        "apri_palette" => {
+                            toggle_palette(app);
+                        }
+                        "nuovo_prompt" => {
+                            mostra_libreria();
+                            let _ = app.emit("tray:nuovo-prompt", ());
+                        }
+                        "mostra_libreria" => {
+                            mostra_libreria();
+                        }
+                        "impostazioni" => {
+                            mostra_libreria();
+                            let _ = app.emit("tray:apri-impostazioni", ());
+                        }
+                        "esci" => {
+                            app.exit(0);
+                        }
+                        _ => {}
                     }
-                    "esci" => {
-                        app.exit(0);
-                    }
-                    _ => {}
                 })
                 .build(app)?;
 
