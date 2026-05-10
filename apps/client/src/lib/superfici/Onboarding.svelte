@@ -43,6 +43,21 @@
   let errore = $state("");
   let sbloccoInCorso = $state(false);
 
+  /**
+   * Issue #143: il backend `vault_unlock` lancia `VaultGiaAperto`
+   * (display "Il vault è già aperto") se la connessione SQLite è già
+   * cached in `VaultState`. Può capitare in scenari edge (es. doppia
+   * istanza app — vedi #144 — o rebuild dev con state preservato).
+   * Per l'utente finale lo stato "vault già aperto" è equivalente a
+   * "vault sbloccato con successo": dovremmo procedere a oncompletato
+   * invece di bloccare con "Errore". Match exact + fallback substring
+   * per resilienza forward-compat.
+   */
+  function isErroreVaultGiaAperto(e: unknown): boolean {
+    const msg = String(e);
+    return msg === "Il vault è già aperto" || msg.includes("già aperto");
+  }
+
   async function rilevaStatoIniziale(): Promise<void> {
     try {
       const [aperto, esiste, prefs] = await Promise.all([
@@ -68,7 +83,16 @@
             // Vault esistente non cifrato: prova a sbloccare con password
             // vuota (vault_unlock con stringa vuota su vault non cifrato
             // è il pattern adottato dal legacy Libreria.svelte).
-            await invoke("vault_unlock", { password: "" });
+            try {
+              await invoke("vault_unlock", { password: "" });
+            } catch (unlockErr) {
+              // Issue #143: se il backend dice "vault già aperto" lo
+              // stato finale è raggiunto comunque, procediamo. Solo
+              // errori reali (file rotto, password errata) propaghiamo.
+              if (!isErroreVaultGiaAperto(unlockErr)) {
+                throw unlockErr;
+              }
+            }
             oncompletato();
           }
         } catch (e) {
@@ -101,8 +125,14 @@
       password = "";
       oncompletato();
     } catch (e) {
+      // Issue #143: "vault già aperto" non è un errore user-blocking,
+      // procedi come se fosse stato sbloccato.
+      if (isErroreVaultGiaAperto(e)) {
+        password = "";
+        oncompletato();
+        return;
+      }
       errore = "Password errata.";
-      void e;
     } finally {
       sbloccoInCorso = false;
     }
