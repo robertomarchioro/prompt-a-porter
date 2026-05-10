@@ -14,14 +14,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-14
-            args: --target aarch64-apple-darwin
-            rust-target: aarch64-apple-darwin
-          - platform: ubuntu-22.04
-            args: ""
-            rust-target: x86_64-unknown-linux-gnu
+          # NOTE: per semplificare i prossimi passaggi (debug v0.8.x) il
+          # workflow è temporaneamente ridotto alla sola **versione
+          # portable Windows**. Gli altri target sono commentati in attesa
+          # di essere riabilitati quando si rigenera il pacchetto multi-OS.
+          #
+          # - platform: macos-14
+          #   args: --target aarch64-apple-darwin
+          #   rust-target: aarch64-apple-darwin
+          # - platform: ubuntu-22.04
+          #   args: ""
+          #   rust-target: x86_64-unknown-linux-gnu
           - platform: windows-latest
-            args: ""
+            # `--no-bundle` salta NSIS/MSI: il bundle Tauri non serve
+            # quando l'unico artifact pubblicato è il portable .zip
+            # creato dallo step PowerShell sotto. Riabilitare bundle
+            # togliendo questo flag se si vogliono di nuovo .msi/setup.exe.
+            args: --no-bundle
             rust-target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.platform }}
@@ -80,12 +89,20 @@ jobs:
 
             Vedi [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) per il dettaglio.
 
-            **Nota**: i binari non sono firmati.
-            - **Windows**: SmartScreen mostrerà un avviso, scegli "Maggiori informazioni" → "Esegui comunque".
-            - **macOS**: alla prima apertura, tasto destro sull'app → "Apri" (necessario perché non notarizzato).
-            - **Linux**: nessun avviso, `.deb` / `.AppImage` installabili direttamente.
+            **Versione portable Windows** (unico artifact in questa release):
+            il file `Prompt-a-Porter-portable-windows-x64-${{ github.ref_name }}.zip`
+            contiene l'eseguibile standalone, senza installer. Estrai e lancia
+            `Prompt a Porter.exe`. Richiede WebView2 runtime (incluso in
+            Windows 11, scaricabile [da Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/)
+            per Windows 10).
 
-            **Versione portable Windows**: il file `Prompt-a-Porter-portable-windows-x64.zip` contiene l'eseguibile standalone, senza installer. Estrai e lancia `Prompt a Porter.exe`. Richiede WebView2 runtime (incluso in Windows 11, scaricabile [da Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/) per Windows 10).
+            Il binario non è firmato Authenticode: SmartScreen mostrerà un
+            avviso, scegli "Maggiori informazioni" → "Esegui comunque".
+
+            > **Nota:** in questa release i target macOS / Linux / Windows
+            > installer (.msi/.exe-setup) sono temporaneamente disabilitati
+            > per semplificare il debug delle versioni v0.8.x. Saranno
+            > rigenerati nelle release successive.
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
