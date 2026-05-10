@@ -214,6 +214,37 @@
     stato.densita = d;
   }
 
+  // Issue #145: il bottone "+ Nuovo" era cabled a un placeholder
+  // `console.log("F8 modale crea prompt")`. Ora chiama il cmd backend
+  // `prompt_crea` esistente (editor.rs:146) con dati minimi default,
+  // poi seleziona il nuovo prompt nel DetailPane per editing immediato.
+  async function creaNuovoPrompt(): Promise<void> {
+    try {
+      const folderId =
+        folderSelezionato && folderSelezionato !== "__nessuna__"
+          ? folderSelezionato
+          : null;
+      const id = await invoke<string>("prompt_crea", {
+        dati: {
+          titolo: "Nuovo prompt",
+          descrizione: "",
+          body: "",
+          visibilita: "private",
+          tag_nomi: [],
+          target_model: null,
+          folder_id: folderId,
+        },
+      });
+      // Notifica refresh lista (listener pap:lista-mutata già attivo
+      // in onMount di questo stesso component) e seleziona il nuovo
+      // prompt nel DetailPane.
+      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+      onSelezionaPrompt(id);
+    } catch (e) {
+      console.error("[list-pane] crea prompt fallito", e);
+    }
+  }
+
   // ─── Drag & drop riordino ─────────────────
 
   function gestDragStart(e: DragEvent, id: string): void {
@@ -301,8 +332,8 @@
       <button
         class="btn-nuovo"
         type="button"
-        onclick={() => console.log("F8 modale crea prompt")}
-        title="F8 modale crea prompt"
+        onclick={creaNuovoPrompt}
+        title="Crea nuovo prompt"
       >
         <Plus size={14} />
         <span>Nuovo</span>
