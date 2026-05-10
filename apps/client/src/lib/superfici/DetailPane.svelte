@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, onDestroy } from "svelte";
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
-  import { Star, GitFork, Download, PanelRight } from "lucide-svelte";
+  import { Star, GitFork, Download, PanelRight, Save, Trash2 } from "lucide-svelte";
   import type { EditorView } from "@codemirror/view";
   import DetailTabs, { type TabId } from "$lib/components/DetailTabs.svelte";
   import EditorTab from "$lib/components/EditorTab.svelte";
@@ -90,6 +90,15 @@
 
   let timerAutosave: ReturnType<typeof setTimeout> | undefined;
 
+  // Issue #158: `dirty` traccia "modifiche autosave non confermate dal
+  // salvataggio manuale". Autosave aggiorna body in DB ma NON crea
+  // riga in PromptVersions; solo `salvaManuale()` crea cronologia.
+  // Switch prompt o Compila con dirty=true → forziamo salvaManuale.
+  // Beforeunload con dirty=true → dialog conferma chiusura.
+  let dirty = $state(false);
+  // Track del promptId precedente per gestire dirty al cambio prompt.
+  let promptIdPrec = $state<string | null>(null);
+
   $effect(() => {
     salvaMetaCollapsed(metaCollapsed);
   });
@@ -129,6 +138,18 @@
   });
 
   $effect(() => {
+    // Issue #158: switch prompt con dirty del precedente → forza
+    // snapshot prima del cambio. Così la cronologia del vecchio
+    // prompt cattura le modifiche autosave non confermate.
+    if (
+      promptIdPrec !== null &&
+      promptIdPrec !== promptId &&
+      dirty &&
+      dettaglio
+    ) {
+      void salvaManuale();
+    }
+    promptIdPrec = promptId;
     void caricaDettaglio(promptId);
   });
 
@@ -159,22 +180,32 @@
       /* ignore */
     }
     window.addEventListener("pap:goto-line", onGotoLine);
+    window.addEventListener("beforeunload", onBeforeUnload);
   });
 
   onDestroy(() => {
     if (timerAutosave) clearTimeout(timerAutosave);
     window.removeEventListener("pap:goto-line", onGotoLine);
+    window.removeEventListener("beforeunload", onBeforeUnload);
   });
 
   function pianificaAutosave(): void {
     if (!dettaglio) return;
     statoSalvataggio = "dirty";
+    dirty = true;
     if (timerAutosave) clearTimeout(timerAutosave);
-    timerAutosave = setTimeout(salvaBackground, 2000);
+    timerAutosave = setTimeout(() => void salvaBozza(), 2000);
   }
 
-  async function salvaBackground(): Promise<void> {
-    if (!titolo.trim() || !body.trim() || !dettaglio) return;
+  /**
+   * Issue #158: salvataggio interno generico. `creaSnapshot=false` =
+   * autosave (no riga in PromptVersions). `creaSnapshot=true` = save
+   * manuale dell'utente (crea versione in cronologia).
+   *
+   * Ritorna true se l'invoke è andato a buon fine, false altrimenti.
+   */
+  async function salva(creaSnapshot: boolean): Promise<boolean> {
+    if (!titolo.trim() || !body.trim() || !dettaglio) return false;
     statoSalvataggio = "salvando";
     try {
       await invoke("prompt_aggiorna", {
@@ -187,14 +218,97 @@
           tag_nomi: dettaglio.tags.map((t) => t.nome),
           target_model: dettaglio.target_model || null,
           folder_id: dettaglio.folder_id,
+          crea_snapshot: creaSnapshot,
         },
       });
       statoSalvataggio = "salvato";
       salvatoTs = new Date().toISOString();
+      if (creaSnapshot) {
+        // Solo il save manuale resetta dirty: autosave silenzioso lascia
+        // dirty=true così l'utente sa che ci sono modifiche non snapshot-ate.
+        dirty = false;
+      }
       window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+      return true;
     } catch (e) {
       console.error("[detail] save", e);
       statoSalvataggio = "errore";
+      return false;
+    }
+  }
+
+  async function salvaBozza(): Promise<void> {
+    await salva(false);
+  }
+
+  /**
+   * Issue #158: salvataggio manuale dell'utente — crea snapshot in
+   * PromptVersions, reset dirty. Triggato da bottone "Salva", da
+   * Compila se dirty, da switch prompt se dirty, da beforeunload.
+   */
+  async function salvaManuale(): Promise<boolean> {
+    // Cancel autosave pending: il manuale lo include.
+    if (timerAutosave) {
+      clearTimeout(timerAutosave);
+      timerAutosave = undefined;
+    }
+    return salva(true);
+  }
+
+  /**
+   * Issue #156: elimina prompt corrente con confirm dialog.
+   * Backend prompt_elimina è soft-delete (DeletedAt timestamp).
+   */
+  async function eliminaPrompt(): Promise<void> {
+    if (!dettaglio) return;
+    const titoloVis = dettaglio.titolo || "(senza titolo)";
+    const ok = window.confirm(
+      `Eliminare il prompt "${titoloVis}"?\n\nIl prompt verrà spostato nel cestino (eliminazione soft, recuperabile dal database fino al cleanup).`,
+    );
+    if (!ok) return;
+    try {
+      await invoke("prompt_elimina", { id: promptId });
+      // Cancel autosave pending: eviterebbe di riscrivere il prompt
+      // appena cancellato.
+      if (timerAutosave) {
+        clearTimeout(timerAutosave);
+        timerAutosave = undefined;
+      }
+      dirty = false;
+      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+      _onChiudi?.();
+    } catch (e) {
+      console.error("[detail] elimina", e);
+      window.alert("Errore nell'eliminazione del prompt: " + String(e));
+    }
+  }
+
+  /**
+   * Issue #158: apertura Compila con dirty force-snapshot prima di
+   * lanciare la modale (così la versione compilata coincide con
+   * quella in cronologia).
+   */
+  async function apriCompila(): Promise<void> {
+    if (dirty) {
+      const ok = await salvaManuale();
+      if (!ok) {
+        window.alert("Impossibile salvare il prompt prima di aprire Compila.");
+        return;
+      }
+    }
+    apriModale({ tipo: "compila", promptId });
+  }
+
+  /**
+   * Issue #158: beforeunload (chiusura app) con dirty mostra dialog
+   * standard del browser/webview. L'utente può scegliere "Annulla"
+   * per restare oppure proseguire (in tal caso le modifiche autosave
+   * sono già in DB ma niente snapshot in PromptVersions).
+   */
+  function onBeforeUnload(e: BeforeUnloadEvent): void {
+    if (dirty) {
+      e.preventDefault();
+      e.returnValue = "";
     }
   }
 
@@ -324,10 +438,32 @@
             <Download size={14} />
           </button>
           <button
+            class="ico"
+            class:dirty-pulse={dirty}
+            type="button"
+            title={dirty
+              ? "Salva (modifiche non confermate in cronologia)"
+              : "Salva (nessuna modifica)"}
+            aria-label="Salva"
+            disabled={!dirty}
+            onclick={() => void salvaManuale()}
+          >
+            <Save size={14} />
+          </button>
+          <button
+            class="ico danger"
+            type="button"
+            title="Elimina prompt"
+            aria-label="Elimina prompt"
+            onclick={() => void eliminaPrompt()}
+          >
+            <Trash2 size={14} />
+          </button>
+          <button
             class="primary"
             type="button"
             title="Compila (apre modale)"
-            onclick={() => apriModale({ tipo: "compila", promptId })}
+            onclick={() => void apriCompila()}
           >
             Compila
           </button>
@@ -559,6 +695,34 @@
 
   .primary:hover {
     background: var(--accent-team-strong);
+  }
+
+  /* Issue #156: bottone Trash header — colore danger su hover. */
+  .ico.danger:hover {
+    color: var(--accent-danger, #d9534f);
+    background: var(--accent-danger-soft, rgba(217, 83, 79, 0.1));
+  }
+
+  /* Issue #158: bottone Salva header — pulse subtle quando dirty per
+     attirare attenzione utente sulle modifiche non confermate. */
+  .ico.dirty-pulse {
+    color: var(--accent-team);
+  }
+  .ico.dirty-pulse:not(:disabled) {
+    animation: dirty-pulse 2s ease-in-out infinite;
+  }
+  @keyframes dirty-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
+    }
+  }
+  .ico:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 
   .descrizione {

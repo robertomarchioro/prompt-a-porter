@@ -57,6 +57,16 @@ pub struct AggiornamentoPrompt {
     pub target_model: Option<String>,
     #[serde(default)]
     pub folder_id: Option<String>,
+    /// Issue #158: se `false` skippa lo snapshot in `PromptVersions`
+    /// (autosave silenzioso, no spam cronologia). Default `true` per
+    /// back-compat con client che non passano il flag (= comportamento
+    /// pre v0.8.5: ogni save creava versione).
+    #[serde(default = "default_crea_snapshot")]
+    pub crea_snapshot: bool,
+}
+
+fn default_crea_snapshot() -> bool {
+    true
 }
 
 fn normalizza_target_model(v: &Option<String>) -> Option<String> {
@@ -193,11 +203,16 @@ pub fn prompt_aggiorna(
         let target = normalizza_target_model(&dati.target_model);
         let folder = normalizza_target_model(&dati.folder_id);
         let body_clean = dati.body.trim();
+        // Issue #158: Version cresce solo al snapshot per mantenere
+        // 1:1 tra Version field e righe in PromptVersions. Autosave
+        // (crea_snapshot=false) aggiorna body/meta + UpdatedAt ma
+        // lascia Version invariato.
         conn.execute(
             "UPDATE Prompts
              SET Title = ?1, Description = ?2, Body = ?3, Visibility = ?4,
                  TargetModel = ?5, FolderId = ?6,
-                 Version = Version + 1, UpdatedAt = datetime('now'),
+                 Version = CASE WHEN ?8 THEN Version + 1 ELSE Version END,
+                 UpdatedAt = datetime('now'),
                  UpdatedByUserId = 'usr-locale'
              WHERE Id = ?7 AND DeletedAt IS NULL",
             rusqlite::params![
@@ -207,12 +222,20 @@ pub fn prompt_aggiorna(
                 dati.visibilita,
                 target,
                 folder,
-                dati.id
+                dati.id,
+                dati.crea_snapshot,
             ],
         )?;
         sincronizza_tags(conn, &rt_state, &dati.id, &dati.tag_nomi)?;
-        // Snapshot della nuova versione (Version e' gia' stata incrementata dall'UPDATE).
-        crate::versioning::snapshot_versione(conn, &dati.id, "usr-locale")?;
+        // Issue #158: snapshot solo se richiesto dal client (default true
+        // per back-compat). Autosave passa `crea_snapshot: false` per
+        // evitare spam cronologia; salvataggio manuale "Salva" passa true.
+        // Version comunque incrementata dall'UPDATE sopra (autosave la
+        // bumpa anche senza snapshot — ok perché la riga corrente in
+        // Prompts riflette sempre l'ultimo stato).
+        if dati.crea_snapshot {
+            crate::versioning::snapshot_versione(conn, &dati.id, "usr-locale")?;
+        }
         ricostruisci_fts(conn)?;
         // Hook embedding (Fase 3 Step 3): re-compute perché il body è cambiato.
         // No-op se Session non loaded.
