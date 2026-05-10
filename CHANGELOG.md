@@ -1,5 +1,17 @@
 # Changelog — Prompt a Porter
 
+## v0.8.4 — Retry release v0.8.3 (fix CI workflow) (2026-05-10)
+
+> **Stesso codice di v0.8.3** (i 7 bugfix Win11 elencati sotto). Il tag v0.8.3 era stato pushato ma `release.yml` aveva fallito (run 25626291738) a causa di un'incompatibilità tra `--no-bundle` (introdotto in PR #147) e `tauri-action` (che cerca artifact bundle MSI/NSIS). Il fix workflow è in PR #154; v0.8.4 ri-trigga la pipeline release con `args: ""` (bundle attivi).
+
+### Cambia rispetto a v0.8.3
+
+- **release.yml**: rimosso `--no-bundle` da `windows-latest` matrix (PR #154). Ora la release pubblica 5 asset Windows: `Prompt-a-Porter_0.8.4_x64_en-US.msi` + `.sig` + `Prompt-a-Porter_0.8.4_x64-setup.exe` + `.sig` + `Prompt-a-Porter-portable-windows-x64-v0.8.4.zip`. Solo il portable .zip è documentato nel release body — gli installer MSI/NSIS sono "bonus" non documentati ma utilizzabili.
+
+I 7 bugfix Win11 di v0.8.3 (PR #148-#152) sono inclusi senza modifiche. Vedi entry v0.8.3 sotto per il dettaglio.
+
+---
+
 ## v0.8.3 — Bugfix Win11 multi-issue (2026-05-10)
 
 > Patch su v0.8.2 per 7 issue Win11 segnalate dopo la release portable. Risolte in **5 PR distinte** con focus sulle cause root, non sui sintomi. Schema DB invariato, no breaking change utente. Backend cambia solo aggiungendo `tauri-plugin-single-instance` e un campo `body_preview` al payload `PromptCard`.
