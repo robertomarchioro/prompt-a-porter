@@ -1,7 +1,15 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, onDestroy } from "svelte";
-  import { ChevronsLeft, Search, Plus, X } from "lucide-svelte";
+  import {
+    ChevronsLeft,
+    Search,
+    Plus,
+    X,
+    Rows3,
+    Rows2,
+    LayoutList,
+  } from "lucide-svelte";
   import PromptCard from "./PromptCard.svelte";
   import {
     caricaStato,
@@ -26,6 +34,9 @@
     uso_count: number;
     aggiornato_a: string;
     tags: TagInfo[];
+    /** Issue #141: body troncato a 800 char server-side, usato solo
+     *  nella densità "anteprima". Vuoto se densità ≠ anteprima. */
+    body_preview: string;
   }
 
   interface Cartella {
@@ -176,11 +187,20 @@
       : null,
   );
 
-  const opzioniDensita: { id: Densita; label: string; abilitata: boolean }[] = [
+  // Issue #140 + #141: 3 bottoni icon-only invece di chip-label per
+  // occupare meno spazio quando la colonna è stretta. Anteprima ora
+  // attiva (era `abilitata: false` come placeholder F3 PR-B che non
+  // era mai stato cancellato).
+  // Icone lucide rese inline nel template (switch case) perché
+  // lucide-svelte non si compone con il tipo Component<...> di Svelte 5.
+  const opzioniDensita: {
+    id: Densita;
+    label: string;
+    abilitata: boolean;
+  }[] = [
     { id: "compatta", label: "Compatta", abilitata: true },
     { id: "comoda", label: "Comoda", abilitata: true },
-    // Anteprima: F3 PR-B.
-    { id: "anteprima", label: "Anteprima", abilitata: false },
+    { id: "anteprima", label: "Anteprima", abilitata: true },
   ];
 
   const opzioniOrdine: { id: Ordine; label: string }[] = [
@@ -191,10 +211,6 @@
   ];
 
   function selezionaDensita(d: Densita): void {
-    if (d === "anteprima") {
-      console.warn("[list-pane] densità Anteprima rinviata a F3 PR-B");
-      return;
-    }
     stato.densita = d;
   }
 
@@ -294,16 +310,25 @@
     </div>
 
     <div class="toolbar-row">
-      <div class="chip-densita">
+      <div class="chip-densita" role="group" aria-label="Densità lista">
         {#each opzioniDensita as opt (opt.id)}
           <button
-            class="chip"
+            class="chip chip-icona"
             class:chip-attivo={stato.densita === opt.id}
             disabled={!opt.abilitata}
             type="button"
+            aria-label={opt.label}
+            aria-pressed={stato.densita === opt.id}
+            title={opt.label}
             onclick={() => selezionaDensita(opt.id)}
           >
-            {opt.label}
+            {#if opt.id === "compatta"}
+              <Rows3 size={14} />
+            {:else if opt.id === "comoda"}
+              <Rows2 size={14} />
+            {:else}
+              <LayoutList size={14} />
+            {/if}
           </button>
         {/each}
       </div>
@@ -403,6 +428,7 @@
             attivo={promptSelezionato === p.id}
             densita={stato.densita}
             righePreview={stato.righePreview}
+            bodyPreview={p.body_preview}
             onclick={() => onSelezionaPrompt(p.id)}
           />
         </div>
@@ -585,6 +611,17 @@
   .chip-attivo {
     background: var(--bg-surface);
     color: var(--text-default);
+  }
+
+  /* Issue #140: bottoni icon-only quadrati per occupare meno spazio
+     orizzontale quando la colonna è stretta (era ~210px con 3 label,
+     ora ~92px con 3 icone). */
+  .chip-icona {
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    height: 24px;
+    padding: 0;
   }
 
   .filtri-attivi {

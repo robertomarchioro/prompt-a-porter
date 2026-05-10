@@ -22,6 +22,11 @@ pub struct PromptCard {
     pub uso_count: i64,
     pub aggiornato_a: String,
     pub tags: Vec<TagInfo>,
+    /// Issue #141: per la modalità densità "anteprima" la card mostra
+    /// le prime righe del Body. Tronchiamo a 800 char server-side per
+    /// limitare il payload (lista max 100 card → max ~80 KB extra).
+    /// Il client poi ri-applica `righePreview` via CSS `-webkit-line-clamp`.
+    pub body_preview: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -93,6 +98,7 @@ fn riga_a_card(row: &rusqlite::Row) -> rusqlite::Result<PromptCard> {
         uso_count: row.get(5)?,
         aggiornato_a: row.get::<_, Option<String>>(6)?.unwrap_or_default(),
         tags: vec![],
+        body_preview: row.get::<_, Option<String>>(7)?.unwrap_or_default(),
     })
 }
 
@@ -196,7 +202,8 @@ pub fn libreria_lista(
         // controllano l'attivazione via NULL check / boolean flag.
         let sql = format!(
             "SELECT p.Id, p.Title, p.Description, p.Visibility,
-                    p.IsFavorite, p.UseCount, p.UpdatedAt
+                    p.IsFavorite, p.UseCount, p.UpdatedAt,
+                    SUBSTR(COALESCE(p.Body, ''), 1, 800) AS body_preview
              FROM Prompts p
              LEFT JOIN PromptTags pt ON pt.PromptId = p.Id
              WHERE p.DeletedAt IS NULL{vista_cond}
