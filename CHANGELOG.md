@@ -1,5 +1,31 @@
 # Changelog — Prompt a Porter
 
+## v0.8.3 — Bugfix Win11 multi-issue (2026-05-10)
+
+> Patch su v0.8.2 per 7 issue Win11 segnalate dopo la release portable. Risolte in **5 PR distinte** con focus sulle cause root, non sui sintomi. Schema DB invariato, no breaking change utente. Backend cambia solo aggiungendo `tauri-plugin-single-instance` e un campo `body_preview` al payload `PromptCard`.
+
+### Fix
+
+- **#140 + #141 density UI** (PR #148) — i 3 chip label "Compatta / Comoda / Anteprima" occupavano ~210 px orizzontali sulla colonna stretta (320 px). Sostituiti con 3 bottoni icon-only quadrati (Rows3 / Rows2 / LayoutList lucide). Inoltre la modalità "Anteprima" non funzionava: il flag `abilitata: false` era un placeholder F3 PR-B mai cancellato, e il backend `PromptCard` non includeva il body. Aggiunto `body_preview: String` al payload (SUBSTR truncato a 800 char server-side, max ~80 KB extra per 100 card).
+- **#142 sizing barre** (PR #149) — `--titlebar-h` e `--statusbar-h` erano referenziati in 3 punti (Shell.svelte, TitleBar.svelte, StatusBar.svelte) ma **mai definiti** in `tokens.css`. Senza `var(name, default)` la regola `height` collassava → barre prendevano altezza naturale del contenuto. Aggiunti i 2 token con i valori esatti del prototipo (`36px` / `28px`).
+- **#143 vault startup error** (PR #151) — `vault_unlock` lanciava `VaultGiaAperto` ("Il vault è già aperto") se la connessione era già cached in memoria backend, e Onboarding mostrava errore bloccante. Helper `isErroreVaultGiaAperto(e)` riconosce il messaggio e procede a `oncompletato()` (no-op success): per l'utente "vault già aperto" = "sbloccato".
+- **#144 + #146 tray Windows** (PR #152) — installato `tauri-plugin-single-instance v2.4.2` come primo plugin del Builder: la seconda istanza al lancio focalizza la finestra esistente e termina (no più doppia tray icon). Inoltre `on_menu_event` per "nuovo_prompt" e "impostazioni" ora dopo show+focus emette event Tauri (`tray:nuovo-prompt`, `tray:apri-impostazioni`) verso il webview; Shell.svelte registra listener via `@tauri-apps/api/event` e li traduce in `apriModale({tipo:"impostazioni"})` o `dispatch CustomEvent("pap:nuovo-prompt")`. ListPane ascolta quest'ultimo e chiama `creaNuovoPrompt`.
+- **#145 "+ Nuovo" prompt creation** (PR #150) — bottone era cabled a placeholder `console.log("F8 modale crea prompt")`. Funzione `creaNuovoPrompt()` async che invoca `prompt_crea` (cmd backend esistente) con dati minimi default (titolo "Nuovo prompt", body vuoto, visibilità "private", folder = cartella corrente filtrata se ≠ "__nessuna__"); dispatch `pap:lista-mutata` per refresh + `onSelezionaPrompt(id)` per aprire DetailPane in editing immediato.
+
+### Numeri
+
+- **5 PR** mergiate in main (#148, #149, #150, #151, #152) + 1 PR di bump (questa)
+- **113 vitest pass** invariati (no nuovi test richiesti per i fix)
+- **0 errors** svelte-check (3742 files)
+- `cargo check` verde con nuova dep `tauri-plugin-single-instance v2.4.2`
+- 1 nuova dep Cargo (~150 KB binari ulteriori, trascurabile vs ~30 MB Win portable)
+
+### Closes
+
+#140 #141 #142 #143 #144 #145 #146
+
+---
+
 ## v0.8.2 — Layout fix completo (CSS grid come prototipo) (2026-05-10)
 
 > Patch su v0.8.1 per issue #137 (layout ancora sbagliato dopo i fix v0.8.1). Refactor totale di `Shell.svelte` da `paneforge` percentuali a **CSS grid puro** come da prototipo originale (`docs/architettura/redesign/prototype/redesign.css`). Risolve 5 sintomi con una sola correzione architetturale. Schema DB invariato, no breaking change utente.
