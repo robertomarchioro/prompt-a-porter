@@ -5,6 +5,7 @@
   import NavGroup from "./NavGroup.svelte";
   import NavItem from "./NavItem.svelte";
   import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
+  import { MODELLI_TARGET } from "$lib/modelli-target";
 
   interface ConteggiViste {
     tutti: number;
@@ -207,6 +208,14 @@
       >
         Tutti
       </NavItem>
+      {#each MODELLI_TARGET as m (m.value)}
+        <NavItem
+          attivo={modelTargetSelezionato === m.value}
+          onclick={() => onSelezionaModelTarget(m.value)}
+        >
+          {m.label}
+        </NavItem>
+      {/each}
     </NavGroup>
   </nav>
 

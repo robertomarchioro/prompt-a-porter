@@ -4,6 +4,7 @@
   import { GitFork, X, Sparkles } from "lucide-svelte";
   import { estraiSegnaposti } from "$lib/template";
   import { estraiImports } from "$lib/util/estrai-imports";
+  import { MODELLI_TARGET } from "$lib/modelli-target";
 
   interface TagInfo {
     id: string;
@@ -200,11 +201,9 @@
         placeholder="Modello target"
       />
       <datalist id="rr-target-models">
-        <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-        <option value="claude-opus-4-5">Claude Opus 4.5</option>
-        <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
-        <option value="gpt-4o">GPT-4o</option>
-        <option value="ollama">Ollama (locale)</option>
+        {#each MODELLI_TARGET as m (m.value)}
+          <option value={m.value}>{m.label}</option>
+        {/each}
       </datalist>
     </div>
 
