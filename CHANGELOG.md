@@ -1,5 +1,34 @@
 # Changelog — Prompt a Porter
 
+## v0.8.2 — Layout fix completo (CSS grid come prototipo) (2026-05-10)
+
+> Patch su v0.8.1 per issue #137 (layout ancora sbagliato dopo i fix v0.8.1). Refactor totale di `Shell.svelte` da `paneforge` percentuali a **CSS grid puro** come da prototipo originale (`docs/architettura/redesign/prototype/redesign.css`). Risolve 5 sintomi con una sola correzione architetturale. Schema DB invariato, no breaking change utente.
+
+### Fix
+
+- **#137 layout grid prototipo** — il fix v0.8.1 (#132) di `html/body/#app` width/height non bastava: `.shell-root` continuava a non stretchare le barre e `paneforge` percentuali (20%/26%) ignoravano le proporzioni del prototipo (248px/320px fissi). Refactor completo:
+  - `.shell-root` ora ha `width: 100vw + height: 100vh + overflow: hidden` esplicito → barre full-width su massimizzazione.
+  - `.shell-body` usa CSS grid `grid-template-columns: var(--col-sidebar, 248px) 1px var(--col-list, 320px) 1px minmax(0, 1fr)` — stesso pattern del prototipo originale.
+  - Quando ListPane è collapsed, lo slot resta **visibile a 36px con un bottone `>>` (`.list-restore`) per riaprirlo** invece di sparire del tutto.
+  - Icona collapse cambiata da `>>` a `<<` (semantica corretta: collassa verso sinistra, non espande).
+  - Drag handler manuali via `pointermove`/`pointerup`: mouse a destra ⇒ pane sinistro cresce (paneforge era confuso da `collapsedSize=0` e dava drag invertito).
+- **Nuovo store `lib/stores/shell-layout.ts`** — persistenza `{colSidebar, colList}` in `localStorage["pap.shell.layout"]`, default 248/320, clamp MIN/MAX (sidebar 200-480, list 240-560). Pattern identico a `sidebar-collapsed.ts` e `densita.ts`.
+
+### Numeri
+
+- 1 PR (#138) merge squash, 1 commit di bump (#139)
+- 113 vitest pass invariati
+- 0 errors svelte-check (3742 files, +1 store)
+- Bundle: app `index.js` 68.7 kB gzip (+1 kB vs v0.8.1, drag handler manuale)
+- Closes #137
+
+### Note tecniche
+
+- `paneforge` resta installata come dep ma non più importata (tree-shake la esclude). Cleanup `package.json` deferito a PR separata per non mischiare scope.
+- `listCollapsed` è **in-memory only** (non persistito): alla riapertura app la lista riparte espansa, come da prototipo. Le larghezze `colSidebar`/`colList` invece persistono.
+
+---
+
 ## v0.8.1 — Bugfix patch redesign UI (2026-05-09)
 
 > Patch immediata su v0.8.0 per 3 bug post-rilascio segnalati in issue. Nessun cambiamento funzionale, solo fix di rendering layout, controllo collassa colonna lista, e display shortcut OS-aware.
