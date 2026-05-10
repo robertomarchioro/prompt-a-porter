@@ -1,5 +1,33 @@
 # Changelog — Prompt a Porter
 
+## v0.8.5 — Editor UX + tray fix + segnaposti globali (2026-05-10)
+
+> Sprint patch su v0.8.4 con 3 PR: editor "Salva manuale" + autosave senza snapshot, tray icon singola Win + modelli AI consistenti, e nuova feature **segnaposti globali** (issue #159).
+
+### Feature
+
+- **#159 segnaposti globali** (PR #162) — sintassi `{{globale nome}}` per placeholder riutilizzabili tra prompt diversi con valore di default editabile. Backend: V015 migration `GlobalPlaceholders(Name PK, Value, UpdatedAt)` + 3 cmd Tauri (`globale_placeholder_lista`/`aggiorna(UPSERT)`/`elimina`). Frontend: regex parser estesa (`/\{\{\s*(globale\s+)?(\w+)\s*\}\}/g`), `compila`/`contaCompilati` con 3° arg `valoriGlobali`, `CompilaModal` pre-fill dei globali con auto-UPSERT al copy, nuova sub-sezione "Segnaposti globali" in Impostazioni → Avanzate (CRUD UI), bottone Globe in MarkdownToolbar.
+
+### Fix
+
+- **#156 + #158 editor UX** (PR #160) — `DetailPane` ora separa "Salva manuale" (con snapshot versione, default) da "Salva bozza"/autosave (senza incremento `Version`). Bottoni Save/Trash nell'header, `dirty` state tracking, `onBeforeUnload` warning, snapshot automatico al cambio prompt. Backend `editor::aggiorna_prompt` accetta nuovo flag `crea_snapshot: bool` con SQL `Version = CASE WHEN ?8 THEN Version + 1 ELSE Version END`.
+- **#144 tray icon doppia** (PR #161) — root cause finale: `app.trayIcon` in `tauri.conf.json` auto-creava una TrayIcon **in aggiunta** a quella creata manualmente da `TrayIconBuilder` in `lib.rs`. Rimosso il blocco `app.trayIcon` dalla config (single-instance plugin di v0.8.3 non bastava perché le 2 icone erano nello stesso processo).
+- **#157 modelli AI inconsistenti** (PR #161) — `Sidebar.svelte` e `RightRail.svelte` hardcodavano sotto-insiemi diversi della lista modelli. Entrambi ora iterano `MODELLI_TARGET` (constante condivisa) garantendo lista identica ovunque.
+
+### Numeri
+
+- **3 PR** mergiate in main (#160, #161, #162) + 1 PR di bump (questa)
+- **126 vitest pass** (di cui 34 in `template.test.ts`, +19 nuovi per globali)
+- **3 nuovi unit test backend** in `segnaposti_globali` (3/3 verdi)
+- **0 errors** svelte-check (3742 files)
+- 1 nuova migration `V015__segnaposti_globali.sql` (totale 15)
+
+### Closes
+
+#144 #156 #157 #158 #159
+
+---
+
 ## v0.8.4 — Retry release v0.8.3 (fix CI workflow) (2026-05-10)
 
 > **Stesso codice di v0.8.3** (i 7 bugfix Win11 elencati sotto). Il tag v0.8.3 era stato pushato ma `release.yml` aveva fallito (run 25626291738) a causa di un'incompatibilità tra `--no-bundle` (introdotto in PR #147) e `tauri-action` (che cerca artifact bundle MSI/NSIS). Il fix workflow è in PR #154; v0.8.4 ri-trigga la pipeline release con `args: ""` (bundle attivi).
