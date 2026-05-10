@@ -26,6 +26,7 @@ pub mod sync;
 pub mod tags_suggest;
 pub mod varianti;
 pub mod vault;
+pub mod segnaposti_globali;
 pub mod versioning;
 
 use tauri::{
@@ -397,6 +398,9 @@ pub fn run() {
             fork::fork_info,
             rating::rating_aggiungi,
             rating::rating_aggregato,
+            segnaposti_globali::globale_placeholder_lista,
+            segnaposti_globali::globale_placeholder_aggiorna,
+            segnaposti_globali::globale_placeholder_elimina,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())
