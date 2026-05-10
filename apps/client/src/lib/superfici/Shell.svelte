@@ -21,6 +21,7 @@
    * drag invertito + lista che spariva del tutto).
    */
   import { onDestroy, onMount } from "svelte";
+  import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { ChevronsRight } from "lucide-svelte";
   import TitleBar from "$lib/components/TitleBar.svelte";
   import StatusBar from "$lib/components/StatusBar.svelte";
@@ -196,15 +197,37 @@
     window.removeEventListener("pointermove", onPointerMoveResizer);
   }
 
+  // Issue #146: tray menu items (Nuovo prompt / Impostazioni) emettono
+  // event Tauri verso il webview. Qui ci registriamo per tradurli in
+  // azioni client. `mostra_libreria` e `apri_palette` sono gestiti
+  // interamente backend-side, qui non serve nulla.
+  let unlistenTray: UnlistenFn[] = [];
+
   onMount(() => {
     window.addEventListener("pap:apri-prompt", onApriPrompt);
     window.addEventListener("keydown", onShortcutGlobale);
+    void (async () => {
+      unlistenTray.push(
+        await listen("tray:apri-impostazioni", () => {
+          apriModale({ tipo: "impostazioni" });
+        }),
+      );
+      unlistenTray.push(
+        await listen("tray:nuovo-prompt", () => {
+          // Delega a ListPane via window event: ListPane ha già il
+          // contesto folder/filtri e la logica creaNuovoPrompt.
+          window.dispatchEvent(new CustomEvent("pap:nuovo-prompt"));
+        }),
+      );
+    })();
   });
 
   onDestroy(() => {
     window.removeEventListener("pap:apri-prompt", onApriPrompt);
     window.removeEventListener("keydown", onShortcutGlobale);
     window.removeEventListener("pointermove", onPointerMoveResizer);
+    unlistenTray.forEach((u) => u());
+    unlistenTray = [];
   });
 </script>
 

@@ -17,6 +17,11 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-global-shortcut = "2"
+# Issue #144: previene seconda istanza dell'app su Win/macOS/Linux.
+# Senza questo plugin, lanciare l'eseguibile portable due volte crea
+# due processi → due icone in traybar. Il callback emette focus alla
+# prima istanza già attiva.
+tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"

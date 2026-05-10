@@ -150,6 +150,14 @@
     stato = caricaStato();
   }
 
+  // Issue #146: Shell ascolta tray menu event "tray:nuovo-prompt" e
+  // dispatcha pap:nuovo-prompt verso window. Qui in ListPane traduciamo
+  // quell'event in chiamata a creaNuovoPrompt (che è definita più
+  // sotto, fa il invoke prompt_crea + selezione automatica).
+  function onNuovoPromptDaTray(): void {
+    void creaNuovoPrompt();
+  }
+
   onMount(async () => {
     try {
       cartelle = await invoke<Cartella[]>("folder_lista");
@@ -158,11 +166,13 @@
     }
     window.addEventListener("pap:lista-mutata", caricaLista);
     window.addEventListener("pap:lista-densita-cambiata", onDensitaCambiata);
+    window.addEventListener("pap:nuovo-prompt", onNuovoPromptDaTray);
   });
 
   onDestroy(() => {
     window.removeEventListener("pap:lista-mutata", caricaLista);
     window.removeEventListener("pap:lista-densita-cambiata", onDensitaCambiata);
+    window.removeEventListener("pap:nuovo-prompt", onNuovoPromptDaTray);
   });
 
   const titoloVista = $derived.by(() => {
