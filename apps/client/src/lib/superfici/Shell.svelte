@@ -1,6 +1,27 @@
 <script lang="ts">
+  /**
+   * Shell — root della UI redesign v0.8 (post v0.8.1 issue #137).
+   *
+   * Layout 3-pane via **CSS grid puro** come da prototipo originale
+   * (`docs/architettura/redesign/prototype/redesign.css:117`):
+   *
+   *   .shell-body {
+   *     grid-template-columns:
+   *       var(--col-sidebar) 1px var(--col-list) 1px minmax(0, 1fr);
+   *   }
+   *
+   * Drag handler manuali (pointermove/pointerup) aggiornano le var
+   * `--col-sidebar` / `--col-list` clamped tra MIN/MAX. Persistenza in
+   * localStorage via `shell-layout.ts`. Quando ListPane è collapsed,
+   * lo slot resta visibile a 36px con un bottone "list-restore" per
+   * ri-aprirlo.
+   *
+   * Sostituisce paneforge che non rispettava le proporzioni del proto
+   * (248/320px) ed era confuso da `collapsedSize=0` (vedi issue #137:
+   * drag invertito + lista che spariva del tutto).
+   */
   import { onDestroy, onMount } from "svelte";
-  import { PaneGroup, Pane, PaneResizer } from "paneforge";
+  import { ChevronsRight } from "lucide-svelte";
   import TitleBar from "$lib/components/TitleBar.svelte";
   import StatusBar from "$lib/components/StatusBar.svelte";
   import Sidebar from "$lib/components/Sidebar.svelte";
@@ -19,15 +40,30 @@
     apriModale,
   } from "$lib/stores/modale.svelte";
   import {
-    caricaStato,
-    salvaStato,
+    caricaStato as caricaStatoSidebar,
+    salvaStato as salvaStatoSidebar,
     type StatoSidebar,
   } from "$lib/stores/sidebar-collapsed";
+  import {
+    caricaStato as caricaStatoLayout,
+    salvaStato as salvaStatoLayout,
+    COL_SIDEBAR_MIN,
+    COL_SIDEBAR_MAX,
+    COL_LIST_MIN,
+    COL_LIST_MAX,
+  } from "$lib/stores/shell-layout";
 
   // F2: stato collapsed sidebar + gruppi NavGroup, persistito in localStorage.
-  let stato = $state<StatoSidebar>(caricaStato());
+  let stato = $state<StatoSidebar>(caricaStatoSidebar());
 
-  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  // Larghezze 2 colonne resizable in pixel, persistite in localStorage.
+  let layout = $state(caricaStatoLayout());
+
+  // Stato collapse ListPane (separato dalla sidebar). In-memory only:
+  // alla riapertura dell'app la lista riparte espansa, come da prototipo.
+  let listCollapsed = $state(false);
+
+  let saveSidebarTimer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
     void stato.sidebarCollapsed;
     void stato.gruppi.viste;
@@ -35,8 +71,16 @@
     void stato.gruppi.cartelle;
     void stato.gruppi.tag;
     void stato.gruppi.modelTarget;
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => salvaStato(stato), 200);
+    if (saveSidebarTimer) clearTimeout(saveSidebarTimer);
+    saveSidebarTimer = setTimeout(() => salvaStatoSidebar(stato), 200);
+  });
+
+  let saveLayoutTimer: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => {
+    void layout.colSidebar;
+    void layout.colList;
+    if (saveLayoutTimer) clearTimeout(saveLayoutTimer);
+    saveLayoutTimer = setTimeout(() => salvaStatoLayout(layout), 200);
   });
 
   // Stato filtri condivisi Sidebar ↔ ListPane (F2 + F3).
@@ -45,22 +89,10 @@
   let tagSelezionato = $state<string | null>(null);
   let modelTargetSelezionato = $state("");
   let promptSelezionato = $state<string | null>(null);
-  // Nota: cross-folder drop (drag prompt → cartella sidebar) sarà F3.x.
-  // F3 PR-A copre solo drag-reorder dentro la lista.
 
-  // F5 PR-F: selezione multipla per Diff libero (Cmd/Ctrl+click in ListPane)
+  // F5 PR-F: selezione multipla per Diff libero.
   let selezioneMultipla = $state<Set<string>>(new Set());
   let mostraDiffLibero = $state(false);
-
-  // Fix #133: ref al Pane ListPane per .collapse() programmatic via API
-  // paneforge (collapse/expand/resize/isCollapsed) — il bottone ">>" in
-  // ListPane chiama listPaneRef?.collapse() invece del placeholder.
-  let listPaneRef = $state<{
-    collapse: () => void;
-    expand: () => void;
-    isCollapsed: () => boolean;
-    resize: (size: number) => void;
-  }>();
 
   function toggleSelezione(id: string): void {
     const next = new Set(selezioneMultipla);
@@ -79,7 +111,7 @@
     }
   }
 
-  // F7: notifica StatusBar quando il prompt viene deselezionato
+  // F7: notifica StatusBar quando il prompt viene deselezionato.
   $effect(() => {
     if (promptSelezionato === null) {
       window.dispatchEvent(
@@ -91,8 +123,7 @@
     }
   });
 
-  // F5 PR-E + F6: navigazione cross-prompt via custom event
-  // (Import composti, Varianti A/B/C → click apre nel detail)
+  // F5 PR-E + F6: navigazione cross-prompt via custom event.
   function onApriPrompt(e: Event): void {
     const id = (e as CustomEvent<string>).detail;
     if (typeof id === "string" && id) {
@@ -100,10 +131,7 @@
     }
   }
 
-  // F8 PR-D1/PR-E: shortcut globali per modali ricorrenti
-  // - ⌘/Ctrl+,            → Impostazioni
-  // - ⌘/Ctrl+K            → Palette
-  // - ⌘/Ctrl+Shift+P      → Palette (alias VS Code-style)
+  // F8 PR-D1/PR-E: shortcut globali per modali ricorrenti.
   function onShortcutGlobale(e: KeyboardEvent): void {
     if (!(e.metaKey || e.ctrlKey)) return;
     if (e.key === ",") {
@@ -118,6 +146,56 @@
     }
   }
 
+  // ─── Drag handler resizer (issue #137) ───
+  // Pattern: onpointerdown su .resizer cattura pointer, listener
+  // pointermove + pointerup su window aggiornano la var corrispondente
+  // clamped tra MIN/MAX. Niente paneforge → drag direzione corretta:
+  // mouse a destra ⇒ pane a sinistra cresce.
+  type ResizeKind = "sidebar" | "list";
+
+  let dragKind = $state<ResizeKind | null>(null);
+  let dragStartX = 0;
+  let dragStartCol = 0;
+
+  function onPointerDownResizer(kind: ResizeKind, e: PointerEvent): void {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dragKind = kind;
+    dragStartX = e.clientX;
+    dragStartCol = kind === "sidebar" ? layout.colSidebar : layout.colList;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    window.addEventListener("pointermove", onPointerMoveResizer);
+    window.addEventListener("pointerup", onPointerUpResizer, { once: true });
+  }
+
+  function onPointerMoveResizer(e: PointerEvent): void {
+    if (!dragKind) return;
+    const delta = e.clientX - dragStartX;
+    const next = dragStartCol + delta;
+    if (dragKind === "sidebar") {
+      layout = {
+        ...layout,
+        colSidebar: Math.min(
+          COL_SIDEBAR_MAX,
+          Math.max(COL_SIDEBAR_MIN, Math.round(next)),
+        ),
+      };
+    } else {
+      layout = {
+        ...layout,
+        colList: Math.min(
+          COL_LIST_MAX,
+          Math.max(COL_LIST_MIN, Math.round(next)),
+        ),
+      };
+    }
+  }
+
+  function onPointerUpResizer(): void {
+    dragKind = null;
+    window.removeEventListener("pointermove", onPointerMoveResizer);
+  }
+
   onMount(() => {
     window.addEventListener("pap:apri-prompt", onApriPrompt);
     window.addEventListener("keydown", onShortcutGlobale);
@@ -126,48 +204,67 @@
   onDestroy(() => {
     window.removeEventListener("pap:apri-prompt", onApriPrompt);
     window.removeEventListener("keydown", onShortcutGlobale);
+    window.removeEventListener("pointermove", onPointerMoveResizer);
   });
 </script>
 
 <div class="shell-root">
   <TitleBar />
-  <main class="shell-body">
-    <PaneGroup direction="horizontal" autoSaveId="redesign-shell-v08">
-      {#if stato.sidebarCollapsed}
-        <Pane defaultSize={4} minSize={4} maxSize={4}>
-          <SidebarMini
-            onApriExpand={() => (stato.sidebarCollapsed = false)}
-            onApriInsight={() => apriModale({ tipo: "insight" })}
-            onApriRegressioni={() => apriModale({ tipo: "regressioni" })}
-          />
-        </Pane>
+  <main
+    class="shell-body"
+    data-sidebar-collapsed={stato.sidebarCollapsed}
+    data-list-collapsed={listCollapsed}
+    style="--col-sidebar: {layout.colSidebar}px; --col-list: {layout.colList}px;"
+  >
+    {#if stato.sidebarCollapsed}
+      <div class="pane sidebar-mini-pane">
+        <SidebarMini
+          onApriExpand={() => (stato.sidebarCollapsed = false)}
+          onApriInsight={() => apriModale({ tipo: "insight" })}
+          onApriRegressioni={() => apriModale({ tipo: "regressioni" })}
+        />
+      </div>
+    {:else}
+      <div class="pane sidebar-pane">
+        <Sidebar
+          {vistaCorrente}
+          {folderSelezionato}
+          {tagSelezionato}
+          {modelTargetSelezionato}
+          bind:gruppi={stato.gruppi}
+          onSelezionaVista={(id) => (vistaCorrente = id)}
+          onSelezionaFolder={(id) => (folderSelezionato = id)}
+          onSelezionaTag={(id) => (tagSelezionato = id)}
+          onSelezionaModelTarget={(m) => (modelTargetSelezionato = m)}
+          onApriCollapse={() => (stato.sidebarCollapsed = true)}
+          onApriInsight={() => apriModale({ tipo: "insight" })}
+          onApriRegressioni={() => apriModale({ tipo: "regressioni" })}
+        />
+      </div>
+    {/if}
+
+    <div
+      class="resizer"
+      class:dragging={dragKind === "sidebar"}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Ridimensiona sidebar"
+      tabindex="0"
+      onpointerdown={(e) => onPointerDownResizer("sidebar", e)}
+    ></div>
+
+    <div class="pane list-pane" class:collapsed={listCollapsed}>
+      {#if listCollapsed}
+        <button
+          class="list-restore"
+          type="button"
+          aria-label="Riapri elenco prompt"
+          title="Riapri elenco prompt"
+          onclick={() => (listCollapsed = false)}
+        >
+          <ChevronsRight size={14} />
+        </button>
       {:else}
-        <Pane defaultSize={20} minSize={14} maxSize={30}>
-          <Sidebar
-            {vistaCorrente}
-            {folderSelezionato}
-            {tagSelezionato}
-            {modelTargetSelezionato}
-            bind:gruppi={stato.gruppi}
-            onSelezionaVista={(id) => (vistaCorrente = id)}
-            onSelezionaFolder={(id) => (folderSelezionato = id)}
-            onSelezionaTag={(id) => (tagSelezionato = id)}
-            onSelezionaModelTarget={(m) => (modelTargetSelezionato = m)}
-            onApriCollapse={() => (stato.sidebarCollapsed = true)}
-            onApriInsight={() => apriModale({ tipo: "insight" })}
-            onApriRegressioni={() => apriModale({ tipo: "regressioni" })}
-          />
-        </Pane>
-      {/if}
-      <PaneResizer class="resizer" />
-      <Pane
-        bind:this={listPaneRef}
-        defaultSize={26}
-        minSize={12}
-        maxSize={40}
-        collapsible
-        collapsedSize={0}
-      >
         <ListPane
           {vistaCorrente}
           {folderSelezionato}
@@ -180,27 +277,38 @@
           onSelezionaPrompt={(id) => {
             promptSelezionato = id;
           }}
-          onApriCollapse={() => listPaneRef?.collapse()}
+          onApriCollapse={() => (listCollapsed = true)}
           {selezioneMultipla}
           onToggleSelezione={toggleSelezione}
           onPulisciSelezione={pulisciSelezione}
           onConfronta={apriDiffLibero}
         />
-      </Pane>
-      <PaneResizer class="resizer" />
-      <Pane defaultSize={54}>
-        {#if promptSelezionato}
-          <DetailPane
-            promptId={promptSelezionato}
-            onChiudi={() => (promptSelezionato = null)}
-          />
-        {:else}
-          <div class="placeholder-pane detail-placeholder">
-            <p>Seleziona un prompt dalla lista</p>
-          </div>
-        {/if}
-      </Pane>
-    </PaneGroup>
+      {/if}
+    </div>
+
+    <div
+      class="resizer"
+      class:dragging={dragKind === "list"}
+      class:hidden={listCollapsed}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Ridimensiona lista prompt"
+      tabindex="0"
+      onpointerdown={(e) => onPointerDownResizer("list", e)}
+    ></div>
+
+    <div class="pane detail-pane">
+      {#if promptSelezionato}
+        <DetailPane
+          promptId={promptSelezionato}
+          onChiudi={() => (promptSelezionato = null)}
+        />
+      {:else}
+        <div class="placeholder-pane detail-placeholder">
+          <p>Seleziona un prompt dalla lista</p>
+        </div>
+      {/if}
+    </div>
   </main>
   <StatusBar />
 </div>
@@ -250,16 +358,80 @@
     display: grid;
     grid-template-rows: var(--titlebar-h) 1fr var(--statusbar-h);
     height: 100vh;
+    width: 100vw;
     background: var(--bg-canvas);
     color: var(--text-default);
     font-family: var(--font-ui);
+    overflow: hidden;
   }
 
   .shell-body {
+    display: grid;
+    grid-template-columns:
+      var(--col-sidebar, 248px)
+      1px
+      var(--col-list, 320px)
+      1px
+      minmax(0, 1fr);
+    min-height: 0;
+    background: var(--bg-canvas);
     overflow: hidden;
-    /* F11 PR-D: contain layout/paint riduce lo scope di reflow durante
-       drag-resize dei Pane → meno lavoro layout in target ≤16ms/frame */
-    contain: layout paint style;
+  }
+
+  /* Sidebar collapsed (icon-only mini bar) */
+  .shell-body[data-sidebar-collapsed="true"] {
+    grid-template-columns:
+      44px
+      1px
+      var(--col-list, 320px)
+      1px
+      minmax(0, 1fr);
+  }
+
+  /* List collapsed: pane resta a 36px, mostra solo bottone restore.
+     Resizer a destra del list-pane viene nascosto (.hidden). */
+  .shell-body[data-list-collapsed="true"] {
+    grid-template-columns:
+      var(--col-sidebar, 248px)
+      1px
+      36px
+      0
+      minmax(0, 1fr);
+  }
+
+  .shell-body[data-sidebar-collapsed="true"][data-list-collapsed="true"] {
+    grid-template-columns: 44px 1px 36px 0 minmax(0, 1fr);
+  }
+
+  .pane {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .list-pane.collapsed {
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: var(--sp-2, 12px);
+  }
+
+  .list-restore {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--border-default);
+    background: var(--bg-canvas);
+    color: var(--text-muted);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+
+  .list-restore:hover {
+    background: var(--bg-overlay);
+    color: var(--text-strong);
   }
 
   .placeholder-pane {
@@ -275,29 +447,31 @@
     background: var(--bg-canvas);
   }
 
-  :global(.resizer) {
-    width: 1px;
+  .resizer {
     background: var(--border-subtle);
-    position: relative;
     cursor: col-resize;
+    position: relative;
+    z-index: 10;
     transition: background var(--motion-fast) var(--easing-standard);
   }
 
-  :global(.resizer::after) {
+  /* Hit-area allargata ±3px senza alterare la grid track (1px) */
+  .resizer::after {
     content: "";
     position: absolute;
-    inset: 0 -3px;
+    inset: 0;
+    left: -3px;
+    right: -3px;
   }
 
-  :global(.resizer:hover),
-  :global(.resizer[data-resize-handle-active]) {
-    background: var(--accent-team);
-  }
-
-  /* F11 PR-D: feedback visivo immediato su mousedown senza attendere
-     transition (perceived latency < 16ms) */
-  :global(.resizer:active) {
+  .resizer:hover,
+  .resizer.dragging {
     background: var(--accent-team);
     transition: none;
+  }
+
+  .resizer.hidden {
+    pointer-events: none;
+    background: transparent;
   }
 </style>
