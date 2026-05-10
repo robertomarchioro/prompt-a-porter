@@ -29,6 +29,9 @@
     RefreshCw,
     Keyboard,
     Download,
+    Globe,
+    Plus,
+    Trash2,
   } from "lucide-svelte";
   import Modale from "$lib/components/Modale.svelte";
   import PannelloProviderConfig from "$lib/components/PannelloProviderConfig.svelte";
@@ -57,7 +60,8 @@
     | "embeddings"
     | "audit"
     | "sync"
-    | "hotkey";
+    | "hotkey"
+    | "globali";
 
   interface VoceSezione {
     id: SezioneId;
@@ -128,6 +132,19 @@
       label: "Hotkey",
       keywords: ["hotkey", "scorciatoia", "tasti", "palette", "ctrl", "shift"],
     },
+    {
+      id: "globali",
+      label: "Segnaposti globali",
+      keywords: [
+        "segnaposti",
+        "globali",
+        "placeholder",
+        "default",
+        "variabili",
+        "globale",
+        "autore",
+      ],
+    },
   ];
 
   const sezioni: VoceSezione[] = [
@@ -195,6 +212,10 @@
         "sync",
         "hotkey",
         "scorciatoia",
+        "segnaposti",
+        "globali",
+        "placeholder",
+        "default",
       ],
     },
   ];
@@ -369,6 +390,79 @@
   let hotkeyValore = $state("Ctrl+Shift+P");
   let hotkeySalvata = $state(false);
 
+  // ─── Segnaposti globali (issue #159) ───
+  interface PlaceholderGlobale {
+    name: string;
+    value: string;
+    updated_at: string;
+  }
+  let globaliLista = $state<PlaceholderGlobale[] | null>(null);
+  let globaliErrore = $state("");
+  let globaleNuovoNome = $state("");
+  let globaleNuovoValore = $state("");
+  // Mappa per edit inline: name → valore corrente (potenzialmente dirty)
+  let globaliEdit = $state<Record<string, string>>({});
+
+  async function caricaGlobali(): Promise<void> {
+    globaliErrore = "";
+    try {
+      const lista =
+        await invoke<PlaceholderGlobale[]>("globale_placeholder_lista");
+      globaliLista = lista;
+      const edit: Record<string, string> = {};
+      for (const g of lista) edit[g.name] = g.value;
+      globaliEdit = edit;
+    } catch (e) {
+      globaliErrore = String(e);
+    }
+  }
+
+  async function aggiungiGlobale(): Promise<void> {
+    globaliErrore = "";
+    const name = globaleNuovoNome.trim();
+    if (!name) {
+      globaliErrore = "Nome obbligatorio.";
+      return;
+    }
+    if (!/^\w+$/.test(name)) {
+      globaliErrore =
+        "Il nome può contenere solo lettere, cifre e underscore.";
+      return;
+    }
+    try {
+      await invoke<void>("globale_placeholder_aggiorna", {
+        dati: { name, value: globaleNuovoValore },
+      });
+      globaleNuovoNome = "";
+      globaleNuovoValore = "";
+      await caricaGlobali();
+    } catch (e) {
+      globaliErrore = String(e);
+    }
+  }
+
+  async function salvaGlobale(name: string): Promise<void> {
+    globaliErrore = "";
+    try {
+      await invoke<void>("globale_placeholder_aggiorna", {
+        dati: { name, value: globaliEdit[name] ?? "" },
+      });
+      await caricaGlobali();
+    } catch (e) {
+      globaliErrore = String(e);
+    }
+  }
+
+  async function eliminaGlobale(name: string): Promise<void> {
+    globaliErrore = "";
+    try {
+      await invoke<void>("globale_placeholder_elimina", { name });
+      await caricaGlobali();
+    } catch (e) {
+      globaliErrore = String(e);
+    }
+  }
+
   async function caricaPrefsFull(): Promise<void> {
     try {
       prefsFull = await invoke<PreferenzeFull>("preferenze_carica");
@@ -516,6 +610,12 @@
   $effect(() => {
     if (subSezioneAperta === "embeddings" && embStatus === null) {
       void caricaEmbStatus();
+    }
+  });
+
+  $effect(() => {
+    if (subSezioneAperta === "globali" && globaliLista === null) {
+      void caricaGlobali();
     }
   });
 
@@ -819,7 +919,8 @@
                   {:else if sub.id === "embeddings"}<Sparkles size={14} />
                   {:else if sub.id === "audit"}<ScrollText size={14} />
                   {:else if sub.id === "sync"}<RefreshCw size={14} />
-                  {:else}<Keyboard size={14} />{/if}
+                  {:else if sub.id === "hotkey"}<Keyboard size={14} />
+                  {:else}<Globe size={14} />{/if}
                 </span>
                 <span class="acc-label">{sub.label}</span>
                 <span class="acc-chev">
@@ -1040,6 +1141,95 @@
                         Registrato a livello sistema. La modifica diventa
                         effettiva al prossimo riavvio dell'app.
                       </p>
+                    </div>
+                  {:else if sub.id === "globali"}
+                    <div class="campo">
+                      <p class="hint">
+                        Definisci valori di default per segnaposti
+                        <code>{`{{globale nome}}`}</code>. Quando un prompt
+                        usa un segnaposto globale, il suo valore viene
+                        pre-riempito automaticamente in Compila e
+                        l'eventuale modifica viene salvata come nuovo
+                        default.
+                      </p>
+                    </div>
+                    <div class="campo">
+                      <span class="campo-label">Aggiungi segnaposto</span>
+                      <div class="globale-form">
+                        <input
+                          type="text"
+                          class="num-input globale-nome"
+                          placeholder="nome (es. autore)"
+                          bind:value={globaleNuovoNome}
+                          aria-label="Nome segnaposto globale"
+                        />
+                        <input
+                          type="text"
+                          class="globale-valore"
+                          placeholder="valore di default"
+                          bind:value={globaleNuovoValore}
+                          aria-label="Valore segnaposto globale"
+                        />
+                        <button
+                          type="button"
+                          class="btn-primary"
+                          onclick={aggiungiGlobale}
+                        >
+                          <Plus size={14} />
+                          <span>Aggiungi</span>
+                        </button>
+                      </div>
+                    </div>
+                    {#if globaliErrore}
+                      <p class="msg-err">{globaliErrore}</p>
+                    {/if}
+                    <div class="campo">
+                      <span class="campo-label">
+                        Segnaposti definiti
+                        {#if globaliLista}
+                          <strong class="num">({globaliLista.length})</strong>
+                        {/if}
+                      </span>
+                      {#if globaliLista === null}
+                        <p class="hint">Caricamento…</p>
+                      {:else if globaliLista.length === 0}
+                        <p class="hint">
+                          Nessun segnaposto globale definito.
+                        </p>
+                      {:else}
+                        <div class="globali-tabella" role="table">
+                          {#each globaliLista as g (g.name)}
+                            <div class="globali-riga" role="row">
+                              <code class="globali-nome" title={g.name}>
+                                {`{{globale ${g.name}}}`}
+                              </code>
+                              <input
+                                type="text"
+                                class="globali-input"
+                                bind:value={globaliEdit[g.name]}
+                                aria-label={`Valore di ${g.name}`}
+                              />
+                              <button
+                                type="button"
+                                class="btn-ghost"
+                                onclick={() => salvaGlobale(g.name)}
+                                disabled={globaliEdit[g.name] === g.value}
+                                title="Salva valore"
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                class="btn-ghost btn-danger"
+                                onclick={() => eliminaGlobale(g.name)}
+                                title="Elimina segnaposto globale"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          {/each}
+                        </div>
+                      {/if}
                     </div>
                   {/if}
                 </div>
@@ -1428,5 +1618,70 @@
     margin: 0;
     font-size: var(--fs-xs);
     color: var(--text-muted);
+  }
+
+  /* ── Issue #159: Segnaposti globali ── */
+  .globale-form {
+    display: grid;
+    grid-template-columns: 180px 1fr auto;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .globale-nome,
+  .globale-valore,
+  .globali-input {
+    padding: 6px var(--sp-2);
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-default);
+    font-size: var(--fs-sm);
+    font-family: var(--font-ui);
+  }
+
+  .globale-nome {
+    width: 100%;
+    font-family: var(--font-mono);
+  }
+
+  .globali-tabella {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .globali-riga {
+    display: grid;
+    grid-template-columns: 220px 1fr auto auto;
+    gap: 6px;
+    align-items: center;
+    padding: 4px 6px;
+    border-radius: var(--radius-sm);
+  }
+
+  .globali-riga:hover {
+    background: var(--bg-overlay);
+  }
+
+  .globali-nome {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    background: var(--accent-team-soft);
+    color: var(--accent-team-strong);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .btn-danger {
+    color: var(--accent-danger, #d9534f);
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: var(--accent-danger, #d9534f);
+    color: var(--bg-canvas);
   }
 </style>

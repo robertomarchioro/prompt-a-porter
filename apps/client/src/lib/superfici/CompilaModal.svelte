@@ -12,7 +12,7 @@
    */
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
-  import { Frown, Meh, Smile, Copy, Check } from "lucide-svelte";
+  import { Frown, Meh, Smile, Copy, Check, Globe } from "lucide-svelte";
   import { estraiSegnaposti, compila, contaCompilati } from "$lib/template";
   import Modale from "$lib/components/Modale.svelte";
   import { fmtShortcut } from "$lib/util/shortcut";
@@ -22,6 +22,13 @@
     titolo: string;
     body: string;
     target_model: string;
+  }
+
+  // Issue #159: backend `globale_placeholder_lista` ritorna questo shape
+  interface PlaceholderGlobale {
+    name: string;
+    value: string;
+    updated_at: string;
   }
 
   interface Props {
@@ -36,6 +43,10 @@
 
   let dettaglio = $state<PromptDettaglio | null>(null);
   let valori = $state<Record<string, string>>({});
+  // Issue #159: resolver separato per `{{globale nome}}` — pre-fill dal DB.
+  let valoriGlobali = $state<Record<string, string>>({});
+  // Snapshot dei valori globali al caricamento, per detect dirty su salvataggio.
+  let globaliPersistiti = $state<Record<string, string>>({});
   let formato = $state<FormatoOutput>("testo");
   let copiato = $state(false);
   let ratingScelto = $state<Rating | null>(null);
@@ -45,15 +56,25 @@
 
   async function carica(): Promise<void> {
     try {
-      dettaglio = await invoke<PromptDettaglio>("libreria_dettaglio", {
-        id: promptId,
-      });
-      const seg = estraiSegnaposti(dettaglio.body);
-      const init: Record<string, string> = {};
+      const [det, glob] = await Promise.all([
+        invoke<PromptDettaglio>("libreria_dettaglio", { id: promptId }),
+        invoke<PlaceholderGlobale[]>("globale_placeholder_lista"),
+      ]);
+      dettaglio = det;
+      const seg = estraiSegnaposti(det.body);
+      const initN: Record<string, string> = {};
+      const initG: Record<string, string> = {};
+      const mapGlob = new Map(glob.map((g) => [g.name, g.value]));
       for (const s of seg) {
-        init[s.nome] = "";
+        if (s.globale) {
+          initG[s.nome] = mapGlob.get(s.nome) ?? "";
+        } else {
+          initN[s.nome] = "";
+        }
       }
-      valori = init;
+      valori = initN;
+      valoriGlobali = initG;
+      globaliPersistiti = { ...initG };
     } catch (e) {
       console.error("[compila-modal] caricaDettaglio", e);
       erroreCaricamento = "Prompt non disponibile";
@@ -66,14 +87,16 @@
     dettaglio ? estraiSegnaposti(dettaglio.body) : [],
   );
   const totaleSegnaposti = $derived(segnaposti.length);
-  const compilati = $derived(contaCompilati(segnaposti, valori));
+  const compilati = $derived(
+    contaCompilati(segnaposti, valori, valoriGlobali),
+  );
   const tuttiCompilati = $derived(
     totaleSegnaposti === 0 || compilati === totaleSegnaposti,
   );
 
   const output = $derived.by(() => {
     if (!dettaglio) return "";
-    const testo = compila(dettaglio.body, valori);
+    const testo = compila(dettaglio.body, valori, valoriGlobali);
     if (formato === "testo") return testo;
     if (formato === "markdown") {
       return `\`\`\`\n${testo}\n\`\`\``;
@@ -85,14 +108,43 @@
         target_model: dettaglio.target_model,
         body: testo,
         valori,
+        valori_globali: valoriGlobali,
       },
       null,
       2,
     );
   });
 
+  /**
+   * Issue #159: persiste via UPSERT i globali modificati rispetto allo
+   * snapshot iniziale. "verrà automaticamente aggiornato anche il valore
+   * di default". Best-effort: log su errore senza bloccare la copia.
+   */
+  async function persistiGlobaliSeModificati(): Promise<void> {
+    const dirty: Array<[string, string]> = [];
+    for (const [name, value] of Object.entries(valoriGlobali)) {
+      if (globaliPersistiti[name] !== value) {
+        dirty.push([name, value]);
+      }
+    }
+    if (dirty.length === 0) return;
+    try {
+      await Promise.all(
+        dirty.map(([name, value]) =>
+          invoke<void>("globale_placeholder_aggiorna", {
+            dati: { name, value },
+          }),
+        ),
+      );
+      globaliPersistiti = { ...valoriGlobali };
+    } catch (e) {
+      console.error("[compila-modal] persistGlobali", e);
+    }
+  }
+
   async function copiaOutput(): Promise<void> {
     try {
+      await persistiGlobaliSeModificati();
       await navigator.clipboard.writeText(output);
       copiato = true;
       setTimeout(() => (copiato = false), 1500);
@@ -150,18 +202,39 @@
         {#if totaleSegnaposti === 0}
           <p class="muted">Nessun segnaposto: questo prompt è statico.</p>
         {:else}
-          {#each segnaposti as s (s.nome)}
-            <div class="campo">
-              <label class="lbl" for={`f-${s.nome}`}>
-                <code>{`{{${s.nome}}}`}</code>
+          {#each segnaposti as s (s.globale ? `g:${s.nome}` : s.nome)}
+            <div class="campo" data-globale={s.globale || undefined}>
+              <label
+                class="lbl"
+                for={`f-${s.globale ? "g-" : ""}${s.nome}`}
+              >
+                {#if s.globale}
+                  <span class="lbl-globale-tag" title="Segnaposto globale">
+                    <Globe size={11} />
+                    globale
+                  </span>
+                {/if}
+                <code>{s.globale
+                    ? `{{globale ${s.nome}}}`
+                    : `{{${s.nome}}}`}</code>
               </label>
-              <textarea
-                id={`f-${s.nome}`}
-                class="input"
-                rows="2"
-                bind:value={valori[s.nome]}
-                placeholder={`Valore per ${s.nome}…`}
-              ></textarea>
+              {#if s.globale}
+                <textarea
+                  id={`f-g-${s.nome}`}
+                  class="input"
+                  rows="2"
+                  bind:value={valoriGlobali[s.nome]}
+                  placeholder={`Valore globale per ${s.nome}…`}
+                ></textarea>
+              {:else}
+                <textarea
+                  id={`f-${s.nome}`}
+                  class="input"
+                  rows="2"
+                  bind:value={valori[s.nome]}
+                  placeholder={`Valore per ${s.nome}…`}
+                ></textarea>
+              {/if}
             </div>
           {/each}
         {/if}
@@ -345,6 +418,10 @@
   .lbl {
     font-size: 11px;
     color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
   }
 
   .lbl code {
@@ -353,6 +430,26 @@
     color: var(--accent-private);
     padding: 1px 4px;
     border-radius: var(--radius-sm);
+  }
+
+  /* Issue #159: differenziazione visiva segnaposto globale */
+  .campo[data-globale] .lbl code {
+    background: var(--accent-team-soft);
+    color: var(--accent-team-strong);
+  }
+
+  .lbl-globale-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    background: var(--accent-team-soft);
+    color: var(--accent-team-strong);
+    border-radius: var(--radius-full);
+    font-size: 10px;
+    font-weight: var(--fw-semibold);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
   }
 
   .input {

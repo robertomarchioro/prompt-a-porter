@@ -81,6 +81,11 @@ static MIGRAZIONI: &[Migrazione] = &[
         nome: "sort_order",
         sql: include_str!("../migrations/V014__sort_order.sql"),
     },
+    Migrazione {
+        versione: 15,
+        nome: "segnaposti_globali",
+        sql: include_str!("../migrations/V015__segnaposti_globali.sql"),
+    },
 ];
 
 /// Crea la tabella di tracking se non esiste.

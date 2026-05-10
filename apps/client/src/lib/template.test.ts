@@ -4,7 +4,7 @@ import { estraiSegnaposti, compila, contaCompilati } from "./template";
 describe("estraiSegnaposti", () => {
   it("trova segnaposti semplici", () => {
     const r = estraiSegnaposti("Ciao {{nome}}, benvenuto!");
-    expect(r).toEqual([{ nome: "nome", indice: 5 }]);
+    expect(r).toEqual([{ nome: "nome", indice: 5, globale: false }]);
   });
 
   it("trova segnaposti multipli", () => {
@@ -40,6 +40,39 @@ describe("estraiSegnaposti", () => {
   it("ignora graffe singole o triple", () => {
     expect(estraiSegnaposti("{nome}")).toEqual([]);
     expect(estraiSegnaposti("{{{nome}}}")).toHaveLength(1);
+  });
+
+  // Issue #159: segnaposti globali
+  it("riconosce segnaposto globale con prefisso 'globale '", () => {
+    const r = estraiSegnaposti("Autore: {{globale autore}}");
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject({ nome: "autore", globale: true });
+  });
+
+  it("globali e normali coesistono", () => {
+    const r = estraiSegnaposti("{{globale autore}} dice ciao a {{nome}}");
+    expect(r).toHaveLength(2);
+    expect(r[0]).toMatchObject({ nome: "autore", globale: true });
+    expect(r[1]).toMatchObject({ nome: "nome", globale: false });
+  });
+
+  it("globale con whitespace extra", () => {
+    const r = estraiSegnaposti("{{  globale  autore  }}");
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject({ nome: "autore", globale: true });
+  });
+
+  it("'globaleautore' senza spazio è normale (nome=globaleautore)", () => {
+    const r = estraiSegnaposti("{{globaleautore}}");
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject({ nome: "globaleautore", globale: false });
+  });
+
+  it("dedup separato per globali e normali con stesso nome", () => {
+    const r = estraiSegnaposti("{{nome}} vs {{globale nome}} vs {{nome}}");
+    expect(r).toHaveLength(2);
+    expect(r.find((s) => s.globale)).toBeDefined();
+    expect(r.find((s) => !s.globale)).toBeDefined();
   });
 });
 
@@ -80,6 +113,34 @@ describe("compila", () => {
     const body = "Riga 1: {{a}}\nRiga 2: {{b}}";
     expect(compila(body, { a: "X", b: "Y" })).toBe("Riga 1: X\nRiga 2: Y");
   });
+
+  // Issue #159: compila con valoriGlobali
+  it("sostituisce segnaposto globale con valoriGlobali", () => {
+    expect(
+      compila("Firmato {{globale autore}}", {}, { autore: "Roberto" }),
+    ).toBe("Firmato Roberto");
+  });
+
+  it("mantiene segnaposto globale senza valore globale", () => {
+    expect(compila("{{globale autore}}", {})).toBe("{{globale autore}}");
+  });
+
+  it("non confonde resolver normale e globale (stesso nome)", () => {
+    const body = "{{nome}} firmato {{globale nome}}";
+    expect(compila(body, { nome: "Mario" }, { nome: "Roberto" })).toBe(
+      "Mario firmato Roberto",
+    );
+  });
+
+  it("globale preserva spazio normalizzato nel placeholder non risolto", () => {
+    expect(compila("{{globale  autore  }}", {})).toBe("{{globale autore}}");
+  });
+
+  it("valori normali non leakano in globali", () => {
+    expect(compila("{{globale autore}}", { autore: "Mario" })).toBe(
+      "{{globale autore}}",
+    );
+  });
 });
 
 describe("contaCompilati", () => {
@@ -105,5 +166,21 @@ describe("contaCompilati", () => {
 
   it("zero per array vuoto", () => {
     expect(contaCompilati([], { a: "x" })).toBe(0);
+  });
+
+  // Issue #159
+  it("conta separatamente normali e globali", () => {
+    const s = estraiSegnaposti("{{a}} {{globale b}} {{globale c}}");
+    expect(contaCompilati(s, { a: "ok" }, { b: "ok" })).toBe(2);
+  });
+
+  it("globale non risolto da valori normali", () => {
+    const s = estraiSegnaposti("{{globale a}}");
+    expect(contaCompilati(s, { a: "ok" })).toBe(0);
+  });
+
+  it("normale non risolto da valori globali", () => {
+    const s = estraiSegnaposti("{{a}}");
+    expect(contaCompilati(s, {}, { a: "ok" })).toBe(0);
   });
 });

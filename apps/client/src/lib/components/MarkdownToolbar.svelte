@@ -12,6 +12,7 @@
     Link,
     Minus,
     Variable,
+    Globe,
     GitFork,
     Search,
   } from "lucide-svelte";
@@ -96,6 +97,24 @@
 
   function aprireSearch(): void {
     if (view) openSearchPanel(view);
+  }
+
+  /**
+   * Issue #159: inserisce `{{globale <nome>}}` alla posizione del cursor.
+   * Se c'è una selezione, la usa come nome del segnaposto; altrimenti usa
+   * "nome" come placeholder e lo seleziona per editing immediato.
+   */
+  function inserisciVariabileGlobale(): void {
+    if (!view) return;
+    const { from, to } = view.state.selection.main;
+    const sel = view.state.doc.sliceString(from, to) || "nome";
+    const inserito = `{{globale ${sel}}}`;
+    view.dispatch({
+      changes: { from, to, insert: inserito },
+      // "{{globale " = 10 caratteri → seleziona <sel> per editing
+      selection: { anchor: from + 10, head: from + 10 + sel.length },
+    });
+    view.focus();
   }
 </script>
 
@@ -219,6 +238,15 @@
     onclick={onInserisciVariabile}
   >
     <Variable size={14} strokeWidth={1.75} />
+  </button>
+  <button
+    class="md-btn"
+    type="button"
+    title={"Inserisci segnaposto globale ({{globale nome}})"}
+    aria-label="Inserisci segnaposto globale"
+    onclick={inserisciVariabileGlobale}
+  >
+    <Globe size={14} strokeWidth={1.75} />
   </button>
   <button
     class="md-btn"
