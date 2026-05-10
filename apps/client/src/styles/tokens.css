@@ -108,6 +108,16 @@
   /* ---------- Focus ring ---------- */
   --focus-ring:        0 0 0 2px var(--bg-canvas), 0 0 0 4px var(--accent-team);
   --focus-ring-private: 0 0 0 2px var(--bg-canvas), 0 0 0 4px var(--accent-private);
+
+  /* ---------- Shell chrome heights (issue #142) ----------
+     Valori dal prototipo originale
+     `docs/architettura/redesign/prototype/redesign.css:20-21`.
+     Usati da Shell.svelte (grid-template-rows), TitleBar.svelte
+     (height), StatusBar.svelte (height). Erano referenziati ma mai
+     definiti → la `height` collassava e le barre prendevano
+     l'altezza naturale del contenuto. */
+  --titlebar-h:  36px;
+  --statusbar-h: 28px;
 }
 
 /* =========================================================================
