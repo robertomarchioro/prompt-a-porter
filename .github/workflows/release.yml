@@ -26,11 +26,15 @@ jobs:
           #   args: ""
           #   rust-target: x86_64-unknown-linux-gnu
           - platform: windows-latest
-            # `--no-bundle` salta NSIS/MSI: il bundle Tauri non serve
-            # quando l'unico artifact pubblicato è il portable .zip
-            # creato dallo step PowerShell sotto. Riabilitare bundle
-            # togliendo questo flag se si vogliono di nuovo .msi/setup.exe.
-            args: --no-bundle
+            # NB: `--no-bundle` NON è usabile qui — tauri-action si
+            # aspetta artifact bundle in `target/release/bundle/` e
+            # fallisce con "No artifacts were found" se mancano (vedi
+            # build v0.8.3 25626291738). Lasciamo bundle attivo: i
+            # bundle MSI/NSIS aggiungono ~30s al build dopo cargo
+            # release (~14m), trascurabile. La release avrà 5 asset
+            # (msi/.sig + setup.exe/.sig + portable.zip), il portable
+            # .zip è l'unico documentato in releaseBody.
+            args: ""
             rust-target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.platform }}
