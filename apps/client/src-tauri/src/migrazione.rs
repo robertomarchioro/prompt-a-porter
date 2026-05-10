@@ -160,10 +160,10 @@ mod test {
         let conn = Connection::open_in_memory().unwrap();
         let n = esegui_migrazioni(&conn).unwrap();
         assert!(
-            n >= 14,
-            "Tutte le migrazioni devono essere applicate (almeno 14)"
+            n >= 15,
+            "Tutte le migrazioni devono essere applicate (almeno 15)"
         );
-        assert_eq!(versione_corrente(&conn).unwrap(), 14);
+        assert_eq!(versione_corrente(&conn).unwrap(), 15);
     }
 
     #[test]
