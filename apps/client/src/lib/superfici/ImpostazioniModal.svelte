@@ -32,6 +32,10 @@
     Globe,
     Plus,
     Trash2,
+    FlaskConical,
+    FolderOpen,
+    FileDown,
+    Eraser,
   } from "lucide-svelte";
   import Modale from "$lib/components/Modale.svelte";
   import PannelloProviderConfig from "$lib/components/PannelloProviderConfig.svelte";
@@ -54,7 +58,13 @@
     type SyncState,
   } from "$lib/sync";
 
-  type SezioneId = "aspetto" | "vista" | "editor" | "sicurezza" | "avanzate";
+  type SezioneId =
+    | "aspetto"
+    | "vista"
+    | "editor"
+    | "sicurezza"
+    | "avanzate"
+    | "sviluppo";
   type SubSezioneId =
     | "provider"
     | "embeddings"
@@ -216,6 +226,23 @@
         "globali",
         "placeholder",
         "default",
+      ],
+    },
+    {
+      id: "sviluppo",
+      label: "Sviluppo",
+      keywords: [
+        "sviluppo",
+        "debug",
+        "log",
+        "diagnostica",
+        "telemetria",
+        "bug",
+        "issue",
+        "esporta",
+        "zip",
+        "tracing",
+        "beta",
       ],
     },
   ];
@@ -390,6 +417,95 @@
 
   let hotkeyValore = $state("Ctrl+Shift+P");
   let hotkeySalvata = $state(false);
+
+  // ─── Sviluppo → Debug log (v0.8.7 PR-B) ───
+  interface FileLog {
+    name: string;
+    size_bytes: number;
+    modified_at: string;
+  }
+  interface InfoDebugLog {
+    path_corrente: string;
+    directory: string;
+    files: FileLog[];
+  }
+  let debugInfo = $state<InfoDebugLog | null>(null);
+  let debugErrore = $state("");
+  let debugOpInCorso = $state<"" | "esporta" | "pulisci">("");
+  let debugMessaggio = $state("");
+
+  async function caricaDebugInfo(): Promise<void> {
+    debugErrore = "";
+    try {
+      debugInfo = await invoke<InfoDebugLog>("debug_log_info");
+    } catch (e) {
+      debugErrore = String(e);
+    }
+  }
+
+  async function toggleDebugLog(): Promise<void> {
+    if (!prefsFull) return;
+    const nuovo = !prefsFull.debug_log_abilitato;
+    prefsFull = { ...prefsFull, debug_log_abilitato: nuovo };
+    try {
+      await invoke("preferenze_salva", { preferenze: prefsFull });
+      await invoke("debug_log_imposta_livello", { abilitato: nuovo });
+      debugMessaggio = nuovo
+        ? "Debug log attivato. I prossimi eventi verranno scritti su file."
+        : "Debug log disattivato.";
+      setTimeout(() => (debugMessaggio = ""), 3000);
+    } catch (e) {
+      // Rollback locale in caso di errore
+      prefsFull = { ...prefsFull, debug_log_abilitato: !nuovo };
+      debugErrore = `Errore toggle debug log: ${String(e)}`;
+    }
+  }
+
+  async function apriCartellaLog(): Promise<void> {
+    debugErrore = "";
+    try {
+      await invoke("debug_log_apri_cartella");
+    } catch (e) {
+      debugErrore = `Apertura cartella fallita: ${String(e)}`;
+    }
+  }
+
+  async function pulisciLog(): Promise<void> {
+    if (!window.confirm("Pulire il file di log corrente?\n\nI file rotati (vecchi) NON verranno toccati.")) {
+      return;
+    }
+    debugErrore = "";
+    debugOpInCorso = "pulisci";
+    try {
+      await invoke("debug_log_pulisci");
+      debugMessaggio = "File di log corrente svuotato.";
+      setTimeout(() => (debugMessaggio = ""), 3000);
+      await caricaDebugInfo();
+    } catch (e) {
+      debugErrore = `Pulizia fallita: ${String(e)}`;
+    } finally {
+      debugOpInCorso = "";
+    }
+  }
+
+  async function esportaLogZip(): Promise<void> {
+    debugErrore = "";
+    debugOpInCorso = "esporta";
+    try {
+      const zipPath = await invoke<string>("debug_log_esporta_zip");
+      debugMessaggio = `ZIP esportato: ${zipPath}`;
+    } catch (e) {
+      debugErrore = `Export ZIP fallito: ${String(e)}`;
+    } finally {
+      debugOpInCorso = "";
+    }
+  }
+
+  function formattaBytes(n: number): string {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+  }
 
   // ─── Segnaposti globali (issue #159) ───
   interface PlaceholderGlobale {
@@ -620,6 +736,17 @@
     }
   });
 
+  $effect(() => {
+    if (sezione === "sviluppo") {
+      if (prefsFull === null) {
+        void caricaPrefsFull();
+      }
+      if (debugInfo === null) {
+        void caricaDebugInfo();
+      }
+    }
+  });
+
   onMount(() => {
     syncOnChange(() => {
       syncState = syncGetState();
@@ -700,7 +827,8 @@
                 {:else if s.id === "vista"}<ListIcon size={14} />
                 {:else if s.id === "editor"}<Pencil size={14} />
                 {:else if s.id === "sicurezza"}<Lock size={14} />
-                {:else}<Sliders size={14} />{/if}
+                {:else if s.id === "avanzate"}<Sliders size={14} />
+                {:else}<FlaskConical size={14} />{/if}
                 <span>{s.label}</span>
               </button>
             </li>
@@ -1241,6 +1369,131 @@
             <p class="hint">Nessuna sub-sezione corrisponde alla ricerca.</p>
           {/if}
         </div>
+      {:else if sezione === "sviluppo"}
+        <h3>Sviluppo</h3>
+        <p class="hint">
+          Strumenti di diagnostica e funzioni beta. Utili per indagare
+          comportamenti anomali e fornire informazioni dettagliate quando
+          apri un'issue su GitHub.
+        </p>
+
+        <div class="campo">
+          <div class="sviluppo-card">
+            <div class="sviluppo-card-h">
+              <span class="campo-label">Debug log</span>
+              <label class="sviluppo-toggle">
+                <input
+                  type="checkbox"
+                  checked={prefsFull?.debug_log_abilitato ?? false}
+                  onchange={() => void toggleDebugLog()}
+                  disabled={prefsFull === null}
+                  aria-label="Abilita debug log"
+                />
+                <span>
+                  {prefsFull?.debug_log_abilitato ? "Attivo" : "Disattivo"}
+                </span>
+              </label>
+            </div>
+            <p class="hint">
+              Quando attivo, l'app registra su file gli eventi critici
+              (livello DEBUG). Quando disattivo, solo errori e warning.
+              Modifica effettiva immediata, no riavvio.
+            </p>
+
+            {#if debugInfo}
+              <div class="sviluppo-info">
+                <div class="sviluppo-info-row">
+                  <span class="sviluppo-info-label">Cartella log</span>
+                  <code class="sviluppo-path" title={debugInfo.directory}>
+                    {debugInfo.directory}
+                  </code>
+                </div>
+                <div class="sviluppo-info-row">
+                  <span class="sviluppo-info-label">File attivi</span>
+                  <span class="sviluppo-info-val">
+                    {debugInfo.files.length}
+                    {#if debugInfo.files.length > 0}
+                      ({formattaBytes(
+                        debugInfo.files.reduce(
+                          (a, f) => a + f.size_bytes,
+                          0,
+                        ),
+                      )} totali)
+                    {/if}
+                  </span>
+                </div>
+              </div>
+
+              {#if debugInfo.files.length > 0}
+                <details class="sviluppo-elenco">
+                  <summary>Mostra elenco file</summary>
+                  <ul>
+                    {#each debugInfo.files as f (f.name)}
+                      <li>
+                        <code>{f.name}</code>
+                        <span class="sviluppo-meta">
+                          {formattaBytes(f.size_bytes)}
+                          {#if f.modified_at}
+                            · {f.modified_at.slice(0, 16)}
+                          {/if}
+                        </span>
+                      </li>
+                    {/each}
+                  </ul>
+                </details>
+              {/if}
+            {:else if debugErrore}
+              <p class="msg-err">{debugErrore}</p>
+            {:else}
+              <p class="hint">Caricamento info log…</p>
+            {/if}
+
+            <div class="riga-azioni">
+              <button
+                type="button"
+                class="btn-ghost"
+                onclick={apriCartellaLog}
+                title="Apri la cartella nel file manager"
+              >
+                <FolderOpen size={14} />
+                <span>Apri cartella</span>
+              </button>
+              <button
+                type="button"
+                class="btn-primary"
+                onclick={esportaLogZip}
+                disabled={debugOpInCorso !== ""}
+                title="Crea uno ZIP con tutti i file di log + metadata per allegarlo a un'issue GitHub"
+              >
+                <FileDown size={14} />
+                <span>
+                  {debugOpInCorso === "esporta"
+                    ? "Esporto…"
+                    : "Esporta ZIP per issue"}
+                </span>
+              </button>
+              <button
+                type="button"
+                class="btn-warn"
+                onclick={pulisciLog}
+                disabled={debugOpInCorso !== ""}
+                title="Svuota il file di log corrente (i file rotati restano)"
+              >
+                <Eraser size={14} />
+                <span>
+                  {debugOpInCorso === "pulisci" ? "Pulisco…" : "Pulisci log"}
+                </span>
+              </button>
+            </div>
+
+            {#if debugMessaggio}
+              <p class="msg-info">{debugMessaggio}</p>
+            {/if}
+            {#if debugErrore && debugInfo}
+              <p class="msg-err">{debugErrore}</p>
+            {/if}
+          </div>
+        </div>
       {/if}
     </section>
   </div>
@@ -1684,5 +1937,116 @@
   .btn-danger:hover:not(:disabled) {
     background: var(--accent-danger, #d9534f);
     color: var(--bg-canvas);
+  }
+
+  /* ── v0.8.7 Sezione Sviluppo → Debug log ── */
+  .sviluppo-card {
+    padding: var(--sp-3);
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+
+  .sviluppo-card-h {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+  }
+
+  .sviluppo-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    font-size: var(--fs-sm);
+    color: var(--text-default);
+  }
+
+  .sviluppo-toggle input[type="checkbox"] {
+    accent-color: var(--accent-team);
+    cursor: pointer;
+  }
+
+  .sviluppo-toggle input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+  }
+
+  .sviluppo-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: var(--sp-2);
+    background: var(--bg-canvas);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .sviluppo-info-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    font-size: var(--fs-xs);
+  }
+
+  .sviluppo-info-label {
+    color: var(--text-muted);
+    min-width: 100px;
+  }
+
+  .sviluppo-info-val {
+    color: var(--text-default);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sviluppo-path {
+    flex: 1;
+    font-family: var(--font-mono);
+    color: var(--text-default);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sviluppo-elenco summary {
+    cursor: pointer;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    user-select: none;
+  }
+
+  .sviluppo-elenco ul {
+    margin: 6px 0 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .sviluppo-elenco li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    padding: 2px 6px;
+    background: var(--bg-canvas);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-xs);
+  }
+
+  .sviluppo-elenco code {
+    font-family: var(--font-mono);
+    color: var(--text-default);
+  }
+
+  .sviluppo-meta {
+    color: var(--text-subtle);
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
   }
 </style>
