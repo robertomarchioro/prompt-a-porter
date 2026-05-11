@@ -366,6 +366,7 @@
     ricerca_semantica_abilitata: boolean;
     ricerca_alpha: number;
     idle_unload_secondi: number;
+    debug_log_abilitato: boolean;
   }
 
   let prefsFull = $state<PreferenzeFull | null>(null);
