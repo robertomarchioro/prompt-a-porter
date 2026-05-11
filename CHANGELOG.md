@@ -1,5 +1,31 @@
 # Changelog — Prompt a Porter
 
+## v0.8.6 — Fix data-loss su switch prompt + hardening sicurezza (2026-05-11)
+
+> Patch urgente per **#167** (data-loss catastrofico su switch prompt) + chiusura audit settimanale fallita (#164, #166).
+
+### Fix critico
+
+- **#167 data-loss su switch prompt via meta-link** (PR #168) — sequenza riproducibile: aperto prompt A, click meta-link a B, click su A nella lista → A veniva sovrascritto con body di B. Root cause: 2 bug interagenti.
+  - `EditorTab`: dispatch CodeMirror programmatico per sync body al cambio `promptId` triggava `docChanged=true` → `dirty=true` fantasma in DetailPane senza input utente reale. Fix: flag `ignoraProssimoCambio` blocca propagazione su update programmatico.
+  - `DetailPane.salva()`: chiudeva su variabili reattive (`promptId`/`body`/`titolo`/`dettaglio`). `$effect` su cambio promptId chiamava `salvaManuale()` prima che `caricaDettaglio` aggiornasse le reattive → `invoke prompt_aggiorna` con `id=NUOVO` e `body=VECCHIO`. Fix: nuova `salvaConId(args...)` con parametri espliciti, `$effect` cattura snapshot sincrono e ordina `salvaConId(precedente) → caricaDettaglio(nuovo)` in closure async.
+
+### Hardening sicurezza
+
+- **CI security-audit verde** (PR #164, #166) — bump Go 1.25.10 (fix GO-2026-4971 net.Listen panic con NUL byte), `chi/v5` v5.2.5 (fix GO-2026-4316 open redirect), `golang.org/x/crypto` v0.51.0 (4 CVE in ssh/agent). Rename module path `apps/server` da `anthropics/...` a `robertomarchioro/...`. Issue tracking #165 chiusa.
+
+### Numeri
+
+- **3 PR** mergiate in main (#164, #166, #168) + 1 PR di bump (questa)
+- 126 vitest pass, 0 errori svelte-check
+- Run security-audit dispatch dal branch fix: 4/4 job verdi
+
+### Closes
+
+#164 #166 #167
+
+---
+
 ## v0.8.5 — Editor UX + tray fix + segnaposti globali (2026-05-10)
 
 > Sprint patch su v0.8.4 con 3 PR: editor "Salva manuale" + autosave senza snapshot, tray icon singola Win + modelli AI consistenti, e nuova feature **segnaposti globali** (issue #159).
