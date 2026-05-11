@@ -478,6 +478,7 @@ pub fn run() {
             debug_log::debug_log_apri_cartella,
             debug_log::debug_log_pulisci,
             debug_log::debug_log_esporta_zip,
+            debug_log::debug_log_leggi,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())

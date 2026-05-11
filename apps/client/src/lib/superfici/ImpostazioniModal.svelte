@@ -40,6 +40,7 @@
   import Modale from "$lib/components/Modale.svelte";
   import PannelloProviderConfig from "$lib/components/PannelloProviderConfig.svelte";
   import HotkeyInput from "$lib/components/HotkeyInput.svelte";
+  import LogViewer from "$lib/components/LogViewer.svelte";
   import {
     statoTema,
     salvaTemaTono,
@@ -1492,6 +1493,15 @@
             {#if debugErrore && debugInfo}
               <p class="msg-err">{debugErrore}</p>
             {/if}
+
+            <details class="sviluppo-viewer">
+              <summary>Visualizza log live</summary>
+              <p class="hint">
+                Mostra le ultime 200 righe del file con auto-refresh
+                ogni 2 secondi. Filtra per livello o regex.
+              </p>
+              <LogViewer />
+            </details>
           </div>
         </div>
       {/if}
@@ -2048,5 +2058,20 @@
     color: var(--text-subtle);
     font-variant-numeric: tabular-nums;
     font-size: 11px;
+  }
+
+  .sviluppo-viewer {
+    margin-top: var(--sp-2);
+    border-top: 1px solid var(--border-subtle);
+    padding-top: var(--sp-2);
+  }
+
+  .sviluppo-viewer summary {
+    cursor: pointer;
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    color: var(--text-default);
+    user-select: none;
+    margin-bottom: 6px;
   }
 </style>
