@@ -35,6 +35,7 @@ use tauri::{
     Emitter, Manager,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_log::{RotationStrategy, Target, TargetKind};
 
 fn toggle_palette(app: &tauri::AppHandle) {
     if let Some(palette) = app.get_webview_window("palette") {
@@ -157,6 +158,34 @@ fn carica_idle_unload_pref(data_dir: &std::path::Path) -> Option<u32> {
     Some(prefs.idle_unload_secondi)
 }
 
+/// v0.8.7 Sezione Sviluppo → Debug log: legge preferenza, default false
+/// se file inesistente o malformato.
+fn carica_debug_log_abilitato(data_dir: &std::path::Path) -> bool {
+    let prefs_path = data_dir.join("preferenze.json");
+    let Ok(json) = std::fs::read_to_string(prefs_path) else {
+        return false;
+    };
+    let Ok(prefs) = serde_json::from_str::<preferenze::Preferenze>(&json) else {
+        return false;
+    };
+    prefs.debug_log_abilitato
+}
+
+/// v0.8.7 cmd Tauri per modificare runtime il livello di logging.
+/// Chiamato dal frontend quando l'utente toggla "Debug log abilitato"
+/// in Impostazioni → Sviluppo, evita richiesta di riavvio.
+#[tauri::command]
+fn debug_log_imposta_livello(abilitato: bool) -> Result<(), String> {
+    let livello = if abilitato {
+        log::LevelFilter::Debug
+    } else {
+        log::LevelFilter::Warn
+    };
+    log::set_max_level(livello);
+    log::info!("Debug log livello → {:?}", livello);
+    Ok(())
+}
+
 fn registra_shortcut(app: &tauri::AppHandle, combo: &str) -> Result<(), String> {
     let _ = app.global_shortcut().unregister_all();
     let shortcut = parse_hotkey(combo)?;
@@ -194,12 +223,54 @@ pub fn run() {
                 let _ = finestra.set_focus();
             }
         }))
+        // v0.8.7 Sezione Sviluppo → Debug log: plugin ufficiale Tauri.
+        // Plugin inizializzato con livello max (Trace) per accettare
+        // qualunque chiamata; il filtro effettivo è applicato runtime
+        // via `log::set_max_level()` in .setup() basato sulla preferenza
+        // `debug_log_abilitato` dell'utente. Toggle ON/OFF non richiede
+        // riavvio (vedi cmd `debug_log_imposta_livello`).
+        //
+        // Targets:
+        // - LogDir: file `pap.log` in app_log_dir() (rotation 5MB × 5)
+        // - Stdout: solo in dev (cargo run / tauri dev)
+        // - Webview: bridge console.* JS → log file backend (frontend
+        //   chiama `attachConsole()` da @tauri-apps/plugin-log)
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Trace)
+                .targets([
+                    Target::new(TargetKind::LogDir {
+                        file_name: Some("pap".to_string()),
+                    }),
+                    Target::new(TargetKind::Stdout),
+                    Target::new(TargetKind::Webview),
+                ])
+                .max_file_size(5 * 1024 * 1024) // 5 MB
+                .rotation_strategy(RotationStrategy::KeepAll)
+                .build(),
+        )
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             let data_dir = app
                 .path()
                 .app_data_dir()
                 .expect("Impossibile ottenere la directory dati dell'app");
+
+            // v0.8.7 Sezione Sviluppo → Debug log: applica livello dalla
+            // preferenza dell'utente. Default WARN (file leggero), DEBUG
+            // se l'utente ha attivato il toggle in Impostazioni.
+            let abilitato = carica_debug_log_abilitato(&data_dir);
+            let livello_iniziale = if abilitato {
+                log::LevelFilter::Debug
+            } else {
+                log::LevelFilter::Warn
+            };
+            log::set_max_level(livello_iniziale);
+            log::info!(
+                "PaP avviato — debug log: {} (livello {:?})",
+                if abilitato { "ON" } else { "OFF" },
+                livello_iniziale
+            );
 
             app.manage(vault::VaultState::new(data_dir.clone()));
             app.manage(preferenze::PreferenzeState::new(data_dir.clone()));
@@ -401,6 +472,7 @@ pub fn run() {
             segnaposti_globali::globale_placeholder_lista,
             segnaposti_globali::globale_placeholder_aggiorna,
             segnaposti_globali::globale_placeholder_elimina,
+            debug_log_imposta_livello,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())

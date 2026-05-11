@@ -40,6 +40,13 @@ pub struct Preferenze {
     /// Default 300s = 5 minuti.
     #[serde(default = "default_idle_unload_secondi")]
     pub idle_unload_secondi: u32,
+    /// v0.8.7 Sezione Sviluppo → Debug log. Quando true, il logger
+    /// (tauri-plugin-log) opera a livello DEBUG e scrive su file in
+    /// LogDir; quando false, opera a livello WARN (solo errori).
+    /// Il toggle ON/OFF è esposto in Impostazioni → Sviluppo. Default
+    /// false per non sporcare disco utenti standard.
+    #[serde(default)]
+    pub debug_log_abilitato: bool,
 }
 
 fn default_sync_intervallo() -> u32 {
@@ -72,6 +79,7 @@ impl Default for Preferenze {
             ricerca_semantica_abilitata: false,
             ricerca_alpha: 0.5,
             idle_unload_secondi: 300,
+            debug_log_abilitato: false,
         }
     }
 }
@@ -145,6 +153,7 @@ mod test {
             ricerca_semantica_abilitata: true,
             ricerca_alpha: 0.7,
             idle_unload_secondi: 600,
+            debug_log_abilitato: false,
         };
 
         let json = serde_json::to_string_pretty(&prefs).unwrap();
