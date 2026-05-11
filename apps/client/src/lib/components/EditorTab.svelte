@@ -44,6 +44,13 @@
   let container: HTMLDivElement;
   let view: EditorView | null = null;
   let bodyInterno = body;
+  // Issue #167: distingue dispatch programmatico (switch prompt → sync
+  // contenuto) da input utente. Settato a true prima del dispatch
+  // programmatico nell'$effect su `promptId`; l'updateListener salta
+  // `onChangeBody` se il flag è alto. Senza questo, switchare prompt
+  // emette un finto change che setta dirty=true in DetailPane → trigger
+  // salvataggio fantasma del nuovo prompt con body del vecchio.
+  let ignoraProssimoCambio = false;
 
   function montaEditor(initial: string): void {
     if (!container) return;
@@ -69,7 +76,13 @@
           if (u.docChanged) {
             const text = u.state.doc.toString();
             bodyInterno = text;
-            onChangeBody(text);
+            if (ignoraProssimoCambio) {
+              // Cambio programmatico (switch prompt): non propagare a
+              // DetailPane, altrimenti dirty=true fantasma. Issue #167.
+              ignoraProssimoCambio = false;
+            } else {
+              onChangeBody(text);
+            }
           }
           if ((u.docChanged || u.selectionSet) && onSelectionChange) {
             const sel = u.state.selection.main;
@@ -110,10 +123,13 @@
     smontaEditor();
   });
 
-  // Quando cambia promptId esternamente, sincronizza il contenuto
+  // Quando cambia promptId esternamente, sincronizza il contenuto.
+  // Issue #167: marca il dispatch come programmatico → updateListener
+  // NON chiama onChangeBody (evita dirty=true fantasma in DetailPane).
   $effect(() => {
     void promptId;
     if (view && body !== bodyInterno) {
+      ignoraProssimoCambio = true;
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: body },
       });
