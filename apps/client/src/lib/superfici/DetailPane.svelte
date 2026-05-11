@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, untrack } from "svelte";
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import { Star, GitFork, Download, PanelRight, Save, Trash2 } from "lucide-svelte";
   import type { EditorView } from "@codemirror/view";
@@ -138,23 +138,36 @@
   });
 
   $effect(() => {
-    // Issue #158 + #167: switch prompt con dirty del precedente → forza
-    // snapshot del PRECEDENTE prima di caricare il NUOVO. Cattura snapshot
-    // sincrono di tutte le variabili reattive del prompt che sta uscendo,
-    // così la chiamata `salvaConId` usa i valori corretti anche se le
-    // reattive nel frattempo sarebbero state riassegnate dal caricaDettaglio.
+    // Issue #158 + #167 + #170: switch prompt con dirty del precedente →
+    // forza snapshot del PRECEDENTE prima di caricare il NUOVO.
     //
-    // Senza queste snapshot espliciti, `salva()` userebbe `promptId`/`body`
-    // già aggiornati al NUOVO prompt → A sovrascritto con body di B (issue #167).
-    const idPrec = promptIdPrec;
+    // LA SOLA DIPENDENZA REATTIVA È `promptId`. Tutte le altre letture
+    // (titolo/body/descrizione/dirty/dettaglio/promptIdPrec) DEVONO essere
+    // in `untrack()` altrimenti Svelte 5 le tratta come dipendenze e
+    // l'effect ri-esegue ad ogni keystroke dell'utente → caricaDettaglio
+    // sovrascrive l'input. Issue #170 era esattamente questo loop: ogni
+    // carattere digitato veniva immediatamente cancellato.
     const idNuovo = promptId;
-    const dirtyPrec = dirty;
-    const dettaglioPrec = dettaglio;
-    const titoloPrec = titolo;
-    const descPrec = descrizione;
-    const bodyPrec = body;
 
-    promptIdPrec = idNuovo;
+    const {
+      idPrec,
+      dirtyPrec,
+      dettaglioPrec,
+      titoloPrec,
+      descPrec,
+      bodyPrec,
+    } = untrack(() => ({
+      idPrec: promptIdPrec,
+      dirtyPrec: dirty,
+      dettaglioPrec: dettaglio,
+      titoloPrec: titolo,
+      descPrec: descrizione,
+      bodyPrec: body,
+    }));
+
+    untrack(() => {
+      promptIdPrec = idNuovo;
+    });
 
     void (async () => {
       if (
