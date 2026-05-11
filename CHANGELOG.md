@@ -1,5 +1,42 @@
 # Changelog — Prompt a Porter
 
+## v0.8.7 — Sezione Sviluppo + Debug log Telescope-like (2026-05-11)
+
+> Nuova **sezione Impostazioni → Sviluppo** con funzionalità diagnostica "Debug log": logger strutturato su file con rotazione, toggle ON/OFF runtime, viewer in-app con filtri, e export ZIP per allegare a issue GitHub. Architettura non reinventa la ruota: usa `tauri-plugin-log` ufficiale come backbone.
+
+### Feature
+
+- **Sezione Sviluppo** in `ImpostazioniModal` con icona `FlaskConical`. Card "Debug log" con:
+  - Toggle ON/OFF (preferenza `debug_log_abilitato`, livello DEBUG/WARN, runtime via cmd `debug_log_imposta_livello` — no riavvio richiesto)
+  - Info path cartella + lista file rotati con size/mtime
+  - Bottoni **Apri cartella** (xdg-open/open/explorer), **Esporta ZIP per issue** (metadata.txt + tutti i `pap.log*`), **Pulisci log**
+  - **Viewer tail in-app** (`LogViewer.svelte`): auto-refresh 2s, filtri livello (TRACE/DEBUG/INFO/WARN/ERROR), regex case-insensitive, highlight colori, bottoni Pause/Refresh/Clear
+
+### Backend
+
+- Dep `tauri-plugin-log = "2"` (ufficiale Tauri team, MIT/Apache-2) per file rotation + JS bridge
+- Init plugin in `lib.rs::run` con targets `LogDir + Stdout + Webview`, max file size 5MB, `RotationStrategy::KeepAll`
+- Helper `carica_debug_log_abilitato` + `.setup` applica `log::set_max_level` da preferenza
+- Nuovo modulo `debug_log.rs` con 5 cmd Tauri: `_info`, `_apri_cartella`, `_pulisci`, `_esporta_zip`, `_leggi(n_righe)` + parser format tauri-plugin-log
+- 9 unit test (parser, raccogli file, format ISO)
+- Frontend `main.ts`: `attachConsole()` pipe `console.*` → file backend
+
+### Path file log
+
+- Linux: `~/.local/share/com.pap.app/logs/pap.log`
+- Windows: `%APPDATA%\com.pap.app\logs\pap.log`
+- macOS: `~/Library/Logs/com.pap.app/pap.log`
+
+### Numeri
+
+- **3 PR** mergiate in main (#171 backbone, #172 UI, #173 viewer) + 1 PR di bump (questa)
+- 126 vitest pass, 9 nuovi unit test backend (441 totali)
+- 0 errori svelte-check
+- ~1370 LOC totali (~700 Svelte UI, ~430 Rust backend, ~280 Svelte component)
+- Zero codice di file rotation/management custom (delegato a `tauri-plugin-log`)
+
+---
+
 ## v0.8.6 — Fix data-loss su switch prompt + hardening sicurezza (2026-05-11)
 
 > Patch urgente per **#167** (data-loss catastrofico su switch prompt) + chiusura audit settimanale fallita (#164, #166).
