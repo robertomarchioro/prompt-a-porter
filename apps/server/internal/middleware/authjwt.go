@@ -6,7 +6,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/auth"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/auth"
 )
 
 func JwtAuth(secret []byte) func(http.Handler) http.Handler {

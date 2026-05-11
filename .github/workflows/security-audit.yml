@@ -30,7 +30,10 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          # Pin esatto 1.25.10 per fix GO-2026-4971 (panic in net.Listen
+          # con NUL byte su Windows). Setup-go con "1.25" può risolvere
+          # a 1.25.9 se 1.25.10 non è ancora nel manifests cache.
+          go-version: "1.25.10"
           cache-dependency-path: apps/server/go.sum
 
       - name: Installa govulncheck

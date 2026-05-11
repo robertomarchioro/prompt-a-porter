@@ -8,8 +8,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/database"
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/models"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/database"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/models"
 )
 
 type Handler struct {

@@ -6,10 +6,10 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/auth"
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/database"
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/models"
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/ws"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/auth"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/database"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/models"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/ws"
 )
 
 type Handler struct {

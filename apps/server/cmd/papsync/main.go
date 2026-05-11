@@ -13,11 +13,11 @@ import (
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/auth"
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/database"
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/middleware"
-	syncHandler "github.com/anthropics/prompt-a-porter/apps/server/internal/sync"
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/ws"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/auth"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/database"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/middleware"
+	syncHandler "github.com/robertomarchioro/prompt-a-porter/apps/server/internal/sync"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/ws"
 )
 
 func main() {

@@ -12,7 +12,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/argon2"
 
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/models"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/models"
 )
 
 //go:embed schema.sql

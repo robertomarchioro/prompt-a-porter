@@ -1,4 +1,4 @@
-module github.com/anthropics/prompt-a-porter/apps/server
+module github.com/robertomarchioro/prompt-a-porter/apps/server
 
 go 1.25
 
