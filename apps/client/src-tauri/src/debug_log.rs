@@ -233,6 +233,115 @@ pub fn debug_log_esporta_zip(app: tauri::AppHandle) -> Result<String, PapErrore>
     Ok(zip_path.to_string_lossy().to_string())
 }
 
+// ─── v0.8.7 PR-C: lettura log per viewer in-app ───
+
+const MAX_RIGHE: usize = 5000;
+const DEFAULT_RIGHE: usize = 200;
+
+#[derive(Debug, Serialize)]
+pub struct RigaLog {
+    /// Timestamp ISO senza parentesi, "" se parsing fallito
+    pub timestamp: String,
+    /// "TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR" | "" (unknown)
+    pub level: String,
+    /// Module path / target (es. "pap_lib::editor"), "" se parsing fallito
+    pub target: String,
+    /// Messaggio user-readable
+    pub message: String,
+    /// Linea raw originale (utile per debug del parser stesso)
+    pub raw: String,
+}
+
+/// Parsing best-effort del formato default di tauri-plugin-log:
+/// `[YYYY-MM-DD][HH:MM:SS.mmm +TZ][LEVEL][target] message`
+///
+/// Se il formato non corrisponde (es. linea di continuazione panic
+/// trace), ritorna RigaLog con campi vuoti tranne `raw` e `message=raw`.
+fn parse_riga(line: &str) -> RigaLog {
+    let raw = line.to_string();
+
+    // Helper: estrai contenuto tra `[` e `]` consumando, ritorna (contenuto, resto)
+    fn estrai_bracket(s: &str) -> Option<(&str, &str)> {
+        let s = s.strip_prefix('[')?;
+        let end = s.find(']')?;
+        let (dentro, dopo) = s.split_at(end);
+        let dopo = dopo.strip_prefix(']').unwrap_or(dopo);
+        Some((dentro, dopo))
+    }
+
+    let mut resto = line;
+    let Some((data, r1)) = estrai_bracket(resto) else {
+        return RigaLog {
+            timestamp: String::new(),
+            level: String::new(),
+            target: String::new(),
+            message: raw.clone(),
+            raw,
+        };
+    };
+    resto = r1;
+    let Some((ora, r2)) = estrai_bracket(resto) else {
+        return RigaLog {
+            timestamp: String::new(),
+            level: String::new(),
+            target: String::new(),
+            message: raw.clone(),
+            raw,
+        };
+    };
+    resto = r2;
+    let Some((level, r3)) = estrai_bracket(resto) else {
+        return RigaLog {
+            timestamp: String::new(),
+            level: String::new(),
+            target: String::new(),
+            message: raw.clone(),
+            raw,
+        };
+    };
+    resto = r3;
+    let Some((target, r4)) = estrai_bracket(resto) else {
+        return RigaLog {
+            timestamp: format!("{data} {ora}"),
+            level: level.to_string(),
+            target: String::new(),
+            message: resto.trim().to_string(),
+            raw,
+        };
+    };
+
+    let message = r4.trim().to_string();
+    RigaLog {
+        timestamp: format!("{data} {ora}"),
+        level: level.to_string(),
+        target: target.to_string(),
+        message,
+        raw,
+    }
+}
+
+/// Legge le ultime `n` righe dal file `pap.log` corrente. `n` clampato
+/// a [1, 5000]. Per efficienza legge l'intero file (max 5MB per rotation
+/// strategy) e prende slice finale. Per file > 5MB usare i rotati.
+#[tauri::command]
+pub fn debug_log_leggi(
+    app: tauri::AppHandle,
+    n_righe: Option<usize>,
+) -> Result<Vec<RigaLog>, PapErrore> {
+    let n = n_righe.unwrap_or(DEFAULT_RIGHE).clamp(1, MAX_RIGHE);
+    let dir = log_dir(&app)?;
+    let path = dir.join(format!("{NOME_LOG}.log"));
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let contenuto = fs::read_to_string(&path)
+        .map_err(|e| PapErrore::Generico(format!("Lettura log fallita: {e}")))?;
+    let righe: Vec<&str> = contenuto.lines().collect();
+    let inizio = righe.len().saturating_sub(n);
+    let parsed: Vec<RigaLog> = righe[inizio..].iter().map(|l| parse_riga(l)).collect();
+    Ok(parsed)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -277,5 +386,44 @@ mod test {
     fn raccogli_vuoto_per_dir_inesistente() {
         let files = raccogli_file_log(Path::new("/nonexistent/dir/xyz"));
         assert!(files.is_empty());
+    }
+
+    #[test]
+    fn parse_riga_formato_standard() {
+        let line = "[2026-05-11][14:23:12.345 +02:00][INFO][pap_lib::editor] prompt salvato id=abc";
+        let r = parse_riga(line);
+        assert_eq!(r.timestamp, "2026-05-11 14:23:12.345 +02:00");
+        assert_eq!(r.level, "INFO");
+        assert_eq!(r.target, "pap_lib::editor");
+        assert_eq!(r.message, "prompt salvato id=abc");
+    }
+
+    #[test]
+    fn parse_riga_formato_3_brackets_solo() {
+        // Manca target bracket, parser deve estrarre level e mettere il resto in message
+        let line = "[2026-05-11][14:23:12][WARN] panic in module";
+        let r = parse_riga(line);
+        assert_eq!(r.level, "WARN");
+        assert!(r.target.is_empty());
+        assert_eq!(r.message, "panic in module");
+    }
+
+    #[test]
+    fn parse_riga_non_match_fallback_raw() {
+        let line = "  at module::function (src/file.rs:42)";
+        let r = parse_riga(line);
+        assert!(r.timestamp.is_empty());
+        assert!(r.level.is_empty());
+        assert_eq!(r.message, line);
+        assert_eq!(r.raw, line);
+    }
+
+    #[test]
+    fn parse_riga_messaggio_vuoto() {
+        let line = "[2026-05-11][14:23:12][ERROR][pap_lib::vault] ";
+        let r = parse_riga(line);
+        assert_eq!(r.level, "ERROR");
+        assert_eq!(r.target, "pap_lib::vault");
+        assert_eq!(r.message, "");
     }
 }
