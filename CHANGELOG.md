@@ -1,5 +1,26 @@
 # Changelog — Prompt a Porter
 
+## v0.8.8 — Hotfix CATASTROFICO: editor input bloccato (2026-05-11)
+
+> ⚠️ **v0.8.6 e v0.8.7 sono DIFETTOSE — non usare.** Aggiornare a v0.8.8.
+
+### Fix critico
+
+- **#170 editor input bloccato** (PR #175) — In v0.8.6/v0.8.7 era impossibile scrivere nel titolo o nel body editor: ogni keystroke veniva immediatamente cancellato. Root cause: la PR #168 (fix #167 data-loss) aveva introdotto in `DetailPane.svelte` un `$effect` su `promptId` che leggeva sincronamente le variabili reattive (`titolo`/`body`/`descrizione`/`dirty`/`dettaglio`) per snapshot. Svelte 5 traccia queste letture come dipendenze: ogni assegnazione (utente digita) ri-eseguiva l'effect → `caricaDettaglio` ricaricava dal DB sovrascrivendo l'input. Fix: `untrack()` da `svelte` per leggere le variabili di snapshot SENZA creare dipendenza reattiva. La sola vera dipendenza resta `promptId`. Comportamento del fix #167 mantenuto.
+
+### Numeri
+
+- **1 PR** mergiata in main (#175) + 1 PR di bump (questa)
+- 126 vitest pass invariati
+- 0 errori svelte-check
+- Severity HOTFIX: v0.8.6 e v0.8.7 marcate come ⚠️ DIFETTOSE sulla release page GitHub
+
+### Closes
+
+#170
+
+---
+
 ## v0.8.7 — Sezione Sviluppo + Debug log Telescope-like (2026-05-11)
 
 > Nuova **sezione Impostazioni → Sviluppo** con funzionalità diagnostica "Debug log": logger strutturato su file con rotazione, toggle ON/OFF runtime, viewer in-app con filtri, e export ZIP per allegare a issue GitHub. Architettura non reinventa la ruota: usa `tauri-plugin-log` ufficiale come backbone.
