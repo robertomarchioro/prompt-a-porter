@@ -3,6 +3,7 @@
 // visibilità Rust ordinaria.
 pub mod audit;
 pub mod cartelle;
+pub mod debug_log;
 pub mod editor;
 pub mod embeddings;
 pub mod embeddings_backfill;
@@ -473,6 +474,10 @@ pub fn run() {
             segnaposti_globali::globale_placeholder_aggiorna,
             segnaposti_globali::globale_placeholder_elimina,
             debug_log_imposta_livello,
+            debug_log::debug_log_info,
+            debug_log::debug_log_apri_cartella,
+            debug_log::debug_log_pulisci,
+            debug_log::debug_log_esporta_zip,
             registra_hotkey,
         ])
         .run(tauri::generate_context!())
