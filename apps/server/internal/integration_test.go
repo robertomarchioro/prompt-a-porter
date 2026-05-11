@@ -13,12 +13,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/auth"
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/database"
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/middleware"
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/models"
-	syncpkg "github.com/anthropics/prompt-a-porter/apps/server/internal/sync"
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/ws"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/auth"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/database"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/middleware"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/models"
+	syncpkg "github.com/robertomarchioro/prompt-a-porter/apps/server/internal/sync"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/ws"
 )
 
 const testSecret = "test-secret-32-bytes-long-enough"

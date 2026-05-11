@@ -10,8 +10,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/auth"
-	"github.com/anthropics/prompt-a-porter/apps/server/internal/models"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/auth"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/models"
 )
 
 var upgrader = websocket.Upgrader{
