@@ -138,19 +138,47 @@
   });
 
   $effect(() => {
-    // Issue #158: switch prompt con dirty del precedente → forza
-    // snapshot prima del cambio. Così la cronologia del vecchio
-    // prompt cattura le modifiche autosave non confermate.
-    if (
-      promptIdPrec !== null &&
-      promptIdPrec !== promptId &&
-      dirty &&
-      dettaglio
-    ) {
-      void salvaManuale();
-    }
-    promptIdPrec = promptId;
-    void caricaDettaglio(promptId);
+    // Issue #158 + #167: switch prompt con dirty del precedente → forza
+    // snapshot del PRECEDENTE prima di caricare il NUOVO. Cattura snapshot
+    // sincrono di tutte le variabili reattive del prompt che sta uscendo,
+    // così la chiamata `salvaConId` usa i valori corretti anche se le
+    // reattive nel frattempo sarebbero state riassegnate dal caricaDettaglio.
+    //
+    // Senza queste snapshot espliciti, `salva()` userebbe `promptId`/`body`
+    // già aggiornati al NUOVO prompt → A sovrascritto con body di B (issue #167).
+    const idPrec = promptIdPrec;
+    const idNuovo = promptId;
+    const dirtyPrec = dirty;
+    const dettaglioPrec = dettaglio;
+    const titoloPrec = titolo;
+    const descPrec = descrizione;
+    const bodyPrec = body;
+
+    promptIdPrec = idNuovo;
+
+    void (async () => {
+      if (
+        idPrec !== null &&
+        idPrec !== idNuovo &&
+        dirtyPrec &&
+        dettaglioPrec
+      ) {
+        // Cancel autosave pending del precedente: il save manuale lo include.
+        if (timerAutosave) {
+          clearTimeout(timerAutosave);
+          timerAutosave = undefined;
+        }
+        await salvaConId(
+          idPrec,
+          titoloPrec,
+          descPrec,
+          bodyPrec,
+          dettaglioPrec,
+          true,
+        );
+      }
+      await caricaDettaglio(idNuovo);
+    })();
   });
 
   function onGotoLine(e: Event): void {
@@ -202,22 +230,33 @@
    * autosave (no riga in PromptVersions). `creaSnapshot=true` = save
    * manuale dell'utente (crea versione in cronologia).
    *
+   * Issue #167: gli argomenti sono espliciti (no closure su reattive)
+   * per evitare race in cui `promptId` è già il nuovo ma `body`/`titolo`
+   * sono ancora del precedente (catastrofic data-loss).
+   *
    * Ritorna true se l'invoke è andato a buon fine, false altrimenti.
    */
-  async function salva(creaSnapshot: boolean): Promise<boolean> {
-    if (!titolo.trim() || !body.trim() || !dettaglio) return false;
+  async function salvaConId(
+    idTarget: string,
+    titoloTarget: string,
+    descTarget: string,
+    bodyTarget: string,
+    dettaglioTarget: PromptDettaglio,
+    creaSnapshot: boolean,
+  ): Promise<boolean> {
+    if (!titoloTarget.trim() || !bodyTarget.trim()) return false;
     statoSalvataggio = "salvando";
     try {
       await invoke("prompt_aggiorna", {
         dati: {
-          id: promptId,
-          titolo: titolo.trim(),
-          descrizione: descrizione.trim(),
-          body: body.trim(),
-          visibilita: dettaglio.visibilita,
-          tag_nomi: dettaglio.tags.map((t) => t.nome),
-          target_model: dettaglio.target_model || null,
-          folder_id: dettaglio.folder_id,
+          id: idTarget,
+          titolo: titoloTarget.trim(),
+          descrizione: descTarget.trim(),
+          body: bodyTarget.trim(),
+          visibilita: dettaglioTarget.visibilita,
+          tag_nomi: dettaglioTarget.tags.map((t) => t.nome),
+          target_model: dettaglioTarget.target_model || null,
+          folder_id: dettaglioTarget.folder_id,
           crea_snapshot: creaSnapshot,
         },
       });
@@ -237,6 +276,25 @@
     }
   }
 
+  /**
+   * Salva il prompt **corrente** (legge le reattive). Usare SOLO quando
+   * non c'è ambiguità su quale prompt si sta salvando — cioè dal flow
+   * utente diretto (autosave su input, click Salva). Per il caso "save
+   * del precedente al cambio prompt" usare invece `salvaConId()` con
+   * snapshot esplicito delle variabili (vedi $effect su promptId).
+   */
+  async function salva(creaSnapshot: boolean): Promise<boolean> {
+    if (!dettaglio) return false;
+    return salvaConId(
+      promptId,
+      titolo,
+      descrizione,
+      body,
+      dettaglio,
+      creaSnapshot,
+    );
+  }
+
   async function salvaBozza(): Promise<void> {
     await salva(false);
   }
@@ -244,7 +302,7 @@
   /**
    * Issue #158: salvataggio manuale dell'utente — crea snapshot in
    * PromptVersions, reset dirty. Triggato da bottone "Salva", da
-   * Compila se dirty, da switch prompt se dirty, da beforeunload.
+   * Compila se dirty, da beforeunload (caso prompt corrente).
    */
   async function salvaManuale(): Promise<boolean> {
     // Cancel autosave pending: il manuale lo include.
