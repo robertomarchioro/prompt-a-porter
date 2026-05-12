@@ -1,6 +1,10 @@
-# Todo Fase 5 — Ecosistema Enterprise
+# Todo Fase 5 — Ecosistema Enterprise (PaP v2.0)
 
-> **Deliverable finale**: tag release `v1.0.0` (uscita da beta).
+> **Deliverable finale**: tag release `v2.0.0` (apertura linea PaP Enterprise commerciale).
+>
+> **Aggiornamento 2026-05-12**: il prodotto è stato suddiviso in 2 SKU. PaP Personale arriva a `v1.0.0` con il recupero dei rinvii Fase 1-4 (vedi [`v1.0-personale.md`](./v1.0-personale.md)). PaP Enterprise diventa il deliverable di Fase 5 e arriva a `v2.0.0` — gate **domanda-driven**. Vedi [`v2.0-enterprise.md`](./v2.0-enterprise.md) per scope SKU e prerequisiti di apertura branch.
+>
+> Il vecchio target "uscita beta" è stato rimappato: la beta utente individuale chiude con `v1.0.0`, la beta enterprise chiude con `v2.0.0`.
 
 ## Direzione generale del progetto
 
