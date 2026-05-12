@@ -39,110 +39,125 @@ Tutto quanto sopra è v2.0, gate domanda-driven. Non va comunicato come "in arri
 - Utenti casuali che usano ChatGPT 1 volta a settimana.
 
 ## Brand identity (riferimenti)
-[Rivedi questo paragrafo: quello che voglio fare è spingere sul gioco di parole "Prompt-a-porter"->"Pret-a-porter" quindi anche la landing page deve strizzare l'occhiolino al mondo della moda]
-L'applicazione usa già un design system maturo. La landing dovrebbe ereditare il **tono visivo** del client desktop per coerenza:
 
-- **Palette**: 3 toni neutri configurabili (`zinc`, `slate`, `stone`). Default `zinc`. Accento "team" (blu intenso) per CTA primari.
-- **Tipografia**: Inter (UI) + JetBrains Mono (codice/snippet).
-- **Tono**: tecnico ma accessibile. Mai "magico" (no "rivoluziona la tua produttività", no "potenzia con l'AI"). Mai marketing-speak gonfio.
-- **Voce**: italiano corretto, registro medio, no anglismi gratuiti ("workflow" sì, "use case" sì; "leverage" no, "skill set" no).
+Il nome "Prompt a Porter" è un omaggio dichiarato al **prêt-à-porter**: prompt pronti da indossare, cuciti su misura. La landing deve **onorare il gioco di parole** con un mood editoriale che strizza l'occhio al mondo della moda — non come parodia, ma come tono.
+
+**Mood**: rivista di moda contemporanea (think Wallpaper, COS Magazine, Aesop website). Pulito, ariosa, white space generoso, dettagli tipografici raffinati. Il prodotto è tecnico ma si presenta come una **collezione curata**, non come un tool.
+
+**Vocabolario suggerito** (usare con misura, mai forzato): _collezione · guardaroba · cassetto · armadio · sartoria · atelier · capi · vetrina · su misura · cuciti · tagli · stagione · indossare · fondo del cassetto_.
+
+**Tipografia**: indicazione direzionale a Claude Design — serif editoriale per i titoli (es. Fraunces, Tiempos, GT Sectra, Newsreader) abbinato a sans-serif pulito per il body (Inter, IBM Plex Sans). Monospace per snippet (JetBrains Mono). La scelta finale è di Claude Design.
+
+**Palette**: **aperta** — decide Claude Design senza vincoli di coerenza con il client desktop. Il mood di riferimento è "fashion brand minimalista" (nero profondo + neutri caldi + 1 accent), non "SaaS techno". La landing è la **vetrina**, può permettersi una voce visiva propria.
+
+**Tono**: **ironico e auto-consapevole**. Diciamo cose serie con leggerezza. Mai marketing-speak gonfio ("rivoluziona la tua produttività"), mai techno-speak rigido ("leverage your AI stack"). Riferimento: come una rivista di moda parla di vestiti — con autorevolezza ma con humor.
+
+**Voce**: italiano corretto, registro medio-alto editoriale. Anglismi solo dove inevitabili nel dominio tecnico (prompt, software, file). Niente "leverage", "skill set", "use case" tradotti goffi. Niente esclamativi gratuiti.
 
 ## Struttura proposta (8 sezioni)
-[Rivedi questo capitolo: quello che voglio fare è spingere sul gioco di parole "Prompt-a-porter"->"Pret-a-porter" quindi anche la landing page deve strizzare l'occhiolino al mondo della moda]
+
+Tutte le sezioni applicano il tone-of-voice editoriale fashion definito sopra. Il messaggio funzionale resta invariato — quello che cambia è la cornice.
 
 ### 1. Hero
 
 **Titolo (h1)**: Prompt a Porter
-**Sottotitolo**: La tua libreria di prompt AI, sul tuo computer. Open source.
-**Pitch breve (1 frase)**: Smetti di perdere i prompt nei file di testo. Versionali, falli evolvere, riusali con i segnaposti — tutto in locale, niente cloud obbligatorio.
+**Sottotitolo**: La tua collezione di prompt AI. Pronti da indossare.
+**Pitch breve (1 frase)**: Versionali, riusali, cuciscili su misura con i segnaposti. Tutto in locale, niente cloud obbligatorio.
 
 **CTA primario**: `Scarica per Windows` (link diretto all'asset portable .zip Latest release)
 **CTA secondario**: `Vedi su GitHub` (link al repo)
 
-**Visual**: screenshot del client (Libreria + DetailPane + un prompt visibile con segnaposti evidenziati) o mockup pulito.
+**Visual**: screenshot del client (Libreria + DetailPane + un prompt visibile con segnaposti evidenziati) o mockup pulito, presentato in stile editoriale (es. lookbook con white space generoso, non screenshot product-marketing standard).
 
 ### 2. Il problema
 
-**Titolo**: I tuoi prompt valgono. Ma probabilmente sono ovunque.
+**Titolo**: I tuoi prompt valgono. Ma sono nel fondo del cassetto.
 **Body**:
 > File di testo sparsi. Note in app diverse. Screenshot di conversazioni. Prompt copiati e incollati che ogni volta vanno adattati a mano. Quando trovi quello buono, finisce nel buco nero degli appunti.
 >
-> Prompt a Porter è la tua libreria personale: prompts come asset di prima classe, non come testo casuale.
+> Prompt a Porter è il tuo guardaroba: ogni prompt al suo posto, pronto da indossare quando serve. Senza ricuciture, senza ricordarsi dove l'avevi lasciato.
 
-### 3. Le capability (4-5 card)
-[buono, tieni questi contenuti contestualizzandoli alla struttura nuova]
-Ogni card ha icona, titolo, 1-2 righe di descrizione.
+### 3. La collezione (4-5 card capability)
 
-**Card 1 — Versiona ogni modifica**
-Ogni save crea una versione. Diff stile git. Torna indietro quando l'ultimo "miglioramento" ha rotto tutto.
+Le **capacità del prodotto** presentate come capi di una collezione. Ogni card ha icona, titolo (con flair fashion), 1-2 righe di descrizione funzionale (chiara, tecnica, niente forzature).
 
-**Card 2 — Segnaposti riutilizzabili**
-`{{nome}}` per variabili ad-hoc, `{{globale autore}}` per valori che vivono nel vault. Il prompt diventa template.
+**Card 1 — Ogni modifica, in vetrina**
+Ogni save crea una versione. Diff stile git. Torna indietro quando l'ultima modifica ha rovinato tutto.
 
-**Card 3 — Ricerca semantica locale**
+**Card 2 — Capi su misura**
+`{{nome}}` per variabili ad-hoc, `{{globale autore}}` per valori che vivono nel vault. Il prompt diventa template, il template diventa abito su misura.
+
+**Card 3 — Trova quello giusto. Anche al buio dell'armadio.**
 Cerca per significato, non solo per parola. Modello ONNX MiniLM embedded — niente API, niente cloud, niente quote.
 
-**Card 4 — Varianti e A/B test**
-Crea variazioni dello stesso prompt, confrontale fianco a fianco, scegli la migliore con i golden test (regression testing sui prompt).
+**Card 4 — Prova prima di comprare**
+Crea varianti dello stesso prompt, confrontale fianco a fianco, scegli la migliore con i golden test (regression testing sui prompt).
 
-**Card 5 — Prompt componibili**
-`{{import "altro-prompt"}}` per riusare blocchi. Definisci una volta il tono, importalo in 10 prompt diversi.
+**Card 5 — Lo stesso tono, in tagli diversi**
+`{{import "altro-prompt"}}` per riusare blocchi. Definisci una volta lo stile, riusalo in dieci prompt diversi. Sartoria modulare.
 
-### 4. Locale, davvero
+### 4. Il guardaroba resta a casa tua.
 
-**Titolo**: I dati restano sul tuo computer.
+**Titolo**: Il guardaroba resta a casa tua.
 **Body**:
 > Vault SQLite cifrato AES-256 con master password tua. Modello AI eseguito on-device. Sync server è **opzionale** — se non lo configuri, PaP non parla con internet.
 >
-> Open source AGPL 3.0: chiunque può ispezionare il codice. La privacy non è una feature opt-in, è il default.
+> Open source AGPL 3.0: chiunque può ispezionare il codice. La privacy non è una feature opt-in, è il taglio di partenza.
 
-Visual: schema architettura semplificato (cassaforte locale + cervello on-device + freccia sbarrata verso cloud).
+Visual: schema architettura semplificato (cassaforte locale + cervello on-device + freccia sbarrata verso cloud), trattato come illustrazione editoriale, non come "diagramma tecnico SaaS".
 
-### 5. Per chi è (3 persone tipo)
+### 5. Tre clienti tipo
 
-Mini-card con foto-style illustrazione + scenario in 2 frasi:
+**Titolo**: A chi sta bene Prompt a Porter.
 
-**Lo sviluppatore**: usa Claude/GPT 30 volte al giorno per code review, refactor, documentazione. Vuole template ripetibili e versionabili come il codice.
+Mini-card con illustrazione editoriale (no foto stock) + scenario in 2 frasi. Tono leggero, riconoscibile.
 
-**Il copywriter**: ha 50 prompt per email marketing, brief creativi, social. Ogni cliente è una variante. Vuole non riscriverli da zero ogni volta.
+**Lo sviluppatore**: usa Claude/GPT trenta volte al giorno per code review, refactor, documentazione. Vuole template ripetibili e versionabili come il codice. Si rifiuta di chiamarli "asset".
 
-**Il ricercatore**: prepara prompt sperimentali per i suoi paper. Vuole confrontare 3 versioni dello stesso prompt e capire quale dà output migliori.
+**Il copywriter**: ha cinquanta prompt che si chiamano `email_v3_FINAL_FINAL.txt`. Ogni cliente è una variante. Vuole smettere di riscrivere lo stesso brief da zero ogni volta.
 
-### 6. Differenziatori (vs alternative)
-[non tiriamocela e non prendiamoci troppo sul serio, fai solo differenza con file .txt]
-**Titolo**: Cosa lo rende diverso da Notion / un file Markdown / un altro tool.
+**Il ricercatore**: prepara prompt sperimentali per i suoi paper. Vuole confrontare tre versioni dello stesso prompt e capire quale dà output migliori. Senza diventare matto.
 
-| | PaP | Notion | File .md | Tool cloud |
-|---|---|---|---|---|
-| Locale-first | ✅ | ❌ | ✅ | ❌ |
-| Cifratura vault | ✅ | ❌ | ❌ | varia |
-| Versionamento auto | ✅ | git su .md | git | varia |
-| Segnaposti compilabili | ✅ | ❌ | ❌ | ✅ |
-| Ricerca semantica | ✅ on-device | cloud | grep | cloud |
-| Regression testing | ✅ | ❌ | ❌ | varia |
-| Open source AGPL | ✅ | ❌ | N/A | varia |
-| Zero costo continuativo | ✅ | freemium | ✅ | abbon. |
+### 6. PaP vs. un file `.txt`
 
-### 7. Installazione
+**Titolo**: Perché non basta un file `.txt`.
+**Sottotitolo**: Lo abbiamo provato anche noi. Davvero.
 
-**Titolo**: Inizia in 2 minuti.
+Tabella a 2 colonne, tono ironico ma con contenuto. Niente confronti gonfi con Notion o "tool cloud generici": il vero competitor di chi inizia è il file di testo.
+
+| | Prompt a Porter | Un file `.txt` |
+|---|---|---|
+| Versionamento | Diff stile git, ogni save una versione | `prompt-v2-FINAL.txt`, `prompt-v2-FINAL-davvero.txt`, `prompt-v2-FINAL-questo-funziona.txt` |
+| Ricerca | Per significato, locale, on-device | Cmd+F e una preghiera |
+| Segnaposti | `{{nome}}`, compilati al volo | Cerca-e-sostituisci a mano |
+| Varianti | A/B con confronto fianco a fianco | Tre file diversi che dimentichi quale era quello buono |
+| Riuso tra prompt | `{{import "blocco"}}` | Copia-incolla, scordandoti l'aggiornamento |
+| Sicurezza | Vault SQLite cifrato AES-256 | "Documenti/prompt/" in chiaro |
+| Sync (opzionale) | Server tuo o niente | Te lo emaili da solo. Di nuovo. |
+
+> Un file `.txt` resta una scelta legittima. Quando smetti di trovarlo, sai dove siamo.
+
+### 7. Provare un abito
+
+**Titolo**: In due minuti. Come provare un abito.
+
 **Sotto-sezione**: Windows
 1. Scarica `Prompt-a-Porter-portable-windows-x64-vX.Y.Z.zip` dalla release Latest.
-2. Estrai dove vuoi.
-3. Esegui `Prompt-a-Porter.exe`. Niente installazione, niente UAC.
+2. Estrai dove preferisci.
+3. Esegui `Prompt-a-Porter.exe`. Niente installazione, niente UAC, niente domande.
 
 **Sotto-sezione**: Linux / macOS
 Build automatiche disponibili dalla [pagina release GitHub](https://github.com/robertomarchioro/prompt-a-porter/releases/latest).
 
-**Box informativo**: Auto-update silenzioso in arrivo con v1.0 (firmato Authenticode).
+**Box informativo**: Auto-update silenzioso in arrivo con v1.0 (firmato Authenticode). Una volta dentro l'armadio, gli aggiornamenti arrivano da soli.
 
-### 8. Open source
+### 8. Atelier aperto
 
-**Titolo**: Codice aperto. Roadmap pubblica. Issue aperte.
+**Titolo**: Codice aperto. Roadmap pubblica. Le cuciture si vedono.
 **Body**:
-> PaP è open source con licenza AGPL 3.0. Codice su GitHub: contribuire è semplice, le issue documentano lo stato del progetto, la roadmap è pubblica.
+> PaP è open source con licenza AGPL 3.0. Il codice è su GitHub: contribuire è semplice, le issue documentano lo stato del progetto, la roadmap è pubblica.
 >
-> Niente telemetria. Niente account obbligatorio. Niente dark pattern.
+> Niente telemetria. Niente account obbligatorio. Niente dark pattern. Il modello è in vetrina.
 
 **CTA**: `⭐ Vedi su GitHub` + link.
 
@@ -152,31 +167,46 @@ Build automatiche disponibili dalla [pagina release GitHub](https://github.com/r
 - Copyright: Roberto Marchioro · {anno}
 - Nessun "Privacy Policy" complesso perché non raccogliamo dati — solo un disclaimer breve: "Questa pagina usa Matomo self-hosted per analytics anonimizzati. Nessun cookie di terze parti. Nessun dato condiviso."
 
-## Tono ed esempi di copy da NON usare
+## Tono ed esempi di copy
+
+### Da NON usare
 
 ❌ "Rivoluziona il tuo modo di lavorare con l'AI"
 ❌ "Sblocca la produttività"
 ❌ "Sfrutta la potenza dei Large Language Models"
 ❌ "Powered by AI" come tag generico
 ❌ "Easy to use" generico — sostituire con esempio concreto
+❌ Anglismi gonfi: "leverage", "skill set", "use case" tradotti goffi
+❌ Esclamativi gratuiti, emoji marketing, "🚀✨💯"
+❌ Riferimenti moda forzati: "PaP è il Chanel dei prompt" (cringe garantito)
 
-✅ "Versiona, confronta, riusa. Localmente."
-✅ "I tuoi prompt restano sul tuo disco."
-✅ "Vault cifrato AES-256, modello ONNX on-device."
+### Da usare
+
+✅ "La tua collezione di prompt. Pronti da indossare."
+✅ "Versiona, confronta, riusa. In locale."
+✅ "Il guardaroba resta a casa tua."
+✅ "Cmd+F e una preghiera." (per descrivere alternative)
+✅ "Vault cifrato AES-256, modello ONNX on-device." (i fatti tecnici vanno detti dritti, senza svestirli)
+✅ "Atelier aperto. Le cuciture si vedono."
 ✅ "Codice aperto. Nessun account."
+
+### Regola d'oro
+
+I riferimenti moda **adornano**, non sostituiscono. Ogni claim fashion deve avere accanto (sopra o sotto) un'**informazione tecnica concreta**. Se togli il flair fashion, il copy deve ancora funzionare come comunicazione di prodotto.
 
 ## Asset richiesti a Claude Design
 
 L'handoff a Claude Design deve produrre:
 
-1. **Mockup high-fidelity** per le 8 sezioni sopra (desktop 1440px + mobile 375px).
-2. **Componenti riutilizzabili**: card capability, card persona, tabella confronto, hero, CTA button (primario + secondario).
-3. **Palette tonale** scelta (zinc/slate/stone) + variazioni dark/light.
-4. **Tipografia** definita (sizes h1-h6, body, mono).
-5. **Screenshot del prodotto** preparati: Libreria con prompt visibili, DetailPane con segnaposti, vista Confronto varianti, Diagnosi linting.
-6. **Icona/logo** della pagina (può riusare l'icona esistente del client `Prompt-a-Porter.exe`).
+1. **Mockup high-fidelity** per le 8 sezioni sopra (desktop 1440px + mobile 375px), con trattamento **editoriale fashion** (white space generoso, layout magazine, dettagli tipografici curati).
+2. **Componenti riutilizzabili**: card capability (con flair fashion), card persona (illustrazione editoriale no-stock), tabella confronto PaP vs `.txt`, hero, CTA button (primario + secondario).
+3. **Palette** proposta dal designer — direzione: fashion brand minimalista (nero profondo + neutri caldi + 1 accent caldo tipo terracotta/ocra/ruggine). Variazioni dark/light se applicabile.
+4. **Tipografia**: serif editoriale per titoli (Fraunces / Tiempos / GT Sectra / Newsreader o equivalente) + sans-serif per body (Inter / IBM Plex Sans) + monospace per snippet (JetBrains Mono). Sizes h1-h6, body, mono definiti.
+5. **Screenshot del prodotto** preparati e trattati: Libreria con prompt visibili, DetailPane con segnaposti, vista Confronto varianti, Diagnosi linting. Trattati con cornice editoriale (es. dispositivo stilizzato, ombre soft, niente browser chrome generico).
+6. **Icona/logo** della pagina (può riusare l'icona esistente del client `Prompt-a-Porter.exe` o reinterpretarla in chiave fashion).
 7. **Favicon** + `apple-touch-icon` 180×180.
-8. **Meta OG image** 1200×630 per anteprime social.
+8. **Meta OG image** 1200×630 per anteprime social, treated come copertina di rivista.
+9. **Illustrazioni editoriali** per le 3 persone tipo della sezione 5 (no foto stock, no clipart). Stile coerente col mood editoriale fashion.
 
 ## Tracciamento progetto
 
