@@ -2,10 +2,11 @@
 
 > **Destinatario**: Claude Design (o designer umano) per la fase di ideazione grafica.
 > **Obiettivo**: fornire tutto il copy, struttura, audience e CTA necessari per progettare la landing senza dover ri-chiedere.
+> **Nome del prodotto**: Prompt-a-porter
 
 ## Frame
 
-**Cosa promuoviamo**: PaP **Personale** (single user, local-first). Niente teaser Enterprise — quando v2.0 esisterà, faremo refresh della landing.
+**Cosa promuoviamo**: versione di Prompt-a-porter **Personale** (single user, local-first). Niente teaser Enterprise — quando v2.0 esisterà, faremo refresh della landing.
 
 **Cosa NON promettere**:
 - Multi-utente / workspace team
@@ -27,6 +28,7 @@ Tutto quanto sopra è v2.0, gate domanda-driven. Non va comunicato come "in arri
 - Professionisti che lavorano quotidianamente con LLM (Claude, GPT, Gemini) e accumulano prompt sparsi tra appunti, note, screenshot.
 - Sviluppatori che usano AI in workflow (code review, documentazione, debugging) e vogliono trattare i prompt come asset versionabili.
 - Creatori di contenuti (copywriter, marketer, formatori) che riutilizzano template di prompt con variazioni.
+- Appassionati che iniziano a usare più sitemi LLM per passione, divertimento o studio
 
 **Secondaria**:
 - Power user di Notion/Obsidian che cercano un'alternativa specializzata per i prompt.
@@ -37,7 +39,7 @@ Tutto quanto sopra è v2.0, gate domanda-driven. Non va comunicato come "in arri
 - Utenti casuali che usano ChatGPT 1 volta a settimana.
 
 ## Brand identity (riferimenti)
-
+[Rivedi questo paragrafo: quello che voglio fare è spingere sul gioco di parole "Prompt-a-porter"->"Pret-a-porter" quindi anche la landing page deve strizzare l'occhiolino al mondo della moda]
 L'applicazione usa già un design system maturo. La landing dovrebbe ereditare il **tono visivo** del client desktop per coerenza:
 
 - **Palette**: 3 toni neutri configurabili (`zinc`, `slate`, `stone`). Default `zinc`. Accento "team" (blu intenso) per CTA primari.
@@ -46,6 +48,7 @@ L'applicazione usa già un design system maturo. La landing dovrebbe ereditare i
 - **Voce**: italiano corretto, registro medio, no anglismi gratuiti ("workflow" sì, "use case" sì; "leverage" no, "skill set" no).
 
 ## Struttura proposta (8 sezioni)
+[Rivedi questo capitolo: quello che voglio fare è spingere sul gioco di parole "Prompt-a-porter"->"Pret-a-porter" quindi anche la landing page deve strizzare l'occhiolino al mondo della moda]
 
 ### 1. Hero
 
@@ -67,7 +70,7 @@ L'applicazione usa già un design system maturo. La landing dovrebbe ereditare i
 > Prompt a Porter è la tua libreria personale: prompts come asset di prima classe, non come testo casuale.
 
 ### 3. Le capability (4-5 card)
-
+[buono, tieni questi contenuti contestualizzandoli alla struttura nuova]
 Ogni card ha icona, titolo, 1-2 righe di descrizione.
 
 **Card 1 — Versiona ogni modifica**
@@ -106,7 +109,7 @@ Mini-card con foto-style illustrazione + scenario in 2 frasi:
 **Il ricercatore**: prepara prompt sperimentali per i suoi paper. Vuole confrontare 3 versioni dello stesso prompt e capire quale dà output migliori.
 
 ### 6. Differenziatori (vs alternative)
-
+[non tiriamocela e non prendiamoci troppo sul serio, fai solo differenza con file .txt]
 **Titolo**: Cosa lo rende diverso da Notion / un file Markdown / un altro tool.
 
 | | PaP | Notion | File .md | Tool cloud |
