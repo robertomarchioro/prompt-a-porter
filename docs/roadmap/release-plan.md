@@ -1,8 +1,8 @@
 # Release plan — Timeline completa
 
-> **Fonte autorevole** della pianificazione di rilascio. Una sola tabella per tutta la vita del progetto, dalla v0.1 alla v1.0+. Aggiornato a ogni tag o decisione di rinvio.
+> **Fonte autorevole** della pianificazione di rilascio. Una sola tabella per tutta la vita del progetto, dalla v0.1 alla v2.0+. Aggiornato a ogni tag o decisione di rinvio.
 >
-> **Aggiornato al**: 2026-05-07 (Fase 4 client-first track chiusa, tag `v0.4.0` in arrivo dopo Step 9-10).
+> **Aggiornato al**: 2026-05-12 (post v0.8.8 hotfix + adozione strategia SKU v1.0/v2.0).
 
 ## Concetti
 
@@ -13,9 +13,29 @@ Distinguiamo deliberatamente:
   - chiudere una fase (es. `v0.1.0-fase1` chiude Fase 1);
   - chiudere parzialmente una fase con sblocchi rinviati (es. `v0.2.0-foundations` = 6/8 step di Fase 2);
   - essere un **patch line** (es. `v0.2.x` = fix + step deferred di Fase 2);
-  - essere un **rilascio speciale** che non chiude alcuna fase ma paga debito o fa polish trasversale (es. `v0.5.0`, `v0.6.0` previsti).
+  - essere un **rilascio speciale** che non chiude alcuna fase ma paga debito o fa polish trasversale (es. `v0.5.0`, `v0.6.0` già rilasciati).
+- **SKU** = linea di prodotto distinta con audience e gating diverso. PaP ha 2 SKU pianificati:
+  - **PaP Personale** → target `v1.0.0` GA. Single-user, local-first. Scope chiuso in [`v1.0-personale.md`](./v1.0-personale.md).
+  - **PaP Enterprise** → target `v2.0.0` GA. Multi-user, server-driven. **Gate domanda-driven**, nessuna data finché non c'è cliente reale. Scope in [`v2.0-enterprise.md`](./v2.0-enterprise.md) + dettaglio tecnico in [`fase-5-enterprise.md`](./fase-5-enterprise.md).
 
 Una fase può ospitare 0..N rilasci; un rilascio può attraversare 0..N fasi.
+
+## Strategia SKU v1.0 / v2.0
+
+Adottata il 2026-05-12. PaP si separa in due linee di rilascio:
+
+| Linea | Scope | Status oggi | Prossimo tag |
+|---|---|---|---|
+| **Personale (v1.x)** | Recupero rinvii Fase 1-4 + auto-update + polish UX/docs/coverage | 90% completo (v0.8.8 Latest) | `v0.9.x` patch line → `v1.0.0` GA |
+| **Enterprise (v2.x)** | Fase 5 Step 0a-8 (server cross-OS, SSO, E2E, web, extension, etc.) | Non avviato (gate domanda-driven) | Nessuno finché non c'è cliente reale; consentito stream design parallelo |
+
+**Sequenzialità macro**: v1.0 prima, v2.0 dopo. Vietato parallelo "due agenti su codice di produzione" prima di v1.0 chiusa (rischio sovra-ingegnerizzazione + conflitti su file condivisi come `lib.rs`, `ImpostazioniModal.svelte`, migration numbering).
+
+**Parallelismo permesso**:
+- *Dentro* v1.0: agenti su layer disgiunti (UI / auto-update / docs / coverage). Vedi [`v1.0-personale.md`](./v1.0-personale.md) §"Strategia di branching".
+- *Stream design v2.0*: un agente può produrre design doc, ADR, spike (non in `apps/`) mentre v1.0 procede. Vedi [`v2.0-enterprise.md`](./v2.0-enterprise.md) §"Stream design parallelo a v1.0".
+
+**Post-v2.0 GA**: due binari (`pap` personal + `pap-enterprise`) da single codebase con feature flag Cargo + dynamic import Svelte. CI build matrix raddoppiata. Rilasci di pari passo (stesso giorno entrambi i binari).
 
 ## Timeline
 
@@ -25,88 +45,36 @@ Una fase può ospitare 0..N rilasci; un rilascio può attraversare 0..N fasi.
 | `v0.2.0-foundations` | 2026-05-04 | fase (parziale) | Foundations & Distribuzione — AGPL 3.0, MCP, CLI, versioning, audit, import/export. Step 5 → patch line, Step 6 → Fase 5 | ✅ rilasciato (6/8 step controllabili) | [`fase-2-foundations.md`](./fase-2-foundations.md) |
 | `v0.2.1` | 2026-05-05 | patch + quick wins | Quick wins anticipati di Fase 3 (modello target, Insight, cartelle) + portable Windows agli asset | ✅ rilasciato | [`fase-2-foundations.md`](./fase-2-foundations.md) (patch line) |
 | `v0.2.1-fix1` | 2026-05-05 | patch fix | Bug 1 vault loop portable + bug 2 parziale tray icon | ✅ prerelease | (fix branch) |
-| `v0.2.x` | TBD | patch line | **Step 5 — Auto-update silenzioso** (NSIS per-user, Tauri Updater, Authenticode signing) | 🔒 bloccato cert Certum (KYC in corso) | [`fase-2-foundations.md`](./fase-2-foundations.md) Step 5 deferred |
+| `v0.2.x` | TBD | patch line | **Step 5 — Auto-update silenzioso** (NSIS per-user, Tauri Updater, Authenticode signing) | 🔒 bloccato cert Certum (KYC in corso) | [`fase-2-foundations.md`](./fase-2-foundations.md) Step 5 deferred — confluisce in v1.0 (M1) |
 | `v0.3.0` | 2026-05-06 | fase | Intelligenza & Authoring — embeddings ONNX locali, ricerca ibrida FTS+vettoriale, linting, cartelle, prompt componibili `{{import}}`, statistiche, idle-unload | ✅ rilasciato (11/11 step) | [`fase-3-intelligence.md`](./fase-3-intelligence.md) |
-| `v0.4.0` | TBD | fase (parziale) | Workflow Avanzati & Quality Assurance — golden+regression (differenziatore), varianti, diff, confronto, fork, rating. Step 6 (approval) e 7 (RBAC cartelle) → Fase 5 | 🚧 client-first chiusa (6/8 step), pending Step 9 quality gate + Step 10 doc | [`fase-4-workflow.md`](./fase-4-workflow.md) |
-| **`v0.5.0`** | TBD | **rilascio speciale** | **Recupero ritardi** — paga il debito accumulato in v0.1-v0.4 (item da `rinvii.md`). Stabilizzazione pre-1.0 | 📋 pianificata | sezione [Rilascio v0.5.0](#rilascio-v050--recupero-ritardi) |
-| **`v0.6.0`** | TBD | **rilascio speciale** | **Pulizia interfaccia grafica** — pass cosmetico cross-cutting su tutte le superfici, niente nuove capability | 📋 pianificata | sezione [Rilascio v0.6.0](#rilascio-v060--pulizia-interfaccia-grafica) |
-| `v1.0.0` | TBD | fase | Ecosistema Enterprise — SSO, E2E encryption, server cross-OS senza Docker, web app, browser extension. Uscita beta | 📋 pianificata, domanda-driven | [`fase-5-enterprise.md`](./fase-5-enterprise.md) |
+| `v0.4.0` | 2026-05-07 | fase (parziale) | Workflow Avanzati & Quality Assurance — golden+regression, varianti, diff, confronto, fork, rating. Step 6+7 → Fase 5/v2.0 | ✅ rilasciato (6/8 step client-first) | [`fase-4-workflow.md`](./fase-4-workflow.md) |
+| `v0.5.0` | 2026-05-07 | rilascio speciale | Quick wins UX (6 PR) + 5° provider AI Gemini + 351 test backend | ✅ rilasciato | memoria `sprint_v05_chiuso.md` |
+| `v0.6.0` | 2026-05-07 | rilascio speciale | Hardening + quick wins (6 PR) + 382 test backend, coverage 71% | ✅ rilasciato | memoria `sprint_v06_chiuso.md` |
+| `v0.7.0` | 2026-05-08 | rilascio speciale | Refactor coverage + import/cartelle quick wins (6 PR) + 416 test, coverage 74% | ✅ rilasciato | memoria `sprint_v07_chiuso.md` |
+| `v0.8.0` | 2026-05-09 | redesign | Redesign UI completo F0-F11 (17 PR) — sezione Modale, Onboarding, Shell, a11y WCAG 2.1 AA | ✅ rilasciato | memoria `release_v080.md` |
+| `v0.8.1`–`v0.8.4` | 2026-05-09/10 | patch line | Bugfix Win11 multi-issue + retry release CI | ✅ rilasciati | CHANGELOG |
+| `v0.8.5` | 2026-05-10 | patch + feature | Editor UX + tray fix + segnaposti globali `{{globale nome}}` | ✅ rilasciato (Draft GitHub) | memoria `sprint_v085_chiuso.md` |
+| `v0.8.6` | 2026-05-10 | ⚠️ DIFETTOSA | Fix data-loss switch prompt + hardening Go 1.25.10 + chi v5.2.5 — **regressione editor input** | ⚠️ Draft, banner di warning | release notes |
+| `v0.8.7` | 2026-05-10 | ⚠️ DIFETTOSA | Sezione Sviluppo + Debug log Telescope-like — **regressione editor input ereditata** | ⚠️ Draft, banner di warning | memoria `sprint_v087_chiuso.md` |
+| `v0.8.8` | 2026-05-11 | hotfix | Fix #170 editor input bloccato (`untrack()` su `$effect`) | ✅ rilasciato + Latest published | CHANGELOG v0.8.8 |
+| `v0.9.x` | TBD | patch line | **Recupero finale verso v1.0** — pulizia a11y, sub-step Fase 4, Markdown import, import scopati, doppia vista editor, docs utente, coverage 80%/70% | 🚧 pianificata | [`v1.0-personale.md`](./v1.0-personale.md) M1-M8 |
+| **`v1.0.0`** | TBD (~mese 3) | **fase + SKU GA** | **PaP Personale GA** — uscita beta lato utente individuale. Quality gate completo. | 📋 pianificata | [`v1.0-personale.md`](./v1.0-personale.md) |
+| `v1.x.x` | post-1.0 | patch line | Patch + minor feature PaP Personale. Vive su `main` (single codebase con `v2.x`) | 📋 futuro | TBD |
+| **`v2.0.0`** | TBD (domanda-driven) | **fase + SKU GA** | **PaP Enterprise GA** — Server cross-OS + SSO + RBAC + Webhook + API pubblica. Gate cliente reale | 🟡 in attesa di domanda | [`v2.0-enterprise.md`](./v2.0-enterprise.md) + [`fase-5-enterprise.md`](./fase-5-enterprise.md) |
+| `v2.x.x` | post-2.0 | patch line | Patch + minor feature PaP Enterprise | 📋 futuro | TBD |
 
 ---
 
-## Rilascio v0.5.0 — Recupero ritardi
+## Rilasci speciali archiviati
 
-> **Tipo**: rilascio speciale, non lega a una singola fase.
-> **Scope**: pagamento del debito accumulato durante Fase 1-4. Niente nuove feature, solo *graduazione* degli item che fino a quel momento sono in `rinvii.md` con marker 📋 (sub-step) o 🎨 (polish).
-> **Quando**: dopo Fase 4 (`v0.4.0`), prima di Fase 5. È una porta di stabilizzazione.
+Le sezioni v0.5.0 (recupero ritardi) e v0.6.0 (pulizia UI) qui originariamente pianificate sono state shippate con scope diverso da quello previsto:
 
-### Criteri di ingresso
+- **v0.5.0** (2026-05-07) → quick wins UX + 5° provider AI Gemini (6 PR). Vedi memoria `sprint_v05_chiuso.md`.
+- **v0.6.0** (2026-05-07) → hardening backend + quick wins. Vedi memoria `sprint_v06_chiuso.md`.
+- **v0.7.0** (2026-05-08) → refactor coverage + import/cartelle quick wins. Vedi memoria `sprint_v07_chiuso.md`.
+- **v0.8.0** (2026-05-09) → redesign UI completo F0-F11 (17 PR) — la pulizia UI che era prevista in v0.6.0 è stata fatta qui, in forma più ambiziosa.
 
-Un item entra in v0.5.0 se soddisfa **tutte** queste condizioni:
-1. È in [`rinvii.md`](./rinvii.md) con marker 📋 o 🎨 (no 🔒 esterni che restano bloccati).
-2. Il blocker tecnico/di dipendenza è caduto (es. è arrivata la fase prerequisita).
-3. Vale la pena pagarlo prima di v1.0.0 (cioè ha utilizzo reale, non è speculativo).
-
-Item con marker 🔒 (cert Certum, Apple Developer) restano nel patch line `v0.2.x` per quando atterrano i rispettivi sblocchi — non vengono spostati a v0.5.
-
-### Pool di candidati
-
-Il pool è costruito dinamicamente da `rinvii.md`. Al momento dell'apertura del branch `feat/v0.5-recupero` si fa un audit completo e si selezionano i candidati. Esempi probabili (da rinvii.md attuale):
-
-- **Sub-step di feature già atterrate** (📋): markdown import/export, custom free-text target model, statistiche per cartella + per autore, MCP HTTP/SSE, MCP `pap_create_draft`, CLI `import`/`export`, esporta singola cartella, **riload automatico Session post idle-unload (Fase 3)**, **inline marker CodeMirror sui lint issue (Fase 3)**, **sintassi import `with k=v` e `version=N` (Fase 3)**, **editor doppia vista Sorgente/Compilato + hover preview + ctrl+click navigazione (Fase 3)**, **cross-prompt linting "chi importa X" (Fase 3)**, **Markdown export con front-matter `imports` (Fase 3)**.
-- **Coverage gap** chiusi prima di v1.0.0: TS client `vitest --coverage`, server 70%, MCP unit test minimi, **client Rust 60% → 70%** (oggi 60.12%, roadmap incrementale in `docs/operativo/coverage.md`).
-- **Cosmetic / debiti tecnici minori** (🎨): riattivare golangci-lint quando v2 stabile, ~37 warning a11y svelte-check.
-
-### Quality gate v0.5.0
-
-Definito in fase di apertura branch. Bozza:
-- [ ] Tutti i 📋/🎨 di `rinvii.md` valutati: ognuno è "atterrato" o "rinviato a 1.x" con razionale documentato
-- [ ] Coverage TS client ≥ 70% su `lib/*.ts`
-- [ ] Coverage server ≥ 70%
-- [ ] Coverage client Rust ≥ 70% (oggi 60.12% gate CI, target documentato in `docs/operativo/coverage.md`)
-- [ ] MCP server con almeno 5 unit test
-- [x] `Cargo.toml`/`tauri.conf.json` allineati al tag (fatto in v0.3.0 PR #55)
-
----
-
-## Rilascio v0.6.0 — Pulizia interfaccia grafica
-
-> **Tipo**: rilascio speciale, cross-cutting cosmetico.
-> **Scope**: pass cosmetico su tutte le superfici del client desktop. Niente nuove capability funzionali, niente schema migration, niente Tauri command nuovi. Solo CSS, layout, micro-interaction, copy.
-> **Quando**: dopo `v0.5.0` (recupero), prima di `v1.0.0`. Funge da "rifinitura pre-uscita beta".
-
-### Scope tipico
-
-- **Coerenza visiva**: ricognizione su tutte le superfici (`Libreria`, `EditorPrompt`, `CompilatorePrompt`, `CommandPalette`, `Impostazioni`, `Insight`, `OnboardingWizard`, etc.) per uniformare spaziature, colori accent, transizioni.
-- **Stati di feedback**: empty state, loading, errore, success — uniformare presentazione e copy.
-- **Micro-interaction**: hover, focus, active, drag, drop, animazioni di entrata/uscita modali.
-- **Dark / light theme parity**: verifica che tutti i componenti rispettino entrambi i temi.
-- **Accessibilità**: focus visibili, contrasti, semantica HTML, label associate (oggi ci sono ~30 warning a11y noti da `svelte-check`).
-- **Responsive minore**: comportamento window resize tra 800x600 e 1920x1080.
-- **Copy editing**: stringhe italiane uniformate (terminologia, capitalizzazione, vs/vs.).
-
-### Out of scope per v0.6.0
-
-- Nuove feature funzionali → restano nelle fasi
-- Refactor architetturale → restano in `rinvii.md`
-- Localizzazione (i18n EN/altre) → eventualmente v0.7+ o Fase 5
-- Branding / logo redesign → fuori scope
-
-### Backlog
-
-Si costruisce mano mano fra v0.4.0 e v0.6.0 raccogliendo feedback durante l'uso. Riserviamo qui una sezione che cresce nel tempo:
-
-- [ ] (placeholder — popolare con click-path-audit prima dell'apertura branch)
-- [ ] Risolvere il residuo doppia tray icon Windows (vedi memoria `tray_icon_doppia_windows.md`)
-- [ ] Pulire i ~37 warning a11y di `svelte-check` (autofocus, label senza control, role/aria mismatch)
-- [ ] Verificare coerenza spaziature dei `meta-sezione` nell'editor
-
-### Quality gate v0.6.0
-
-Bozza:
-- [ ] Tutte le superfici verificate manualmente in dark + light
-- [ ] svelte-check warning a11y < 10 (oggi 37)
-- [ ] Nessuna regressione funzionale rispetto a v0.5 (smoke test E2E)
+Il **pool di item residui** (sub-step Fase 4, Markdown import, sintassi import scopati, editor doppia vista, coverage gap, warning a11y) è confluito nel piano **PaP Personale v1.0** documentato in [`v1.0-personale.md`](./v1.0-personale.md) M1-M8.
 
 ---
 
