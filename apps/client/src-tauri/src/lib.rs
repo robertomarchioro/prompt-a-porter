@@ -251,6 +251,12 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        // v1.0 M1.4 — Tauri Updater: check + download + install di nuove
+        // release verificando la firma Ed25519 di `latest.json`. Endpoint
+        // configurato in tauri.conf.json punta agli asset GitHub Releases.
+        // L'utente invoca `check()` da Impostazioni → Sviluppo (futuro M1.4b)
+        // o automaticamente al boot (decisione di policy TBD).
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let data_dir = app
                 .path()

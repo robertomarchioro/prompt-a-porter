@@ -83,6 +83,13 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # v1.0 M1.4 — Tauri Updater signing (Ed25519, separato da
+          # Authenticode). tauri-action genera `latest.json` + `.sig` se
+          # questi secret sono presenti. Vedi
+          # docs/architettura/decisioni/authenticode-signing.md
+          # §"Tauri Updater key pair" per la procedura di generazione.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/client
           tauriScript: pnpm tauri

@@ -278,6 +278,87 @@ Questa ADR copre la decisione architetturale + setup. Implementazione effettiva 
 - **M1.6** — smoke test installer Win10/Win11 + test E2E updater
 - **M1.7** — `docs/utente/auto-update.md` per l'utente finale
 
+## Appendice — Tauri Updater key pair (Ed25519)
+
+Authenticode firma il binario; **Tauri Updater firma il `latest.json`** che annuncia nuove release. Sono **due signing distinti** con due chiavi diverse:
+
+| | Authenticode | Tauri Updater |
+|---|---|---|
+| Cosa firma | `.exe`, `.msi` | `latest.json` (metadata release) |
+| Chiave | RSA, cloud Certum | Ed25519, generata localmente |
+| Verifica | Windows + SmartScreen | Plugin Tauri lato client |
+| Provider | Certum (CA pubblica) | Tu, generata `tauri signer generate` |
+
+L'utente NON deve disinstallare/riinstallare l'app se la chiave Tauri Updater cambia (lock-in elevato): la chiave Ed25519 va custodita come segreto a lungo termine.
+
+### Procedura UNA TANTUM — generazione chiavi Tauri Updater
+
+Esegui sul tuo computer (NON in CI):
+
+```bash
+cd apps/client
+pnpm tauri signer generate -w ~/.tauri/pap-updater.key
+```
+
+Verrà richiesto:
+- **Password della chiave privata** (opzionale ma raccomandato). Mettilo se vuoi un layer extra di sicurezza.
+
+Output:
+- `~/.tauri/pap-updater.key` → **chiave privata** (NON COMMITTARE!)
+- `~/.tauri/pap-updater.key.pub` → **chiave pubblica** (da inserire in `tauri.conf.json`)
+
+### GitHub Secrets da configurare (in aggiunta ai 4 CERTUM_*)
+
+| Nome secret | Valore | Note |
+|---|---|---|
+| `TAURI_SIGNING_PRIVATE_KEY` | Contenuto di `~/.tauri/pap-updater.key` | Stringa base64 multi-linea. Copia tutto il file inclusi header/footer |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password scelta sopra (vuoto se non l'hai messa) | Se vuoto: imposta secret a stringa vuota, NON ometterlo |
+
+### Aggiornamento `tauri.conf.json`
+
+Sostituisci il placeholder in `plugins.updater.pubkey` con il contenuto **single-line** di `~/.tauri/pap-updater.key.pub`:
+
+```bash
+cat ~/.tauri/pap-updater.key.pub
+# Output esempio:
+# dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6...
+```
+
+Copia la stringa (è una singola riga base64) e incollala come valore di `pubkey` in `tauri.conf.json`:
+
+```json
+"plugins": {
+  "updater": {
+    "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6...",
+    "endpoints": [
+      "https://github.com/robertomarchioro/prompt-a-porter/releases/latest/download/latest.json"
+    ]
+  }
+}
+```
+
+⚠️ La chiave pubblica è committata nel repo (è pubblica per design). La chiave privata NO.
+
+### Backup chiave privata
+
+`~/.tauri/pap-updater.key` è la chiave **eterna** del progetto. Se la perdi, devi:
+1. Generare nuova chiave
+2. Cambiare `pubkey` in `tauri.conf.json` (breaking change: gli utenti con vecchia versione non potranno verificare i nuovi `latest.json` finché non installano manualmente la nuova versione)
+3. Aggiornare GitHub Secrets
+
+Per evitare questo dramma:
+- Backup `~/.tauri/pap-updater.key` in un password manager (1Password, Bitwarden, etc.)
+- Mai committare in clear nel repo, nemmeno per "trovarla in futuro"
+
+### Recovery key persa
+
+Se la chiave privata è persa MA hai release già pubblicate firmate con la vecchia chiave:
+1. Genera nuova coppia.
+2. Aggiorna `tauri.conf.json` con la nuova `pubkey`.
+3. Aggiorna Secret `TAURI_SIGNING_PRIVATE_KEY`.
+4. **Pubblica la nuova versione come release "manuale"** con note che indicano "aggiornamento manuale richiesto, l'updater automatico non funzionerà fino a installazione nuova versione".
+5. Da quel punto in avanti, l'updater riprende a funzionare per chi ha installato la nuova versione.
+
 ## Riferimenti
 
 - [Certum SimplySign — Code Signing in the cloud (Signtool/Jarsigner manual PDF)](https://www.files.certum.eu/documents/manual_en/Signing_with_the_use_of_jarsigner_tool_and_signtool.pdf)
@@ -286,6 +367,8 @@ Questa ADR copre la decisione architetturale + setup. Implementazione effettiva 
 - [hpvb/certum-container](https://github.com/hpvb/certum-container) — approccio B container Linux
 - [rubyinstaller2 CertumCodeSigning wiki](https://github.com/oneclick/rubyinstaller2/wiki/CertumCodeSigning) — esempi CI con osslsigncode
 - [Tauri 2 Windows Code Signing docs](https://v2.tauri.app/distribute/sign/windows/)
+- [Tauri 2 Updater docs](https://v2.tauri.app/plugin/updater/) — plugin updater, signer generate, latest.json schema
+- [Tauri tauri-action README](https://github.com/tauri-apps/tauri-action) — env vars TAURI_SIGNING_PRIVATE_KEY*
 
 ## Manutenzione di questo documento
 

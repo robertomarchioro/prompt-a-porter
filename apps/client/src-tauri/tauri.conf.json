@@ -53,6 +53,15 @@
         "displayLanguageSelector": false,
         "languages": ["Italian"]
       }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "PLACEHOLDER_GENERA_CON_TAURI_SIGNER_GENERATE",
+      "endpoints": [
+        "https://github.com/robertomarchioro/prompt-a-porter/releases/latest/download/latest.json"
+      ]
     }
   }
 }

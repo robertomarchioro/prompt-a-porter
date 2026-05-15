@@ -27,6 +27,12 @@ tauri-plugin-single-instance = "2"
 # Bridge bidirezionale frontend/backend, log levels filtrabili.
 # Inizializzato in lib.rs::run() con LogDir + Stdout (dev) targets.
 tauri-plugin-log = "2"
+# v1.0 M1.4 — Tauri Updater: check + download + install di nuove release
+# verificando la firma Ed25519 di `latest.json`. Endpoint configurato in
+# tauri.conf.json punta agli asset GitHub Releases. Vedi
+# docs/architettura/decisioni/authenticode-signing.md §"Tauri Updater
+# key pair" per la procedura di generazione chiavi.
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
