@@ -29,6 +29,7 @@
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-global-shortcut": "^2.0.0",
     "@tauri-apps/plugin-log": "^2.0.0",
+    "@tauri-apps/plugin-updater": "^2.0.0",
     "@types/diff": "^8.0.0",
     "codemirror": "^6.0.0",
     "diff": "^9.0.0",
