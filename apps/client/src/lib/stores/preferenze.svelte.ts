@@ -41,6 +41,7 @@ interface Preferenze {
   ricerca_alpha: number;
   idle_unload_secondi: number;
   debug_log_abilitato: boolean;
+  updater_abilitato: boolean;
 }
 
 class StatoTema {
