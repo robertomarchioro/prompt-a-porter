@@ -359,6 +359,35 @@ Se la chiave privata è persa MA hai release già pubblicate firmate con la vecc
 4. **Pubblica la nuova versione come release "manuale"** con note che indicano "aggiornamento manuale richiesto, l'updater automatico non funzionerà fino a installazione nuova versione".
 5. Da quel punto in avanti, l'updater riprende a funzionare per chi ha installato la nuova versione.
 
+### Garanzie di sicurezza dell'updater (M1.5)
+
+`tauri-plugin-updater` v2 fornisce **automaticamente** le seguenti verifiche prima di applicare un update. Nessun codice utente è necessario per attivarle.
+
+| Garanzia | Comportamento | Bypass possibile |
+|---|---|---|
+| **Signature verification** | Plugin verifica la firma Ed25519 di `latest.json` (campo `signature`) contro la `pubkey` configurata in `tauri.conf.json`. Mismatch → `Error("signature mismatch")`, update NON applicato | Solo se attaccante possiede la chiave privata |
+| **Downgrade refuse** | Plugin compara semver `version` corrente (`env!("CARGO_PKG_VERSION")`) vs `version` in `latest.json`. Se non strictly newer → `shouldUpdate=false`, niente prompt utente | Solo se attaccante con chiave privata firma falso `latest.json` con `version` superiore |
+| **HTTPS-only endpoint** | Config `plugins.updater.endpoints` accetta solo URL `https://`. URL `http://` rifiutati a parse-time del config | No (validato a build-time) |
+| **MITM su payload binario** | Plugin scarica il binario indicato in `latest.json:platforms.<os>.url`, verifica integrità via firma Ed25519 di `latest.json:platforms.<os>.signature` (firma del binario stesso, non solo del manifesto) | Solo se attaccante con chiave privata |
+| **Replay attack** (vecchio `latest.json` riproposto) | Non c'è nonce/timestamp esplicito, ma il downgrade refuse copre il caso pratico (vecchio `latest.json` = vecchia version → ignored) | Solo se vecchio `latest.json` contiene version newer del corrente |
+
+### Policy di update applicata
+
+Coerente con il principio "i dati restano sull'utente" + privacy-first:
+
+1. **No auto-check al boot**. L'app non interroga l'endpoint updater senza azione esplicita dell'utente. Vedi `lib.rs` plugin init: nessuna chiamata `check()` automatica nello startup.
+2. **Check on-demand utente**. La UI (futuro M1.4b) espone un bottone "Verifica aggiornamenti" in Impostazioni → Sviluppo (o sezione dedicata). L'invocazione è esplicita.
+3. **Download e install con conferma**. Anche dopo il check, l'apply richiede consenso esplicito utente. Niente "applica e riavvia silenziosamente".
+4. **No telemetria sul check**. L'app non invia user-agent identificabili oltre il default user-agent del runtime HTTPS Tauri. Niente fingerprinting, niente analytics sul controllo update.
+5. **Disabilitazione**. L'utente può disabilitare il check (preferenza futura `updater_abilitato: bool` simile a `debug_log_abilitato`). Default: abilitato ma on-demand.
+
+### Cosa NON copre l'updater
+
+- **Compromise della chiave privata Ed25519** → l'attaccante con la chiave può firmare un payload malevolo con version superiore e l'updater lo applicherà. Mitigation = custodia chiave (vedi Appendice §"Backup chiave privata") + rotation se sospetto.
+- **Compromise dell'endpoint GitHub Releases** (es. account GitHub hijack) → l'attaccante può sostituire `latest.json` con payload firmato. Mitigation = 2FA hardware key su GitHub account + audit log monitoring.
+- **Vulnerabilità del runtime WebView2 / sistema OS** → fuori scope updater.
+- **Phishing che porta utente a scaricare manualmente da URL ≠ GitHub Releases** → fuori scope updater (utente bypassa il sistema).
+
 ## Riferimenti
 
 - [Certum SimplySign — Code Signing in the cloud (Signtool/Jarsigner manual PDF)](https://www.files.certum.eu/documents/manual_en/Signing_with_the_use_of_jarsigner_tool_and_signtool.pdf)
