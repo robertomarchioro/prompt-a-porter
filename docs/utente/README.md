@@ -17,6 +17,7 @@ Documentazione per **chi usa** Prompt a Porter, sia il client desktop che gli st
 | [`fork-prompt.md`](./fork-prompt.md) | Clone indipendente con tracciabilità: quando fare fork, banner "Fork di X", chain (Fase 4) |
 | [`rating-prompt.md`](./rating-prompt.md) | Rating discreto post-uso 👎/😐/👍, badge percentuale colorato, traiettoria nel tempo (Fase 4) |
 | [`regression-testing.md`](./regression-testing.md) | Golden examples + provider AI (Ollama/Anthropic/OpenAI) + similarity functions + drift report — differenziatore strategico (Fase 4) |
+| [`auto-update.md`](./auto-update.md) | Aggiornamenti automatici (v1.0+): policy on-demand, firma Ed25519 + Authenticode, privacy, troubleshooting, FAQ |
 
 ## Per iniziare
 
