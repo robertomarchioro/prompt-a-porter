@@ -26,20 +26,22 @@
 
 ## 1. Patch line `v0.2.x` — sblocco esterno
 
-Item che vivono nel branch della release v0.2 ma aspettano qualcosa di non-tecnico. **Confluiscono in v1.0 M1** ([`v1.0-personale.md`](./v1.0-personale.md#m1-auto-update--authenticode-signing-)) quando il cert arriva.
+Item che vivono nel branch della release v0.2 ma aspettavano il cert Authenticode. **Confluiscono in v1.0 M1** ([`v1.0-personale.md`](./v1.0-personale.md#m1-auto-update--authenticode-signing-)).
+
+**Aggiornamento 2026-05-15**: cert Certum **SimplySign Cloud** (variante API-based, CI-friendly) **arrivato**. Tutti gli item Certum-bloccati passano da 🔒 a 🚧 (in lavorazione). Resta 🔒 solo macOS notarization (cert Apple Developer separato, non richiesto).
 
 | Item | Stato | Sblocca con |
 |---|---|---|
-| **Step 5 — Auto-update silenzioso completo** (NSIS per-user, Tauri Updater, `latest.json` firmato, downgrade refuse, signature mismatch refuse) | 🔒 → v1.0 M1 | Cert Authenticode Certum OSS (procedura KYC in corso) |
-| Firma Authenticode su tutti gli `.exe` portable di release | 🔒 → v1.0 M1 | Stesso cert Certum |
-| Test reale **macOS notarization** del bundle Tauri con `libonnxruntime.dylib` inclusa | 🔒 → v1.0 M1 | Apple Developer certificate |
-| Test reale **Authenticode signing** del bundle Windows con `onnxruntime.dll` inclusa | 🔒 → v1.0 M1 | Cert Certum |
-| `docs/utente/auto-update.md` (meccanica + troubleshooting + recovery update corrotto) | 📋 → v1.0 M1 | Step 5 |
-| `docs/architettura/decisioni/authenticode-signing.md` (provider considerati, criteri attivazione) | 📋 → v1.0 M1 | Step 5 |
-| Test E2E Tauri Updater (build dev → fake update server → download + apply, downgrade refuse, signature mismatch refuse) | 🔒 → v1.0 M1 | Sblocca con Step 5 |
-| Smoke test installer NSIS per-user su Win10 e Win11 (verifica nessun UAC) | 🔒 → v1.0 M1 | Sblocca con Step 5 |
+| **Step 5 — Auto-update silenzioso completo** (NSIS per-user, Tauri Updater, `latest.json` firmato, downgrade refuse, signature mismatch refuse) | 🚧 → v1.0 M1 | ✅ Cert Certum SimplySign Cloud arrivato 2026-05-15 |
+| Firma Authenticode su tutti gli `.exe` portable di release | 🚧 → v1.0 M1 | ✅ Cert Certum SimplySign Cloud arrivato 2026-05-15 |
+| Test reale **macOS notarization** del bundle Tauri con `libonnxruntime.dylib` inclusa | 🔒 → v1.0 M1 | Apple Developer certificate (separato, non richiesto) |
+| Test reale **Authenticode signing** del bundle Windows con `onnxruntime.dll` inclusa | 🚧 → v1.0 M1 | ✅ Cert Certum arrivato |
+| `docs/utente/auto-update.md` (meccanica + troubleshooting + recovery update corrotto) | 📋 → v1.0 M1.7 | Sub-deliverable di M1 |
+| `docs/architettura/decisioni/authenticode-signing.md` (provider considerati, criteri attivazione) | 📋 → v1.0 M1.1 | Primo sub-PR di M1 |
+| Test E2E Tauri Updater (build dev → fake update server → download + apply, downgrade refuse, signature mismatch refuse) | 🚧 → v1.0 M1.6 | Sub-deliverable di M1 |
+| Smoke test installer NSIS per-user su Win10 e Win11 (verifica nessun UAC) | 🚧 → v1.0 M1.6 | Sub-deliverable di M1 |
 
-**Quando atterrano**: cert Certum arriva → branch `feat/auto-update`, due PR (`v0.2.2` NSIS per-user; `v0.2.3` updater + signing) → confluenza in v1.0.
+**Quando atterrano**: lavoro avviabile in qualunque momento, sequenza sub-PR M1.1-M1.7 documentata in [`v1.0-personale.md`](./v1.0-personale.md#m1-auto-update--authenticode-signing-) §"Sequenza sub-PR raccomandata". Parallelo a M2/M3 senza conflitti.
 
 ---
 
