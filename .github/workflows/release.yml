@@ -100,8 +100,10 @@ jobs:
             Windows 11, scaricabile [da Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/)
             per Windows 10).
 
-            Il binario non è firmato Authenticode: SmartScreen mostrerà un
-            avviso, scegli "Maggiori informazioni" → "Esegui comunque".
+            Il binario è firmato Authenticode (Certum Code Signing Open Source).
+            La prima esecuzione potrebbe ancora mostrare un avviso SmartScreen
+            (reputation building del nuovo certificato): clicca "Maggiori
+            informazioni" → "Esegui comunque". L'avviso scompare con l'uso.
 
             > **Nota:** in questa release i target macOS / Linux / Windows
             > installer (.msi/.exe-setup) sono temporaneamente disabilitati
@@ -110,6 +112,195 @@ jobs:
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
+
+      # M1.2 v1.0 — Authenticode signing via Certum SimplySign Cloud.
+      # Vedi docs/architettura/decisioni/authenticode-signing.md per la
+      # decisione architetturale e la procedura di setup dei secret.
+      #
+      # Ordine: dopo tauri-action (build completata, bundle in target/
+      # release/) e PRIMA di "Pacchettizza versione portable" (così il
+      # binario raw che finisce nello zip portable è già firmato).
+      - name: Install SimplySign Desktop (CI signing)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $url = "https://files.certum.eu/software/SimplySignDesktop/Windows/SimplySignDesktop-Setup.exe"
+          $installer = "$env:TEMP\simplysign-setup.exe"
+          Write-Host "Download SimplySign Desktop installer..."
+          Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
+          Write-Host "Install silently..."
+          Start-Process -FilePath $installer -ArgumentList "/quiet","/norestart" -Wait
+          $simplySignPath = "C:\Program Files (x86)\Certum\SimplySign Desktop"
+          if (Test-Path $simplySignPath) {
+            echo $simplySignPath | Out-File -FilePath $env:GITHUB_PATH -Append
+            Write-Host "SimplySign Desktop installato: $simplySignPath"
+          } else {
+            Write-Error "SimplySign Desktop non trovato dopo install"
+            exit 1
+          }
+
+      - name: Firma Authenticode (Certum SimplySign) + re-upload asset
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          CERTUM_USERNAME: ${{ secrets.CERTUM_USERNAME }}
+          CERTUM_PASSWORD: ${{ secrets.CERTUM_PASSWORD }}
+          CERTUM_TOTP_SEED: ${{ secrets.CERTUM_TOTP_SEED }}
+          CERTUM_CERT_THUMBPRINT: ${{ secrets.CERTUM_CERT_THUMBPRINT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # ── 1. TOTP generation inline (RFC 6238 HMAC-SHA1, no extra deps) ──
+          function Get-TOTP {
+            param(
+              [Parameter(Mandatory=$true)][string]$Base32Secret,
+              [int]$TimeStep = 30,
+              [int]$Digits = 6
+            )
+            $base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+            $cleanSecret = ($Base32Secret.ToUpper() -replace "[^A-Z2-7]", "")
+            $bits = ""
+            foreach ($c in $cleanSecret.ToCharArray()) {
+              $val = $base32chars.IndexOf($c)
+              if ($val -lt 0) { throw "Invalid Base32 char: $c" }
+              $bits += [Convert]::ToString($val, 2).PadLeft(5, '0')
+            }
+            $byteCount = [math]::Floor($bits.Length / 8)
+            $bytes = New-Object byte[] $byteCount
+            for ($i = 0; $i -lt $byteCount; $i++) {
+              $bytes[$i] = [Convert]::ToByte($bits.Substring($i * 8, 8), 2)
+            }
+            $unixTime = [int64]([DateTimeOffset]::Now.ToUnixTimeSeconds())
+            $counter = [int64][math]::Floor($unixTime / $TimeStep)
+            $counterBytes = [BitConverter]::GetBytes($counter)
+            if ([BitConverter]::IsLittleEndian) { [Array]::Reverse($counterBytes) }
+            $hmac = New-Object System.Security.Cryptography.HMACSHA1
+            $hmac.Key = $bytes
+            $hash = $hmac.ComputeHash($counterBytes)
+            $offset = $hash[-1] -band 0x0F
+            $binCode = (([int]$hash[$offset] -band 0x7F) -shl 24) -bor `
+                       (([int]$hash[$offset + 1] -band 0xFF) -shl 16) -bor `
+                       (([int]$hash[$offset + 2] -band 0xFF) -shl 8) -bor `
+                       ([int]$hash[$offset + 3] -band 0xFF)
+            $otp = $binCode % [math]::Pow(10, $Digits)
+            return $otp.ToString("D$Digits")
+          }
+
+          $totp = Get-TOTP -Base32Secret $env:CERTUM_TOTP_SEED
+          Write-Host "TOTP generato (6 cifre). Login SimplySign Desktop..."
+
+          # ── 2. Login SimplySign Desktop ──
+          # NOTE: i path/args CLI di SimplySign Desktop possono variare fra
+          # release. Verifica il PDF "Installation_of_the_SimplySign_application"
+          # di Certum se questo fallisce con "unknown argument".
+          $simplySignExe = "C:\Program Files (x86)\Certum\SimplySign Desktop\SimplySignDesktop.exe"
+          & $simplySignExe `
+            /silent /login `
+            "/user:$env:CERTUM_USERNAME" `
+            "/password:$env:CERTUM_PASSWORD" `
+            "/totp:$totp"
+
+          # Wait per virtual smart card pronta
+          Write-Host "Attesa virtual smart card (max 30s)..."
+          $maxWait = 30
+          $cert = $null
+          for ($i = 0; $i -lt $maxWait; $i++) {
+            Start-Sleep -Seconds 1
+            $cert = Get-ChildItem Cert:\CurrentUser\My -ErrorAction SilentlyContinue |
+              Where-Object { $_.Thumbprint -eq $env:CERTUM_CERT_THUMBPRINT }
+            if ($cert) {
+              Write-Host "Cert disponibile dopo $($i+1)s: $($cert.Subject)"
+              break
+            }
+          }
+          if (-not $cert) {
+            throw "Certificato $env:CERTUM_CERT_THUMBPRINT non disponibile nello store dopo $maxWait secondi. SimplySign login fallito?"
+          }
+
+          # ── 3. Trova signtool.exe (Windows SDK) ──
+          $signtool = (Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+                       Sort-Object -Property FullName -Descending |
+                       Select-Object -First 1).FullName
+          if (-not $signtool) {
+            throw "signtool.exe non trovato in Windows Kits. Windows SDK installato sul runner?"
+          }
+          Write-Host "signtool: $signtool"
+
+          # ── 4. Raccogli artifact da firmare ──
+          $releaseDir = "apps/client/src-tauri/target/release"
+          $bundleDir = "$releaseDir/bundle"
+
+          # 4a. Binario raw (verrà zippato dal step portable successivo)
+          $rawCandidates = @(
+            "$releaseDir/Prompt a Porter.exe",
+            "$releaseDir/pap.exe"
+          )
+          $rawExe = $null
+          foreach ($c in $rawCandidates) {
+            if (Test-Path $c) { $rawExe = $c; break }
+          }
+          if (-not $rawExe) {
+            $rawExe = (Get-ChildItem -Path $releaseDir -Filter *.exe -File |
+                       Select-Object -First 1).FullName
+          }
+
+          # 4b. Bundle artifact (NSIS .exe setup, MSI .msi)
+          $bundleArtifacts = @()
+          if (Test-Path $bundleDir) {
+            $bundleArtifacts = Get-ChildItem -Path $bundleDir -Recurse -File |
+              Where-Object { $_.Extension -in ".exe", ".msi" } |
+              ForEach-Object { $_.FullName }
+          }
+
+          $toSign = @()
+          if ($rawExe) { $toSign += $rawExe }
+          $toSign += $bundleArtifacts
+
+          if ($toSign.Count -eq 0) {
+            throw "Nessun artifact da firmare trovato in $releaseDir o $bundleDir"
+          }
+
+          Write-Host "Artifact da firmare: $($toSign.Count)"
+          $toSign | ForEach-Object { Write-Host "  - $_" }
+
+          # ── 5. Firma con signtool ──
+          foreach ($file in $toSign) {
+            Write-Host "Firmando $file..."
+            & $signtool sign `
+              /sha1 $env:CERTUM_CERT_THUMBPRINT `
+              /tr "http://time.certum.pl" `
+              /td sha256 `
+              /fd sha256 `
+              /a `
+              $file
+            if ($LASTEXITCODE -ne 0) {
+              throw "Signing failed for $file (exit $LASTEXITCODE)"
+            }
+          }
+
+          # ── 6. Verifica firma ──
+          foreach ($file in $toSign) {
+            & $signtool verify /pa /v $file
+            if ($LASTEXITCODE -ne 0) {
+              throw "Signature verification failed for $file"
+            }
+          }
+          Write-Host "Tutte le firme verificate."
+
+          # ── 7. Re-upload bundle firmati come asset (clobber unsigned di
+          #    tauri-action). Il rawExe NON va re-uploadato: finisce zippato
+          #    dal step "Pacchettizza versione portable" successivo.
+          $tag = "${{ github.ref_name }}"
+          if ($bundleArtifacts.Count -gt 0) {
+            foreach ($file in $bundleArtifacts) {
+              Write-Host "Re-upload firmato: $(Split-Path $file -Leaf)"
+              gh release upload $tag $file --clobber
+              if ($LASTEXITCODE -ne 0) {
+                throw "gh release upload failed for $file"
+              }
+            }
+          } else {
+            Write-Host "Nessun bundle artifact da re-uploadare (build minimal portable-only)."
+          }
 
       # Windows portable: zippa il .exe standalone + README e lo carica come
       # asset extra della release draft. Pattern Chrome/VSCode portable —
