@@ -47,6 +47,18 @@ pub struct Preferenze {
     /// false per non sporcare disco utenti standard.
     #[serde(default)]
     pub debug_log_abilitato: bool,
+    /// v1.0 M1.4b Sezione Sviluppo → Aggiornamenti. Quando true, l'app
+    /// mostra il bottone "Verifica aggiornamenti" in Impostazioni →
+    /// Sviluppo; quando false, il check è disabilitato e l'app non
+    /// contatta GitHub Releases per gli update meta. Default true:
+    /// l'utente decide quando controllare, ma il check è disponibile.
+    /// Vedi docs/utente/auto-update.md §"Come disabilitare il check".
+    #[serde(default = "default_updater_abilitato")]
+    pub updater_abilitato: bool,
+}
+
+fn default_updater_abilitato() -> bool {
+    true
 }
 
 fn default_sync_intervallo() -> u32 {
@@ -80,6 +92,7 @@ impl Default for Preferenze {
             ricerca_alpha: 0.5,
             idle_unload_secondi: 300,
             debug_log_abilitato: false,
+            updater_abilitato: true,
         }
     }
 }
@@ -154,6 +167,7 @@ mod test {
             ricerca_alpha: 0.7,
             idle_unload_secondi: 600,
             debug_log_abilitato: false,
+            updater_abilitato: true,
         };
 
         let json = serde_json::to_string_pretty(&prefs).unwrap();

@@ -36,6 +36,7 @@
     FolderOpen,
     FileDown,
     Eraser,
+    CloudDownload,
   } from "lucide-svelte";
   import Modale from "$lib/components/Modale.svelte";
   import PannelloProviderConfig from "$lib/components/PannelloProviderConfig.svelte";
@@ -395,6 +396,7 @@
     ricerca_alpha: number;
     idle_unload_secondi: number;
     debug_log_abilitato: boolean;
+    updater_abilitato: boolean;
   }
 
   let prefsFull = $state<PreferenzeFull | null>(null);
@@ -506,6 +508,85 @@
     if (n < 1024) return `${n} B`;
     if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
     return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  // ─── Sviluppo → Aggiornamenti (v1.0 M1.4b) ───
+  // Wrapping di tauri-plugin-updater. Check on-demand, niente
+  // auto-check al boot. Vedi docs/utente/auto-update.md per la policy
+  // e docs/architettura/decisioni/authenticode-signing.md §M1.5 per
+  // le garanzie di sicurezza.
+  type StatoUpdater =
+    | { kind: "idle" }
+    | { kind: "checking" }
+    | { kind: "no-update" }
+    | { kind: "available"; version: string; date: string; notes: string }
+    | { kind: "installing" }
+    | { kind: "error"; message: string };
+
+  let updaterStato = $state<StatoUpdater>({ kind: "idle" });
+
+  async function verificaAggiornamenti(): Promise<void> {
+    updaterStato = { kind: "checking" };
+    try {
+      // Import dinamico per evitare di caricare il plugin se non serve
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const update = await check();
+      if (!update) {
+        updaterStato = { kind: "no-update" };
+        return;
+      }
+      updaterStato = {
+        kind: "available",
+        version: update.version ?? "?",
+        date: update.date ?? "",
+        notes: update.body ?? "",
+      };
+    } catch (e) {
+      updaterStato = { kind: "error", message: String(e) };
+    }
+  }
+
+  async function installaAggiornamento(): Promise<void> {
+    if (updaterStato.kind !== "available") return;
+    const ok = window.confirm(
+      `Installare la versione ${updaterStato.version}?\n\nL'app verrà chiusa e riavviata. I tuoi dati restano intatti.`,
+    );
+    if (!ok) return;
+    updaterStato = { kind: "installing" };
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const update = await check();
+      if (!update) {
+        updaterStato = {
+          kind: "error",
+          message: "Update non più disponibile (forse già installato?)",
+        };
+        return;
+      }
+      await update.downloadAndInstall();
+      // Dopo install riuscito, Tauri Updater chiude l'app per riavviarla.
+      // Se il control torna qui significa che download/install non hanno
+      // applicato (caso edge), riporto a idle.
+      updaterStato = { kind: "idle" };
+    } catch (e) {
+      updaterStato = { kind: "error", message: String(e) };
+    }
+  }
+
+  async function toggleUpdaterAbilitato(): Promise<void> {
+    if (!prefsFull) return;
+    const nuovo = !prefsFull.updater_abilitato;
+    prefsFull = { ...prefsFull, updater_abilitato: nuovo };
+    try {
+      await invoke("preferenze_salva", { preferenze: prefsFull });
+      // Reset stato updater al toggle (caso: utente disabilita mentre
+      // c'è un update.available aperto)
+      if (!nuovo) updaterStato = { kind: "idle" };
+    } catch (e) {
+      // Rollback locale
+      prefsFull = { ...prefsFull, updater_abilitato: !nuovo };
+      updaterStato = { kind: "error", message: String(e) };
+    }
   }
 
   // ─── Segnaposti globali (issue #159) ───
@@ -1504,6 +1585,108 @@
             </details>
           </div>
         </div>
+
+        <!-- v1.0 M1.4b — Sub-card Aggiornamenti -->
+        <div class="campo">
+          <div class="sviluppo-card">
+            <div class="sviluppo-card-h">
+              <span class="campo-label">
+                <CloudDownload size={14} />
+                Aggiornamenti
+              </span>
+              <label class="sviluppo-toggle">
+                <input
+                  type="checkbox"
+                  checked={prefsFull?.updater_abilitato ?? true}
+                  onchange={() => void toggleUpdaterAbilitato()}
+                  disabled={prefsFull === null}
+                  aria-label="Abilita verifica aggiornamenti"
+                />
+                <span>
+                  {prefsFull?.updater_abilitato === false
+                    ? "Disabilitato"
+                    : "Abilitato"}
+                </span>
+              </label>
+            </div>
+            <p class="hint">
+              Quando abilitato, puoi verificare manualmente se è
+              disponibile una nuova versione. L'app non contatta GitHub
+              automaticamente all'avvio. Vedi
+              <a
+                href="https://github.com/robertomarchioro/prompt-a-porter/blob/main/docs/utente/auto-update.md"
+                target="_blank"
+                rel="noopener"
+              >
+                docs auto-update
+              </a>
+              per la policy completa.
+            </p>
+
+            {#if prefsFull?.updater_abilitato !== false}
+              <div class="riga-azioni">
+                <button
+                  type="button"
+                  class="btn-primary"
+                  onclick={verificaAggiornamenti}
+                  disabled={updaterStato.kind === "checking" ||
+                    updaterStato.kind === "installing"}
+                >
+                  <CloudDownload size={14} />
+                  <span>
+                    {updaterStato.kind === "checking"
+                      ? "Verifica in corso…"
+                      : "Verifica aggiornamenti"}
+                  </span>
+                </button>
+              </div>
+
+              {#if updaterStato.kind === "no-update"}
+                <p class="msg-ok">Sei aggiornato all'ultima versione.</p>
+              {:else if updaterStato.kind === "available"}
+                <div class="sviluppo-info">
+                  <div class="sviluppo-info-row">
+                    <span class="sviluppo-info-label">Versione</span>
+                    <strong class="sviluppo-info-val">
+                      {updaterStato.version}
+                    </strong>
+                  </div>
+                  {#if updaterStato.date}
+                    <div class="sviluppo-info-row">
+                      <span class="sviluppo-info-label">Rilasciata</span>
+                      <span class="sviluppo-info-val">
+                        {updaterStato.date.slice(0, 10)}
+                      </span>
+                    </div>
+                  {/if}
+                  {#if updaterStato.notes}
+                    <details class="sviluppo-elenco">
+                      <summary>Note di rilascio</summary>
+                      <pre class="updater-notes">{updaterStato.notes}</pre>
+                    </details>
+                  {/if}
+                </div>
+                <div class="riga-azioni">
+                  <button
+                    type="button"
+                    class="btn-primary"
+                    onclick={installaAggiornamento}
+                  >
+                    <CloudDownload size={14} />
+                    <span>Installa e riavvia</span>
+                  </button>
+                </div>
+              {:else if updaterStato.kind === "installing"}
+                <p class="hint">
+                  Download e installazione in corso… L'app si riavvierà
+                  automaticamente a fine processo.
+                </p>
+              {:else if updaterStato.kind === "error"}
+                <p class="msg-err">{updaterStato.message}</p>
+              {/if}
+            {/if}
+          </div>
+        </div>
       {/if}
     </section>
   </div>
@@ -2073,5 +2256,20 @@
     color: var(--text-default);
     user-select: none;
     margin-bottom: 6px;
+  }
+
+  .updater-notes {
+    max-height: 200px;
+    overflow: auto;
+    background: var(--bg-canvas);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: var(--sp-2);
+    margin: 6px 0 0 0;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-default);
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 </style>
