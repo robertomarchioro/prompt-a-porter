@@ -1,12 +1,127 @@
 # ADR — Authenticode signing per release Windows
 
-**Stato**: ✅ PASSED · **Data**: 2026-05-15 · **Branch sub-PR M1**: M1.1 (questo doc)
+**Stato**: ⚠️ AMENDED 2026-05-16 (approach C adottato) · **Data**: 2026-05-15 · **Branch sub-PR M1**: M1.1 (questo doc)
+
+> **Storico decisione**: l'ADR originale (2026-05-15) adottava l'approccio
+> **A — Windows runner CI** con SimplySign Desktop installato sul runner
+> + login TOTP automatizzato. Dopo 4 iterazioni di test
+> (`v0.8.9-test` → `v0.8.9-test4`) abbiamo confermato che SimplySign
+> Desktop richiede interazione GUI per il login — non esiste un CLI
+> headless documentato (gli argomenti `/silent /login /user /password
+> /totp` non sono supportati nella release 2026 di SimplySign Desktop,
+> contrariamente a quanto suggerito da alcune fonti community datate).
+> Abbiamo quindi adottato l'**approccio C — pre-signing locale**
+> (precedentemente scartato), che è l'unica opzione che funziona oggi
+> con un cert Certum SimplySign Cloud.
+>
+> Vedi nuova §"Strategia pre-signing locale" sotto. Le sezioni
+> "Workflow GitHub Actions — snippet pronto" e "Trade-off documentati"
+> restano archiviate per riferimento storico (descrivono l'approccio
+> A non più in uso).
 
 ## Decisione finale
 
-Adottiamo **Certum SimplySign Cloud Code Signing (Open Source variante)** per la firma Authenticode dei bundle Windows di Prompt a Porter (`.exe` portable, `.msi`, `.exe` NSIS installer, `latest.json` Tauri Updater).
+Adottiamo **Certum SimplySign Cloud Code Signing (Open Source variante)** come provider di firma Authenticode per i bundle Windows di Prompt a Porter (`.exe` portable, `.msi`, `.exe` NSIS installer).
 
-Integrazione in GitHub Actions: **approccio A — Windows runner**, con SimplySign Desktop installato sul runner di build e autenticazione TOTP automatizzata da seed in GitHub Secret.
+Integrazione: **approccio C — pre-signing locale**. La CI produce asset unsigned in release draft; il maintainer firma manualmente da workstation Windows con SimplySign Desktop logged-in tramite lo script `scripts/sign-release.ps1`, poi promuove la release a Latest published.
+
+Il **Tauri Updater signing** (Ed25519 su `latest.json`) resta invece automatizzato in CI tramite secret `TAURI_SIGNING_PRIVATE_KEY` — è una chiave software locale, indipendente dal cert Certum.
+
+## Strategia pre-signing locale (approccio C — corrente)
+
+### Scoperta del blocker
+
+Dopo aver implementato lo step di signing in CI (approccio A, sub-PR
+M1.2 originale) e averlo testato su 4 tag consecutivi:
+
+| Tag | Sintomo | Root cause |
+|---|---|---|
+| `v0.8.9-test` | 404 download installer Certum | URL hardcoded vendor-side cambiato (resolved via WinGet) |
+| `v0.8.9-test2` | TOTP exception `Format specifier was invalid` | `[math]::Pow(10,6)` ritorna Double, `D6` non valido su Double (resolved con cast int) |
+| `v0.8.9-test3` | `SimplySignDesktop.exe is not recognized` | Path hardcoded errato (resolved con path detection dinamica via GITHUB_ENV) |
+| `v0.8.9-test4` | `Certificato non disponibile nello store dopo 30 secondi` | **SimplySign Desktop non ha CLI di login**. Gli argomenti `/silent /login /user /password /totp` non esistono. Il login richiede GUI. |
+
+Ricerca community + verifica documentazione Certum 2026:
+
+- **PDF Certum ufficiale** `Code Signing - signing the code using tools like Singtool and Jarsigner.pdf`: assume SimplySign Desktop già loggato. Non documenta nessun CLI di login.
+- **[devas.life tutorial](https://www.devas.life/how-to-automate-signing-your-windows-app-with-certum/)** (2023): usa **SendKeys** per pilotare la GUI di SimplySign Desktop dopo aver aperto la finestra di login con start-process. Funzionante ma fragile (timing-dependent, ~50% success rate riportato).
+- **[hpvb/certum-container](https://github.com/hpvb/certum-container)**: stacka SimplySign Desktop Windows in Wine + Xvnc per esporre la GUI via VNC; serve **login manuale via VNC ogni 2h** quando la sessione scade.
+- **[defguard blog](https://defguard.net/blog/windows-codesign-certum-hsm/)**: usa cert HSM USB su self-hosted runner Linux con `p11-kit` + `osslsigncode`. Non applicabile al cert cloud.
+
+**Conclusione**: non esiste oggi un metodo headless documentato per
+loggarsi a SimplySign Cloud Code Signing. Tutti gli approcci CI
+funzionanti richiedono o (a) GUI scripting fragile via SendKeys
+oppure (b) container Linux con login VNC manuale periodico oppure
+(c) cert HSM USB su runner self-hosted (cert diverso da quello che
+abbiamo).
+
+### Flusso adottato
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ Workstation maintainer (Windows)                               │
+│  • SimplySign Desktop GUI logged-in                            │
+│  • signtool.exe (Windows SDK)                                  │
+│  • gh CLI autenticato                                          │
+└────────────────────────────────────────────────────────────────┘
+                          ▲
+                          │  scripts/sign-release.ps1 -Tag v0.9.0
+                          │  - download asset draft
+                          │  - signtool sign + verify
+                          │  - re-zip portable (con .exe firmato)
+                          │  - gh release upload --clobber
+                          │  - gh release edit --draft=false --latest
+                          │
+┌─────────────────────────┴──────────────────────────────────────┐
+│ GitHub Releases                                                │
+│  • Release draft "v0.9.0" creata da CI                         │
+│  • Asset: portable.zip (unsigned), latest.json, latest.json.sig│
+└─────────────────────────▲──────────────────────────────────────┘
+                          │  tauri-action (in CI)
+                          │  - build Tauri
+                          │  - genera asset
+                          │  - sign Ed25519 latest.json (chiave Updater)
+                          │
+┌─────────────────────────┴──────────────────────────────────────┐
+│ GitHub Actions (release.yml su tag v*)                         │
+│  • Windows runner, NO SimplySign, NO signtool                  │
+│  • Bundle unsigned + Updater signing Ed25519                   │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### Vantaggi
+
+| | |
+|---|---|
+| **Affidabilità** | 100% determinismo: niente GUI scripting fragile, niente sessioni VNC, niente race condition fra Install-WinGet e login |
+| **Costo zero infrastrutturale** | Nessun self-hosted runner, nessun container, nessuna VM dedicata |
+| **Sicurezza** | Cert credentials NON in GitHub Secrets — restano solo sulla workstation del maintainer. Anche un compromise totale del repo GitHub non espone il cert |
+| **Diagnostica facile** | Lo script gira sotto gli occhi del maintainer, errori visibili immediatamente, retry one-command |
+| **Indipendenza dalla macchina di sviluppo** | Lo script non richiede il codice sorgente — basta gh CLI + signtool + SimplySign Desktop. Può girare su una qualunque workstation Windows (VM, secondo PC, ecc.) |
+
+### Svantaggi accettati
+
+| | |
+|---|---|
+| **Manualità per ogni release** | ~5 min attivi del maintainer + ~15 min wait CI. Per il cadenza release di PaP (mensile/bimestrale) è gestibile |
+| **Dipendenza dalla disponibilità maintainer** | Se in viaggio senza workstation Windows accessibile, la release aspetta |
+| **Promessa "release riproducibile da git tag" rotta** | L'asset firmato richiede intervento umano. Mitigation: la build CI è 100% riproducibile, il signing è l'unico step manuale e copre solo la "fiducia" verso Windows, non la sostanza dell'artifact |
+| **Finestra 2h SimplySign** | Lo script verifica all'avvio che il cert sia disponibile e fallisce subito se la sessione è scaduta. Re-login GUI + re-run script |
+
+### Quando rivedere questa decisione
+
+Riaprire l'ADR se si verifica **una** di queste condizioni:
+
+1. **Certum rilascia un'API headless** per SimplySign Cloud Code Signing (verifica annuale alla scadenza cert).
+2. **Cresce la cadenza di release a >2/settimana** rendendo la manualità inaccettabile.
+3. **Si presenta esigenza di release automatizzate da bot** (es. dependabot publish flow). Allora valutare cert HSM USB con self-hosted runner (approccio D).
+4. **Si vuole supportare contributor esterni che pubblicano fork firmati**: serve un meccanismo diverso (ognuno con il proprio cert + script).
+
+### Riferimenti operativi
+
+- Procedura step-by-step: [`../../contribuire/release-signing-workflow.md`](../../contribuire/release-signing-workflow.md)
+- Script: `scripts/sign-release.ps1`
+- Setup cert una tantum: §"Setup procedura — UNA TANTUM" sotto
 
 ## Contesto
 
@@ -261,7 +376,7 @@ Stessa procedura, ma senza revoke. Pianifica con 60 giorni di anticipo.
 ### Approccio C — Pre-signing locale + upload
 Buildare in CI, scaricare artifact, firmarli sulla macchina dello sviluppatore (con SimplySign Desktop logged in interactively), ri-uploadare come release asset.
 
-**Scartato**: rompe la promessa di "release riproducibile da git tag", richiede sempre intervento manuale, nullifica il valore di GitHub Actions per release pipeline.
+**~~Scartato~~ Adottato dopo amend 2026-05-16**: l'approccio A (Windows runner CI) si è rivelato non praticabile per la mancanza di un CLI headless di SimplySign Desktop. Approccio C è ora l'opzione corrente — vedi §"Strategia pre-signing locale (approccio C — corrente)" all'inizio del documento per il dettaglio operativo. Lo scrupolo originale ("rompe la promessa di release riproducibile da git tag") è mitigato dal fatto che la build CI resta 100% riproducibile: l'unico step manuale è il signing, che modifica metadati dell'asset ma non l'asset compilato.
 
 ### Approccio D — Cert HSM con runner self-hosted
 Acquistare cert Standard HSM (token USB) + tenere un mini-PC dedicato come self-hosted runner GitHub con token montato.

@@ -10,6 +10,7 @@ Documentazione per **chi vuole contribuire codice** al progetto.
 | [`setup-repo-github.md`](./setup-repo-github.md) | Branch strategy, naming convention dei branch, configurazione iniziale del repo GitHub |
 | [`ci-workflows.md`](./ci-workflows.md) | Mappa esaustiva path → workflow CI attivati, anti-pattern (PR doc-only, workflow non auto-listati), checklist operativa, comandi di debug |
 | [`setup-tauri-updater-keys.md`](./setup-tauri-updater-keys.md) | Procedura una-tantum maintainer per generare e configurare la coppia di chiavi Ed25519 del Tauri Updater (v1.0 M1.4): generate, backup, GitHub Secrets, sostituzione `pubkey` in `tauri.conf.json`, recovery se chiave persa |
+| [`release-signing-workflow.md`](./release-signing-workflow.md) | Procedura operativa per ogni release: tag → wait CI → SimplySign login → `scripts/sign-release.ps1 -Tag vX.Y.Z -Publish`. Prerequisiti workstation Windows, troubleshooting, limiti noti (v1.0 M1.2 approccio C) |
 
 ## Per cominciare
 
