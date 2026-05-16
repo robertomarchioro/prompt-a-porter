@@ -306,28 +306,64 @@ if ($SkipInstall) {
     }
 }
 
-# 4. Verifica signtool (Windows SDK)
-Write-Section "4. Verifica Windows SDK signtool"
-$signtool = (Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
-             Sort-Object -Property FullName -Descending |
-             Select-Object -First 1).FullName
-if (-not $signtool) {
-    $signtool = (Get-ChildItem -Path "$env:ProgramFiles\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
-                 Sort-Object -Property FullName -Descending |
-                 Select-Object -First 1).FullName
+# 4. Verifica signtool (Windows SDK) + install automatico del solo
+#    componente "Windows SDK Signing Tools for Desktop Apps" (~30 MB)
+function Find-Signtool {
+    $found = (Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+              Sort-Object -Property FullName -Descending |
+              Select-Object -First 1).FullName
+    if (-not $found) {
+        $found = (Get-ChildItem -Path "$env:ProgramFiles\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+                  Sort-Object -Property FullName -Descending |
+                  Select-Object -First 1).FullName
+    }
+    return $found
 }
-if (-not $signtool) {
-    Write-Host "[FAIL] signtool.exe NON trovato."
-    Write-Host ""
-    Write-Host "  Scarica Windows SDK da:"
-    Write-Host "  https://developer.microsoft.com/windows/downloads/windows-sdk/"
-    Write-Host ""
-    Write-Host "  Durante l'installazione seleziona solo:"
-    Write-Host "    [x] Windows SDK Signing Tools for Desktop Apps"
-    Write-Host ""
-    Write-Host "  Poi rilancia questo script con -SkipInstall per validare."
-} else {
+
+function Install-WinSdkSigningTools {
+    # Microsoft pubblica un bootstrapper che permette di selezionare solo
+    # i componenti voluti via /features OptionId.SigningTools (~30 MB).
+    # URL stabile: fwlink che redireziona al Windows 11 SDK installer
+    # corrente. Alternativa documentata: https://aka.ms/windowssdk
+    $url = 'https://go.microsoft.com/fwlink/?linkid=2286561'
+    $tmpExe = Join-Path $env:TEMP ("winsdksetup-" + [System.IO.Path]::GetRandomFileName() + ".exe")
+    Write-Host "  Download Windows SDK bootstrapper..."
+    Invoke-WebRequest -Uri $url -OutFile $tmpExe -UseBasicParsing
+    Write-Host "  Install OptionId.SigningTools (UAC prompt: accetta)..."
+    try {
+        $proc = Start-Process -FilePath $tmpExe `
+            -ArgumentList '/quiet', '/norestart', '/features', 'OptionId.SigningTools' `
+            -Verb RunAs -Wait -PassThru
+    } catch {
+        Remove-Item -Path $tmpExe -Force -ErrorAction SilentlyContinue
+        throw "Lancio Windows SDK installer fallito (UAC negato?): $($_.Exception.Message)"
+    }
+    Remove-Item -Path $tmpExe -Force -ErrorAction SilentlyContinue
+    # 0 = OK; 3010 = OK, reboot required
+    if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+        throw "Windows SDK Signing Tools install fallito (exit $($proc.ExitCode))"
+    }
+    Write-Host "  [OK] Windows SDK Signing Tools installato (exit $($proc.ExitCode))"
+}
+
+Write-Section "4. Windows SDK signtool"
+$signtool = Find-Signtool
+if ($signtool) {
     Write-Host "[OK] signtool: $signtool"
+} elseif ($SkipInstall) {
+    Write-Host "[INFO] signtool non presente, ma -SkipInstall attivo. Skip install."
+    Write-Host "       Per installare manualmente:"
+    Write-Host "         https://developer.microsoft.com/windows/downloads/windows-sdk/"
+    Write-Host "         (seleziona solo 'Windows SDK Signing Tools for Desktop Apps')"
+} else {
+    Write-Host "[INFO] signtool NON trovato. Installo Windows SDK Signing Tools (~30 MB)..."
+    Install-WinSdkSigningTools
+    $signtool = Find-Signtool
+    if ($signtool) {
+        Write-Host "[OK] signtool: $signtool"
+    } else {
+        Write-Host "[WARN] signtool ancora non trovato dopo install. Riapri PowerShell e rilancia con -SkipInstall."
+    }
 }
 
 # 5. Verifica gh CLI auth
