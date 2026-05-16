@@ -151,33 +151,36 @@ jobs:
           }
           Write-Host "WinGet install OK (exit $exitCode)"
 
-          # Find install path dinamicamente: l'MSI può finire in vari posti
-          # (Program Files, Program Files (x86), %LOCALAPPDATA%).
-          $candidatePaths = @(
-            "C:\Program Files (x86)\Certum\SimplySign Desktop",
-            "C:\Program Files\Certum\SimplySign Desktop",
-            "$env:LOCALAPPDATA\Programs\Certum\SimplySign Desktop"
-          )
-          $simplySignPath = $null
-          foreach ($p in $candidatePaths) {
-            if (Test-Path $p) { $simplySignPath = $p; break }
-          }
+          # Find dinamicamente l'eseguibile: nome esatto può variare
+          # (SimplySignDesktop.exe, SimplySign Desktop.exe, SimplySign.exe).
+          # Cerco tutti gli .exe in Program Files* + LOCALAPPDATA che
+          # contengono "SimplySign" nel nome.
+          Write-Host "Find SimplySign exe..."
+          $found = Get-ChildItem -Path "C:\Program Files (x86)","C:\Program Files","$env:LOCALAPPDATA\Programs" `
+            -Recurse -Filter "*.exe" `
+            -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like "*SimplySign*" } |
+            Select-Object -First 1
 
-          if (-not $simplySignPath) {
-            Write-Host "Path standard non trovato, cerco SimplySignDesktop.exe con glob..."
-            $found = Get-ChildItem -Path "C:\Program Files (x86)", "C:\Program Files" `
-              -Recurse -Filter "SimplySignDesktop.exe" `
-              -ErrorAction SilentlyContinue |
-              Select-Object -First 1
-            if ($found) {
-              $simplySignPath = $found.DirectoryName
-            } else {
-              throw "SimplySignDesktop.exe non trovato dopo install via WinGet"
+          if (-not $found) {
+            Write-Host "SimplySign exe non trovato. Dump install dirs candidate:"
+            @("C:\Program Files (x86)\Certum","C:\Program Files\Certum","$env:LOCALAPPDATA\Programs\Certum") | ForEach-Object {
+              if (Test-Path $_) {
+                Write-Host "  $_"
+                Get-ChildItem -Path $_ -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue |
+                  ForEach-Object { Write-Host "    $($_.FullName)" }
+              }
             }
+            throw "SimplySign exe non trovato dopo WinGet install"
           }
 
-          echo $simplySignPath | Out-File -FilePath $env:GITHUB_PATH -Append
-          Write-Host "SimplySign Desktop installato: $simplySignPath"
+          $simplySignExe = $found.FullName
+          $simplySignDir = $found.DirectoryName
+          Write-Host "SimplySign exe: $simplySignExe"
+          # Esporta sia il path completo dell'exe (per step Firma) sia la
+          # cartella (per uso futuro). GITHUB_ENV persiste fra step.
+          "SIMPLYSIGN_EXE=$simplySignExe" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "SIMPLYSIGN_DIR=$simplySignDir" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Firma Authenticode (Certum SimplySign) + re-upload asset
         if: matrix.platform == 'windows-latest'
@@ -236,7 +239,13 @@ jobs:
           # NOTE: i path/args CLI di SimplySign Desktop possono variare fra
           # release. Verifica il PDF "Installation_of_the_SimplySign_application"
           # di Certum se questo fallisce con "unknown argument".
-          $simplySignExe = "C:\Program Files (x86)\Certum\SimplySign Desktop\SimplySignDesktop.exe"
+          # SIMPLYSIGN_EXE viene da step precedente (Install via WinGet)
+          # che fa path detection dinamica e lo esporta in GITHUB_ENV.
+          $simplySignExe = $env:SIMPLYSIGN_EXE
+          if (-not $simplySignExe -or -not (Test-Path $simplySignExe)) {
+            throw "SIMPLYSIGN_EXE env var non settato o file inesistente. Step Install ha esportato il path?"
+          }
+          Write-Host "Login SimplySign via: $simplySignExe"
           & $simplySignExe `
             /silent /login `
             "/user:$env:CERTUM_USERNAME" `
