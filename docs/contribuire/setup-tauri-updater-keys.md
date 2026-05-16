@@ -166,9 +166,41 @@ Una volta che PR di sostituzione è mergiata, hai 2 opzioni per validare:
 ```bash
 cd apps/client
 echo "test" > /tmp/test.txt
-pnpm tauri signer sign -k ~/.tauri/pap-updater.key /tmp/test.txt
+
+# Con password impostata in Step 1
+pnpm tauri signer sign -f ~/.tauri/pap-updater.key -p "TUA_PASSWORD" /tmp/test.txt
+
+# Se hai lasciato password vuota
+pnpm tauri signer sign -f ~/.tauri/pap-updater.key /tmp/test.txt
+
+# Verifica + cleanup
 ls /tmp/test.txt.sig  # se esiste, la chiave funziona
 rm /tmp/test.txt /tmp/test.txt.sig
+```
+
+⚠️ **Flag corretto è `-f` (file path), NON `-k`** che invece vuole la chiave come stringa base64 inline. Se usi `-k ~/.tauri/...` il parser interpreta il path come base64 e fallisce con `Invalid symbol 46, offset 14` (il punto del path non è base64 valido).
+
+In alternativa, più sicuro per evitare la password nello shell history, usa env vars:
+
+```bash
+export TAURI_SIGNING_PRIVATE_KEY_PATH=~/.tauri/pap-updater.key
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="TUA_PASSWORD"
+pnpm tauri signer sign /tmp/test.txt
+unset TAURI_SIGNING_PRIVATE_KEY_PATH TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+```
+
+Per riferimento, l'help del comando (Tauri 2):
+
+```
+Usage: tauri signer sign [OPTIONS] <FILE>
+
+Options:
+  -k, --private-key <PRIVATE_KEY>           Load the private key from a string
+                                            [env: TAURI_SIGNING_PRIVATE_KEY=]
+  -f, --private-key-path <PRIVATE_KEY_PATH> Load the private key from a file
+                                            [env: TAURI_SIGNING_PRIVATE_KEY_PATH=]
+  -p, --password <PASSWORD>                 Set private key password when signing
+                                            [env: TAURI_SIGNING_PRIVATE_KEY_PASSWORD=]
 ```
 
 Se il file `.sig` viene generato senza errori, la chiave è valida e funziona col toolchain.
