@@ -32,12 +32,17 @@ Senza re-signing Updater (sconsigliato — Tauri Updater rifiuterà ogni update 
 
 ## Prerequisiti — una tantum
 
+> 💡 **Setup automatico**: usa `scripts/setup-windows.ps1` (workstation
+> di signing) o `scripts/setup-ubuntu.sh` (dev workstation Linux) per
+> installare e configurare tutti i componenti elencati sotto in una
+> sola invocazione. Vedi §"Setup guidato via script" in fondo.
+
 ### Sulla workstation Windows usata per il signing
 
 Può essere la macchina di sviluppo o una workstation Windows dedicata
 (es. una VM Windows, un PC secondario, un laptop Windows). Lo script
 non ha dipendenze dal codice sorgente di Prompt a Porter — gli basta
-gh CLI + signtool + SimplySign Desktop.
+gh CLI + signtool + SimplySign Desktop + Tauri CLI.
 
 | Software | Come installarlo |
 |---|---|
@@ -275,9 +280,62 @@ Aggiornare quando:
 - Si aggiungono nuovi target (es. riabilitiamo macOS / Linux signing)
 - Il cert scade e si rinnova (aggiornare thumbprint e link Certum)
 
+## Setup guidato via script
+
+Per evitare di installare e configurare manualmente ogni componente,
+usa lo script appropriato per la tua workstation.
+
+### Windows 10/11 (anche IoT Enterprise) — workstation di signing
+
+```powershell
+# Dal repo clonato sulla workstation Windows:
+.\scripts\setup-windows.ps1
+```
+
+Lo script:
+- Installa via WinGet: GitHub CLI, SimplySign Desktop, Node.js LTS
+- Installa Tauri CLI globalmente via pnpm (corepack)
+- Verifica presenza signtool.exe (Windows SDK, install manuale se mancante)
+- Configura env vars User scope: `CERTUM_CERT_THUMBPRINT`,
+  `TAURI_UPDATER_PRIVATE_KEY_PATH`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+- Copia la chiave privata Tauri Updater in `%USERPROFILE%\.tauri\pap-updater.key`
+- Guida `gh auth login` se non autenticato
+
+Esegui come utente normale (NON Administrator); winget userà UAC per
+i pacchetti che lo richiedono. Dopo l'esecuzione, **chiudi e riapri
+PowerShell** per caricare env vars e nuovi tool in PATH.
+
+Modalità solo-configurazione (utile dopo aver installato manualmente
+Windows SDK):
+```powershell
+.\scripts\setup-windows.ps1 -SkipInstall
+```
+
+### Ubuntu 24.04 — workstation di sviluppo / gestione chiavi
+
+```bash
+./scripts/setup-ubuntu.sh
+```
+
+Lo script:
+- Installa via apt: build-essential, git, gh, dipendenze Tauri 2 Linux
+  (libwebkit2gtk-4.1-dev, libayatana-appindicator3-dev, librsvg2-dev,
+  libxdo-dev, patchelf, ecc.)
+- Installa Node.js LTS via NodeSource + pnpm via corepack
+- Installa Tauri CLI globalmente
+- Guida copia o generazione chiave Tauri Updater in `~/.tauri/`
+- Aggiunge `TAURI_UPDATER_PRIVATE_KEY_PATH` in `~/.bashrc` (idempotente,
+  delimitato da marker `# >>> prompt-a-porter setup >>>`)
+
+Una workstation Ubuntu può buildare l'app e gestire la chiave Updater,
+ma **non può eseguire `sign-release.ps1`** perché signtool.exe è
+Windows-only. Per la firma Authenticode serve sempre una macchina
+Windows con SimplySign Desktop.
+
 ## Vedi anche
 
 - ADR signing: [`../architettura/decisioni/authenticode-signing.md`](../architettura/decisioni/authenticode-signing.md)
 - Setup chiavi Tauri Updater: [`./setup-tauri-updater-keys.md`](./setup-tauri-updater-keys.md)
 - Workflow CI release: [`../../.github/workflows/release.yml`](../../.github/workflows/release.yml)
 - Doc utente auto-update: [`../utente/auto-update.md`](../utente/auto-update.md)
+- Script setup workstation: `scripts/setup-windows.ps1`, `scripts/setup-ubuntu.sh`
