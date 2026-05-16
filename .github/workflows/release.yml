@@ -221,8 +221,12 @@ jobs:
                        (([int]$hash[$offset + 1] -band 0xFF) -shl 16) -bor `
                        (([int]$hash[$offset + 2] -band 0xFF) -shl 8) -bor `
                        ([int]$hash[$offset + 3] -band 0xFF)
-            $otp = $binCode % [math]::Pow(10, $Digits)
-            return $otp.ToString("D$Digits")
+            # Fix: [math]::Pow ritorna Double, mod risulta Double, e
+            # Double.ToString("D6") fallisce ("Format specifier was invalid").
+            # Calcoliamo $mod come int per restare in int-space.
+            $mod = [int][math]::Pow(10, $Digits)
+            $otp = $binCode % $mod
+            return ([int]$otp).ToString("D$Digits")
           }
 
           $totp = Get-TOTP -Base32Secret $env:CERTUM_TOTP_SEED
