@@ -229,11 +229,28 @@ if ($SkipInstall) {
         Write-Host "       Workaround: chiudi questo terminale, riapri, rilancia: .\scripts\setup-windows.ps1 -SkipInstall"
         exit 0
     }
-    Write-Host "Abilito pnpm via corepack..."
-    corepack enable
-    corepack prepare pnpm@latest --activate
+
+    # corepack enable scrive shim in C:\Program Files\nodejs\ -> richiede
+    # admin. Lo lancio in sub-shell elevated via -Verb RunAs (UAC prompt).
+    Write-Host "Abilito pnpm via corepack (UAC prompt: serve admin per scrivere in Program Files)..."
+    $corepackCmd = 'corepack enable; corepack prepare pnpm@latest --activate'
+    try {
+        $proc = Start-Process -FilePath 'powershell' `
+            -ArgumentList '-NoProfile', '-Command', $corepackCmd `
+            -Verb RunAs -Wait -PassThru
+    } catch {
+        throw "Lancio corepack elevated fallito (UAC negato?): $($_.Exception.Message)"
+    }
+    if ($proc.ExitCode -ne 0) {
+        throw "corepack enable fallito (exit $($proc.ExitCode)). Workaround: apri PowerShell come Admin e lancia manualmente: corepack enable; corepack prepare pnpm@latest --activate"
+    }
+
+    # Refresh PATH per intercettare pnpm shim appena creato in Program Files\nodejs
+    $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' +
+                [Environment]::GetEnvironmentVariable('PATH', 'User')
+
     if (-not (Test-CommandExists 'pnpm')) {
-        throw "pnpm non disponibile dopo corepack enable. Riapri PowerShell."
+        throw "pnpm non disponibile dopo corepack enable elevated. Riapri PowerShell e rilancia con -SkipInstall."
     }
     Write-Host "[OK] pnpm: $(pnpm -v)"
 
