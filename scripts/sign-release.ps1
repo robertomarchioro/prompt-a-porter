@@ -475,14 +475,18 @@ if ($doUpdaterReSign) {
         $latest = Get-Content $latestJsonPath -Raw | ConvertFrom-Json
 
         # latest.json schema: platforms.<key>.{signature, url}
-        # signature = base64(contenuto file .sig).
+        # signature = contenuto file .sig as-is. Importante: la CLI
+        # `tauri signer sign` v2 emette gia' il .sig in formato base64
+        # (encoding del minisign 4-line raw text). Tauri Updater client
+        # si aspetta proprio quel base64 nel campo `signature`. NON
+        # ri-encodare in base64 (sarebbe doppia encoding -> updater
+        # rifiuterebbe con "invalid signature").
         foreach ($prop in $latest.platforms.PSObject.Properties) {
             $platform = $prop.Value
             $url = $platform.url
             $fname = ($url -split '/' | Select-Object -Last 1)
             if ($newSigContent.ContainsKey($fname)) {
-                $sigBytes = [System.Text.Encoding]::UTF8.GetBytes($newSigContent[$fname])
-                $platform.signature = [Convert]::ToBase64String($sigBytes)
+                $platform.signature = $newSigContent[$fname].Trim()
                 Write-Host "  latest.json platforms.$($prop.Name) -> nuova signature per $fname"
             } else {
                 Write-Warning "  latest.json platforms.$($prop.Name) -> url '$fname' non in target ri-firmati, lascio signature stale"
@@ -490,9 +494,14 @@ if ($doUpdaterReSign) {
         }
         $latest.pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
 
-        $latest | ConvertTo-Json -Depth 10 | Set-Content -Path $latestJsonPath -Encoding utf8 -NoNewline
+        # Scrivi senza BOM UTF-8 (PS 5.1 Set-Content -Encoding utf8
+        # aggiunge BOM; serde Rust + Tauri Updater non gradiscono).
+        # .NET API e' compatibile sia PS 5.1 che PS 7+.
+        $json = $latest | ConvertTo-Json -Depth 10
+        $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+        [System.IO.File]::WriteAllText($latestJsonPath, $json, $utf8NoBom)
         $updaterArtifactsToUpload += $latestJsonPath
-        Write-Host "[OK] latest.json rigenerato + .sig ri-firmati ($($newSigContent.Count) target)"
+        Write-Host "[OK] latest.json rigenerato (no BOM) + .sig ri-firmati ($($newSigContent.Count) target)"
     }
 }
 
