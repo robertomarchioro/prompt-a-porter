@@ -98,6 +98,102 @@ Write-Host "  WorkDir: $WorkDir"
 Write-Host "  Publish: $Publish"
 Write-Host "==========================================================="
 
+# 1a. Preflight summary - visione d'insieme di tutti gli ingredienti.
+# Non-blocking: i check critici successivi falliscono fast se mancano
+# componenti essenziali. Serve a vedere a colpo d'occhio cosa manca.
+function Show-PreflightSummary {
+    Write-Host ""
+    Write-Host "-- Preflight check --"
+
+    $envThumb = [Environment]::GetEnvironmentVariable('CERTUM_CERT_THUMBPRINT', 'User')
+    $envKey = [Environment]::GetEnvironmentVariable('TAURI_UPDATER_PRIVATE_KEY_PATH', 'User')
+    $envPwd = [Environment]::GetEnvironmentVariable('TAURI_SIGNING_PRIVATE_KEY_PASSWORD', 'User')
+
+    $checks = [System.Collections.ArrayList]@()
+
+    # CERTUM_CERT_THUMBPRINT
+    if ($envThumb) {
+        [void]$checks.Add(@{ Name = 'CERTUM_CERT_THUMBPRINT'; Status = 'OK'; Detail = $envThumb })
+    } else {
+        [void]$checks.Add(@{ Name = 'CERTUM_CERT_THUMBPRINT'; Status = 'MISSING'; Detail = '' })
+    }
+
+    # TAURI_UPDATER_PRIVATE_KEY_PATH (path env var must point to existing file)
+    if (-not $envKey) {
+        [void]$checks.Add(@{ Name = 'TAURI_UPDATER_PRIVATE_KEY_PATH'; Status = 'MISSING (opzione B disabilitata)'; Detail = '' })
+    } elseif (-not (Test-Path $envKey)) {
+        [void]$checks.Add(@{ Name = 'TAURI_UPDATER_PRIVATE_KEY_PATH'; Status = 'PATH_NOT_FOUND'; Detail = $envKey })
+    } else {
+        [void]$checks.Add(@{ Name = 'TAURI_UPDATER_PRIVATE_KEY_PATH'; Status = 'OK'; Detail = $envKey })
+    }
+
+    # TAURI_SIGNING_PRIVATE_KEY_PASSWORD (vuota = OK se chiave non cifrata)
+    if ($envPwd) {
+        [void]$checks.Add(@{ Name = 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD'; Status = 'SETTATA'; Detail = '(valore nascosto)' })
+    } else {
+        [void]$checks.Add(@{ Name = 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD'; Status = '(vuota - ok se chiave non cifrata)'; Detail = '' })
+    }
+
+    # tauri CLI
+    $tauriCmd = Get-Command tauri -ErrorAction SilentlyContinue
+    if ($tauriCmd) {
+        [void]$checks.Add(@{ Name = 'tauri CLI'; Status = 'OK'; Detail = (& tauri -V) })
+    } else {
+        [void]$checks.Add(@{ Name = 'tauri CLI'; Status = 'MISSING (re-signing Ed25519 disabilitato)'; Detail = '' })
+    }
+
+    # signtool
+    $st = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+           Sort-Object -Property FullName -Descending | Select-Object -First 1).FullName
+    if (-not $st) {
+        $st = (Get-ChildItem "$env:ProgramFiles\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+               Sort-Object -Property FullName -Descending | Select-Object -First 1).FullName
+    }
+    if ($st) {
+        [void]$checks.Add(@{ Name = 'signtool.exe'; Status = 'OK'; Detail = $st })
+    } else {
+        [void]$checks.Add(@{ Name = 'signtool.exe'; Status = 'MISSING (run setup-windows.ps1)'; Detail = '' })
+    }
+
+    # gh CLI auth
+    if (Get-Command gh -ErrorAction SilentlyContinue) {
+        & gh auth status 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            [void]$checks.Add(@{ Name = 'gh CLI'; Status = 'OK'; Detail = '(authenticated)' })
+        } else {
+            [void]$checks.Add(@{ Name = 'gh CLI'; Status = 'NOT_AUTHENTICATED (run: gh auth login)'; Detail = '' })
+        }
+    } else {
+        [void]$checks.Add(@{ Name = 'gh CLI'; Status = 'MISSING'; Detail = '' })
+    }
+
+    # Cert visible in store (richiede SimplySign loggato)
+    if ($envThumb) {
+        $cert = Get-ChildItem Cert:\CurrentUser\My -ErrorAction SilentlyContinue |
+                Where-Object { $_.Thumbprint -eq $envThumb }
+        if ($cert) {
+            $subj = $cert.Subject
+            if ($subj.Length -gt 60) { $subj = $subj.Substring(0, 60) + '...' }
+            [void]$checks.Add(@{ Name = 'Cert in Cert:\CurrentUser\My'; Status = 'OK'; Detail = $subj })
+        } else {
+            [void]$checks.Add(@{ Name = 'Cert in Cert:\CurrentUser\My'; Status = 'NOT_FOUND (apri SimplySign Desktop + login)'; Detail = '' })
+        }
+    } else {
+        [void]$checks.Add(@{ Name = 'Cert in Cert:\CurrentUser\My'; Status = 'SKIP (thumbprint missing)'; Detail = '' })
+    }
+
+    foreach ($c in $checks) {
+        $line = "  {0,-40} {1}" -f $c.Name, $c.Status
+        if ($c.Detail) {
+            $line += "  ($($c.Detail))"
+        }
+        Write-Host $line
+    }
+    Write-Host ""
+}
+
+Show-PreflightSummary
+
 if ([string]::IsNullOrWhiteSpace($CertThumbprint)) {
     $CertThumbprint = Read-Host "Thumbprint cert Certum (40 hex)"
 }
