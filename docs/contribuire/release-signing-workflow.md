@@ -19,7 +19,14 @@ gh run watch --repo robertomarchioro/prompt-a-porter
 
 # 3. apri SimplySign Desktop, fai login (user + pwd + TOTP)
 
-# 4. firma + ricarica + pubblica
+# 4. firma Authenticode + re-sign Ed25519 Updater + ricarica + pubblica
+#    Assume env CERTUM_CERT_THUMBPRINT + TAURI_UPDATER_PRIVATE_KEY_PATH gia' settate.
+.\scripts\sign-release.ps1 -Tag v0.9.0 -Publish
+```
+
+Senza re-signing Updater (sconsigliato — Tauri Updater rifiuterà ogni update da questa release):
+```powershell
+# Senza env TAURI_UPDATER_PRIVATE_KEY_PATH lo script chiede conferma
 .\scripts\sign-release.ps1 -Tag v0.9.0 -Publish
 ```
 
@@ -39,6 +46,7 @@ gh CLI + signtool + SimplySign Desktop.
 | **SimplySign Desktop** (Certum) | `winget install --id Certum.SmartSignSimplySignDesktop` oppure download da [pagina Certum](https://www.certum.eu/en/cert_expertise_signature_cards_drivers_simplysign_desktop/) |
 | **GitHub CLI** (`gh`) | `winget install --id GitHub.cli` oppure [cli.github.com](https://cli.github.com/) |
 | **PowerShell 5.1+** o **PowerShell 7+** | Preinstallato su Windows 10/11 |
+| **Tauri CLI** (per re-signing Ed25519 Updater) | `cargo install tauri-cli --version "^2"` oppure `pnpm i -g @tauri-apps/cli`. Necessario per **opzione B** (re-signing post-Authenticode). Senza, lo script chiede conferma e procede ma Tauri Updater rifiuta gli update da quella release. |
 
 ### Setup credenziali una tantum
 
@@ -60,6 +68,19 @@ gh CLI + signtool + SimplySign Desktop.
    [Environment]::SetEnvironmentVariable('CERTUM_CERT_THUMBPRINT', '<TUO_THUMB>', 'User')
    # poi riapri PowerShell perche' la nuova env var sia visibile
    ```
+3. **Tauri Updater private key** (per re-signing Ed25519 - opzione B):
+   copia la chiave privata `pap-updater.key` dalla tua macchina di
+   sviluppo principale (o dal tuo password manager) sulla workstation
+   di signing. Esempio: `C:\Users\<user>\.tauri\pap-updater.key`.
+   Esportala come env var permanente:
+   ```powershell
+   [Environment]::SetEnvironmentVariable('TAURI_UPDATER_PRIVATE_KEY_PATH', 'C:\Users\<user>\.tauri\pap-updater.key', 'User')
+   # se la chiave ha password, settala con:
+   [Environment]::SetEnvironmentVariable('TAURI_SIGNING_PRIVATE_KEY_PASSWORD', '<password>', 'User')
+   # riapri PowerShell.
+   ```
+   ⚠️ **Mai committare questa chiave**. Vedi `setup-tauri-updater-keys.md`
+   §"Backup chiave privata" per la gestione long-term del segreto.
 
 ## Procedura per ogni release
 
@@ -122,24 +143,29 @@ Dal repo Prompt a Porter clonato sulla workstation Windows:
 ```powershell
 cd path\to\prompt-a-porter
 
-# Variante "safe" (lascia draft, ti da' chance di review prima di pubblicare)
+# Variante "safe" (lascia draft, ti da' chance di review prima di pubblicare).
+# Assume env TAURI_UPDATER_PRIVATE_KEY_PATH settata -> re-signing Updater attivo.
 .\scripts\sign-release.ps1 -Tag v0.9.0
 
 # Variante "all-in-one" (firma + ricarica + pubblica come Latest)
 .\scripts\sign-release.ps1 -Tag v0.9.0 -Publish
+
+# Override esplicito path chiave Updater (se non hai usato env var):
+.\scripts\sign-release.ps1 -Tag v0.9.0 -UpdaterPrivKey C:\Users\<user>\.tauri\pap-updater.key -Publish
 ```
 
 Lo script:
-1. Verifica gh CLI, signtool, cert disponibile, release esiste
+1. Verifica gh CLI, signtool, cert disponibile, release esiste, (se re-signing attivo) tauri CLI + chiave Updater
 2. Crea workdir temp `%TEMP%\pap-sign-v0.9.0\`
-3. Scarica asset firmabili (`.exe`, `.msi`, `*portable*.zip`)
+3. Scarica asset firmabili (`.exe`, `.msi`, `*portable*.zip`, + `.sig` e `latest.json` se re-signing attivo)
 4. Estrae il `.zip` portable per firmare l'`.exe` interno
 5. Firma tutti i file con `signtool sign /sha1 <thumb> /tr http://time.certum.pl /td sha256 /fd sha256 /a`
 6. Verifica le firme con `signtool verify /pa /v`
-7. Re-zippa il portable con `.exe` firmato dentro
-8. Re-uploada gli asset firmati con `gh release upload --clobber`
-9. (Opzionale, se `-Publish`) promuove la release da draft a Latest
-10. Cleanup workdir (a meno che `-KeepWorkDir`)
+7. **(Opzione B, se `-UpdaterPrivKey` o env var presente)** Re-firma Ed25519 i target Updater (setup.exe NSIS + .msi) con `tauri signer sign`, ricomputa `latest.json` con le nuove signature + `pub_date` corrente. Senza questo step, Tauri Updater rifiuta gli update con `signature mismatch` perché i `.sig` di CI sono calcolati sui binari unsigned.
+8. Re-zippa il portable con `.exe` firmato dentro
+9. Re-uploada gli asset firmati (+ `.sig` + `latest.json` se re-signing attivo) con `gh release upload --clobber`
+10. (Opzionale, se `-Publish`) promuove la release da draft a Latest
+11. Cleanup workdir (a meno che `-KeepWorkDir`)
 
 ### Step 5 — (Se non hai usato `-Publish`) review e pubblica
 

@@ -123,6 +123,50 @@ Riaprire l'ADR se si verifica **una** di queste condizioni:
 - Script: `scripts/sign-release.ps1`
 - Setup cert una tantum: §"Setup procedura — UNA TANTUM" sotto
 
+### Interazione con Tauri Updater Ed25519 (scoperta 2026-05-16, v0.8.9-test5)
+
+**Problema**: tauri-action genera `latest.json` + `.sig` Ed25519 sui
+binari prodotti dalla build CI, che sono **unsigned** (nessun
+Authenticode). Quando il maintainer esegue `signtool sign` localmente,
+il contenuto dei `.exe` / `.msi` cambia (~10-12 KB di firma aggiunti).
+I `.sig` Ed25519 originali quindi **non matchano più** il contenuto
+dei file ri-uploadati → Tauri Updater rifiuta gli update con
+`signature mismatch`.
+
+Bug rilevato durante test pipeline su tag `v0.8.9-test5` (lasciato
+draft pre-release permanente come test artifact, mai promosso a Latest).
+
+**Soluzione adottata (opzione B)**: lo script `sign-release.ps1`
+include uno step di re-signing Ed25519 dopo `signtool`:
+
+1. Per ogni target Updater (NSIS `setup.exe` + `.msi`), genera nuovo
+   `<file>.sig` via `tauri signer sign -f <updater-privkey> <file>`.
+2. Scarica `latest.json` originale, sostituisce
+   `platforms.*.signature` con il contenuto base64 del nuovo `.sig`,
+   aggiorna `pub_date` con timestamp corrente.
+3. Re-uploada `latest.json` + tutti i `.sig` con `--clobber`.
+
+**Requisiti aggiuntivi sulla workstation di signing**:
+- Tauri CLI (`cargo install tauri-cli --version "^2"` o
+  `pnpm i -g @tauri-apps/cli`).
+- Chiave privata Ed25519 `pap-updater.key` accessibile localmente
+  (path via env `TAURI_UPDATER_PRIVATE_KEY_PATH` o param
+  `-UpdaterPrivKey`). Password via env
+  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` se la chiave è cifrata.
+
+**Comportamento se chiave non passata**: lo script mostra warning
+chiaro e chiede conferma esplicita prima di procedere (per evitare
+release "silenziosamente rotte" per gli utenti con auto-update
+attivo).
+
+**Trade-off accettato**: la chiave privata Updater ora vive in due
+posti — GitHub Secret (per CI) + workstation maintainer (per
+re-signing). Mitigation: la chiave è custodita anche nel password
+manager del maintainer ed è già la chiave "eterna" del progetto
+(perderla = utenti non possono più ricevere update). Vedi
+[`../../contribuire/setup-tauri-updater-keys.md`](../../contribuire/setup-tauri-updater-keys.md)
+§"Backup chiave privata".
+
 ## Contesto
 
 - Prompt a Porter è distribuito come bundle Windows portable + (in v1.0) NSIS installer per-user + Tauri Updater.

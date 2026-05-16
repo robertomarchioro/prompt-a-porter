@@ -100,10 +100,12 @@ jobs:
 
             Vedi [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) per il dettaglio.
 
-            > ⚠️ **Release in stato draft — signing Authenticode pending.**
-            > Gli asset sono presenti ma NON ancora firmati Authenticode.
-            > Il maintainer eseguirà `scripts/sign-release.ps1` da
-            > workstation Windows con SimplySign Desktop logged-in, poi
+            > ⚠️ **Release in stato draft — signing pending.**
+            > Gli asset sono presenti ma NON ancora firmati Authenticode
+            > e i `.sig` Ed25519 sono calcolati sui binari unsigned
+            > (verranno rigenerati post-signing). Il maintainer eseguirà
+            > `scripts/sign-release.ps1` da workstation Windows con
+            > SimplySign Desktop logged-in + chiave Updater locale, poi
             > promuoverà la release a Latest published.
             >
             > Vedi `docs/contribuire/release-signing-workflow.md`.

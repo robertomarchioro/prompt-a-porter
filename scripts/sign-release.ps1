@@ -72,7 +72,18 @@ param(
 
     [string]$WorkDir = (Join-Path $env:TEMP "pap-sign-$Tag"),
 
-    [switch]$KeepWorkDir
+    [switch]$KeepWorkDir,
+
+    # v1.0 M1.2 - re-signing Ed25519 Tauri Updater (opzione B).
+    # I .sig generati dalla CI sono calcolati sui binari unsigned;
+    # dopo signtool il contenuto cambia e i .sig non matchano piu',
+    # rompendo il Tauri Updater (signature mismatch). Se passato
+    # questo param, lo script rigenera .sig + latest.json sui
+    # binari firmati. Se omesso, viene mostrato un warning chiaro
+    # e si procede senza re-signing.
+    [string]$UpdaterPrivKey = $env:TAURI_UPDATER_PRIVATE_KEY_PATH,
+
+    [string]$UpdaterPrivKeyPassword = $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 )
 
 $ErrorActionPreference = 'Stop'
@@ -183,13 +194,42 @@ if (Test-Path $WorkDir) {
 Set-Location $WorkDir
 Write-Host "[OK] WorkDir pronta: $WorkDir"
 
-# 3. Download asset firmabili
+# 3. Download asset firmabili (+ updater artifacts se re-signing attivo)
 $signablePatterns = @('*.exe', '*.msi')
 $zipPattern = '*portable*.zip'
+$updaterPatterns = @('*.sig', 'latest.json')
+
+$doUpdaterReSign = -not [string]::IsNullOrWhiteSpace($UpdaterPrivKey)
+if ($doUpdaterReSign) {
+    if (-not (Test-Path $UpdaterPrivKey)) {
+        throw "UpdaterPrivKey path non esiste: $UpdaterPrivKey"
+    }
+    $tauriCmd = Get-Command tauri -ErrorAction SilentlyContinue
+    if (-not $tauriCmd) {
+        throw "tauri CLI non trovato. Installa con 'cargo install tauri-cli --version ^2' oppure 'pnpm i -g @tauri-apps/cli'."
+    }
+    Write-Host "[OK] Tauri Updater re-signing ATTIVO (key: $UpdaterPrivKey)"
+} else {
+    Write-Host ""
+    Write-Host "[WARN] Tauri Updater re-signing SKIPPED."
+    Write-Host "       I .sig generati dalla CI sono calcolati sui binari unsigned;"
+    Write-Host "       dopo signtool non matchano piu' -> Tauri Updater rifiutera'"
+    Write-Host "       gli update da questa release con 'signature mismatch'."
+    Write-Host ""
+    Write-Host "       Per abilitare il re-signing, passa -UpdaterPrivKey <path>"
+    Write-Host "       (o setta env TAURI_UPDATER_PRIVATE_KEY_PATH)."
+    Write-Host ""
+    $continueAnyway = Read-Host "Procedere comunque senza updater re-signing? [y/N]"
+    if ($continueAnyway -notmatch '^[yY]') {
+        throw "Interrotto dall'utente."
+    }
+}
 
 Write-Host ""
-Write-Host "Scarico asset firmabili (.exe, .msi, .zip portable)..."
-foreach ($pattern in @($signablePatterns + $zipPattern)) {
+Write-Host "Scarico asset (.exe, .msi, .zip portable$(if($doUpdaterReSign){', .sig, latest.json'}))..."
+$downloadPatterns = $signablePatterns + $zipPattern
+if ($doUpdaterReSign) { $downloadPatterns += $updaterPatterns }
+foreach ($pattern in $downloadPatterns) {
     & gh release download $Tag --repo $Repo --pattern $pattern --skip-existing 2>&1 | Out-Null
 }
 
@@ -269,6 +309,81 @@ foreach ($file in $toSign) {
 }
 Write-Host "[OK] Tutte le firme verificate."
 
+# 7b. Re-signing Ed25519 Tauri Updater (opzione B v1.0 M1.2).
+# I .sig della CI sono calcolati sui binari unsigned; dopo signtool
+# il contenuto e' cambiato e i .sig sono stale -> Tauri Updater
+# rifiuterebbe gli update con 'signature mismatch'. Qui generiamo
+# nuovi .sig sui binari firmati e ricomputiamo latest.json.
+$updaterTargets = @()  # paths dei file Updater-relevant ri-firmati
+$updaterArtifactsToUpload = @()  # paths di .sig + latest.json da uppare
+if ($doUpdaterReSign) {
+    Write-Host ""
+    Write-Host "-- Re-signing Ed25519 Tauri Updater --"
+
+    # Target Updater: NSIS setup.exe + MSI (NON il portable .exe,
+    # NON il binario raw -> Tauri Updater su Windows segue
+    # latest.json -> platforms.windows-x86_64.url, di default i
+    # bundle NSIS/MSI).
+    $updaterTargets = @($toSign | Where-Object {
+        ($_ -like '*setup.exe') -or ($_ -like '*.msi')
+    })
+    if ($updaterTargets.Count -eq 0) {
+        Write-Warning "Nessun target Updater (.msi / setup.exe) trovato fra i firmati. Skip re-signing."
+    } else {
+        # Mappa filename -> nuova signature (contenuto file .sig)
+        $newSigContent = @{}  # filename "Prompt....msi" -> raw .sig text
+
+        foreach ($file in $updaterTargets) {
+            $sigPath = "$file.sig"
+            if (Test-Path $sigPath) { Remove-Item $sigPath -Force }
+
+            Write-Host "Re-sign Ed25519: $(Split-Path $file -Leaf)..."
+            $tauriArgs = @('signer', 'sign', '-f', $UpdaterPrivKey)
+            if (-not [string]::IsNullOrEmpty($UpdaterPrivKeyPassword)) {
+                $tauriArgs += @('-p', $UpdaterPrivKeyPassword)
+            }
+            $tauriArgs += $file
+            & tauri @tauriArgs
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sigPath)) {
+                throw "tauri signer sign FALLITO per $file (exit $LASTEXITCODE)"
+            }
+            $newSigContent[(Split-Path $file -Leaf)] = (Get-Content $sigPath -Raw)
+            $updaterArtifactsToUpload += $sigPath
+        }
+
+        # Rigenera latest.json: scarica originale (se non gia' presente),
+        # sostituisci signature in ogni platform, aggiorna pub_date.
+        $latestJsonPath = Join-Path $WorkDir 'latest.json'
+        if (-not (Test-Path $latestJsonPath)) {
+            & gh release download $Tag --repo $Repo --pattern 'latest.json' --skip-existing 2>&1 | Out-Null
+        }
+        if (-not (Test-Path $latestJsonPath)) {
+            throw "latest.json non scaricabile dalla release $Tag."
+        }
+        $latest = Get-Content $latestJsonPath -Raw | ConvertFrom-Json
+
+        # latest.json schema: platforms.<key>.{signature, url}
+        # signature = base64(contenuto file .sig).
+        foreach ($prop in $latest.platforms.PSObject.Properties) {
+            $platform = $prop.Value
+            $url = $platform.url
+            $fname = ($url -split '/' | Select-Object -Last 1)
+            if ($newSigContent.ContainsKey($fname)) {
+                $sigBytes = [System.Text.Encoding]::UTF8.GetBytes($newSigContent[$fname])
+                $platform.signature = [Convert]::ToBase64String($sigBytes)
+                Write-Host "  latest.json platforms.$($prop.Name) -> nuova signature per $fname"
+            } else {
+                Write-Warning "  latest.json platforms.$($prop.Name) -> url '$fname' non in target ri-firmati, lascio signature stale"
+            }
+        }
+        $latest.pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+
+        $latest | ConvertTo-Json -Depth 10 | Set-Content -Path $latestJsonPath -Encoding utf8 -NoNewline
+        $updaterArtifactsToUpload += $latestJsonPath
+        Write-Host "[OK] latest.json rigenerato + .sig ri-firmati ($($newSigContent.Count) target)"
+    }
+}
+
 # 8. Re-zip portable (con .exe firmato dentro)
 foreach ($entry in ($extractedExesFromZip | Group-Object ZipPath)) {
     $zipPath = $entry.Name
@@ -284,10 +399,13 @@ foreach ($entry in ($extractedExesFromZip | Group-Object ZipPath)) {
     Write-Host "[OK] $($zipPath | Split-Path -Leaf) -> $([math]::Round($newSize/1MB,2)) MB"
 }
 
-# 9. Re-upload firmati con clobber
+# 9. Re-upload firmati con clobber (+ updater artifacts se ri-firmati)
 Write-Host ""
 Write-Host "-- Re-upload asset firmati (clobber) --"
-$toUpload = $downloaded | ForEach-Object { $_.FullName }
+$toUpload = @($downloaded | ForEach-Object { $_.FullName })
+if ($doUpdaterReSign -and $updaterArtifactsToUpload.Count -gt 0) {
+    $toUpload += $updaterArtifactsToUpload
+}
 foreach ($file in $toUpload) {
     $fileName = Split-Path $file -Leaf
     Write-Host "Upload $fileName..."
