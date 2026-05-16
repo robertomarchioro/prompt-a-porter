@@ -145,12 +145,36 @@ Write-Host "     Asset presenti: $($release.assets.Count)"
 $release.assets | ForEach-Object { Write-Host "       - $($_.name)" }
 
 # 2. Setup workdir
+function Remove-WorkDirRobust {
+    param([string]$Path)
+    # Esci dalla dir per liberare handle CWD (capita dopo crash di un
+    # run precedente con Set-Location dentro $WorkDir).
+    Set-Location $env:USERPROFILE
+    # Primo tentativo veloce
+    Remove-Item -Path $Path -Recurse -Force -ErrorAction SilentlyContinue
+    if (-not (Test-Path $Path)) { return }
+    # Retry: tipicamente file ancora locked da Defender scan dopo
+    # Expand-Archive. Attendi e riprova file-by-file (innermost first).
+    Write-Host "Cleanup parziale - retry tolerante (Defender lock?)..."
+    Start-Sleep -Milliseconds 1500
+    Get-ChildItem -Path $Path -Recurse -Force -ErrorAction SilentlyContinue |
+        Sort-Object -Property FullName -Descending |
+        ForEach-Object {
+            try { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop }
+            catch { Start-Sleep -Milliseconds 200; try { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop } catch { } }
+        }
+    Remove-Item -Path $Path -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path $Path) {
+        throw "Impossibile pulire $Path. Chiudi processi che usano file dentro questa cartella (es. esplora risorse, antivirus scan) e rilancia. Workaround: cancella manualmente la cartella e rilancia lo script."
+    }
+}
+
 if (Test-Path $WorkDir) {
     Write-Host ""
     Write-Host "WorkDir esiste gia': $WorkDir"
     $reuse = Read-Host "Riutilizzare contenuto esistente? [y/N]"
     if ($reuse -notmatch '^[yY]') {
-        Remove-Item -Path $WorkDir -Recurse -Force
+        Remove-WorkDirRobust -Path $WorkDir
         New-Item -ItemType Directory -Path $WorkDir | Out-Null
     }
 } else {
