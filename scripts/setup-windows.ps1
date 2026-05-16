@@ -254,15 +254,36 @@ if ($SkipInstall) {
     }
     Write-Host "[OK] pnpm: $(pnpm -v)"
 
+    # pnpm alla prima esecuzione richiede PNPM_HOME + PNPM_HOME in PATH
+    # per ospitare i global packages (tauri, ecc.). 'pnpm setup' fa
+    # questo ma con output interattivo variabile; lo facciamo manuale.
+    $pnpmHome = Join-Path $env:LOCALAPPDATA 'pnpm'
+    if (-not (Test-Path $pnpmHome)) {
+        New-Item -ItemType Directory -Path $pnpmHome -Force | Out-Null
+    }
+    [Environment]::SetEnvironmentVariable('PNPM_HOME', $pnpmHome, 'User')
+    $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
+    if ($null -eq $userPath) { $userPath = '' }
+    if ($userPath -notlike "*$pnpmHome*") {
+        $newUserPath = if ($userPath) { "$userPath;$pnpmHome" } else { $pnpmHome }
+        [Environment]::SetEnvironmentVariable('PATH', $newUserPath, 'User')
+        Write-Host "[OK] aggiunto $pnpmHome a User PATH (persistente)"
+    }
+    # Refresh PATH della sessione corrente (senza riavvio shell)
+    $env:PNPM_HOME = $pnpmHome
+    if (-not ($env:PATH -like "*$pnpmHome*")) {
+        $env:PATH = "$env:PATH;$pnpmHome"
+    }
+
     Write-Host "Installo @tauri-apps/cli globalmente..."
     pnpm i -g @tauri-apps/cli
+    if ($LASTEXITCODE -ne 0) {
+        throw "pnpm i -g @tauri-apps/cli fallito (exit $LASTEXITCODE)"
+    }
     if (-not (Test-CommandExists 'tauri')) {
-        # pnpm global bin puo' non essere in PATH la prima volta
-        $pnpmBin = (pnpm bin -g).Trim()
-        Write-Host "[WARN] 'tauri' non in PATH. pnpm global bin: $pnpmBin"
-        Write-Host "       Aggiungilo al PATH utente:"
-        Write-Host "       [Environment]::SetEnvironmentVariable('PATH', `"`$env:PATH;$pnpmBin`", 'User')"
-        Write-Host "       Poi riapri PowerShell."
+        Write-Host "[WARN] 'tauri' non ancora in PATH della sessione corrente."
+        Write-Host "       L'install e' OK ($pnpmHome\tauri.cmd dovrebbe esistere)"
+        Write-Host "       Chiudi e riapri PowerShell, poi: tauri -V"
     } else {
         Write-Host "[OK] tauri: $(tauri -V)"
     }
