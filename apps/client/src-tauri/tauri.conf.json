@@ -58,7 +58,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "PLACEHOLDER_GENERA_CON_TAURI_SIGNER_GENERATE",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc1NDk4MTBCQjBFQzc5MwpSV1NUeHc2N0VKaFVCL1l0OERJampkK2JRZWlkNFVNN2RlT3dOM2xNKzduNDRaUnhTL0hkeWF2Rwo=",
       "endpoints": [
         "https://github.com/robertomarchioro/prompt-a-porter/releases/latest/download/latest.json"
       ]
