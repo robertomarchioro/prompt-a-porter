@@ -106,24 +106,45 @@ function Install-WinGetPackage {
 
 # Fallback per ambienti senza winget (es. Windows IoT Enterprise senza
 # Microsoft Store). Scarica MSI direttamente e installa via msiexec.
+# Usa -Verb RunAs per triggerare UAC: la maggior parte degli MSI
+# installa in Program Files che richiede elevation (senza, exit 1603).
 function Install-MsiFromUrl {
     param(
         [string]$Url,
         [string]$DisplayName
     )
-    $tmpMsi = Join-Path $env:TEMP ("setup-" + [System.IO.Path]::GetRandomFileName() + ".msi")
+    $rand = [System.IO.Path]::GetRandomFileName()
+    $tmpMsi = Join-Path $env:TEMP "setup-$rand.msi"
+    $logFile = Join-Path $env:TEMP "msi-install-$rand.log"
     Write-Host "  Download MSI: $Url"
     Invoke-WebRequest -Uri $Url -OutFile $tmpMsi -UseBasicParsing
-    Write-Host "  Installazione msiexec /quiet..."
-    $proc = Start-Process -FilePath msiexec.exe `
-        -ArgumentList "/i", "`"$tmpMsi`"", "/quiet", "/norestart" `
-        -Wait -PassThru
-    Remove-Item -Path $tmpMsi -Force -ErrorAction SilentlyContinue
-    if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
-        # 3010 = success but reboot required
-        throw "msiexec install fallito per $DisplayName (exit $($proc.ExitCode))"
+    Write-Host "  Installazione msiexec (UAC prompt se richiesto, accetta)..."
+    try {
+        $proc = Start-Process -FilePath msiexec.exe `
+            -ArgumentList "/i", "`"$tmpMsi`"", "/quiet", "/norestart", "/L*v", "`"$logFile`"" `
+            -Verb RunAs -Wait -PassThru
+    } catch {
+        Remove-Item -Path $tmpMsi -Force -ErrorAction SilentlyContinue
+        throw "msiexec lancio fallito (UAC negato?): $($_.Exception.Message)"
     }
-    Write-Host "  [OK] $DisplayName installato (exit $($proc.ExitCode))"
+    # 0 = OK; 3010 = OK, reboot required
+    if ($proc.ExitCode -eq 0 -or $proc.ExitCode -eq 3010) {
+        Remove-Item -Path $tmpMsi -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $logFile -Force -ErrorAction SilentlyContinue
+        Write-Host "  [OK] $DisplayName installato (exit $($proc.ExitCode))"
+        return
+    }
+    # Fail: tengo MSI + log per debug
+    Write-Host ""
+    Write-Host "  [FAIL] msiexec exit $($proc.ExitCode)"
+    Write-Host "    MSI scaricata (conservata):   $tmpMsi"
+    Write-Host "    Log dettagliato msiexec:      $logFile"
+    Write-Host "    Per la causa specifica cerca 'return value 3' nel log,"
+    Write-Host "    oppure: Select-String -Path '$logFile' -Pattern 'Error|return value 3'"
+    Write-Host ""
+    Write-Host "    Workaround: doppio click sull'MSI per install GUI manuale."
+    Write-Host ""
+    throw "msiexec install fallito per $DisplayName (exit $($proc.ExitCode)). Vedi log: $logFile"
 }
 
 function Get-LatestGhMsiUrl {
