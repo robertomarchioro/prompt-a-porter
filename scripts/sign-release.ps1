@@ -169,8 +169,8 @@ foreach ($pattern in @($signablePatterns + $zipPattern)) {
     & gh release download $Tag --repo $Repo --pattern $pattern --skip-existing 2>&1 | Out-Null
 }
 
-$downloaded = Get-ChildItem -Path $WorkDir -File |
-              Where-Object { $_.Extension -in '.exe', '.msi', '.zip' }
+$downloaded = @(Get-ChildItem -Path $WorkDir -File |
+                Where-Object { $_.Extension -in '.exe', '.msi', '.zip' })
 if ($downloaded.Count -eq 0) {
     throw "Nessun asset firmabile scaricato. Controlla che la release abbia .exe / .msi / .zip."
 }
@@ -178,7 +178,7 @@ Write-Host "[OK] $($downloaded.Count) asset scaricati:"
 $downloaded | ForEach-Object { Write-Host "       - $($_.Name) ($([math]::Round($_.Length/1MB,2)) MB)" }
 
 # 4. Estrai .zip portable per firmare l'.exe interno
-$zipFiles = $downloaded | Where-Object { $_.Extension -eq '.zip' }
+$zipFiles = @($downloaded | Where-Object { $_.Extension -eq '.zip' })
 $extractedExesFromZip = @()
 
 foreach ($zip in $zipFiles) {
@@ -190,7 +190,7 @@ foreach ($zip in $zipFiles) {
     Write-Host "Estraggo $($zip.Name) in $extractDir..."
     Expand-Archive -Path $zip.FullName -DestinationPath $extractDir -Force
 
-    $innerExes = Get-ChildItem -Path $extractDir -Recurse -Filter *.exe -File
+    $innerExes = @(Get-ChildItem -Path $extractDir -Recurse -Filter *.exe -File)
     if ($innerExes.Count -eq 0) {
         Write-Warning "Nessun .exe trovato dentro $($zip.Name) - verra' ri-uploadato as-is."
         continue
