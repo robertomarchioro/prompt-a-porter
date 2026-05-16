@@ -1,5 +1,46 @@
 # Changelog — Prompt a Porter
 
+## v0.8.10 — v1.0 M1: Authenticode signing + Tauri Updater attivi (2026-05-16)
+
+> Prima release pubblica con **codice firmato Authenticode** (Certum Code Signing Open Source) e **auto-update Tauri** funzionante. SmartScreen Windows mostra il publisher "Open Source Developer, Roberto Marchioro" invece di "Unknown publisher".
+
+### Feature
+
+- **Authenticode signing** su tutti i binari Windows (`Prompt a Porter.exe` portable, NSIS `setup.exe` per-user installer, MSI `.msi`). Catena cert: Open Source Developer Roberto Marchioro → Certum Code Signing 2021 CA → Certum Trusted Network CA 2 → Certum Trusted Network CA. Timestamp Certum (`http://time.certum.pl`) → la firma resta valida anche dopo la scadenza del cert (2027-05-15).
+- **Tauri Updater** integrato (plugin `tauri-plugin-updater` v2) con verifica Ed25519 minisign su `latest.json` + ogni binario. Endpoint: GitHub Releases `latest/download/latest.json`. Policy: **check on-demand utente** (no auto-check al boot, no telemetria), disabilitabile da Impostazioni → Sviluppo → Aggiornamenti.
+- **NSIS installer per-user** (`installMode: "currentUser"`) — installazione senza UAC, in `%LOCALAPPDATA%\Prompt a Porter\`.
+- **Pipeline pre-signing locale** (script `scripts/sign-release.ps1`): CI produce asset unsigned in release draft, maintainer firma da workstation Windows con SimplySign Desktop logged-in + ri-firma Ed25519 + rigenera `latest.json`, poi promuove a Latest published. Vedi `docs/contribuire/release-signing-workflow.md`.
+
+### Scoperte architetturali (cfr. ADR `authenticode-signing.md`)
+
+- **SimplySign Cloud è GUI-only**: 4 iterazioni di test CI hanno confermato che non esiste un metodo headless documentato per il login (gli argomenti CLI suggeriti da fonti community datate non sono supportati in SimplySign Desktop 2026). Adottato approccio C — pre-signing locale, scartato in fase di ADR iniziale ma unica opzione praticabile oggi.
+- **Tauri Updater + Authenticode interagiscono**: i `.sig` Ed25519 generati dalla CI sono calcolati sui binari unsigned; dopo `signtool` il contenuto cambia (~+10 KB di firma) e i `.sig` diventano stale, rompendo l'updater. Lo script `sign-release.ps1` rigenera Ed25519 + `latest.json` post-Authenticode.
+
+### Documentazione nuova
+
+- `docs/architettura/decisioni/authenticode-signing.md` — ADR completo (amended 2026-05-16 con scoperte test pipeline)
+- `docs/contribuire/release-signing-workflow.md` — procedura step-by-step maintainer
+- `docs/contribuire/setup-tauri-updater-keys.md` — generazione chiavi una tantum
+- `docs/utente/auto-update.md` — guida utente finale + FAQ
+- `scripts/setup-windows.ps1` — setup guidato workstation di signing (Win 10/11 IoT)
+- `scripts/setup-ubuntu.sh` — setup guidato dev workstation Linux
+
+### Numeri
+
+- **15+ PR** mergiate per M1 (signing + updater + setup scripts + fix iterativi)
+- 4 test tag (`v0.8.9-test*`) per validazione end-to-end pipeline (lasciati come draft pre-release per riferimento)
+- Test backend invariati (416), copertura 74.14%
+
+### Skip versions
+
+`v0.8.9` saltata: il numero è stato consumato dai tag di test (`v0.8.9-test1` → `-test6`). Prossima versione "production" = `v0.8.10`.
+
+### Closes
+
+ADR `authenticode-signing.md`, milestone M1 v1.0 (Personale)
+
+---
+
 ## v0.8.8 — Hotfix CATASTROFICO: editor input bloccato (2026-05-11)
 
 > ⚠️ **v0.8.6 e v0.8.7 sono DIFETTOSE — non usare.** Aggiornare a v0.8.8.

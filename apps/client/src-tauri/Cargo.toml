@@ -1,6 +1,6 @@
 [package]
 name = "pap"
-version = "0.8.8"
+version = "0.8.10"
 description = "Prompt a Porter — Libreria locale per prompt AI"
 authors = ["Roberto Marchioro"]
 license = "AGPL-3.0-only"
