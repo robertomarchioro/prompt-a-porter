@@ -131,20 +131,53 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          $url = "https://files.certum.eu/software/SimplySignDesktop/Windows/SimplySignDesktop-Setup.exe"
-          $installer = "$env:TEMP\simplysign-setup.exe"
-          Write-Host "Download SimplySign Desktop installer..."
-          Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
-          Write-Host "Install silently..."
-          Start-Process -FilePath $installer -ArgumentList "/quiet","/norestart" -Wait
-          $simplySignPath = "C:\Program Files (x86)\Certum\SimplySign Desktop"
-          if (Test-Path $simplySignPath) {
-            echo $simplySignPath | Out-File -FilePath $env:GITHUB_PATH -Append
-            Write-Host "SimplySign Desktop installato: $simplySignPath"
-          } else {
-            Write-Error "SimplySign Desktop non trovato dopo install"
-            exit 1
+          # Install via WinGet — più robusto del download diretto da Certum
+          # (URL hardcoded `files.certum.eu/.../SimplySignDesktop-Setup.exe`
+          # ritorna 404 dato che il vero pattern Certum è versionato:
+          # `.../Windows/<version>/SimplySignDesktop-<version>-64-bit-pl.msi`).
+          # Package WinGet ufficiale: Certum.SmartSignSimplySignDesktop.
+          Write-Host "Install SimplySign Desktop via WinGet..."
+          winget install `
+            --id Certum.SmartSignSimplySignDesktop `
+            --accept-package-agreements `
+            --accept-source-agreements `
+            --silent `
+            --disable-interactivity
+          $exitCode = $LASTEXITCODE
+          # WinGet exit code 0 = success, 0x8A150011 = already installed (ok),
+          # altri = fail. -2147024894 (0x80070002) = file not found (network?).
+          if ($exitCode -ne 0 -and $exitCode -ne -1978335215) {
+            throw "WinGet install fallito (exit $exitCode)"
           }
+          Write-Host "WinGet install OK (exit $exitCode)"
+
+          # Find install path dinamicamente: l'MSI può finire in vari posti
+          # (Program Files, Program Files (x86), %LOCALAPPDATA%).
+          $candidatePaths = @(
+            "C:\Program Files (x86)\Certum\SimplySign Desktop",
+            "C:\Program Files\Certum\SimplySign Desktop",
+            "$env:LOCALAPPDATA\Programs\Certum\SimplySign Desktop"
+          )
+          $simplySignPath = $null
+          foreach ($p in $candidatePaths) {
+            if (Test-Path $p) { $simplySignPath = $p; break }
+          }
+
+          if (-not $simplySignPath) {
+            Write-Host "Path standard non trovato, cerco SimplySignDesktop.exe con glob..."
+            $found = Get-ChildItem -Path "C:\Program Files (x86)", "C:\Program Files" `
+              -Recurse -Filter "SimplySignDesktop.exe" `
+              -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+            if ($found) {
+              $simplySignPath = $found.DirectoryName
+            } else {
+              throw "SimplySignDesktop.exe non trovato dopo install via WinGet"
+            }
+          }
+
+          echo $simplySignPath | Out-File -FilePath $env:GITHUB_PATH -Append
+          Write-Host "SimplySign Desktop installato: $simplySignPath"
 
       - name: Firma Authenticode (Certum SimplySign) + re-upload asset
         if: matrix.platform == 'windows-latest'
