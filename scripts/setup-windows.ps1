@@ -7,10 +7,12 @@
   scripts\sign-release.ps1 su una macchina Windows 10/11 (anche
   IoT Enterprise). Configura env vars permanenti per il maintainer.
 
-  Componenti gestiti:
-   - GitHub CLI (gh)             -> winget GitHub.cli
+  Componenti gestiti (preferenza: winget se disponibile, fallback
+  download diretto MSI per Windows IoT / Server senza Microsoft Store):
+   - GitHub CLI (gh)             -> winget GitHub.cli | MSI da api.github.com
    - SimplySign Desktop          -> winget Certum.SmartSignSimplySignDesktop
-   - Node.js LTS                 -> winget OpenJS.NodeJS.LTS
+                                    (se winget assente: install manuale guidato)
+   - Node.js LTS                 -> winget OpenJS.NodeJS.LTS | MSI da nodejs.org
    - pnpm                        -> via corepack (incluso in Node.js >=16)
    - Tauri CLI (@tauri-apps/cli) -> pnpm i -g
    - Windows SDK Signing Tools   -> NON installabile da winget; lo script
@@ -102,23 +104,101 @@ function Install-WinGetPackage {
     Write-Host "  [OK] installato"
 }
 
-# 1. Preflight: verifica winget disponibile (App Installer da Microsoft Store)
-Write-Section "1. Preflight"
-if (-not (Test-CommandExists 'winget')) {
-    throw "winget non disponibile. Installa 'App Installer' dal Microsoft Store: https://aka.ms/getwinget"
+# Fallback per ambienti senza winget (es. Windows IoT Enterprise senza
+# Microsoft Store). Scarica MSI direttamente e installa via msiexec.
+function Install-MsiFromUrl {
+    param(
+        [string]$Url,
+        [string]$DisplayName
+    )
+    $tmpMsi = Join-Path $env:TEMP ("setup-" + [System.IO.Path]::GetRandomFileName() + ".msi")
+    Write-Host "  Download MSI: $Url"
+    Invoke-WebRequest -Uri $Url -OutFile $tmpMsi -UseBasicParsing
+    Write-Host "  Installazione msiexec /quiet..."
+    $proc = Start-Process -FilePath msiexec.exe `
+        -ArgumentList "/i", "`"$tmpMsi`"", "/quiet", "/norestart" `
+        -Wait -PassThru
+    Remove-Item -Path $tmpMsi -Force -ErrorAction SilentlyContinue
+    if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+        # 3010 = success but reboot required
+        throw "msiexec install fallito per $DisplayName (exit $($proc.ExitCode))"
+    }
+    Write-Host "  [OK] $DisplayName installato (exit $($proc.ExitCode))"
 }
-Write-Host "[OK] winget presente"
+
+function Get-LatestGhMsiUrl {
+    Write-Host "  Resolve URL MSI gh CLI latest..."
+    $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/cli/cli/releases/latest' -Headers @{ 'User-Agent' = 'pap-setup' }
+    $asset = $rel.assets | Where-Object { $_.name -like '*windows_amd64.msi' } | Select-Object -First 1
+    if (-not $asset) { throw "Asset MSI gh CLI non trovato nella latest release" }
+    return $asset.browser_download_url
+}
+
+function Get-LatestNodeLtsMsiUrl {
+    Write-Host "  Resolve URL MSI Node.js LTS..."
+    $idx = Invoke-RestMethod -Uri 'https://nodejs.org/dist/index.json' -Headers @{ 'User-Agent' = 'pap-setup' }
+    $lts = $idx | Where-Object { $_.lts -and $_.lts -ne $false } | Select-Object -First 1
+    if (-not $lts) { throw "Nessuna versione LTS Node.js trovata" }
+    return "https://nodejs.org/dist/$($lts.version)/node-$($lts.version)-x64.msi"
+}
+
+# 1. Preflight: verifica winget (opzionale - fallback con download diretto MSI
+#    per ambienti senza Microsoft Store, es. Windows IoT Enterprise)
+Write-Section "1. Preflight"
+$useWinget = Test-CommandExists 'winget'
+if ($useWinget) {
+    Write-Host "[OK] winget presente -> uso winget per gli install"
+} else {
+    Write-Host "[INFO] winget NON disponibile (probabile Windows IoT senza Store)"
+    Write-Host "       Uso fallback: download MSI diretto + msiexec /quiet"
+}
 
 if ($SkipInstall) {
     Write-Host "[INFO] -SkipInstall passato: salto installazioni"
 } else {
-    Write-Section "2. Install software via winget"
-    Install-WinGetPackage -PackageId 'GitHub.cli' -DisplayName 'GitHub CLI'
-    Install-WinGetPackage -PackageId 'Certum.SmartSignSimplySignDesktop' -DisplayName 'SimplySign Desktop'
-    Install-WinGetPackage -PackageId 'OpenJS.NodeJS.LTS' -DisplayName 'Node.js LTS'
+    Write-Section "2. Install software"
 
-    # Refresh PATH per la sessione corrente (winget aggiunge a User PATH
-    # solo per nuove shell; per usare node/npm subito qui ricarichiamo).
+    # 2a. GitHub CLI
+    if (Test-CommandExists 'gh') {
+        Write-Host "[OK] gh CLI gia' presente: $((gh --version | Select-Object -First 1))"
+    } elseif ($useWinget) {
+        Install-WinGetPackage -PackageId 'GitHub.cli' -DisplayName 'GitHub CLI'
+    } else {
+        Write-Host "Installo GitHub CLI via MSI diretto..."
+        Install-MsiFromUrl -Url (Get-LatestGhMsiUrl) -DisplayName 'GitHub CLI'
+    }
+
+    # 2b. SimplySign Desktop
+    # Difficile da fallback (URL Certum versionato, soggetto a 404). Se
+    # winget non disponibile e SimplySign non presente, lascio install
+    # manuale all'utente con istruzioni.
+    $simplySignExe = (Get-ChildItem -Path "C:\Program Files (x86)","C:\Program Files","$env:LOCALAPPDATA\Programs" `
+        -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like "*SimplySign*" } | Select-Object -First 1)
+    if ($simplySignExe) {
+        Write-Host "[OK] SimplySign Desktop gia' presente: $($simplySignExe.FullName)"
+    } elseif ($useWinget) {
+        Install-WinGetPackage -PackageId 'Certum.SmartSignSimplySignDesktop' -DisplayName 'SimplySign Desktop'
+    } else {
+        Write-Host "[WARN] SimplySign Desktop NON installato e winget non disponibile."
+        Write-Host "       Scaricalo da:"
+        Write-Host "         https://www.certum.eu/en/cert_expertise_signature_cards_drivers_simplysign_desktop/"
+        Write-Host "       (download .msi richiede registrazione)."
+    }
+
+    # 2c. Node.js LTS
+    if (Test-CommandExists 'node') {
+        Write-Host "[OK] Node.js gia' presente: $(node -v)"
+    } elseif ($useWinget) {
+        Install-WinGetPackage -PackageId 'OpenJS.NodeJS.LTS' -DisplayName 'Node.js LTS'
+    } else {
+        Write-Host "Installo Node.js LTS via MSI diretto..."
+        Install-MsiFromUrl -Url (Get-LatestNodeLtsMsiUrl) -DisplayName 'Node.js LTS'
+    }
+
+    # Refresh PATH per la sessione corrente (gli installer aggiungono a
+    # User/Machine PATH solo per nuove shell; per usare node/npm subito
+    # qui ricarichiamo).
     $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' +
                 [Environment]::GetEnvironmentVariable('PATH', 'User')
 
