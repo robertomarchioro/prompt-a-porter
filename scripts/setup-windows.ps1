@@ -254,25 +254,42 @@ if ($SkipInstall) {
     }
     Write-Host "[OK] pnpm: $(pnpm -v)"
 
-    # pnpm alla prima esecuzione richiede PNPM_HOME + PNPM_HOME in PATH
-    # per ospitare i global packages (tauri, ecc.). 'pnpm setup' fa
-    # questo ma con output interattivo variabile; lo facciamo manuale.
+    # pnpm alla prima esecuzione richiede PNPM_HOME settata + PNPM_HOME\bin
+    # in PATH per i global package bin (tauri.cmd, ecc.). 'pnpm setup' fa
+    # tutto ma ha output interattivo variabile; lo facciamo manuale.
     $pnpmHome = Join-Path $env:LOCALAPPDATA 'pnpm'
-    if (-not (Test-Path $pnpmHome)) {
-        New-Item -ItemType Directory -Path $pnpmHome -Force | Out-Null
+    $pnpmBin = Join-Path $pnpmHome 'bin'
+    foreach ($dir in @($pnpmHome, $pnpmBin)) {
+        if (-not (Test-Path $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
     }
     [Environment]::SetEnvironmentVariable('PNPM_HOME', $pnpmHome, 'User')
+
+    # Aggiorna User PATH includendo sia PNPM_HOME (per cache pnpm e tool
+    # che cercano qui) sia PNPM_HOME\bin (richiesto da pnpm per global bin).
     $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
     if ($null -eq $userPath) { $userPath = '' }
-    if ($userPath -notlike "*$pnpmHome*") {
-        $newUserPath = if ($userPath) { "$userPath;$pnpmHome" } else { $pnpmHome }
-        [Environment]::SetEnvironmentVariable('PATH', $newUserPath, 'User')
-        Write-Host "[OK] aggiunto $pnpmHome a User PATH (persistente)"
+    $pathParts = @($userPath -split ';' | Where-Object { $_ })
+    $added = @()
+    foreach ($dir in @($pnpmHome, $pnpmBin)) {
+        if ($pathParts -notcontains $dir) {
+            $pathParts += $dir
+            $added += $dir
+        }
     }
+    if ($added.Count -gt 0) {
+        $newUserPath = ($pathParts -join ';')
+        [Environment]::SetEnvironmentVariable('PATH', $newUserPath, 'User')
+        Write-Host "[OK] aggiunto a User PATH: $($added -join ', ')"
+    }
+
     # Refresh PATH della sessione corrente (senza riavvio shell)
     $env:PNPM_HOME = $pnpmHome
-    if (-not ($env:PATH -like "*$pnpmHome*")) {
-        $env:PATH = "$env:PATH;$pnpmHome"
+    foreach ($dir in @($pnpmHome, $pnpmBin)) {
+        if (-not ($env:PATH -like "*$dir*")) {
+            $env:PATH = "$env:PATH;$dir"
+        }
     }
 
     Write-Host "Installo @tauri-apps/cli globalmente..."
