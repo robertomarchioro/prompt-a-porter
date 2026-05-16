@@ -439,9 +439,25 @@ if ($doUpdaterReSign) {
                 $tauriArgs += @('-p', $UpdaterPrivKeyPassword)
             }
             $tauriArgs += $file
-            & tauri @tauriArgs
-            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sigPath)) {
-                throw "tauri signer sign FALLITO per $file (exit $LASTEXITCODE)"
+            # Cattura stderr (tauri scrive errori su stderr): 2>&1 li
+            # ridireziona su stdout cosi' diventano visibili.
+            $tauriOutput = & tauri @tauriArgs 2>&1
+            $tauriExit = $LASTEXITCODE
+            if ($tauriExit -ne 0 -or -not (Test-Path $sigPath)) {
+                Write-Host ""
+                Write-Host "  [tauri output completo]:"
+                $tauriOutput | ForEach-Object { Write-Host "    $_" }
+                Write-Host ""
+                Write-Host "  Possibili cause exit 1:"
+                Write-Host "  - Password TAURI_SIGNING_PRIVATE_KEY_PASSWORD errata"
+                Write-Host "  - Chiave $UpdaterPrivKey corrotta o non valida"
+                Write-Host "  - Tauri CLI version incompatibile (verifica: tauri -V vs sintassi 'signer sign')"
+                Write-Host ""
+                Write-Host "  Debug manuale (testa la chiave su un file dummy):"
+                Write-Host "    echo test > test.txt"
+                Write-Host "    tauri signer sign -f '$UpdaterPrivKey' -p '<password>' test.txt"
+                Write-Host ""
+                throw "tauri signer sign FALLITO per $file (exit $tauriExit)"
             }
             $newSigContent[(Split-Path $file -Leaf)] = (Get-Content $sigPath -Raw)
             $updaterArtifactsToUpload += $sigPath
