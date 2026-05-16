@@ -135,7 +135,7 @@ if (-not $cert) {
 Write-Host "[OK] Cert trovato: $($cert.Subject)"
 Write-Host "     Scade: $($cert.NotAfter)"
 
-$releaseJson = & gh release view $Tag --repo $Repo --json tag,name,isDraft,isPrerelease,assets 2>&1
+$releaseJson = & gh release view $Tag --repo $Repo --json tagName,name,isDraft,isPrerelease,assets 2>&1
 if ($LASTEXITCODE -ne 0) {
     throw "Release $Tag non trovata su $Repo. Output gh: $releaseJson"
 }
