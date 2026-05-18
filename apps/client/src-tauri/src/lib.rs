@@ -451,6 +451,7 @@ pub fn run() {
             linting::prompt_lint,
             prompt_componibili::prompt_compila,
             prompt_componibili::prompt_resolve_import_preview,
+            prompt_componibili::prompt_suggest_intellisense,
             cartelle::folder_lista,
             cartelle::folder_crea,
             cartelle::folder_rinomina,

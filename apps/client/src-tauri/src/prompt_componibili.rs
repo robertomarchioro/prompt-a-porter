@@ -430,6 +430,64 @@ pub fn pulisci_imports(conn: &Connection, prompt_id: &str) -> Result<(), PapErro
     Ok(())
 }
 
+// ─── M4 PR-3: Intellisense autocomplete ────────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PromptSuggerito {
+    pub id: String,
+    pub titolo: String,
+    /// Path della cartella (es. "/marketing/email") o "" se in root.
+    /// Frontend lo usa come `detail` nel popover di completamento.
+    pub folder_path: String,
+}
+
+/// Logica pura: cerca prompt il cui Title matcha il prefisso (case-insensitive),
+/// ordinati per popolarita' (UseCount DESC, UpdatedAt DESC).
+/// `escludi_id`: opzionale, tipicamente l'id del prompt corrente
+/// nell'editor per evitare suggerimento self-import.
+pub(crate) fn suggest_pure(
+    conn: &Connection,
+    prefix: &str,
+    limit: usize,
+    escludi_id: Option<&str>,
+) -> Result<Vec<PromptSuggerito>, PapErrore> {
+    let like_param = format!("{}%", prefix.trim());
+    let escludi = escludi_id.unwrap_or("");
+    let limit_i64 = limit as i64;
+    let mut stmt = conn.prepare(
+        "SELECT p.Id, p.Title, COALESCE(f.Path, '')
+         FROM Prompts p
+         LEFT JOIN Folders f ON f.Id = p.FolderId AND f.DeletedAt IS NULL
+         WHERE p.DeletedAt IS NULL
+           AND p.Title LIKE ?1 COLLATE NOCASE
+           AND (?2 = '' OR p.Id != ?2)
+         ORDER BY p.UseCount DESC, p.UpdatedAt DESC
+         LIMIT ?3",
+    )?;
+    let rows: Vec<PromptSuggerito> = stmt
+        .query_map(params![like_param, escludi, limit_i64], |r| {
+            Ok(PromptSuggerito {
+                id: r.get(0)?,
+                titolo: r.get(1)?,
+                folder_path: r.get(2)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(rows)
+}
+
+#[tauri::command]
+pub fn prompt_suggest_intellisense(
+    prefix: String,
+    limit: Option<usize>,
+    escludi_id: Option<String>,
+    state: State<'_, VaultState>,
+) -> Result<Vec<PromptSuggerito>, PapErrore> {
+    let lim = limit.unwrap_or(20).clamp(1, 100);
+    state.with_conn(|conn| suggest_pure(conn, &prefix, lim, escludi_id.as_deref()))
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -974,5 +1032,96 @@ mod test {
             .unwrap();
         // Pinning a v1 (body "Ciao {{nome}}, v1") + with sostituisce nome
         assert_eq!(out, "Ciao Mario, v1");
+    }
+
+    // ─── M4 PR-3: intellisense suggest_pure ────────────────────────
+
+    #[test]
+    fn suggest_filtra_per_prefisso_case_insensitive() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "Marketing email", "body", None);
+        inserisci_prompt(&conn, "prm-2", "marketing social", "body", None);
+        inserisci_prompt(&conn, "prm-3", "Vendita prodotto", "body", None);
+
+        let r = suggest_pure(&conn, "mark", 10, None).unwrap();
+        assert_eq!(r.len(), 2, "atteso 2 match per 'mark', got {}", r.len());
+        let titoli: Vec<&str> = r.iter().map(|p| p.titolo.as_str()).collect();
+        assert!(titoli.contains(&"Marketing email"));
+        assert!(titoli.contains(&"marketing social"));
+    }
+
+    #[test]
+    fn suggest_ordina_per_use_count_desc() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "Alfa A", "b", None);
+        inserisci_prompt(&conn, "prm-2", "Alfa B", "b", None);
+        conn.execute(
+            "UPDATE Prompts SET UseCount = 5 WHERE Id = 'prm-2'",
+            [],
+        )
+        .unwrap();
+
+        let r = suggest_pure(&conn, "Alfa", 10, None).unwrap();
+        assert_eq!(r.len(), 2);
+        assert_eq!(r[0].titolo, "Alfa B"); // UseCount maggiore prima
+        assert_eq!(r[1].titolo, "Alfa A");
+    }
+
+    #[test]
+    fn suggest_rispetta_limit() {
+        let conn = db_test();
+        for i in 0..5 {
+            inserisci_prompt(&conn, &format!("p{i}"), &format!("X{i}"), "b", None);
+        }
+        let r = suggest_pure(&conn, "X", 3, None).unwrap();
+        assert_eq!(r.len(), 3);
+    }
+
+    #[test]
+    fn suggest_esclude_id_specificato() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-self", "Self prompt", "b", None);
+        inserisci_prompt(&conn, "prm-other", "Self other", "b", None);
+
+        let r = suggest_pure(&conn, "Self", 10, Some("prm-self")).unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].id, "prm-other");
+    }
+
+    #[test]
+    fn suggest_include_folder_path() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-mkt", "Marketing", "/marketing");
+        inserisci_prompt(&conn, "prm-1", "Email cold", "b", Some("fld-mkt"));
+
+        let r = suggest_pure(&conn, "Email", 10, None).unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].folder_path, "/marketing");
+    }
+
+    #[test]
+    fn suggest_prompt_root_ha_folder_path_vuoto() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "Senza cartella", "b", None);
+
+        let r = suggest_pure(&conn, "Senza", 10, None).unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].folder_path, "");
+    }
+
+    #[test]
+    fn suggest_esclude_prompt_eliminati() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-live", "Live", "b", None);
+        inserisci_prompt(&conn, "prm-del", "Live deleted", "b", None);
+        conn.execute(
+            "UPDATE Prompts SET DeletedAt = datetime('now') WHERE Id = 'prm-del'",
+            [],
+        )
+        .unwrap();
+
+        let r = suggest_pure(&conn, "Live", 10, None).unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].id, "prm-live");
     }
 }
