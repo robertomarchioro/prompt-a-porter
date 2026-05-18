@@ -56,8 +56,11 @@ Sub-step di feature già atterrate, recuperati come must-have v1.0. Vedi [`v1.0-
 - 📋 → v1.0 nice-to-have: **regole linting nuove** per validare sintassi import scopati (`with k=v`, `version=N`)
 
 ### Da Fase 3 Step 8 — Prompt componibili
-- 📋 → v1.0 M4: **Sintassi `{{import "x" with k=v}}`** per variabili scopate per import. Schema decodifica già pensato, manca parser
-- 📋 → v1.0 M4: **Pinning a versione storica** `{{import "x" version=N}}` — schema `PromptVersions` già pronto, manca solo parser + lookup
+- ✅ M4 PR-1 (#209, 2026-05-16): **Sintassi `{{import "x" with k=v}}`** per variabili scopate per import
+- ✅ M4 PR-2 (#210, 2026-05-16): **Pinning a versione storica** `{{import "x" version=N}}` — letto da `PromptVersions`, combinabile con `with`
+- ✅ M4 PR-3 (#211, 2026-05-16): **Intellisense autocomplete `{{import "...`** in EditorTab (richiesta utente, bonus M4)
+- 📋 → **v1.0 M4.x backlog** (post-M4): **Lint rules IMP004/005** per `with`/`version` (variabile dichiarata non usata, version inesistente). Richiede refactor lint per accesso DB.
+- 📋 → **v1.0 M4.x backlog** (post-M4): **Doc utente `docs/utente/prompt-componibili.md`** aggiornato con esempi `with`/`version`/intellisense + screenshot.
 - 📋 → v1.0 M5: **Editor doppia vista Sorgente/Compilato integrata** (oggi separato in `CompilaModal` standalone)
 
 ### Da Fase 4 Step 1 — Varianti
