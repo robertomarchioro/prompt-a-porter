@@ -11,7 +11,7 @@
    * - Blueprint F8 PR-A §1
    */
   import { invoke } from "@tauri-apps/api/core";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { Frown, Meh, Smile, Copy, Check, Globe } from "lucide-svelte";
   import { estraiSegnaposti, compila, contaCompilati } from "$lib/template";
   import Modale from "$lib/components/Modale.svelte";
@@ -54,10 +54,32 @@
   let ratingInviato = $state(false);
   let erroreCaricamento = $state<string | null>(null);
 
-  async function carica(): Promise<void> {
+  // M3 PR-4: dropdown switch tra varianti senza chiudere la modale.
+  // `promptIdAttivo` viene usato per TUTTE le invoke (libreria_dettaglio,
+  // rating_aggiungi) -> il parent passa il promptId iniziale come prop
+  // ma le interazioni successive seguono la variante selezionata.
+  interface VariantInfo {
+    id: string;
+    parent_prompt_id: string;
+    variant_label: string;
+    titolo: string;
+  }
+  // Snapshot iniziale del prop reattivo; untrack evita warning state_referenced_locally.
+  let promptIdAttivo = $state(untrack(() => promptId));
+  let varianti = $state<VariantInfo[]>([]);
+
+  /**
+   * Carica dettaglio + globali per `promptIdAttivo`.
+   *
+   * @param preservaValori M3 PR-4: se true (switch variante), preserva i
+   *   valori dei segnaposti per le chiavi presenti in entrambi (l'utente
+   *   ha gia' digitato qualcosa: non vogliamo che il toggle variante
+   *   cancelli il suo lavoro). Default false al primo mount (reset puro).
+   */
+  async function carica(preservaValori = false): Promise<void> {
     try {
       const [det, glob] = await Promise.all([
-        invoke<PromptDettaglio>("libreria_dettaglio", { id: promptId }),
+        invoke<PromptDettaglio>("libreria_dettaglio", { id: promptIdAttivo }),
         invoke<PlaceholderGlobale[]>("globale_placeholder_lista"),
       ]);
       dettaglio = det;
@@ -65,23 +87,59 @@
       const initN: Record<string, string> = {};
       const initG: Record<string, string> = {};
       const mapGlob = new Map(glob.map((g) => [g.name, g.value]));
+      const vecchiValori = preservaValori ? valori : {};
+      const vecchiGlobali = preservaValori ? valoriGlobali : {};
       for (const s of seg) {
         if (s.globale) {
-          initG[s.nome] = mapGlob.get(s.nome) ?? "";
+          initG[s.nome] =
+            vecchiGlobali[s.nome] ?? mapGlob.get(s.nome) ?? "";
         } else {
-          initN[s.nome] = "";
+          initN[s.nome] = vecchiValori[s.nome] ?? "";
         }
       }
       valori = initN;
       valoriGlobali = initG;
-      globaliPersistiti = { ...initG };
+      if (!preservaValori) {
+        // Snapshot riferimento solo al primo caricamento: dopo un
+        // switch variante, mantenere lo snapshot originale evita di
+        // perdere persistenza pendente sui globali.
+        globaliPersistiti = { ...initG };
+      }
     } catch (e) {
       console.error("[compila-modal] caricaDettaglio", e);
       erroreCaricamento = "Prompt non disponibile";
     }
   }
 
-  onMount(carica);
+  // M3 PR-4: carica anche la lista varianti (sister + main) al mount.
+  // Usa parent_id quando promptId attuale e' gia' una variante; backend
+  // gestisce entrambi i casi (parent diretto o nipote -> grandparent).
+  async function caricaVarianti(): Promise<void> {
+    try {
+      const lista = await invoke<VariantInfo[]>("varianti_lista", {
+        parentId: promptId,
+      });
+      varianti = lista;
+    } catch {
+      varianti = [];
+    }
+  }
+
+  onMount(async () => {
+    await carica();
+    await caricaVarianti();
+  });
+
+  async function switchVariante(nuovoId: string): Promise<void> {
+    if (nuovoId === promptIdAttivo) return;
+    promptIdAttivo = nuovoId;
+    // Reset rating state: il prossimo voto va sulla variante nuova,
+    // non sulla precedente.
+    ratingScelto = null;
+    ratingInviato = false;
+    nota = "";
+    await carica(true);
+  }
 
   const segnaposti = $derived(
     dettaglio ? estraiSegnaposti(dettaglio.body) : [],
@@ -103,7 +161,7 @@
     }
     return JSON.stringify(
       {
-        prompt_id: promptId,
+        prompt_id: promptIdAttivo,
         titolo: dettaglio.titolo,
         target_model: dettaglio.target_model,
         body: testo,
@@ -180,7 +238,7 @@
     try {
       await invoke<string>("rating_aggiungi", {
         nuovo: {
-          prompt_id: promptId,
+          prompt_id: promptIdAttivo,
           rating: scelto,
           nota: notaFinale,
           used_with_model: dettaglio.target_model || null,
@@ -239,6 +297,21 @@
   {:else if !dettaglio}
     <p class="muted">Caricamento…</p>
   {:else}
+    {#if varianti.length > 1}
+      <label class="variante-bar">
+        <span class="variante-bar-label">Variante</span>
+        <select
+          class="variante-select"
+          value={promptIdAttivo}
+          onchange={(e) => void switchVariante(e.currentTarget.value)}
+          aria-label="Scegli variante del prompt"
+        >
+          {#each varianti as v (v.id)}
+            <option value={v.id}>{v.variant_label} — {v.titolo}</option>
+          {/each}
+        </select>
+      </label>
+    {/if}
     <div class="grid">
       <div class="form">
         <header class="sez-h">
@@ -435,6 +508,37 @@
 {/if}
 
 <style>
+  /* M3 PR-4: dropdown variante */
+  .variante-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-2);
+    padding: 6px 10px;
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+  }
+  .variante-bar-label {
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    flex-shrink: 0;
+  }
+  .variante-select {
+    flex: 1;
+    min-width: 0;
+    padding: 4px 8px;
+    background: var(--bg-canvas);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    color: var(--text-default);
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+    cursor: pointer;
+  }
+
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
