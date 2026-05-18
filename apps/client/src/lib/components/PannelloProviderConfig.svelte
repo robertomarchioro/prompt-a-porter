@@ -315,7 +315,7 @@
 
       <div class="campo campo-switch">
         <span class="switch-label">Abilitato</span>
-        <Switch bind:attivo={formAbilitato} />
+        <Switch bind:attivo={formAbilitato} etichetta="Abilita questo provider AI" />
       </div>
 
       {#if formErrore}

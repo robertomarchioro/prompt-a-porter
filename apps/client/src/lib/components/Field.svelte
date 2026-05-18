@@ -13,9 +13,19 @@
 
 <div class="field">
   {#if etichetta}
-    <label class="field-label">{etichetta}</label>
+    <!--
+      label wrappa children per associare automaticamente il control
+      (input/textarea/select) all'etichetta. Pattern HTML5 valido che
+      elimina il warning a11y_label_has_associated_control senza
+      richiedere id/for esplicito su ogni callsite.
+    -->
+    <label class="field-row">
+      <span class="field-label">{etichetta}</span>
+      {@render children()}
+    </label>
+  {:else}
+    {@render children()}
   {/if}
-  {@render children()}
   {#if errore}
     <span class="field-error">{errore}</span>
   {:else if hint}
@@ -25,6 +35,17 @@
 
 <style>
   .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /*
+    Quando etichetta presente, la label wrappa testo + control e mantiene
+    lo stesso layout colonna del .field. Pattern Svelte: la label e' un
+    flex container interno per non rompere il gap visivo.
+  */
+  .field-row {
     display: flex;
     flex-direction: column;
     gap: 6px;

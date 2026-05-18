@@ -3,6 +3,13 @@
     attivo?: boolean;
     privato?: boolean;
     disabled?: boolean;
+    /**
+     * Etichetta a11y per screen reader (aria-label). Obbligatoria in
+     * pratica: il Switch e' puramente visivo (no text content), senza
+     * etichetta non e' identificabile via screen reader. Fallback
+     * generico "Interruttore" se omessa.
+     */
+    etichetta?: string;
     onchange?: (attivo: boolean) => void;
   }
 
@@ -10,6 +17,7 @@
     attivo = $bindable(false),
     privato = false,
     disabled = false,
+    etichetta,
     onchange,
   }: Props = $props();
 
@@ -25,6 +33,7 @@
   class:switch--privato={privato}
   role="switch"
   aria-checked={attivo}
+  aria-label={etichetta ?? "Interruttore"}
   {disabled}
   onclick={toggle}
   type="button"
