@@ -266,6 +266,14 @@
       </div>
     {/if}
 
+    <!--
+      svelte-ignore a11y_no_noninteractive_tabindex
+      WAI-ARIA: resizable separator pattern - role=separator + tabindex=0
+      e' la combinazione corretta per uno splitter ridimensionabile da
+      tastiera (cfr. https://www.w3.org/WAI/ARIA/apg/patterns/windowsplitter/).
+      svelte-check non riconosce questo pattern e lo segnala come falso
+      positivo.
+    -->
     <div
       class="resizer"
       class:dragging={dragKind === "sidebar"}
@@ -309,6 +317,7 @@
       {/if}
     </div>
 
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex (vedi nota resizer sidebar sopra) -->
     <div
       class="resizer"
       class:dragging={dragKind === "list"}
