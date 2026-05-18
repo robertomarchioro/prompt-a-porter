@@ -61,7 +61,7 @@ Sub-step di feature già atterrate, recuperati come must-have v1.0. Vedi [`v1.0-
 - ✅ M4 PR-3 (#211, 2026-05-16): **Intellisense autocomplete `{{import "...`** in EditorTab (richiesta utente, bonus M4)
 - 📋 → **v1.0 M4.x backlog** (post-M4): **Lint rules IMP004/005** per `with`/`version` (variabile dichiarata non usata, version inesistente). Richiede refactor lint per accesso DB.
 - 📋 → **v1.0 M4.x backlog** (post-M4): **Doc utente `docs/utente/prompt-componibili.md`** aggiornato con esempi `with`/`version`/intellisense + screenshot.
-- 📋 → v1.0 M5: **Editor doppia vista Sorgente/Compilato integrata** (oggi separato in `CompilaModal` standalone)
+- ✅ M5 PR-1+PR-2 (#213-214, 2026-05-16): **Editor doppia vista Sorgente/Compilato integrata** — AnteprimaTab ora split-view con form valori inline + espansione import live via `prompt_compila_inline`. CompilaModal mantenuto come fallback palette.
 
 ### Da Fase 4 Step 1 — Varianti
 - ✅ M3 PR-1 (#203, 2026-05-16): **UI Editor "Crea variante"** (modale in RightRail)
