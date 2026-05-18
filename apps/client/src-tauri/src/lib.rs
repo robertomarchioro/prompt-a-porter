@@ -472,6 +472,7 @@ pub fn run() {
             provider_ai::provider_config_elimina,
             varianti::prompt_crea_variante,
             varianti::varianti_lista,
+            varianti::prompt_promuovi_variante,
             fork::prompt_fork,
             fork::fork_info,
             rating::rating_aggiungi,

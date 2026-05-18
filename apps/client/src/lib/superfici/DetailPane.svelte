@@ -52,6 +52,10 @@
     aggiornato_a: string;
     ultimo_uso: string;
     tags: TagInfo[];
+    // M3 PR-5: id del prompt principale se questo e' una variante,
+    // null se questo e' il principale. Passato a RightRail per mostrare
+    // il bottone "Promuovi a principale" solo sulle varianti.
+    parent_prompt_id: string | null;
   }
 
   interface Cartella {
@@ -649,6 +653,7 @@
             visibilita={dettaglio.visibilita}
             targetModel={dettaglio.target_model}
             folderId={dettaglio.folder_id}
+            parentPromptId={dettaglio.parent_prompt_id}
             tags={dettaglio.tags}
             onCambiaVisibilita={(v) => {
               if (dettaglio) dettaglio.visibilita = v;

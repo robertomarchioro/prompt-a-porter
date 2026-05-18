@@ -44,6 +44,12 @@ pub struct PromptDettaglio {
     pub aggiornato_a: String,
     pub ultimo_uso: String,
     pub tags: Vec<TagInfo>,
+    /// M3 PR-5: id del prompt principale se questo è una variante,
+    /// `None` se è il prompt principale stesso. Usato dal frontend per
+    /// mostrare il bottone "Promuovi a principale" solo sulle varianti
+    /// e per listare correttamente le sister anche partendo da una
+    /// variante.
+    pub parent_prompt_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -255,7 +261,8 @@ pub fn libreria_dettaglio(
     state.with_conn(|conn| {
         let mut det = conn.query_row(
             "SELECT Id, Title, Description, Body, Visibility, TargetModel,
-                    FolderId, IsFavorite, UseCount, CreatedAt, UpdatedAt, LastUsedAt
+                    FolderId, IsFavorite, UseCount, CreatedAt, UpdatedAt, LastUsedAt,
+                    ParentPromptId
              FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
             [&id],
             |row| {
@@ -273,6 +280,7 @@ pub fn libreria_dettaglio(
                     aggiornato_a: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
                     ultimo_uso: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
                     tags: vec![],
+                    parent_prompt_id: row.get::<_, Option<String>>(12)?,
                 })
             },
         )?;
