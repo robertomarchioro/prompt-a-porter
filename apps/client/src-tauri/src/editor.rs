@@ -75,7 +75,7 @@ fn normalizza_target_model(v: &Option<String>) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-fn genera_id() -> String {
+pub(crate) fn genera_id() -> String {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
