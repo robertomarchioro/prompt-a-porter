@@ -54,7 +54,11 @@
           <div class="card-nome">{ETICHETTE[cat]}</div>
           <div class="card-desc">{DESCRIZIONI[cat]}</div>
         </div>
-        <Switch attivo={attiva} onchange={() => handleToggle(cat)} />
+        <Switch
+          attivo={attiva}
+          etichetta="Categoria linter {ETICHETTE[cat]}"
+          onchange={() => handleToggle(cat)}
+        />
       </li>
     {/each}
   </ul>

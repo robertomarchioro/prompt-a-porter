@@ -267,7 +267,7 @@
         {/if}
 
         <label class="skip-cifratura">
-          <Switch bind:attivo={saltaCifratura} />
+          <Switch bind:attivo={saltaCifratura} etichetta="Salta cifratura del vault" />
           <span>Salta cifratura — il vault sarà in chiaro sul disco.</span>
           <Badge variante="warning">Sconsigliato</Badge>
         </label>
@@ -290,7 +290,11 @@
               cancellarlo subito se vuoi.
             </p>
           </div>
-          <Switch bind:attivo={creaPromptEsempio} privato />
+          <Switch
+            bind:attivo={creaPromptEsempio}
+            etichetta="Crea prompt di esempio al primo avvio"
+            privato
+          />
         </div>
       {/if}
     </div>
