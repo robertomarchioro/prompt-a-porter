@@ -47,13 +47,53 @@ pub struct ImportRef {
     /// con il body risolto.
     pub byte_start: usize,
     pub byte_end: usize,
+    /// M4 PR-1: variabili scopate passate via sintassi
+    /// `{{import "x" with k=v, k2="value"}}`. Vec preserva l'ordine di
+    /// dichiarazione; in caso di chiavi duplicate, vince l'ultima
+    /// (semantica simile a CSS `last-rule-wins`).
+    #[serde(default)]
+    pub variables: Vec<(String, String)>,
 }
 
 fn re_import() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        Regex::new(r#"\{\{\s*import\s+"([^"]+)"\s*\}\}"#).unwrap()
+        // M4 PR-1: gruppo opzionale `with ...` cattura tutto fino a }}
+        // (lazy match per non sforare oltre il tag).
+        Regex::new(
+            r#"\{\{\s*import\s+"([^"]+)"(?:\s+with\s+([^}]+?))?\s*\}\}"#,
+        )
+        .unwrap()
     })
+}
+
+/// Parse della clausola `with k=v, k2="value with spaces", ...` in
+/// coppie (key, value). Supporta:
+/// - identifier=value (no spaces)
+/// - identifier="quoted string" (per value con spazi/virgole)
+/// - separatore virgola fra coppie (spazi opzionali)
+///
+/// Token invalidi (no `=`, key non identifier) sono silenziosamente
+/// ignorati per resilienza forward-compat. La validazione strict
+/// e' delegata al linter (futura issue IMP004).
+pub fn parse_with_clause(raw: &str) -> Vec<(String, String)> {
+    static RE_KV: OnceLock<Regex> = OnceLock::new();
+    let re = RE_KV.get_or_init(|| {
+        Regex::new(r#"([A-Za-z_]\w*)\s*=\s*(?:"((?:[^"\\]|\\.)*)"|(\S+?))(?:\s*,\s*|\s*$)"#)
+            .unwrap()
+    });
+    re.captures_iter(raw)
+        .map(|cap| {
+            let key = cap.get(1).unwrap().as_str().to_string();
+            // group 2 = quoted value (senza quote), group 3 = unquoted.
+            let value = cap
+                .get(2)
+                .map(|m| m.as_str().replace("\\\"", "\""))
+                .or_else(|| cap.get(3).map(|m| m.as_str().to_string()))
+                .unwrap_or_default();
+            (key, value)
+        })
+        .collect()
 }
 
 /// Estrae tutti gli import dichiarati in un body, in ordine di apparizione.
@@ -64,14 +104,53 @@ pub fn parse_imports(body: &str) -> Vec<ImportRef> {
         .map(|(i, cap)| {
             let m = cap.get(0).unwrap();
             let path = cap.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
+            let variables = cap
+                .get(2)
+                .map(|m| parse_with_clause(m.as_str()))
+                .unwrap_or_default();
             ImportRef {
                 path,
                 position: i,
                 byte_start: m.start(),
                 byte_end: m.end(),
+                variables,
             }
         })
         .collect()
+}
+
+/// M4 PR-1: applica le variabili scopate al body importato sostituendo
+/// `{{nome}}` (segnaposti non-globali) con il rispettivo value.
+/// Segnaposti senza match nella mappa restano intatti per essere
+/// risolti dal compilatore frontend con i valori utente.
+/// I segnaposti globali (`{{globale nome}}`) NON sono toccati: la
+/// loro semantica e' "valore dal DB globale", non override per import.
+fn applica_variabili_scoped(body: &str, vars: &[(String, String)]) -> String {
+    if vars.is_empty() {
+        return body.to_string();
+    }
+    static RE_SEG: OnceLock<Regex> = OnceLock::new();
+    let re = RE_SEG.get_or_init(|| {
+        // Stesso pattern di template.ts (RE_SEGNAPOSTO) ma in Rust regex
+        // syntax. Cattura nome del segnaposto solo se NON globale.
+        Regex::new(r"\{\{\s*(\w+)\s*\}\}").unwrap()
+    });
+    re.replace_all(body, |caps: &regex::Captures| {
+        let nome = &caps[1];
+        // Skip parola riservata "globale" (e.g. malformed `{{globale}}`
+        // senza spazio dopo non lo lasciamo passare come variabile).
+        if nome == "globale" {
+            return caps[0].to_string();
+        }
+        // Last-wins per chiavi duplicate
+        for (k, v) in vars.iter().rev() {
+            if k == nome {
+                return v.clone();
+            }
+        }
+        caps[0].to_string()
+    })
+    .into_owned()
 }
 
 /// Risolve un path a un prompt_id. Strategie in ordine:
@@ -168,10 +247,16 @@ fn compila_ricorsivo(
                     [&id_imp],
                     |r| r.get(0),
                 )?;
+                // M4 PR-1: applica variabili scopate `with k=v` PRIMA
+                // della ricorsione: i segnaposti `{{k}}` del body
+                // importato vengono pre-sostituiti con i value passati
+                // dal chiamante. Gli import nested all'interno del body
+                // importato vengono poi espansi normalmente.
+                let body_pre_sostituito = applica_variabili_scoped(&body_imp, &imp.variables);
                 let espanso = compila_ricorsivo(
                     conn,
                     &id_imp,
-                    &body_imp,
+                    &body_pre_sostituito,
                     visitati,
                     depth + 1,
                 )?;
@@ -531,5 +616,149 @@ mod test {
             )
             .unwrap();
         assert_eq!(n, 0);
+    }
+
+    // ─── M4 PR-1: sintassi `with k=v` ──────────────────────────────
+
+    #[test]
+    fn parse_with_clause_singola_kv() {
+        let v = parse_with_clause("tono=formale");
+        assert_eq!(v, vec![("tono".to_string(), "formale".to_string())]);
+    }
+
+    #[test]
+    fn parse_with_clause_multipli_kv_separati_da_virgola() {
+        let v = parse_with_clause("tono=formale, lingua=it, max=10");
+        assert_eq!(
+            v,
+            vec![
+                ("tono".to_string(), "formale".to_string()),
+                ("lingua".to_string(), "it".to_string()),
+                ("max".to_string(), "10".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_with_clause_value_quotato_con_spazi() {
+        let v = parse_with_clause(r#"nome="Mario Rossi", ruolo=admin"#);
+        assert_eq!(
+            v,
+            vec![
+                ("nome".to_string(), "Mario Rossi".to_string()),
+                ("ruolo".to_string(), "admin".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_with_clause_value_quotato_con_escape() {
+        let v = parse_with_clause(r#"msg="Disse \"ciao\" a tutti""#);
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].0, "msg");
+        assert_eq!(v[0].1, r#"Disse "ciao" a tutti"#);
+    }
+
+    #[test]
+    fn parse_imports_estrae_variables() {
+        let body = r#"Prima {{import "x" with tono=formale, max=5}} dopo."#;
+        let imps = parse_imports(body);
+        assert_eq!(imps.len(), 1);
+        assert_eq!(imps[0].path, "x");
+        assert_eq!(
+            imps[0].variables,
+            vec![
+                ("tono".to_string(), "formale".to_string()),
+                ("max".to_string(), "5".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_imports_senza_with_ha_variables_vuoto() {
+        let body = r#"{{import "x"}}"#;
+        let imps = parse_imports(body);
+        assert_eq!(imps.len(), 1);
+        assert!(imps[0].variables.is_empty());
+    }
+
+    #[test]
+    fn applica_variabili_sostituisce_segnaposti_match() {
+        let out = applica_variabili_scoped(
+            "Ciao {{nome}}, sei {{ruolo}}.",
+            &[
+                ("nome".to_string(), "Mario".to_string()),
+                ("ruolo".to_string(), "admin".to_string()),
+            ],
+        );
+        assert_eq!(out, "Ciao Mario, sei admin.");
+    }
+
+    #[test]
+    fn applica_variabili_preserva_segnaposti_senza_match() {
+        let out = applica_variabili_scoped(
+            "Ciao {{nome}}, eta {{eta}}.",
+            &[("nome".to_string(), "Mario".to_string())],
+        );
+        // eta non e' nelle variables -> resta inalterato per
+        // compilazione frontend con valori utente
+        assert_eq!(out, "Ciao Mario, eta {{eta}}.");
+    }
+
+    #[test]
+    fn applica_variabili_non_tocca_segnaposti_globali() {
+        let out = applica_variabili_scoped(
+            "Autore {{globale autore}}, nome {{nome}}.",
+            &[("nome".to_string(), "X".to_string())],
+        );
+        // globale resta intatto
+        assert_eq!(out, "Autore {{globale autore}}, nome X.");
+    }
+
+    #[test]
+    fn applica_variabili_chiavi_duplicate_last_wins() {
+        let out = applica_variabili_scoped(
+            "X={{k}}",
+            &[
+                ("k".to_string(), "primo".to_string()),
+                ("k".to_string(), "secondo".to_string()),
+            ],
+        );
+        assert_eq!(out, "X=secondo");
+    }
+
+    #[test]
+    fn compila_con_import_with_vars_sostituisce_inline() {
+        let conn = db_test();
+        // child con segnaposti che verranno sovrascritti dal `with`
+        inserisci_prompt(
+            &conn,
+            "prm-child",
+            "Saluto",
+            "Ciao {{nome}}, ruolo: {{ruolo}}",
+            None,
+        );
+        // parent importa con variabili scopate (path = titolo root)
+        let parent_body = r#"{{import "Saluto" with nome="Mario", ruolo=admin}}"#;
+        inserisci_prompt(&conn, "prm-parent", "Padre", parent_body, None);
+
+        let mut visitati = HashSet::new();
+        let out = compila_ricorsivo(&conn, "prm-parent", parent_body, &mut visitati, 0)
+            .unwrap();
+        assert_eq!(out, "Ciao Mario, ruolo: admin");
+    }
+
+    #[test]
+    fn compila_con_import_senza_with_lascia_segnaposti() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-child", "Saluto", "Ciao {{nome}}", None);
+        let parent_body = r#"{{import "Saluto"}}"#;
+        inserisci_prompt(&conn, "prm-parent", "Padre", parent_body, None);
+
+        let mut visitati = HashSet::new();
+        let out = compila_ricorsivo(&conn, "prm-parent", parent_body, &mut visitati, 0)
+            .unwrap();
+        // segnaposto resta -> sara' risolto dal frontend con valori utente
+        assert_eq!(out, "Ciao {{nome}}");
     }
 }
