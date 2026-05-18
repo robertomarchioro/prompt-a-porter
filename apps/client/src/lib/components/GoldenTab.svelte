@@ -9,7 +9,8 @@
    */
   import { invoke } from "@tauri-apps/api/core";
   import { onDestroy, onMount } from "svelte";
-  import { Play, Pencil, Trash2, Plus } from "lucide-svelte";
+  import { Play, PlayCircle, Pencil, Trash2, Plus } from "lucide-svelte";
+  import Modale from "$lib/components/Modale.svelte";
 
   interface Golden {
     id: string;
@@ -21,6 +22,24 @@
     soglia_tolleranza: number;
     creato_a: string;
     aggiornato_a: string;
+  }
+
+  // Shape parziale: serve solo `passed` per la UI batch.
+  interface Observation {
+    passed: boolean;
+  }
+
+  interface ProviderConfigItem {
+    provider: string;
+    base_url?: string | null;
+    default_model?: string | null;
+    abilitato: boolean;
+  }
+
+  interface RisultatoBatch {
+    etichetta: string;
+    passed: boolean;
+    errore?: string;
   }
 
   interface Props {
@@ -76,6 +95,107 @@
     }
   }
 
+  // M3 PR-3: "Esegui tutti i golden" batch.
+  // Loop seriale per evitare rate limit/cost spike del provider.
+  // Backend `golden_esegui` chiamato per ogni golden con provider scelto;
+  // raccogliamo Observation.passed (o errore) per il summary finale.
+  type StatoBatch =
+    | { fase: "scelta" }
+    | { fase: "esecuzione"; correnteIdx: number; correnteEtichetta: string }
+    | { fase: "completato"; risultati: RisultatoBatch[] };
+
+  let modaleBatch = $state<{
+    aperto: boolean;
+    providers: ProviderConfigItem[];
+    providerScelto: string;
+    modelScelto: string;
+    stato: StatoBatch;
+    caricamentoProviders: boolean;
+    errore: string;
+  }>({
+    aperto: false,
+    providers: [],
+    providerScelto: "",
+    modelScelto: "",
+    stato: { fase: "scelta" },
+    caricamentoProviders: false,
+    errore: "",
+  });
+
+  async function apriBatch(): Promise<void> {
+    modaleBatch = {
+      aperto: true,
+      providers: [],
+      providerScelto: "",
+      modelScelto: "",
+      stato: { fase: "scelta" },
+      caricamentoProviders: true,
+      errore: "",
+    };
+    try {
+      const lista = await invoke<ProviderConfigItem[]>("provider_config_lista");
+      modaleBatch.providers = lista.filter((p) => p.abilitato);
+      if (modaleBatch.providers.length === 0) {
+        modaleBatch.errore =
+          "Nessun provider AI abilitato. Configura un provider in Impostazioni → Provider AI.";
+      } else {
+        const primo = modaleBatch.providers[0];
+        modaleBatch.providerScelto = primo.provider;
+        modaleBatch.modelScelto = primo.default_model ?? "";
+      }
+    } catch (e) {
+      modaleBatch.errore = String(e).replace(/^Error: /, "");
+    } finally {
+      modaleBatch.caricamentoProviders = false;
+    }
+  }
+
+  function chiudiBatch(): void {
+    if (modaleBatch.stato.fase === "esecuzione") return; // no chiusura mid-batch
+    modaleBatch.aperto = false;
+  }
+
+  function onCambiaProvider(): void {
+    const p = modaleBatch.providers.find(
+      (x) => x.provider === modaleBatch.providerScelto,
+    );
+    modaleBatch.modelScelto = p?.default_model ?? "";
+  }
+
+  async function eseguiTutti(): Promise<void> {
+    if (
+      !modaleBatch.providerScelto ||
+      !modaleBatch.modelScelto.trim() ||
+      goldens.length === 0
+    ) {
+      return;
+    }
+    const risultati: RisultatoBatch[] = [];
+    for (let i = 0; i < goldens.length; i++) {
+      const g = goldens[i];
+      modaleBatch.stato = {
+        fase: "esecuzione",
+        correnteIdx: i + 1,
+        correnteEtichetta: g.etichetta,
+      };
+      try {
+        const obs = await invoke<Observation>("golden_esegui", {
+          goldenId: g.id,
+          providerKind: modaleBatch.providerScelto,
+          model: modaleBatch.modelScelto,
+        });
+        risultati.push({ etichetta: g.etichetta, passed: obs.passed });
+      } catch (e) {
+        risultati.push({
+          etichetta: g.etichetta,
+          passed: false,
+          errore: String(e).replace(/^Error: /, ""),
+        });
+      }
+    }
+    modaleBatch.stato = { fase: "completato", risultati };
+  }
+
   function tempoRelativo(iso: string): string {
     if (!iso) return "";
     try {
@@ -100,6 +220,18 @@
   <header class="header">
     <span class="titolo">Test golden</span>
     <span class="conteggio">{goldens.length}</span>
+    <button
+      class="secondary"
+      type="button"
+      onclick={apriBatch}
+      disabled={goldens.length === 0}
+      title={goldens.length === 0
+        ? "Nessun golden da eseguire"
+        : `Esegui tutti i ${goldens.length} golden test in batch`}
+    >
+      <PlayCircle size={14} />
+      <span>Esegui tutti</span>
+    </button>
     <button
       class="primary"
       type="button"
@@ -173,6 +305,107 @@
     </ul>
   {/if}
 </div>
+
+{#if modaleBatch.aperto}
+  <Modale
+    titolo="Esegui tutti i golden"
+    sottotitolo={`${goldens.length} test su questo prompt`}
+    larghezza="md"
+    onChiudi={chiudiBatch}
+  >
+    {#if modaleBatch.caricamentoProviders}
+      <p class="batch-info">Caricamento provider…</p>
+    {:else if modaleBatch.errore}
+      <p class="batch-error">{modaleBatch.errore}</p>
+    {:else if modaleBatch.stato.fase === "scelta"}
+      <div class="batch-form">
+        <label class="batch-field">
+          <span class="batch-label">Provider</span>
+          <select
+            class="batch-input"
+            bind:value={modaleBatch.providerScelto}
+            onchange={onCambiaProvider}
+          >
+            {#each modaleBatch.providers as p (p.provider)}
+              <option value={p.provider}>{p.provider}</option>
+            {/each}
+          </select>
+        </label>
+        <label class="batch-field">
+          <span class="batch-label">Modello</span>
+          <input
+            class="batch-input"
+            type="text"
+            bind:value={modaleBatch.modelScelto}
+            placeholder="Es. claude-sonnet-4-6, gpt-4o, llama3.2…"
+          />
+        </label>
+        <p class="batch-hint">
+          I golden verranno eseguiti in serie (uno alla volta) per evitare
+          rate-limit. Stima ~5-30s per golden a seconda del provider.
+        </p>
+      </div>
+    {:else if modaleBatch.stato.fase === "esecuzione"}
+      <div class="batch-progress">
+        <p class="batch-progress-label">
+          Esecuzione {modaleBatch.stato.correnteIdx} di {goldens.length}:
+          <strong>{modaleBatch.stato.correnteEtichetta}</strong>
+        </p>
+        <div class="batch-bar">
+          <div
+            class="batch-bar-fill"
+            style:width="{((modaleBatch.stato.correnteIdx - 1) / goldens.length) * 100}%"
+          ></div>
+        </div>
+      </div>
+    {:else if modaleBatch.stato.fase === "completato"}
+      {@const pass = modaleBatch.stato.risultati.filter((r) => r.passed).length}
+      {@const fail = modaleBatch.stato.risultati.length - pass}
+      <div class="batch-summary">
+        <div class="batch-counts">
+          <span class="batch-count pass">✓ {pass} pass</span>
+          <span class="batch-count fail">✗ {fail} fail</span>
+        </div>
+        <ul class="batch-result-list" role="list">
+          {#each modaleBatch.stato.risultati as r (r.etichetta)}
+            <li class="batch-result" class:fail={!r.passed}>
+              <span class="batch-result-icon">{r.passed ? "✓" : "✗"}</span>
+              <span class="batch-result-name">{r.etichetta}</span>
+              {#if r.errore}
+                <span class="batch-result-err" title={r.errore}>{r.errore}</span>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+    {#snippet footer()}
+      {#if modaleBatch.stato.fase === "scelta"}
+        <button class="secondary" type="button" onclick={chiudiBatch}>
+          Annulla
+        </button>
+        <button
+          class="primary"
+          type="button"
+          onclick={eseguiTutti}
+          disabled={!modaleBatch.providerScelto ||
+            !modaleBatch.modelScelto.trim() ||
+            modaleBatch.providers.length === 0}
+        >
+          Esegui {goldens.length} test
+        </button>
+      {:else if modaleBatch.stato.fase === "esecuzione"}
+        <button class="secondary" type="button" disabled>
+          Esecuzione in corso…
+        </button>
+      {:else}
+        <button class="primary" type="button" onclick={chiudiBatch}>
+          Chiudi
+        </button>
+      {/if}
+    {/snippet}
+  </Modale>
+{/if}
 
 <style>
   .golden-tab {
@@ -343,5 +576,140 @@
 
   .ico-danger:hover {
     color: var(--danger);
+  }
+
+  /* M3 PR-3: header batch button */
+  .secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: var(--fs-xs);
+    background: transparent;
+    color: var(--text-default);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .secondary:hover:not(:disabled) {
+    background: var(--bg-canvas);
+  }
+  .secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* M3 PR-3: modale batch */
+  .batch-info,
+  .batch-error,
+  .batch-hint {
+    margin: 0;
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .batch-error {
+    color: var(--danger);
+  }
+  .batch-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .batch-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .batch-label {
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+  .batch-input {
+    padding: 8px 12px;
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    color: var(--text-default);
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+  }
+  .batch-progress-label {
+    margin: 0 0 var(--sp-2);
+    font-size: var(--fs-sm);
+    color: var(--text-default);
+  }
+  .batch-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-overlay);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+  .batch-bar-fill {
+    height: 100%;
+    background: var(--accent-team);
+    transition: width 200ms ease;
+  }
+  .batch-summary {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+  .batch-counts {
+    display: flex;
+    gap: var(--sp-3);
+    font-weight: var(--fw-medium);
+  }
+  .batch-count.pass {
+    color: var(--accent-success, #2c8a2c);
+  }
+  .batch-count.fail {
+    color: var(--danger);
+  }
+  .batch-result-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .batch-result {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--bg-overlay);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-sm);
+  }
+  .batch-result.fail {
+    background: rgba(220, 80, 80, 0.08);
+  }
+  .batch-result-icon {
+    font-weight: var(--fw-bold);
+  }
+  .batch-result.fail .batch-result-icon {
+    color: var(--danger);
+  }
+  .batch-result-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .batch-result-err {
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+    max-width: 50%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>
