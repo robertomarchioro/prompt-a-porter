@@ -613,7 +613,7 @@
             />
             <EditorIndicator {statoSalvataggio} {righe} {colonna} {chars} />
           {:else if tabAttivo === "anteprima"}
-            <AnteprimaTab {body} />
+            <AnteprimaTab {body} {promptId} />
           {:else if tabAttivo === "diagnosi"}
             <DiagnosiTab
               {promptId}
