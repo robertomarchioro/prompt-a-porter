@@ -2,6 +2,7 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::embeddings::EmbeddingsState;
 use crate::errore::PapErrore;
 use crate::vault::VaultState;
 
@@ -446,6 +447,219 @@ pub fn prompt_export_markdown(
         );
         Ok(md)
     })
+}
+
+// ─── M6 PR-1: Markdown import (singolo file) ───────────────────────
+
+/// Risultato del parsing front-matter + body di un file `.md`.
+/// Tutti i campi sono best-effort: front-matter assente o malformato
+/// produce default sensati (titolo da fallback chiamante, visibility
+/// "private", body intero).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MarkdownImport {
+    pub titolo: String,
+    pub descrizione: String,
+    pub body: String,
+    pub target_model: String,
+    pub visibility: String,
+}
+
+impl Default for MarkdownImport {
+    fn default() -> Self {
+        Self {
+            titolo: String::new(),
+            descrizione: String::new(),
+            body: String::new(),
+            target_model: String::new(),
+            visibility: "private".to_string(),
+        }
+    }
+}
+
+/// Parser puro del front-matter YAML semplificato + body markdown.
+///
+/// Grammatica supportata (subset coerente col formato emesso da
+/// `prompt_export_markdown_pure`):
+/// - Front-matter delimitato da `---` su righe dedicate
+/// - Coppie `key: value` (value opzionalmente quoted con `"..."`)
+/// - Liste `key:\n  - item\n  - item` (ignorate per M6 PR-1: i list
+///   item come `imports` vengono ri-derivati dal body al re-save)
+///
+/// Compatibilità Obsidian/Foam: solo le chiavi note (`title`,
+/// `description`, `body`, `target_model`, `visibility`) vengono lette;
+/// chiavi sconosciute sono ignorate silentemente.
+///
+/// Se il front-matter è assente o malformato, il body intero viene
+/// usato e i metadati restano default (chiamante deve fornire titolo
+/// fallback, es. nome file).
+pub fn parse_markdown_frontmatter(testo: &str) -> MarkdownImport {
+    let mut out = MarkdownImport::default();
+    let testo = testo.trim_start_matches('\u{FEFF}'); // strip BOM
+
+    // Front-matter presente solo se inizia con `---\n` (o `---\r\n`)
+    let inizio_fm = testo.strip_prefix("---\n").or_else(|| testo.strip_prefix("---\r\n"));
+    let Some(after_open) = inizio_fm else {
+        // No front-matter -> tutto e' body
+        out.body = testo.to_string();
+        return out;
+    };
+
+    // Cerca chiusura `\n---\n` o `\n---\r\n` o `\n---` a fine file
+    let fm_end_marker = find_fm_close(after_open);
+    let Some((fm_block, body)) = fm_end_marker else {
+        // Front-matter non chiuso -> trattalo come body
+        out.body = testo.to_string();
+        return out;
+    };
+
+    // Parse riga per riga
+    for line in fm_block.lines() {
+        let trimmed = line.trim_end();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.starts_with("  - ") {
+            // Skip silenzioso (item di lista, ignorato per ora)
+            continue;
+        }
+        let Some(colon) = trimmed.find(':') else {
+            continue;
+        };
+        let key = trimmed[..colon].trim();
+        let raw_value = trimmed[colon + 1..].trim();
+        // Se value vuoto, e' header di lista -> skip (poi sotto-righe
+        // `  - ...` saranno ignorate sopra)
+        if raw_value.is_empty() {
+            continue;
+        }
+        let value = unquote_yaml(raw_value);
+        match key {
+            "title" => out.titolo = value,
+            "description" => out.descrizione = value,
+            "target_model" => out.target_model = value,
+            "visibility" => out.visibility = value,
+            _ => {} // ignora chiavi sconosciute
+        }
+    }
+
+    out.body = body.trim_start_matches('\n').to_string();
+    if out.visibility.is_empty() {
+        out.visibility = "private".to_string();
+    }
+    out
+}
+
+/// Cerca la chiusura del front-matter (`---` su riga dedicata) e
+/// ritorna `(fm_content_senza_delimitatori, body_dopo_delimitatore)`.
+fn find_fm_close(s: &str) -> Option<(String, String)> {
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        // Cerca un newline seguito da "---"
+        if let Some(rel) = s[i..].find("\n---") {
+            let pos = i + rel;
+            let after_marker = pos + 4; // skip "\n---"
+            // Verifica che sia una riga dedicata: dopo "---" o EOF o \n o \r\n
+            let is_eol = after_marker >= bytes.len()
+                || bytes[after_marker] == b'\n'
+                || (bytes[after_marker] == b'\r'
+                    && after_marker + 1 < bytes.len()
+                    && bytes[after_marker + 1] == b'\n');
+            if is_eol {
+                let fm = s[..pos].to_string();
+                let body_start = if after_marker >= bytes.len() {
+                    bytes.len()
+                } else if bytes[after_marker] == b'\r' {
+                    after_marker + 2
+                } else {
+                    after_marker + 1
+                };
+                let body = s[body_start..].to_string();
+                return Some((fm, body));
+            }
+            i = pos + 1;
+        } else {
+            return None;
+        }
+    }
+    None
+}
+
+/// Helper: rimuove eventuali quote di apertura/chiusura da un value
+/// YAML (`"..."` o `'...'`) e unescape `\"` / `\\`.
+fn unquote_yaml(s: &str) -> String {
+    let trimmed = s.trim();
+    if (trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2)
+        || (trimmed.starts_with('\'') && trimmed.ends_with('\'') && trimmed.len() >= 2)
+    {
+        let inner = &trimmed[1..trimmed.len() - 1];
+        return inner.replace("\\\"", "\"").replace("\\\\", "\\");
+    }
+    trimmed.to_string()
+}
+
+/// Tauri command: importa un singolo file `.md` come nuovo prompt.
+/// `testo` è il contenuto del file (frontend lo legge via fs API).
+/// `nome_file` è usato come fallback titolo se front-matter assente.
+/// Ritorna l'id del prompt creato.
+#[tauri::command]
+pub fn prompt_import_markdown(
+    testo: String,
+    nome_file: Option<String>,
+    state: State<'_, VaultState>,
+    rt_state: State<'_, EmbeddingsState>,
+) -> Result<String, PapErrore> {
+    let mut parsed = parse_markdown_frontmatter(&testo);
+    // Fallback titolo: nome file senza estensione, o "Importato"
+    if parsed.titolo.trim().is_empty() {
+        parsed.titolo = nome_file
+            .as_deref()
+            .map(|n| n.trim_end_matches(".md").trim_end_matches(".markdown").to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "Importato".to_string());
+    }
+    let body = parsed.body.trim().to_string();
+    let visibility = match parsed.visibility.as_str() {
+        "workspace" => "workspace",
+        _ => "private",
+    };
+
+    let nuovo_id = format!("prm-{}", crate::editor::genera_id());
+    state.with_conn(|conn| {
+        conn.execute(
+            "INSERT INTO Prompts
+                (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
+                 Visibility, TargetModel, Version, CreatedAt, UpdatedAt)
+             VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, ?4, ?5, ?6, 1,
+                     datetime('now'), datetime('now'))",
+            rusqlite::params![
+                nuovo_id,
+                parsed.titolo.trim(),
+                parsed.descrizione.trim(),
+                body.as_str(),
+                visibility,
+                if parsed.target_model.trim().is_empty() {
+                    None
+                } else {
+                    Some(parsed.target_model.trim())
+                },
+            ],
+        )?;
+        crate::versioning::snapshot_versione(conn, &nuovo_id, "usr-locale")?;
+        crate::editor::ricostruisci_fts(conn)?;
+        crate::editor::aggiorna_embedding(conn, &rt_state, &nuovo_id, &body)?;
+        crate::prompt_componibili::aggiorna_imports(conn, &nuovo_id, &body)?;
+        crate::audit::registra(
+            conn,
+            "prompt.imported.markdown",
+            "Prompt",
+            &nuovo_id,
+            Some(parsed.titolo.trim()),
+        );
+        Ok(())
+    })?;
+    log::info!("Prompt importato da markdown: {nuovo_id}");
+    Ok(nuovo_id)
 }
 
 /// Helper "pure" (no Tauri State) per applicare un `ExportV1` parsato
@@ -1147,5 +1361,91 @@ mod test {
         inserisci_prompt(&conn, "prm-1", "Title", "Body abbastanza lungo per il test.");
         let md = super::prompt_export_markdown_pure(&conn, "prm-1").unwrap();
         assert!(!md.contains("description:"));
+    }
+
+    // ─── M6 PR-1: parse_markdown_frontmatter ───────────────────────
+
+    #[test]
+    fn parse_md_no_frontmatter_tutto_body() {
+        let r = super::parse_markdown_frontmatter("Solo body senza front-matter");
+        assert_eq!(r.body, "Solo body senza front-matter");
+        assert!(r.titolo.is_empty());
+        assert_eq!(r.visibility, "private");
+    }
+
+    #[test]
+    fn parse_md_frontmatter_completo() {
+        let testo = "---\ntitle: \"Mio Prompt\"\ndescription: \"Una descrizione\"\ntarget_model: \"claude-sonnet-4-6\"\nvisibility: private\nversion: 3\n---\n\nQuesto è il body.";
+        let r = super::parse_markdown_frontmatter(testo);
+        assert_eq!(r.titolo, "Mio Prompt");
+        assert_eq!(r.descrizione, "Una descrizione");
+        assert_eq!(r.target_model, "claude-sonnet-4-6");
+        assert_eq!(r.visibility, "private");
+        assert_eq!(r.body, "Questo è il body.");
+    }
+
+    #[test]
+    fn parse_md_frontmatter_value_non_quotato() {
+        let testo = "---\ntitle: SenzaQuote\nvisibility: workspace\n---\nBody";
+        let r = super::parse_markdown_frontmatter(testo);
+        assert_eq!(r.titolo, "SenzaQuote");
+        assert_eq!(r.visibility, "workspace");
+        assert_eq!(r.body, "Body");
+    }
+
+    #[test]
+    fn parse_md_frontmatter_non_chiuso_diventa_body() {
+        let testo = "---\ntitle: \"Test\"\n\nQuesto manca del separatore di chiusura.";
+        let r = super::parse_markdown_frontmatter(testo);
+        assert!(r.titolo.is_empty());
+        assert_eq!(r.body, testo);
+    }
+
+    #[test]
+    fn parse_md_strip_bom() {
+        let testo = "\u{FEFF}---\ntitle: \"Con BOM\"\n---\nBody";
+        let r = super::parse_markdown_frontmatter(testo);
+        assert_eq!(r.titolo, "Con BOM");
+    }
+
+    #[test]
+    fn parse_md_lista_imports_ignorata() {
+        let testo = "---\ntitle: \"X\"\nimports:\n  - foo\n  - bar/baz\n---\nbody";
+        let r = super::parse_markdown_frontmatter(testo);
+        assert_eq!(r.titolo, "X");
+        assert_eq!(r.body, "body");
+        // Lista imports skip silenzioso (la re-derivazione avviene
+        // al save via prompt_componibili::aggiorna_imports).
+    }
+
+    #[test]
+    fn parse_md_chiavi_obsidian_ignorate() {
+        let testo = "---\ntitle: \"Obsidian\"\ntags: [foo, bar]\naliases: [x]\n---\nbody";
+        let r = super::parse_markdown_frontmatter(testo);
+        assert_eq!(r.titolo, "Obsidian");
+        assert_eq!(r.body, "body");
+        // tags/aliases sono ignorate silentemente (non rompono import)
+    }
+
+    #[test]
+    fn parse_md_value_con_escape() {
+        let testo = "---\ntitle: \"Con \\\"quote\\\" dentro\"\n---\nbody";
+        let r = super::parse_markdown_frontmatter(testo);
+        assert_eq!(r.titolo, "Con \"quote\" dentro");
+    }
+
+    #[test]
+    fn parse_md_crlf_line_endings() {
+        let testo = "---\r\ntitle: \"Windows\"\r\n---\r\nbody";
+        let r = super::parse_markdown_frontmatter(testo);
+        assert_eq!(r.titolo, "Windows");
+        assert_eq!(r.body, "body");
+    }
+
+    #[test]
+    fn parse_md_visibility_default_private() {
+        let testo = "---\ntitle: \"X\"\n---\nbody";
+        let r = super::parse_markdown_frontmatter(testo);
+        assert_eq!(r.visibility, "private");
     }
 }
