@@ -18,6 +18,7 @@
     segnapostoHighlight,
     segnapostoTheme,
   } from "$lib/codemirror/placeholder-highlight";
+  import { importAutocompletion } from "$lib/codemirror/import-autocomplete";
 
   interface Props {
     body: string;
@@ -73,6 +74,9 @@
         markdown(),
         importTokens({ onapri: onApriPrompt }),
         importTheme,
+        // M4 PR-3: intellisense autocomplete `{{import "...`. Callback
+        // legge promptId al momento dell'invocazione per escludere self.
+        importAutocompletion({ getPromptId: () => promptId }),
         segnapostoHighlight,
         segnapostoTheme,
         EditorView.lineWrapping,
