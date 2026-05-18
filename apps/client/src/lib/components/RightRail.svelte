@@ -5,6 +5,10 @@
   import { estraiSegnaposti } from "$lib/template";
   import { estraiImports } from "$lib/util/estrai-imports";
   import { MODELLI_TARGET } from "$lib/modelli-target";
+  import Modale from "$lib/components/Modale.svelte";
+  import Button from "$lib/components/Button.svelte";
+  import Input from "$lib/components/Input.svelte";
+  import Field from "$lib/components/Field.svelte";
 
   interface TagInfo {
     id: string;
@@ -92,6 +96,65 @@
       });
     } catch {
       varianti = [];
+    }
+  }
+
+  // M3 PR-1: modale "Crea variante" — sostituisce il placeholder F8.
+  // Backend prompt_crea_variante accetta etichetta opzionale: se vuota,
+  // assegna auto la prossima libera (b, c, d...).
+  let modaleVariante = $state<{
+    aperto: boolean;
+    etichetta: string;
+    salvataggio: boolean;
+    errore: string;
+  }>({
+    aperto: false,
+    etichetta: "",
+    salvataggio: false,
+    errore: "",
+  });
+
+  function apriModaleCreaVariante(): void {
+    modaleVariante = {
+      aperto: true,
+      etichetta: "",
+      salvataggio: false,
+      errore: "",
+    };
+  }
+
+  function chiudiModaleVariante(): void {
+    if (modaleVariante.salvataggio) return; // no chiusura mentre invoke pending
+    modaleVariante.aperto = false;
+  }
+
+  async function confermaCreaVariante(): Promise<void> {
+    modaleVariante.salvataggio = true;
+    modaleVariante.errore = "";
+    try {
+      const etichetta = modaleVariante.etichetta.trim();
+      const newId = await invoke<string>("prompt_crea_variante", {
+        parentId: promptId,
+        etichetta: etichetta.length > 0 ? etichetta : null,
+      });
+      await caricaVarianti();
+      // Apri la nuova variante (stesso pattern di import: CustomEvent
+      // intercettato da Shell/router).
+      window.dispatchEvent(
+        new CustomEvent("pap:apri-prompt", { detail: newId }),
+      );
+      modaleVariante.aperto = false;
+    } catch (e) {
+      modaleVariante.errore = String(e).replace(/^Error: /, "");
+    } finally {
+      modaleVariante.salvataggio = false;
+    }
+  }
+
+  function gestisciKeydownModale(e: KeyboardEvent): void {
+    if (e.key === "Enter" && !modaleVariante.salvataggio) {
+      e.preventDefault();
+      void confermaCreaVariante();
     }
   }
 
@@ -336,7 +399,8 @@
       <button
         type="button"
         class="pill add"
-        onclick={() => console.log("F8 modale crea variante")}
+        onclick={apriModaleCreaVariante}
+        title="Crea nuova variante di questo prompt"
       >
         + Variante
       </button>
@@ -348,6 +412,51 @@
     {/if}
   </section>
 </aside>
+
+{#if modaleVariante.aperto}
+  <Modale
+    titolo="Crea variante"
+    sottotitolo={titolo}
+    larghezza="sm"
+    onChiudi={chiudiModaleVariante}
+  >
+    <div class="modale-variante-body" onkeydown={gestisciKeydownModale} role="presentation">
+      <p class="modale-variante-help">
+        Le varianti permettono di mantenere versioni alternative dello stesso
+        prompt — utili per A/B test o adattamenti per modelli diversi. La
+        nuova variante eredita titolo, descrizione, body, tag e cartella dal
+        prompt corrente.
+      </p>
+      <Field
+        etichetta="Etichetta variante"
+        hint="Lascia vuoto per assegnazione automatica (b, c, d…)"
+        errore={modaleVariante.errore}
+      >
+        <Input
+          bind:valore={modaleVariante.etichetta}
+          placeholder="Es. mobile, formale, GPT-4…"
+          disabled={modaleVariante.salvataggio}
+        />
+      </Field>
+    </div>
+    {#snippet footer()}
+      <Button
+        variante="ghost"
+        onclick={chiudiModaleVariante}
+        disabled={modaleVariante.salvataggio}
+      >
+        Annulla
+      </Button>
+      <Button
+        variante="primary"
+        onclick={confermaCreaVariante}
+        disabled={modaleVariante.salvataggio}
+      >
+        {modaleVariante.salvataggio ? "Creazione…" : "Crea variante"}
+      </Button>
+    {/snippet}
+  </Modale>
+{/if}
 
 <style>
   .right-rail {
@@ -590,5 +699,19 @@
     cursor: pointer;
     text-decoration: underline;
     text-align: left;
+  }
+
+  /* M3 PR-1: modale Crea variante */
+  .modale-variante-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+
+  .modale-variante-help {
+    margin: 0;
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+    line-height: var(--lh-relaxed, 1.5);
   }
 </style>
