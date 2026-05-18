@@ -11,7 +11,7 @@
    */
   import { invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, untrack } from "svelte";
   import {
     Palette,
     List as ListIcon,
@@ -94,7 +94,11 @@
 
   let { onChiudi, sezioneIniziale = "aspetto" }: Props = $props();
 
-  let sezione = $state<SezioneId>(sezioneIniziale);
+  // Snapshot iniziale: il parent passa sezioneIniziale solo per aprire
+  // la modale su una sezione specifica; dopo, il modale gestisce
+  // internamente il routing tra sezioni. untrack evita che successive
+  // mutazioni del prop sezioneIniziale resettino la navigazione utente.
+  let sezione = $state<SezioneId>(untrack(() => sezioneIniziale));
   let query = $state("");
   let subSezioneAperta = $state<SubSezioneId | null>(null);
 

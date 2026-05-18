@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, untrack } from "svelte";
   import { EditorView, lineNumbers, keymap } from "@codemirror/view";
   import { EditorState } from "@codemirror/state";
   import {
@@ -43,7 +43,11 @@
 
   let container: HTMLDivElement;
   let view: EditorView | null = null;
-  let bodyInterno = body;
+  // Snapshot iniziale di `body` (prop reattiva). untrack() evita di
+  // catturare body come dipendenza reattiva del top-level script:
+  // bodyInterno traccia lo stato interno CodeMirror, sync con prop
+  // body avviene nell'$effect dedicato, non automaticamente.
+  let bodyInterno = untrack(() => body);
   // Issue #167: distingue dispatch programmatico (switch prompt → sync
   // contenuto) da input utente. Settato a true prima del dispatch
   // programmatico nell'$effect su `promptId`; l'updateListener salta
