@@ -662,6 +662,234 @@ pub fn prompt_import_markdown(
     Ok(nuovo_id)
 }
 
+// ─── M6 PR-2: Markdown import bulk (directory ricorsiva) ───────────
+
+/// Limite profondità ricorsione per evitare loop simbolici / strutture
+/// patologiche. Coerente con il limite import nidificati (5 livelli).
+pub const BULK_MAX_DEPTH: usize = 5;
+
+/// Limite numero file processati per chiamata (protezione contro
+/// directory enormi che bloccherebbero la UI per minuti).
+pub const BULK_MAX_FILES: usize = 1000;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BulkImportFileSuccess {
+    pub nome_file: String,
+    pub id: String,
+    pub titolo: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BulkImportFileError {
+    pub nome_file: String,
+    pub errore: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BulkImportReport {
+    pub totale_trovati: usize,
+    pub importati: Vec<BulkImportFileSuccess>,
+    pub falliti: Vec<BulkImportFileError>,
+    /// True se la scansione si è fermata per limit (vedi BULK_MAX_FILES).
+    pub truncated: bool,
+}
+
+/// Walker ricorsivo: raccoglie path dei file `.md`/`.markdown` sotto
+/// `root`, in ordine alfabetico stabile per riproducibilità.
+/// Salta link simbolici e directory nascoste (prefisso `.`).
+fn walk_md_files(
+    root: &std::path::Path,
+    depth: usize,
+    accum: &mut Vec<std::path::PathBuf>,
+) -> std::io::Result<()> {
+    if depth > BULK_MAX_DEPTH || accum.len() >= BULK_MAX_FILES {
+        return Ok(());
+    }
+    let mut entries: Vec<_> = std::fs::read_dir(root)?
+        .filter_map(|e| e.ok())
+        .collect();
+    // Ordine alfabetico per output deterministico
+    entries.sort_by_key(|e| e.file_name());
+    for entry in entries {
+        if accum.len() >= BULK_MAX_FILES {
+            break;
+        }
+        let path = entry.path();
+        let file_name = entry.file_name();
+        let name_lossy = file_name.to_string_lossy();
+        // Salta dir/file nascosti (Obsidian: .obsidian/, .git/, ecc.)
+        if name_lossy.starts_with('.') {
+            continue;
+        }
+        let metadata = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+        if metadata.is_dir() {
+            let _ = walk_md_files(&path, depth + 1, accum);
+        } else if metadata.is_file() {
+            let lower = name_lossy.to_lowercase();
+            if lower.ends_with(".md") || lower.ends_with(".markdown") {
+                accum.push(path);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Tauri command: importa tutti i file `.md`/`.markdown` da una
+/// directory ricorsivamente (max 5 livelli, max 1000 file per call).
+///
+/// Best-effort: ogni file viene importato individualmente; gli errori
+/// per-file (parsing, INSERT, ecc.) sono raccolti nel report senza
+/// interrompere il batch. La directory viene scansionata in ordine
+/// alfabetico per output deterministico.
+///
+/// Skipped silently: file/dir nascosti (prefisso `.`, es. `.obsidian/`,
+/// `.git/`), link simbolici (loop protection).
+#[tauri::command]
+pub fn vault_import_markdown_bulk(
+    directory: String,
+    state: State<'_, VaultState>,
+    rt_state: State<'_, EmbeddingsState>,
+) -> Result<BulkImportReport, PapErrore> {
+    let root = std::path::PathBuf::from(&directory);
+    if !root.exists() {
+        return Err(PapErrore::Generico(format!(
+            "Directory non esistente: {directory}"
+        )));
+    }
+    if !root.is_dir() {
+        return Err(PapErrore::Generico(format!(
+            "Path non e' una directory: {directory}"
+        )));
+    }
+
+    let mut paths: Vec<std::path::PathBuf> = Vec::new();
+    walk_md_files(&root, 0, &mut paths).map_err(|e| {
+        PapErrore::Generico(format!("Errore scansione directory: {e}"))
+    })?;
+    let totale = paths.len();
+    let truncated = totale >= BULK_MAX_FILES;
+
+    // Singolo `with_conn` esterno: il loop sui file gira dentro la
+    // chiusura -> `rt_state` viene catturato per reference, no clone.
+    // L'errore singolo (es. INSERT fail) non interrompe il batch:
+    // accumula in `falliti` e continua.
+    let (importati, falliti) = state.with_conn(|conn| {
+        let mut ok: Vec<BulkImportFileSuccess> = Vec::new();
+        let mut ko: Vec<BulkImportFileError> = Vec::new();
+
+        for path in &paths {
+            let nome_file = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.display().to_string());
+
+            let testo = match std::fs::read_to_string(path) {
+                Ok(t) => t,
+                Err(e) => {
+                    ko.push(BulkImportFileError {
+                        nome_file,
+                        errore: format!("read_to_string fallita: {e}"),
+                    });
+                    continue;
+                }
+            };
+
+            let mut parsed = parse_markdown_frontmatter(&testo);
+            if parsed.titolo.trim().is_empty() {
+                parsed.titolo = nome_file
+                    .trim_end_matches(".md")
+                    .trim_end_matches(".markdown")
+                    .to_string();
+                if parsed.titolo.trim().is_empty() {
+                    parsed.titolo = "Importato".to_string();
+                }
+            }
+            let body = parsed.body.trim().to_string();
+            let visibility = match parsed.visibility.as_str() {
+                "workspace" => "workspace",
+                _ => "private",
+            };
+            let target_opt: Option<&str> = if parsed.target_model.trim().is_empty() {
+                None
+            } else {
+                Some(parsed.target_model.trim())
+            };
+
+            let nuovo_id = format!("prm-{}", crate::editor::genera_id());
+            let exec: Result<(), PapErrore> = (|| {
+                conn.execute(
+                    "INSERT INTO Prompts
+                        (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
+                         Visibility, TargetModel, Version, CreatedAt, UpdatedAt)
+                     VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, ?4, ?5, ?6, 1,
+                             datetime('now'), datetime('now'))",
+                    rusqlite::params![
+                        nuovo_id,
+                        parsed.titolo.trim(),
+                        parsed.descrizione.trim(),
+                        body.as_str(),
+                        visibility,
+                        target_opt,
+                    ],
+                )?;
+                crate::versioning::snapshot_versione(conn, &nuovo_id, "usr-locale")?;
+                crate::editor::aggiorna_embedding(conn, &rt_state, &nuovo_id, &body)?;
+                crate::prompt_componibili::aggiorna_imports(conn, &nuovo_id, &body)?;
+                Ok(())
+            })();
+
+            match exec {
+                Ok(()) => ok.push(BulkImportFileSuccess {
+                    nome_file,
+                    id: nuovo_id,
+                    titolo: parsed.titolo.trim().to_string(),
+                }),
+                Err(e) => ko.push(BulkImportFileError {
+                    nome_file,
+                    errore: format!("{e}"),
+                }),
+            }
+        }
+
+        // FTS rebuild una volta sola a fine batch (evita N rebuild costosi)
+        let _ = crate::editor::ricostruisci_fts(conn);
+        crate::audit::registra(
+            conn,
+            "vault.imported.markdown.bulk",
+            "Vault",
+            "bulk",
+            Some(&format!(
+                "importati={}, falliti={}, truncated={}",
+                ok.len(),
+                ko.len(),
+                truncated
+            )),
+        );
+        Ok((ok, ko))
+    })?;
+
+    log::info!(
+        "Bulk markdown import completato: {}/{} importati, {} falliti{}",
+        importati.len(),
+        totale,
+        falliti.len(),
+        if truncated { " (TRUNCATED)" } else { "" }
+    );
+
+    Ok(BulkImportReport {
+        totale_trovati: totale,
+        importati,
+        falliti,
+        truncated,
+    })
+}
+
 /// Helper "pure" (no Tauri State) per applicare un `ExportV1` parsato
 /// sulla connection con la modalità di gestione conflitti specificata.
 /// Riusabile dai test e dal Tauri command `vault_import_json`.
@@ -1447,5 +1675,92 @@ mod test {
         let testo = "---\ntitle: \"X\"\n---\nbody";
         let r = super::parse_markdown_frontmatter(testo);
         assert_eq!(r.visibility, "private");
+    }
+
+    // ─── M6 PR-2: walk_md_files (puro filesystem walker) ───────────
+
+    fn tmp_dir_test() -> tempfile::TempDir {
+        tempfile::Builder::new()
+            .prefix("pap-bulk-md-")
+            .tempdir()
+            .unwrap()
+    }
+
+    fn write_file(dir: &std::path::Path, nome: &str, contenuto: &str) {
+        let p = dir.join(nome);
+        if let Some(parent) = p.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(p, contenuto).unwrap();
+    }
+
+    #[test]
+    fn walk_raccoglie_md_root_e_sottocartelle() {
+        let dir = tmp_dir_test();
+        write_file(dir.path(), "a.md", "body a");
+        write_file(dir.path(), "sub/b.md", "body b");
+        write_file(dir.path(), "sub/nested/c.markdown", "body c");
+        write_file(dir.path(), "ignored.txt", "non md");
+
+        let mut acc = Vec::new();
+        super::walk_md_files(dir.path(), 0, &mut acc).unwrap();
+        assert_eq!(acc.len(), 3);
+        // Ordine alfabetico stabile (a, sub/b, sub/nested/c)
+        let nomi: Vec<String> = acc
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+        assert!(nomi.contains(&"a.md".to_string()));
+        assert!(nomi.contains(&"b.md".to_string()));
+        assert!(nomi.contains(&"c.markdown".to_string()));
+    }
+
+    #[test]
+    fn walk_salta_dir_nascoste() {
+        let dir = tmp_dir_test();
+        write_file(dir.path(), ".obsidian/config.md", "skip me");
+        write_file(dir.path(), ".git/objects/x.md", "skip me");
+        write_file(dir.path(), "visibile.md", "keep");
+
+        let mut acc = Vec::new();
+        super::walk_md_files(dir.path(), 0, &mut acc).unwrap();
+        assert_eq!(acc.len(), 1);
+        assert!(acc[0].ends_with("visibile.md"));
+    }
+
+    #[test]
+    fn walk_salta_file_non_md() {
+        let dir = tmp_dir_test();
+        write_file(dir.path(), "doc.txt", "no");
+        write_file(dir.path(), "img.png", "binary");
+        write_file(dir.path(), "valid.md", "yes");
+        write_file(dir.path(), "valid.MD", "case-insensitive");
+
+        let mut acc = Vec::new();
+        super::walk_md_files(dir.path(), 0, &mut acc).unwrap();
+        assert_eq!(acc.len(), 2);
+    }
+
+    #[test]
+    fn walk_rispetta_max_depth() {
+        let dir = tmp_dir_test();
+        // Crea 7 livelli; MAX_DEPTH=5 -> taglia dopo
+        let mut nested = dir.path().to_path_buf();
+        for i in 0..7 {
+            nested.push(format!("d{i}"));
+        }
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join("deep.md"), "too deep").unwrap();
+        // E uno a profondita' accettabile (depth=2)
+        write_file(dir.path(), "d0/d1/ok.md", "shallow");
+
+        let mut acc = Vec::new();
+        super::walk_md_files(dir.path(), 0, &mut acc).unwrap();
+        let names: Vec<String> = acc
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+        assert!(names.contains(&"ok.md".to_string()));
+        assert!(!names.contains(&"deep.md".to_string()), "deep.md non doveva passare MAX_DEPTH=5");
     }
 }
