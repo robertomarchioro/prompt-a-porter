@@ -155,13 +155,34 @@
 
   async function inviaRating(scelto: Rating): Promise<void> {
     if (!dettaglio) return;
+    // M3 PR-2: voto negativo apre modale dedicato per nota (le note su
+    // voti negativi sono il segnale piu' utile per migliorare il prompt;
+    // chiediamo esplicitamente invece di affidarci al details collassato).
+    // Voti neutri/positivi mantengono il flow diretto.
+    if (scelto === -1) {
+      ratingScelto = scelto;
+      modaleNotaNegativa = {
+        aperto: true,
+        nota: nota.trim(),
+        salvataggio: false,
+      };
+      return;
+    }
+    await persistRating(scelto, nota.trim() || null);
+  }
+
+  async function persistRating(
+    scelto: Rating,
+    notaFinale: string | null,
+  ): Promise<void> {
+    if (!dettaglio) return;
     ratingScelto = scelto;
     try {
       await invoke<string>("rating_aggiungi", {
         nuovo: {
           prompt_id: promptId,
           rating: scelto,
-          nota: nota.trim() || null,
+          nota: notaFinale,
           used_with_model: dettaglio.target_model || null,
         },
       });
@@ -170,6 +191,31 @@
     } catch (e) {
       console.error("[compila-modal] rating", e);
     }
+  }
+
+  // Stato modale "Aggiungi nota" su voto negativo (M3 PR-2).
+  let modaleNotaNegativa = $state<{
+    aperto: boolean;
+    nota: string;
+    salvataggio: boolean;
+  }>({
+    aperto: false,
+    nota: "",
+    salvataggio: false,
+  });
+
+  async function confermaVotoNegativo(conNota: boolean): Promise<void> {
+    modaleNotaNegativa.salvataggio = true;
+    const testo = modaleNotaNegativa.nota.trim();
+    await persistRating(-1, conNota && testo.length > 0 ? testo : null);
+    modaleNotaNegativa.aperto = false;
+    modaleNotaNegativa.salvataggio = false;
+  }
+
+  function chiudiModaleNotaSenzaInviare(): void {
+    if (modaleNotaNegativa.salvataggio) return;
+    modaleNotaNegativa.aperto = false;
+    ratingScelto = null; // rilascia il rating se utente esce senza scegliere
   }
 
   function gestKeydown(e: KeyboardEvent): void {
@@ -347,6 +393,46 @@
     </button>
   {/snippet}
 </Modale>
+
+{#if modaleNotaNegativa.aperto}
+  <Modale
+    titolo="Cosa non ha funzionato?"
+    sottotitolo="Una nota aiuta a capire dove migliorare il prompt"
+    larghezza="sm"
+    onChiudi={chiudiModaleNotaSenzaInviare}
+  >
+    <div class="nota-neg-body">
+      <textarea
+        class="nota-neg-input"
+        rows="4"
+        placeholder="Es. output troppo generico, manca il tono richiesto, formato sbagliato…"
+        bind:value={modaleNotaNegativa.nota}
+        disabled={modaleNotaNegativa.salvataggio}
+      ></textarea>
+      <p class="nota-neg-hint">
+        Opzionale: puoi anche solo registrare il voto negativo.
+      </p>
+    </div>
+    {#snippet footer()}
+      <button
+        class="btn-secondary"
+        type="button"
+        onclick={() => void confermaVotoNegativo(false)}
+        disabled={modaleNotaNegativa.salvataggio}
+      >
+        Salta e registra voto
+      </button>
+      <button
+        class="btn-primary"
+        type="button"
+        onclick={() => void confermaVotoNegativo(true)}
+        disabled={modaleNotaNegativa.salvataggio || modaleNotaNegativa.nota.trim().length === 0}
+      >
+        {modaleNotaNegativa.salvataggio ? "Salvataggio…" : "Salva voto + nota"}
+      </button>
+    {/snippet}
+  </Modale>
+{/if}
 
 <style>
   .grid {
@@ -643,5 +729,36 @@
   .btn-secondary:hover {
     background: var(--bg-overlay);
     color: var(--text-default);
+  }
+
+  /* M3 PR-2: modale nota su voto negativo */
+  .nota-neg-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+
+  .nota-neg-input {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    color: var(--text-default);
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+    resize: vertical;
+    min-height: 80px;
+  }
+
+  .nota-neg-input:focus {
+    outline: 2px solid var(--accent-team);
+    outline-offset: -1px;
+  }
+
+  .nota-neg-hint {
+    margin: 0;
+    font-size: var(--fs-xs);
+    color: var(--text-subtle);
   }
 </style>
