@@ -359,6 +359,27 @@ pub fn prompt_compila(
     })
 }
 
+/// M5 PR-2: variante di `prompt_compila` che accetta il body inline
+/// invece di leggerlo dal DB. Usata da AnteprimaTab per live preview
+/// dell'espansione import senza attendere l'autosave del body editato.
+///
+/// `prompt_id` (opzionale) serve come "self id" per cycle detection:
+/// se l'utente scrive `{{import "self-title"}}` nel proprio prompt e
+/// passa il proprio id, il loop viene rilevato come ciclo. Se omesso,
+/// usiamo un id sintetico `__inline_preview__`.
+#[tauri::command]
+pub fn prompt_compila_inline(
+    body: String,
+    prompt_id: Option<String>,
+    state: State<'_, VaultState>,
+) -> Result<String, PapErrore> {
+    state.with_conn(|conn| {
+        let id = prompt_id.as_deref().unwrap_or("__inline_preview__");
+        let mut visitati: HashSet<String> = HashSet::new();
+        compila_ricorsivo(conn, id, &body, &mut visitati, 0)
+    })
+}
+
 /// Preview di un prompt importato per hover/Ctrl+click nell'editor.
 /// v0.7.0 Step 4: risolve il `path` dichiarato nel `{{import "path"}}`
 /// e ritorna i metadati essenziali per il tooltip (id, titolo, body).
@@ -1123,5 +1144,79 @@ mod test {
         let r = suggest_pure(&conn, "Live", 10, None).unwrap();
         assert_eq!(r.len(), 1);
         assert_eq!(r[0].id, "prm-live");
+    }
+
+    // ─── M5 PR-2: compila_inline (body fornito esternamente) ───────
+
+    #[test]
+    fn compila_inline_espande_import_senza_db_lookup_del_parent() {
+        let conn = db_test();
+        // Solo child registrato; il "parent" e' il body inline passato.
+        inserisci_prompt(&conn, "prm-child", "Saluto", "Ciao mondo", None);
+
+        // Simulazione AnteprimaTab: body editato non ancora salvato
+        let body_inline = r#"Premessa: {{import "Saluto"}}. Fine."#;
+        let mut visitati = HashSet::new();
+        let out = compila_ricorsivo(
+            &conn,
+            "__inline_preview__",
+            body_inline,
+            &mut visitati,
+            0,
+        )
+        .unwrap();
+        assert_eq!(out, "Premessa: Ciao mondo. Fine.");
+    }
+
+    #[test]
+    fn compila_inline_cycle_detection_con_self_id() {
+        let conn = db_test();
+        // Prompt esistente "Padre" che importa se stesso (caso patologico
+        // ma possibile durante editing). Inline simulate: l'utente edita
+        // il body del prompt "Padre" aggiungendo {{import "Padre"}}.
+        inserisci_prompt(&conn, "prm-padre", "Padre", "vecchio", None);
+
+        let body_inline = r#"Test {{import "Padre"}} ciao"#;
+        let mut visitati = HashSet::new();
+        // Usiamo "prm-padre" come self id -> cycle detection lo rifiuta.
+        let err = compila_ricorsivo(
+            &conn,
+            "prm-padre",
+            body_inline,
+            &mut visitati,
+            0,
+        )
+        .unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("Ciclo"), "atteso errore ciclo, got: {msg}");
+    }
+
+    #[test]
+    fn compila_inline_supporta_with_e_version() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-tpl", "Tpl", "Ciao {{nome}}", None);
+        crate::versioning::snapshot_versione(&conn, "prm-tpl", "usr-locale")
+            .unwrap();
+        // edit child -> v2
+        conn.execute(
+            "UPDATE Prompts SET Body = 'Body v2', Version = 2 WHERE Id = 'prm-tpl'",
+            [],
+        )
+        .unwrap();
+        crate::versioning::snapshot_versione(&conn, "prm-tpl", "usr-locale")
+            .unwrap();
+
+        let body_inline =
+            r#"Risultato: {{import "Tpl" version=1 with nome=Mario}}"#;
+        let mut visitati = HashSet::new();
+        let out = compila_ricorsivo(
+            &conn,
+            "__inline_preview__",
+            body_inline,
+            &mut visitati,
+            0,
+        )
+        .unwrap();
+        assert_eq!(out, "Risultato: Ciao Mario");
     }
 }
