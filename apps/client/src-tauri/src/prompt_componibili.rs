@@ -53,18 +53,64 @@ pub struct ImportRef {
     /// (semantica simile a CSS `last-rule-wins`).
     #[serde(default)]
     pub variables: Vec<(String, String)>,
+    /// M4 PR-2: pinning a versione storica via sintassi
+    /// `{{import "x" version=N}}`. Se `Some(N)`, compila_ricorsivo
+    /// legge il body da `PromptVersions` invece che da `Prompts`,
+    /// permettendo a un prompt di importare uno snapshot stabile
+    /// del child anche dopo modifiche. `None` = ultima versione live.
+    #[serde(default)]
+    pub version: Option<i64>,
 }
 
 fn re_import() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        // M4 PR-1: gruppo opzionale `with ...` cattura tutto fino a }}
-        // (lazy match per non sforare oltre il tag).
-        Regex::new(
-            r#"\{\{\s*import\s+"([^"]+)"(?:\s+with\s+([^}]+?))?\s*\}\}"#,
-        )
-        .unwrap()
+        // M4 PR-2 refactor: il gruppo 2 cattura TUTTI i modifiers dopo
+        // "path" (es. `version=3 with tono=formale`), parser esterno
+        // `parse_modifiers` estrae version e with separatamente.
+        // Vincolo sintattico: `version=N` deve precedere `with ...`
+        // (se entrambi presenti). Documentato in roadmap M4.
+        Regex::new(r#"\{\{\s*import\s+"([^"]+)"([^}]*?)\s*\}\}"#).unwrap()
     })
+}
+
+/// M4 PR-2: parse del blob modifiers per estrarre `version=N` e
+/// `with k=v, ...` da `raw` (tutto cio' che sta fra `"path"` e `}}`).
+///
+/// Grammatica supportata (ordine fisso, version prima di with):
+/// - `` (vuoto) -> (None, [])
+/// - `version=N` -> (Some(N), [])
+/// - `with k=v, k2=v2` -> (None, [(k,v), (k2,v2)])
+/// - `version=N with k=v` -> (Some(N), [(k,v)])
+///
+/// NON supportato: `with k=v version=N` (with cattura sempre fino a fine).
+fn parse_modifiers(raw: &str) -> (Option<i64>, Vec<(String, String)>) {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return (None, vec![]);
+    }
+
+    static RE_VER: OnceLock<Regex> = OnceLock::new();
+    let re_ver = RE_VER.get_or_init(|| Regex::new(r"^version\s*=\s*(\d+)\b").unwrap());
+
+    let (version, remaining) = if let Some(cap) = re_ver.captures(trimmed) {
+        let v: i64 = cap[1].parse().unwrap_or(0);
+        let consumed = cap.get(0).unwrap().end();
+        (Some(v), trimmed[consumed..].trim_start())
+    } else {
+        (None, trimmed)
+    };
+
+    // Dopo eventuale version, cerco `with <...>` come prefisso del resto.
+    let vars = if let Some(rest) = remaining
+        .strip_prefix("with ")
+        .or_else(|| remaining.strip_prefix("with\t"))
+    {
+        parse_with_clause(rest.trim())
+    } else {
+        vec![]
+    };
+    (version, vars)
 }
 
 /// Parse della clausola `with k=v, k2="value with spaces", ...` in
@@ -104,16 +150,15 @@ pub fn parse_imports(body: &str) -> Vec<ImportRef> {
         .map(|(i, cap)| {
             let m = cap.get(0).unwrap();
             let path = cap.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
-            let variables = cap
-                .get(2)
-                .map(|m| parse_with_clause(m.as_str()))
-                .unwrap_or_default();
+            let modifiers_raw = cap.get(2).map(|m| m.as_str()).unwrap_or("");
+            let (version, variables) = parse_modifiers(modifiers_raw);
             ImportRef {
                 path,
                 position: i,
                 byte_start: m.start(),
                 byte_end: m.end(),
                 variables,
+                version,
             }
         })
         .collect()
@@ -242,11 +287,31 @@ fn compila_ricorsivo(
                 )));
             }
             Some(id_imp) => {
-                let body_imp: String = conn.query_row(
-                    "SELECT Body FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
-                    [&id_imp],
-                    |r| r.get(0),
-                )?;
+                // M4 PR-2: pinning a versione storica. Se `version=N`
+                // specificato, leggi body da PromptVersions invece che
+                // da Prompts (snapshot stabile, non segue le edit
+                // successive del child).
+                let body_imp: String = match imp.version {
+                    Some(v) => conn
+                        .query_row(
+                            "SELECT Body FROM PromptVersions
+                             WHERE PromptId = ?1 AND Version = ?2",
+                            params![&id_imp, v],
+                            |r| r.get(0),
+                        )
+                        .map_err(|_| {
+                            visitati.remove(prompt_id);
+                            PapErrore::Generico(format!(
+                                "Versione {v} di '{}' non trovata in PromptVersions",
+                                imp.path
+                            ))
+                        })?,
+                    None => conn.query_row(
+                        "SELECT Body FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
+                        [&id_imp],
+                        |r| r.get(0),
+                    )?,
+                };
                 // M4 PR-1: applica variabili scopate `with k=v` PRIMA
                 // della ricorsione: i segnaposti `{{k}}` del body
                 // importato vengono pre-sostituiti con i value passati
@@ -760,5 +825,154 @@ mod test {
             .unwrap();
         // segnaposto resta -> sara' risolto dal frontend con valori utente
         assert_eq!(out, "Ciao {{nome}}");
+    }
+
+    // ─── M4 PR-2: sintassi `version=N` ─────────────────────────────
+
+    #[test]
+    fn parse_modifiers_vuoto_ritorna_none_vec_vuoto() {
+        let (v, vars) = parse_modifiers("");
+        assert!(v.is_none());
+        assert!(vars.is_empty());
+    }
+
+    #[test]
+    fn parse_modifiers_solo_version() {
+        let (v, vars) = parse_modifiers("version=3");
+        assert_eq!(v, Some(3));
+        assert!(vars.is_empty());
+    }
+
+    #[test]
+    fn parse_modifiers_solo_with() {
+        let (v, vars) = parse_modifiers("with tono=formale");
+        assert!(v.is_none());
+        assert_eq!(vars, vec![("tono".to_string(), "formale".to_string())]);
+    }
+
+    #[test]
+    fn parse_modifiers_version_e_with_combinati() {
+        let (v, vars) = parse_modifiers(r#"version=5 with tono=formale, nome="Mario""#);
+        assert_eq!(v, Some(5));
+        assert_eq!(
+            vars,
+            vec![
+                ("tono".to_string(), "formale".to_string()),
+                ("nome".to_string(), "Mario".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_imports_estrae_version() {
+        let body = r#"{{import "x" version=7}}"#;
+        let imps = parse_imports(body);
+        assert_eq!(imps.len(), 1);
+        assert_eq!(imps[0].version, Some(7));
+        assert!(imps[0].variables.is_empty());
+    }
+
+    #[test]
+    fn parse_imports_version_e_with() {
+        let body = r#"{{import "x" version=2 with k=v}}"#;
+        let imps = parse_imports(body);
+        assert_eq!(imps.len(), 1);
+        assert_eq!(imps[0].version, Some(2));
+        assert_eq!(imps[0].variables, vec![("k".to_string(), "v".to_string())]);
+    }
+
+    #[test]
+    fn compila_con_import_version_legge_da_promptversions() {
+        let conn = db_test();
+        // crea child con body originale "v1" + snapshot versione 1
+        inserisci_prompt(&conn, "prm-child", "Saluto", "Versione 1", None);
+        crate::versioning::snapshot_versione(&conn, "prm-child", "usr-locale").unwrap();
+        // simula edit: aggiorna body a "v2" + nuovo snapshot versione 2
+        conn.execute(
+            "UPDATE Prompts SET Body = 'Versione 2', Version = 2 WHERE Id = 'prm-child'",
+            [],
+        )
+        .unwrap();
+        crate::versioning::snapshot_versione(&conn, "prm-child", "usr-locale").unwrap();
+
+        // parent importa con pinning a versione 1
+        let parent_body = r#"{{import "Saluto" version=1}}"#;
+        inserisci_prompt(&conn, "prm-parent", "Padre", parent_body, None);
+
+        let mut visitati = HashSet::new();
+        let out = compila_ricorsivo(&conn, "prm-parent", parent_body, &mut visitati, 0)
+            .unwrap();
+        // Deve leggere la versione 1 storica, NON la 2 corrente
+        assert_eq!(out, "Versione 1");
+    }
+
+    #[test]
+    fn compila_con_import_version_corrente_default() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-child", "Saluto", "Live body", None);
+        crate::versioning::snapshot_versione(&conn, "prm-child", "usr-locale").unwrap();
+        // Edit
+        conn.execute(
+            "UPDATE Prompts SET Body = 'Body modificato', Version = 2 WHERE Id = 'prm-child'",
+            [],
+        )
+        .unwrap();
+
+        // Import senza version -> deve leggere body live (corrente)
+        let parent_body = r#"{{import "Saluto"}}"#;
+        inserisci_prompt(&conn, "prm-parent", "Padre", parent_body, None);
+
+        let mut visitati = HashSet::new();
+        let out = compila_ricorsivo(&conn, "prm-parent", parent_body, &mut visitati, 0)
+            .unwrap();
+        assert_eq!(out, "Body modificato");
+    }
+
+    #[test]
+    fn compila_con_import_version_inesistente_errore_chiaro() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-child", "Saluto", "Body", None);
+        crate::versioning::snapshot_versione(&conn, "prm-child", "usr-locale").unwrap();
+
+        // Import a version=99 che non esiste
+        let parent_body = r#"{{import "Saluto" version=99}}"#;
+        inserisci_prompt(&conn, "prm-parent", "Padre", parent_body, None);
+
+        let mut visitati = HashSet::new();
+        let err = compila_ricorsivo(&conn, "prm-parent", parent_body, &mut visitati, 0)
+            .unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("Versione 99"), "errore poco descrittivo: {msg}");
+        assert!(msg.contains("Saluto"));
+    }
+
+    #[test]
+    fn compila_con_import_version_e_with_combinati() {
+        let conn = db_test();
+        // child v1 con segnaposti
+        inserisci_prompt(
+            &conn,
+            "prm-child",
+            "Tpl",
+            "Ciao {{nome}}, v1",
+            None,
+        );
+        crate::versioning::snapshot_versione(&conn, "prm-child", "usr-locale").unwrap();
+        // edit: v2 con body diverso
+        conn.execute(
+            "UPDATE Prompts SET Body = 'Ciao {{nome}}, v2', Version = 2 WHERE Id = 'prm-child'",
+            [],
+        )
+        .unwrap();
+        crate::versioning::snapshot_versione(&conn, "prm-child", "usr-locale").unwrap();
+
+        let parent_body = r#"{{import "Tpl" version=1 with nome="Mario"}}"#;
+        inserisci_prompt(&conn, "prm-parent", "Padre", parent_body, None);
+
+        let mut visitati = HashSet::new();
+        let out = compila_ricorsivo(&conn, "prm-parent", parent_body, &mut visitati, 0)
+            .unwrap();
+        // Pinning a v1 (body "Ciao {{nome}}, v1") + with sostituisce nome
+        assert_eq!(out, "Ciao Mario, v1");
     }
 }
