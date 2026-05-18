@@ -45,6 +45,9 @@
     targetModel: string;
     folderId: string | null;
     tags: TagInfo[];
+    /** M3 PR-5: se non null, questo prompt è una variante del prompt
+     *  con id `parentPromptId`. Abilita il bottone "Promuovi a principale". */
+    parentPromptId?: string | null;
     onCambiaVisibilita: (v: string) => void;
     onCambiaTarget: (t: string) => void;
     onCambiaFolder: (f: string | null) => void;
@@ -61,6 +64,7 @@
     targetModel,
     folderId,
     tags,
+    parentPromptId = null,
     onCambiaVisibilita,
     onCambiaTarget,
     onCambiaFolder,
@@ -91,11 +95,38 @@
 
   async function caricaVarianti(): Promise<void> {
     try {
+      // M3 PR-5: se siamo su una variante (parentPromptId != null),
+      // chiediamo le sister al backend usando l'id del main reale.
+      // Altrimenti usiamo promptId (siamo gia' sul main).
+      const effectiveParent = parentPromptId ?? promptId;
       varianti = await invoke<VariantInfo[]>("varianti_lista", {
-        parentId: promptId,
+        parentId: effectiveParent,
       });
     } catch {
       varianti = [];
+    }
+  }
+
+  // M3 PR-5: promuovi questa variante a principale.
+  async function promuoviAPrincipale(): Promise<void> {
+    if (!parentPromptId) return; // safe-guard: il bottone non dovrebbe essere visibile
+    const ok = confirm(
+      `Promuovere questa variante a principale?\n\n` +
+        `Lo stato attuale del prompt principale diventerà variante. Le altre ` +
+        `varianti saranno ri-agganciate a questo nuovo principale.\n\n` +
+        `NOTA: gli import esistenti che puntano al vecchio principale ` +
+        `continueranno a puntare allo stesso prompt (ora variante). ` +
+        `La migration automatica e' in backlog.`,
+    );
+    if (!ok) return;
+    try {
+      await invoke<void>("prompt_promuovi_variante", { variantId: promptId });
+      // Reload varianti immediato + dispatch evento per altri pannelli
+      // (DetailPane refetcha dettaglio, Libreria refetcha lista).
+      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+      window.dispatchEvent(new CustomEvent("pap:apri-prompt", { detail: promptId }));
+    } catch (e) {
+      alert(`Errore durante la promozione: ${String(e).replace(/^Error: /, "")}`);
     }
   }
 
@@ -384,6 +415,16 @@
       VARIANTI A/B
       <span class="count">{varianti.length}</span>
     </header>
+    {#if parentPromptId}
+      <button
+        type="button"
+        class="link promuovi-btn"
+        onclick={promuoviAPrincipale}
+        title="Rendi questa variante il prompt principale del gruppo"
+      >
+        ⇑ Promuovi a principale
+      </button>
+    {/if}
     <div class="varianti">
       {#each varianti as v (v.id)}
         <button
@@ -699,6 +740,21 @@
     cursor: pointer;
     text-decoration: underline;
     text-align: left;
+  }
+
+  /* M3 PR-5: bottone Promuovi a principale (visibile solo su varianti) */
+  .promuovi-btn {
+    margin-top: var(--sp-1);
+    margin-bottom: var(--sp-2);
+    font-weight: var(--fw-medium);
+    text-decoration: none;
+    padding: 4px 10px;
+    border: 1px dashed var(--accent-team);
+    border-radius: var(--radius-sm);
+    text-align: center;
+  }
+  .promuovi-btn:hover {
+    background: var(--accent-team-soft);
   }
 
   /* M3 PR-1: modale Crea variante */

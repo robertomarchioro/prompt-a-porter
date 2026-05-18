@@ -64,6 +64,8 @@ Sub-step di feature già atterrate, recuperati come must-have v1.0. Vedi [`v1.0-
 - 📋 → v1.0 M3: **UI Editor "Crea variante"** (oggi solo dalla Libreria)
 - 📋 → v1.0 M3: **Renderer dropdown variante** con switch al volo mantenendo i valori del form
 - 📋 → v1.0 M3: **Promuovi variante a principale** (swap main ↔ variant con preservazione storia)
+- 📋 → **v1.0 M3.x backlog** (post-M3): **Migration automatica backreference su promozione variante**.
+  Quando una variante viene promossa a principale (M3 PR-5, mergiato 2026-05-16), gli `{{import "id-vecchia-main"}}` esistenti nei prompt terzi continuano a puntare alla vecchia main (ora variante). Una migration automatica che li riscrive richiede una decisione semantica: silenziosa (cambio invisibile, può sorprendere) o con notifica utente (lista import affetti + scelta esplicita). Rinviato per evitare decisioni di prodotto inadeguate sotto pressione M3.
 
 ### Da Fase 4 Step 2 — Rating
 - 📋 → v1.0 M3: **Modale "Aggiungi nota" su voto negativo** — campo `Note` già nello schema V013, manca solo UI prompt modale

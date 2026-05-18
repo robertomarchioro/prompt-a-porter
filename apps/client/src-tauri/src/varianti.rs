@@ -10,9 +10,13 @@
 //   ParentPromptId valorizzato, suggerendo "B"/"C"/... se etichetta omessa
 // - Hook FTS/embedding/imports applicati anche alle varianti (sono
 //   prompt a tutti gli effetti)
+// - prompt_promuovi_variante(variant_id): swap main <-> variant (M3 PR-5)
 //
 // Out of scope (sub-step futuri):
-// - prompt_promuovi_variante: scambia main ↔ variant
+// - Migration backreference su promozione: gli `{{import "id-vecchia-main"}}`
+//   restano puntati alla vecchia main (ora variante). Una migration
+//   automatica che riscrive tutti gli import nei prompt terzi richiede
+//   decisione semantica (silenzioso vs notifica utente) -> backlog M3.x.
 // - UI pannello "Confronto varianti" multicolonna
 // - Statistiche aggregate per gruppo di varianti
 
@@ -247,6 +251,92 @@ pub fn varianti_lista(
     state: State<'_, VaultState>,
 ) -> Result<Vec<VariantInfo>, PapErrore> {
     state.with_conn(|conn| lista_pure(conn, &parent_id))
+}
+
+/// Logica pura di `prompt_promuovi_variante` (M3 PR-5).
+///
+/// Swap main <-> variant:
+/// 1. `variant_id` deve essere una variante (ParentPromptId != NULL),
+///    altrimenti errore "non e' una variante".
+/// 2. `old_main` = `variant.ParentPromptId`.
+/// 3. Tutte le altre sister della variante (escluso variant_id) vengono
+///    ri-parentate al nuovo main: `SET ParentPromptId = variant_id
+///    WHERE ParentPromptId = old_main AND Id != variant_id`.
+/// 4. `old_main`: diventa variante del nuovo main con label assegnata
+///    come prossima libera fra le sister post-swap (a/b/c...). La sua
+///    `VariantLabel` precedente era NULL (era main).
+/// 5. `variant_id`: diventa main: `ParentPromptId = NULL, IsVariant = 0,
+///    VariantLabel = NULL`.
+///
+/// Backreference NON migrati: gli `{{import "old_main_id"}}` continuano
+/// a puntare alla vecchia main (ora variante). Backlog M3.x per migration
+/// automatica con scelta semantica (vedi header modulo).
+pub(crate) fn promuovi_pure(
+    conn: &Connection,
+    variant_id: &str,
+) -> Result<(), PapErrore> {
+    // 1. Verifica che sia una variante (ParentPromptId != NULL)
+    let parent_id: Option<String> = conn
+        .query_row(
+            "SELECT ParentPromptId FROM Prompts
+             WHERE Id = ?1 AND DeletedAt IS NULL",
+            [variant_id],
+            |r| r.get(0),
+        )
+        .map_err(|_| PapErrore::Generico(format!("Prompt '{variant_id}' non trovato")))?;
+    let old_main_id = parent_id.ok_or_else(|| {
+        PapErrore::Generico(format!(
+            "Prompt '{variant_id}' non e' una variante (e' gia' il principale)"
+        ))
+    })?;
+
+    // 3. Ri-aggancia le sister al nuovo main (variant_id).
+    //    Esclude variant_id stesso (sta passando a main, non variante).
+    conn.execute(
+        "UPDATE Prompts
+         SET ParentPromptId = ?1
+         WHERE ParentPromptId = ?2 AND Id != ?1 AND DeletedAt IS NULL",
+        params![variant_id, old_main_id],
+    )?;
+
+    // 4a. Calcola label per ex-main: prossima libera fra le sister
+    //     attuali (dopo lo step 3). Le sister ora includono tutti i
+    //     fratelli + l'ex-main che sta per diventare variante. La
+    //     variante promossa NON e' piu' sister (sta per essere main).
+    let usate_dopo_swap = etichette_usate(conn, variant_id)?;
+    let label_old_main = prossima_etichetta(&usate_dopo_swap);
+
+    // 4b. Old main: diventa variante.
+    conn.execute(
+        "UPDATE Prompts
+         SET ParentPromptId = ?1, IsVariant = 1, VariantLabel = ?2,
+             UpdatedAt = datetime('now')
+         WHERE Id = ?3 AND DeletedAt IS NULL",
+        params![variant_id, label_old_main, old_main_id],
+    )?;
+
+    // 5. Variante promossa: diventa main.
+    conn.execute(
+        "UPDATE Prompts
+         SET ParentPromptId = NULL, IsVariant = 0, VariantLabel = NULL,
+             UpdatedAt = datetime('now')
+         WHERE Id = ?1 AND DeletedAt IS NULL",
+        params![variant_id],
+    )?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn prompt_promuovi_variante(
+    variant_id: String,
+    state: State<'_, VaultState>,
+) -> Result<(), PapErrore> {
+    state.with_conn(|conn| promuovi_pure(conn, &variant_id))?;
+    // FTS: body invariato per entrambi i prompt -> non serve ricostruire.
+    // Embedding: idem (l'embedding e' funzione del body, non della
+    // relazione parent/variant). Nessun hook post-swap necessario.
+    Ok(())
 }
 
 #[cfg(test)]
@@ -526,5 +616,130 @@ mod test {
                 l[i].variant_label
             );
         }
+    }
+
+    // ─── M3 PR-5: promuovi_pure ────────────────────────────────────
+
+    fn stato_prompt(conn: &Connection, id: &str) -> (Option<String>, i64, Option<String>) {
+        conn.query_row(
+            "SELECT ParentPromptId, IsVariant, VariantLabel FROM Prompts WHERE Id = ?1",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn promuovi_swap_main_variante_senza_sister() {
+        let conn = db_test();
+        // crea variante "B" del main
+        let v_id = crea_variante_pure(&conn, "prm-parent", Some("B")).unwrap();
+
+        promuovi_pure(&conn, &v_id).unwrap();
+
+        // V e' nuovo main
+        let (parent, is_var, label) = stato_prompt(&conn, &v_id);
+        assert!(parent.is_none(), "variante promossa deve avere ParentPromptId NULL");
+        assert_eq!(is_var, 0);
+        assert!(label.is_none());
+
+        // prm-parent e' ora variante con label "B" (prossima libera, no sister)
+        let (parent, is_var, label) = stato_prompt(&conn, "prm-parent");
+        assert_eq!(parent.as_deref(), Some(v_id.as_str()));
+        assert_eq!(is_var, 1);
+        assert_eq!(label.as_deref(), Some("B"));
+    }
+
+    #[test]
+    fn promuovi_swap_con_sister_rep_arenta() {
+        let conn = db_test();
+        // Main prm-parent + 3 varianti B, C, D
+        let v_b = crea_variante_pure(&conn, "prm-parent", Some("B")).unwrap();
+        let v_c = crea_variante_pure(&conn, "prm-parent", Some("C")).unwrap();
+        let v_d = crea_variante_pure(&conn, "prm-parent", Some("D")).unwrap();
+
+        // Promuovi C -> diventa main; B/D devono diventare sister di C;
+        // prm-parent diventa variante di C con label "B" (prima libera
+        // fra sister attuali: B, D usate -> B viene riusato? No,
+        // prossima_etichetta scorre B..Z saltando le usate. Sister di
+        // C dopo swap = {prm-parent (in arrivo), v_b, v_d}. Labels
+        // gia' usate fra v_b/v_d = "B", "D". prossima_etichetta
+        // restituisce "C" (la prima libera fra B/C/D... salta B,
+        // restituisce C). Quindi prm-parent prende "C".
+        promuovi_pure(&conn, &v_c).unwrap();
+
+        // C e' main
+        let (parent, is_var, label) = stato_prompt(&conn, &v_c);
+        assert!(parent.is_none());
+        assert_eq!(is_var, 0);
+        assert!(label.is_none());
+
+        // B e D ora puntano a C come parent
+        let (parent_b, is_var_b, label_b) = stato_prompt(&conn, &v_b);
+        assert_eq!(parent_b.as_deref(), Some(v_c.as_str()));
+        assert_eq!(is_var_b, 1);
+        assert_eq!(label_b.as_deref(), Some("B"));
+
+        let (parent_d, is_var_d, label_d) = stato_prompt(&conn, &v_d);
+        assert_eq!(parent_d.as_deref(), Some(v_c.as_str()));
+        assert_eq!(is_var_d, 1);
+        assert_eq!(label_d.as_deref(), Some("D"));
+
+        // prm-parent ora variante di C; label C (prima libera saltando B/D)
+        let (parent_p, is_var_p, label_p) = stato_prompt(&conn, "prm-parent");
+        assert_eq!(parent_p.as_deref(), Some(v_c.as_str()));
+        assert_eq!(is_var_p, 1);
+        assert_eq!(label_p.as_deref(), Some("C"));
+    }
+
+    #[test]
+    fn promuovi_errore_se_main() {
+        let conn = db_test();
+        let err = promuovi_pure(&conn, "prm-parent").unwrap_err();
+        assert!(format!("{err}").contains("non e' una variante"));
+    }
+
+    #[test]
+    fn promuovi_errore_se_inesistente() {
+        let conn = db_test();
+        let err = promuovi_pure(&conn, "prm-non-esiste").unwrap_err();
+        assert!(format!("{err}").contains("non trovato"));
+    }
+
+    #[test]
+    fn promuovi_preserva_body_e_titolo() {
+        let conn = db_test();
+        let v_id = crea_variante_pure(&conn, "prm-parent", Some("B")).unwrap();
+        // Modifica body della variante per distinguerla
+        conn.execute(
+            "UPDATE Prompts SET Body = 'body variante personalizzato',
+             Title = 'Titolo variante' WHERE Id = ?1",
+            [&v_id],
+        )
+        .unwrap();
+
+        promuovi_pure(&conn, &v_id).unwrap();
+
+        // Body/Title della variante (ora main) preservati
+        let (body, title): (String, String) = conn
+            .query_row(
+                "SELECT Body, Title FROM Prompts WHERE Id = ?1",
+                [&v_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(body, "body variante personalizzato");
+        assert_eq!(title, "Titolo variante");
+
+        // Body/Title del vecchio main (ora variante) preservati
+        let (body, title): (String, String) = conn
+            .query_row(
+                "SELECT Body, Title FROM Prompts WHERE Id = 'prm-parent'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(body, "body originale");
+        assert_eq!(title, "Padre");
     }
 }
