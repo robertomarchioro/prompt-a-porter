@@ -478,7 +478,7 @@
   </div>
 
   {#if selezioneMultipla && selezioneMultipla.size >= 2}
-    <footer class="multi-toolbar" role="toolbar" aria-label="Selezione multipla">
+    <div class="multi-toolbar" role="toolbar" aria-label="Selezione multipla">
       <span class="multi-info">
         {selezioneMultipla.size} prompt selezionati
       </span>
@@ -500,7 +500,7 @@
       >
         Confronta
       </button>
-    </footer>
+    </div>
   {/if}
 </section>
 

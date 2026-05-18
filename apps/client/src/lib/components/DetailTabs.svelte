@@ -36,7 +36,7 @@
   ]);
 </script>
 
-<nav class="tab-strip" role="tablist" aria-label="Sezioni del prompt">
+<div class="tab-strip" role="tablist" aria-label="Sezioni del prompt">
   {#each tabs as tab (tab.id)}
     <button
       class="tab"
@@ -52,7 +52,7 @@
       {/if}
     </button>
   {/each}
-</nav>
+</div>
 
 <style>
   .tab-strip {
