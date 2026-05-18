@@ -61,18 +61,18 @@ Sub-step di feature già atterrate, recuperati come must-have v1.0. Vedi [`v1.0-
 - 📋 → v1.0 M5: **Editor doppia vista Sorgente/Compilato integrata** (oggi separato in `CompilaModal` standalone)
 
 ### Da Fase 4 Step 1 — Varianti
-- 📋 → v1.0 M3: **UI Editor "Crea variante"** (oggi solo dalla Libreria)
-- 📋 → v1.0 M3: **Renderer dropdown variante** con switch al volo mantenendo i valori del form
-- 📋 → v1.0 M3: **Promuovi variante a principale** (swap main ↔ variant con preservazione storia)
+- ✅ M3 PR-1 (#203, 2026-05-16): **UI Editor "Crea variante"** (modale in RightRail)
+- ✅ M3 PR-4 (#206, 2026-05-16): **Renderer dropdown variante** con switch al volo mantenendo i valori del form
+- ✅ M3 PR-5 (#207, 2026-05-16): **Promuovi variante a principale** (swap main ↔ variant con preservazione storia)
 - 📋 → **v1.0 M3.x backlog** (post-M3): **Migration automatica backreference su promozione variante**.
   Quando una variante viene promossa a principale (M3 PR-5, mergiato 2026-05-16), gli `{{import "id-vecchia-main"}}` esistenti nei prompt terzi continuano a puntare alla vecchia main (ora variante). Una migration automatica che li riscrive richiede una decisione semantica: silenziosa (cambio invisibile, può sorprendere) o con notifica utente (lista import affetti + scelta esplicita). Rinviato per evitare decisioni di prodotto inadeguate sotto pressione M3.
 
 ### Da Fase 4 Step 2 — Rating
-- 📋 → v1.0 M3: **Modale "Aggiungi nota" su voto negativo** — campo `Note` già nello schema V013, manca solo UI prompt modale
-- 📋 → v1.0 M3: **Sort by quality "Migliori prompt"** in Libreria
+- ✅ M3 PR-2 (#204, 2026-05-16): **Modale "Aggiungi nota" su voto negativo** in CompilaModal
+- ✅ pre-M3 (F11 ListPane redesign): **Sort by quality "Migliori prompt"** in Libreria — già implementato (`libreria.rs:172-180` + `ListPane.svelte:220`)
 
 ### Da Fase 4 Step 8 — Golden + regression
-- 📋 → v1.0 M3: **"Esegui tutti i golden" batch** con riassunto pass/fail — quick win frontend
+- ✅ M3 PR-3 (#205, 2026-05-16): **"Esegui tutti i golden" batch** con riassunto pass/fail in GoldenTab
 - 📋 → v1.x (nice-to-have): **CLI integration** `pap test <promptId> [--golden=...]` per CI/CD — `apps/cli` esistente, manca subcommand
 - 📋 → v1.0 (audit): **Security review formale** chiavi API provider AI (security-review agent)
 
