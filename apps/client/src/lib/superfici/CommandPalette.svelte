@@ -64,12 +64,20 @@
 
   $effect(() => {
     void caricaPreferenze();
+    // Focus initial sul campo ricerca al mount (sostituisce autofocus
+    // attribute, sconsigliato a11y -> richiede focus controllato).
+    inputRicerca?.focus();
     // Ricarica preferenze ogni volta che la palette torna visibile —
     // l'utente potrebbe aver cambiato il toggle in Impostazioni.
+    // Stessa occasione: ri-focus campo ricerca se siamo in quella view
+    // (utente atteso digiti subito senza dover cliccare).
     let unlisten: (() => void) | undefined;
     finestra.onFocusChanged(({ payload: focused }) => {
       if (focused) {
         void caricaPreferenze();
+        if (modalita === "ricerca") {
+          inputRicerca?.focus();
+        }
       }
     }).then((u) => {
       unlisten = u;
@@ -78,6 +86,12 @@
       unlisten?.();
     };
   });
+
+  // Action a11y-friendly per il loop segnaposti: sostituisce
+  // l'attributo `autofocus={i === 0}` (vietato da svelte-check a11y).
+  function focusIf(node: HTMLInputElement, shouldFocus: boolean) {
+    if (shouldFocus) node.focus();
+  }
 
   $effect(() => {
     clearTimeout(timeoutRicerca);
@@ -224,7 +238,6 @@
         bind:value={query}
         bind:this={inputRicerca}
         placeholder="Cerca prompt, tag o azione…"
-        autofocus
       />
       {#if usaIbrida && qualcheMatchSem}
         <span
@@ -320,7 +333,7 @@
                 type="text"
                 placeholder="{s.nome}"
                 bind:value={valoriSegnaposti[s.nome]}
-                autofocus={i === 0}
+                use:focusIf={i === 0}
               />
             </div>
           {/each}

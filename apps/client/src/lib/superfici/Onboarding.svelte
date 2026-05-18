@@ -42,6 +42,16 @@
   let password = $state("");
   let errore = $state("");
   let sbloccoInCorso = $state(false);
+  // Riferimento al campo password per focus controllato a11y-friendly
+  // (sostituisce attributo `autofocus`, sconsigliato per a11y).
+  let passwordInput: HTMLInputElement | undefined = $state();
+
+  $effect(() => {
+    // Focus appena lo stato 'sblocco' viene reso e l'input e' nel DOM.
+    if (stato === "sblocco" && passwordInput) {
+      passwordInput.focus();
+    }
+  });
 
   /**
    * Issue #143: il backend `vault_unlock` lancia `VaultGiaAperto`
@@ -176,9 +186,9 @@
           id="vault-pwd"
           type="password"
           bind:value={password}
+          bind:this={passwordInput}
           placeholder="Master password"
           autocomplete="current-password"
-          autofocus
           disabled={sbloccoInCorso}
         />
 
