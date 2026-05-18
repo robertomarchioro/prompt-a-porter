@@ -16,23 +16,33 @@
   }: Props = $props();
 </script>
 
-<span
-  class="tag"
-  class:tag--private={variante === "private"}
-  class:tag--team={variante === "team"}
-  style:--_tag-dot={colore || undefined}
-  role={onclick ? "button" : undefined}
-  tabindex={onclick ? 0 : undefined}
-  onclick={onclick}
-  onkeydown={(e) => {
-    if (onclick && (e.key === "Enter" || e.key === " ")) onclick();
-  }}
->
-  {#if colore}
-    <span class="dot"></span>
-  {/if}
-  {@render children()}
-</span>
+{#if onclick}
+  <button
+    type="button"
+    class="tag tag--interactive"
+    class:tag--private={variante === "private"}
+    class:tag--team={variante === "team"}
+    style:--_tag-dot={colore || undefined}
+    onclick={onclick}
+  >
+    {#if colore}
+      <span class="dot"></span>
+    {/if}
+    {@render children()}
+  </button>
+{:else}
+  <span
+    class="tag"
+    class:tag--private={variante === "private"}
+    class:tag--team={variante === "team"}
+    style:--_tag-dot={colore || undefined}
+  >
+    {#if colore}
+      <span class="dot"></span>
+    {/if}
+    {@render children()}
+  </span>
+{/if}
 
 <style>
   .tag {
@@ -50,7 +60,10 @@
     white-space: nowrap;
   }
 
-  .tag[role="button"] {
+  /* Reset stile button quando Tag e' interattivo (variante <button>) */
+  button.tag {
+    appearance: none;
+    font: inherit;
     cursor: pointer;
   }
 
