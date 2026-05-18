@@ -450,6 +450,7 @@ pub fn run() {
             tags_suggest::tags_suggest,
             linting::prompt_lint,
             prompt_componibili::prompt_compila,
+            prompt_componibili::prompt_compila_inline,
             prompt_componibili::prompt_resolve_import_preview,
             prompt_componibili::prompt_suggest_intellisense,
             cartelle::folder_lista,

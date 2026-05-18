@@ -2,21 +2,21 @@
   /**
    * Tab Anteprima del DetailPane.
    *
-   * M5 PR-1: refactor da preview statica (solo highlight segnaposti)
-   * a split-view live con form valori inline + compilazione locale.
+   * M5 PR-1: refactor da preview statica a split-view live con form
+   * valori inline + compilazione locale.
+   * M5 PR-2: espansione live degli `{{import "x"}}` via backend
+   * `prompt_compila_inline` (debounced 300ms). Quando l'utente edita
+   * body o cambia valori, gli import vengono espansi e il preview
+   * mostra il body finale interamente sostituito.
    *
    * Layout:
    * - Sinistra: form valori segnaposti + (collapsibile) globali
-   * - Destra: preview body compilato (sostituzione segnaposti applicata)
-   *
-   * Limitazione M5 PR-1: gli `{{import "x"}}` sono ancora mostrati come
-   * highlight statico (non espansi). L'espansione live richiede backend
-   * `prompt_compila_inline` (M5 PR-2).
+   * - Destra: preview body compilato (sostituzione segnaposti + espansione import)
    *
    * Riferimento blueprint: docs/roadmap/redesign-v08/blueprint-F5.md §1
    */
 
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { estraiSegnaposti, compila } from "$lib/template";
 
@@ -80,10 +80,53 @@
     }
   });
 
+  // M5 PR-2: espansione live degli import via backend.
+  // Trigger debounced 300ms ad ogni cambio body (ignora se body non
+  // contiene `{{import`). Se backend fallisce (vault locked, ciclo,
+  // ecc.), fallback al body originale (highlight import statico).
+  let bodyEspanso = $state<string | null>(null);
+  let espansioneErrore = $state<string | null>(null);
+  let timerEspansione: ReturnType<typeof setTimeout> | undefined;
+
+  $effect(() => {
+    const corrente = body;
+    if (timerEspansione) clearTimeout(timerEspansione);
+    if (!corrente.includes("{{import")) {
+      // Nessun import -> niente da espandere, usa body inline.
+      bodyEspanso = null;
+      espansioneErrore = null;
+      return;
+    }
+    timerEspansione = setTimeout(async () => {
+      try {
+        const espanso = await invoke<string>("prompt_compila_inline", {
+          body: corrente,
+          promptId,
+        });
+        bodyEspanso = espanso;
+        espansioneErrore = null;
+      } catch (e) {
+        bodyEspanso = null;
+        espansioneErrore = String(e).replace(/^Error: /, "");
+      }
+    }, 300);
+  });
+
+  onDestroy(() => {
+    if (timerEspansione) clearTimeout(timerEspansione);
+  });
+
+  // Body sorgente per la compilazione finale dei segnaposti:
+  // - Se backend ha espanso (bodyEspanso != null) -> uso quello
+  // - Altrimenti uso body originale (highlight import statico)
+  const bodyPerCompilazione = $derived(bodyEspanso ?? body);
+
   // Preview compilata: sostituisce segnaposti con valori utente.
   // Segnaposti non compilati restano come `{{nome}}` (placeholder
-  // visivo nel preview, mostrato senza highlight speciale).
-  const bodyCompilato = $derived(compila(body, valori, valoriGlobali));
+  // visivo nel preview).
+  const bodyCompilato = $derived(
+    compila(bodyPerCompilazione, valori, valoriGlobali),
+  );
 
   // Parser highlight per preview (mantiene import non risolti come
   // visualizzazione, segnaposti non compilati come placeholder).
@@ -197,7 +240,17 @@
     <section class="preview">
       <header class="sez-h">
         <span>ANTEPRIMA COMPILATA</span>
+        {#if bodyEspanso !== null}
+          <span class="badge-espansa" title="Import espansi via backend">
+            import ✓
+          </span>
+        {/if}
       </header>
+      {#if espansioneErrore}
+        <p class="errore-espansione" title={espansioneErrore}>
+          ⚠ Import non risolvibile: <code>{espansioneErrore}</code>
+        </p>
+      {/if}
       <pre
         class="anteprima">{#each segmentiPreview as seg, i (i)}{#if seg.tipo === "testo"}{seg.testo}{:else if seg.tipo === "segnaposto"}<span
               class="ph"
@@ -322,6 +375,31 @@
   .preview > .sez-h {
     padding: var(--sp-2) var(--sp-3) 0;
     flex-shrink: 0;
+  }
+
+  .badge-espansa {
+    font-size: 10px;
+    background: var(--accent-team-soft);
+    color: var(--accent-team-strong, var(--accent-team));
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .errore-espansione {
+    margin: 0;
+    padding: 4px 12px;
+    background: rgba(220, 80, 80, 0.08);
+    color: var(--danger);
+    font-size: var(--fs-xs);
+    flex-shrink: 0;
+  }
+
+  .errore-espansione code {
+    font-family: var(--font-mono);
+    background: transparent;
+    padding: 0;
   }
 
   .anteprima {
