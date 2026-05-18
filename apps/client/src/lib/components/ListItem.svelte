@@ -12,7 +12,7 @@
 
 <button
   class="list-item"
-  aria-selected={selezionato || undefined}
+  aria-current={selezionato ? "true" : undefined}
   onclick={onclick}
   type="button"
 >
@@ -41,7 +41,7 @@
   .list-item:hover {
     background: var(--bg-overlay);
   }
-  .list-item[aria-selected="true"] {
+  .list-item[aria-current="true"] {
     background: var(--bg-overlay);
     color: var(--text-strong);
   }
