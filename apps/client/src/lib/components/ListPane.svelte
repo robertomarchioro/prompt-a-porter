@@ -90,7 +90,8 @@
   let cartelle = $state<Cartella[]>([]);
 
   // Drag state — module-level fallback per dataTransfer null su browser strict.
-  let draggedId: string | null = null;
+  // $state perche' letto reattivamente nel template (class:dragging).
+  let draggedId = $state<string | null>(null);
   let dropTargetIndex = $state<number | null>(null);
   let dropPosition = $state<"before" | "after" | null>(null);
 
