@@ -73,9 +73,8 @@
     overflow: auto;
   }
 
-  .vd-seg {
-    /* Default: nessuna decorazione (uguale). */
-  }
+  /* .vd-seg base: nessuna decorazione (parte invariata fra versioni).
+     Le varianti aggiunto/rimosso sotto applicano highlight semantici. */
 
   .vd-seg--aggiunto {
     background: rgba(108, 184, 108, 0.18);
