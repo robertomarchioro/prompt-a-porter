@@ -37,6 +37,7 @@
     FileDown,
     Eraser,
     CloudDownload,
+    Database,
   } from "lucide-svelte";
   import Modale from "$lib/components/Modale.svelte";
   import PannelloProviderConfig from "$lib/components/PannelloProviderConfig.svelte";
@@ -65,6 +66,7 @@
     | "vista"
     | "editor"
     | "sicurezza"
+    | "dati"
     | "avanzate"
     | "sviluppo";
   type SubSezioneId =
@@ -101,6 +103,137 @@
   let sezione = $state<SezioneId>(untrack(() => sezioneIniziale));
   let query = $state("");
   let subSezioneAperta = $state<SubSezioneId | null>(null);
+
+  // ─── M6 PR-4: sezione "Dati" import/export markdown ──────────────
+  // Repo URL hardcoded per link doc utente (no env var per evitare
+  // dipendenza build, valore stabile).
+  const REPO_ORG_REPO = "robertomarchioro/prompt-a-porter";
+
+  interface ImportRisultato {
+    nomeFile: string;
+    id: string;
+    titolo: string;
+  }
+
+  interface ImportErrore {
+    nomeFile: string;
+    errore: string;
+  }
+
+  let inputFileMarkdown: HTMLInputElement | undefined = $state();
+
+  let datiImport = $state<{
+    inCorso: boolean;
+    risultati: ImportRisultato[];
+    errori: ImportErrore[];
+  }>({
+    inCorso: false,
+    risultati: [],
+    errori: [],
+  });
+
+  let datiExport = $state<{
+    inCorso: boolean;
+    ultimo:
+      | {
+          totale: number;
+          byteCount: number;
+          filename: string;
+        }
+      | null;
+    errore: string;
+  }>({
+    inCorso: false,
+    ultimo: null,
+    errore: "",
+  });
+
+  async function handleSelezioneMarkdown(e: Event): Promise<void> {
+    const target = e.target as HTMLInputElement;
+    const files = target.files;
+    if (!files || files.length === 0) return;
+    datiImport = {
+      inCorso: true,
+      risultati: [],
+      errori: [],
+    };
+    // Loop frontend: per ogni file leggi text via File API + invoke
+    // prompt_import_markdown. La directory bulk via plugin-dialog non
+    // e' installato; il pattern multi-file copre comunque l'80% dei
+    // casi (Obsidian/Foam: user seleziona vault folder content).
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      try {
+        const testo = await f.text();
+        const id = await invoke<string>("prompt_import_markdown", {
+          testo,
+          nomeFile: f.name,
+        });
+        // Recupera titolo finale post-parse via libreria_dettaglio
+        // (best-effort: se fallisce mostra il nome file come fallback).
+        let titolo = f.name;
+        try {
+          const det = await invoke<{ titolo: string }>("libreria_dettaglio", {
+            id,
+          });
+          titolo = det.titolo;
+        } catch {
+          /* fallback al nome file */
+        }
+        datiImport.risultati = [
+          ...datiImport.risultati,
+          { nomeFile: f.name, id, titolo },
+        ];
+      } catch (err) {
+        datiImport.errori = [
+          ...datiImport.errori,
+          {
+            nomeFile: f.name,
+            errore: String(err).replace(/^Error: /, ""),
+          },
+        ];
+      }
+    }
+    datiImport.inCorso = false;
+    // Notifica lista per refresh Libreria
+    window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+    // Reset input per permettere ri-selezione stessi file (browser
+    // ignora change su stesso valore).
+    target.value = "";
+  }
+
+  async function esportaVaultZip(): Promise<void> {
+    datiExport = { inCorso: true, ultimo: null, errore: "" };
+    try {
+      const res = await invoke<{
+        bytes: number[];
+        totale_esportati: number;
+      }>("vault_export_markdown_zip", { folderId: null });
+      const filename = `prompt-a-porter-export-${new Date()
+        .toISOString()
+        .slice(0, 10)}.zip`;
+      const blob = new Blob([new Uint8Array(res.bytes)], {
+        type: "application/zip",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      datiExport.ultimo = {
+        totale: res.totale_esportati,
+        byteCount: res.bytes.length,
+        filename,
+      };
+    } catch (err) {
+      datiExport.errore = String(err).replace(/^Error: /, "");
+    } finally {
+      datiExport.inCorso = false;
+    }
+  }
 
   const subSezioni: VoceSubSezione[] = [
     {
@@ -209,6 +342,23 @@
         "lock",
         "blocca",
         "cifratura",
+      ],
+    },
+    {
+      id: "dati",
+      label: "Dati",
+      keywords: [
+        "import",
+        "export",
+        "importa",
+        "esporta",
+        "markdown",
+        "md",
+        "backup",
+        "obsidian",
+        "foam",
+        "zip",
+        "front-matter",
       ],
     },
     {
@@ -913,6 +1063,7 @@
                 {:else if s.id === "vista"}<ListIcon size={14} />
                 {:else if s.id === "editor"}<Pencil size={14} />
                 {:else if s.id === "sicurezza"}<Lock size={14} />
+                {:else if s.id === "dati"}<Database size={14} />
                 {:else if s.id === "avanzate"}<Sliders size={14} />
                 {:else}<FlaskConical size={14} />{/if}
                 <span>{s.label}</span>
@@ -1115,6 +1266,109 @@
                 </button>
               </div>
             </div>
+          {/if}
+        </div>
+      {:else if sezione === "dati"}
+        <h3>Dati</h3>
+        <p class="dati-intro">
+          Importa prompt da file Markdown (compatibilità Obsidian/Foam) o
+          esporta l'intero vault come archivio zip di file <code>.md</code>
+          con front-matter YAML. Vedi
+          <a
+            href="https://github.com/{REPO_ORG_REPO}/blob/main/docs/utente/markdown-import-export.md"
+            target="_blank"
+            rel="noopener">guida utente</a
+          > per i dettagli.
+        </p>
+
+        <div class="dati-card">
+          <header class="dati-card-h">
+            <span class="dati-card-title">Importa Markdown</span>
+            {#if datiImport.inCorso}
+              <span class="dati-card-status">Importazione in corso…</span>
+            {/if}
+          </header>
+          <p class="dati-card-desc">
+            Seleziona uno o più file <code>.md</code>/<code>.markdown</code>. Per ogni file
+            viene creato un nuovo prompt; front-matter <code>title</code>,
+            <code>description</code>, <code>target_model</code>,
+            <code>visibility</code> letti se presenti, altrimenti
+            usati default.
+          </p>
+          <input
+            type="file"
+            accept=".md,.markdown,text/markdown"
+            multiple
+            bind:this={inputFileMarkdown}
+            onchange={handleSelezioneMarkdown}
+            style="display:none"
+          />
+          <button
+            type="button"
+            class="dati-btn"
+            onclick={() => inputFileMarkdown?.click()}
+            disabled={datiImport.inCorso}
+          >
+            Seleziona file…
+          </button>
+          {#if datiImport.risultati.length > 0 || datiImport.errori.length > 0}
+            <div class="dati-report">
+              {#if datiImport.risultati.length > 0}
+                <p class="dati-report-ok">
+                  ✓ {datiImport.risultati.length} prompt importati
+                </p>
+                <ul class="dati-report-list">
+                  {#each datiImport.risultati as r (r.id)}
+                    <li><code>{r.nomeFile}</code> → "{r.titolo}"</li>
+                  {/each}
+                </ul>
+              {/if}
+              {#if datiImport.errori.length > 0}
+                <p class="dati-report-err">
+                  ✗ {datiImport.errori.length} falliti
+                </p>
+                <ul class="dati-report-list">
+                  {#each datiImport.errori as e (e.nomeFile)}
+                    <li>
+                      <code>{e.nomeFile}</code>: {e.errore}
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
+          {/if}
+        </div>
+
+        <div class="dati-card">
+          <header class="dati-card-h">
+            <span class="dati-card-title">Esporta Vault → Zip Markdown</span>
+            {#if datiExport.inCorso}
+              <span class="dati-card-status">Esportazione in corso…</span>
+            {/if}
+          </header>
+          <p class="dati-card-desc">
+            Crea un archivio zip con tutti i prompt del vault come file
+            <code>.md</code> con front-matter YAML. La struttura cartelle
+            del vault viene preservata. Compatibile con Obsidian/Foam come
+            backup leggibile.
+          </p>
+          <button
+            type="button"
+            class="dati-btn dati-btn-primary"
+            onclick={esportaVaultZip}
+            disabled={datiExport.inCorso}
+          >
+            {datiExport.inCorso ? "Esporto…" : "Esporta zip"}
+          </button>
+          {#if datiExport.ultimo}
+            <p class="dati-report-ok">
+              ✓ Esportati {datiExport.ultimo.totale} prompt
+              ({(datiExport.ultimo.byteCount / 1024).toFixed(1)} KB) →
+              <code>{datiExport.ultimo.filename}</code>
+            </p>
+          {/if}
+          {#if datiExport.errore}
+            <p class="dati-report-err">✗ {datiExport.errore}</p>
           {/if}
         </div>
       {:else if sezione === "avanzate"}
@@ -2275,5 +2529,116 @@
     color: var(--text-default);
     white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  /* M6 PR-4: sezione Dati */
+  .dati-intro {
+    margin: 0 0 var(--sp-3) 0;
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+  .dati-intro code {
+    background: var(--bg-overlay);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  .dati-intro a {
+    color: var(--accent-team);
+    text-decoration: underline;
+  }
+
+  .dati-card {
+    background: var(--bg-canvas);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--sp-3);
+    margin-bottom: var(--sp-3);
+  }
+  .dati-card-h {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: var(--sp-2);
+  }
+  .dati-card-title {
+    font-weight: var(--fw-medium);
+    color: var(--text-default);
+  }
+  .dati-card-status {
+    font-size: var(--fs-xs);
+    color: var(--accent-team);
+  }
+  .dati-card-desc {
+    margin: 0 0 var(--sp-2) 0;
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .dati-card-desc code {
+    background: var(--bg-overlay);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+
+  .dati-btn {
+    padding: 6px 14px;
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    color: var(--text-default);
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+    cursor: pointer;
+  }
+  .dati-btn:hover:not(:disabled) {
+    background: var(--bg-surface);
+  }
+  .dati-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .dati-btn-primary {
+    background: var(--accent-team);
+    color: var(--accent-team-on, white);
+    border-color: transparent;
+  }
+  .dati-btn-primary:hover:not(:disabled) {
+    background: var(--accent-team-strong, var(--accent-team));
+  }
+
+  .dati-report {
+    margin-top: var(--sp-2);
+    padding: var(--sp-2);
+    background: var(--bg-overlay);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-sm);
+  }
+  .dati-report-ok {
+    margin: 6px 0;
+    color: var(--accent-success, #2c8a2c);
+    font-weight: var(--fw-medium);
+  }
+  .dati-report-err {
+    margin: 6px 0;
+    color: var(--danger);
+    font-weight: var(--fw-medium);
+  }
+  .dati-report-list {
+    margin: 4px 0 0 0;
+    padding-left: var(--sp-3);
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+    list-style: disc;
+  }
+  .dati-report-list li {
+    margin: 2px 0;
+  }
+  .dati-report-list code {
+    font-family: var(--font-mono);
+    background: transparent;
+    padding: 0;
   }
 </style>
