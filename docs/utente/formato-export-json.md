@@ -100,7 +100,7 @@ Struttura di un singolo prompt:
 | `version` | integer | Versione corrente (testa). Inizia da `1`. |
 | `created_at` | string ISO 8601 | Creazione. |
 | `updated_at` | string ISO 8601 | Ultimo aggiornamento. |
-| `tag_ids` | array<string> | Array di ID tag associati (referenziano `tags[].id`). |
+| `tag_ids` | string[] | Array di ID tag associati (referenziano `tags[].id`). |
 
 ### `versions[]`
 

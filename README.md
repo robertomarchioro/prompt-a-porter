@@ -49,6 +49,10 @@ prompt-a-porter/
 
 ## Documentazione
 
+🌐 **Sito utente**: <https://robertomarchioro.github.io/prompt-a-porter/> (build automatica da `main`)
+
+🧪 **Test plan**: [`docs/test/test-cases.md`](docs/test/test-cases.md) — 136 test cases manuali citabili nelle issue (`[TC-AUTH-003] ...`)
+
 La documentazione tecnica è organizzata in 5 cluster sotto [`docs/`](docs/):
 
 | Cluster | Per chi |
