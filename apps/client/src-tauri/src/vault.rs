@@ -197,6 +197,12 @@ pub fn vault_aperto(state: State<'_, VaultState>) -> bool {
 ///   probabile creazione precedente fallita a metà), lo rimuove e procede.
 #[tauri::command]
 pub fn vault_crea(password: String, state: State<'_, VaultState>) -> Result<(), PapErrore> {
+    vault_crea_impl(&password, &state)
+}
+
+/// M7 PR-1: logica testabile di `vault_crea` (separata dal wrapper
+/// Tauri command per coverage tramite test diretti senza Tauri runtime).
+pub(crate) fn vault_crea_impl(password: &str, state: &VaultState) -> Result<(), PapErrore> {
     if password.len() < PASSWORD_MIN_LEN {
         return Err(PapErrore::PasswordTroppoCorta);
     }
@@ -210,7 +216,7 @@ pub fn vault_crea(password: String, state: State<'_, VaultState>) -> Result<(), 
             "vault_crea: vault già esistente in {} → tentativo unlock idempotente",
             state.data_dir.display()
         );
-        return vault_unlock(password, state);
+        return vault_unlock_impl(password, state);
     }
 
     // DB orfano (pap-vault.db senza vault-meta.json) → cleanup
@@ -228,7 +234,7 @@ pub fn vault_crea(password: String, state: State<'_, VaultState>) -> Result<(), 
 
     let salt = genera_salt();
     let chiave = deriva_chiave(
-        &password,
+        password,
         &salt,
         ARGON2_MEMORY_KIB,
         ARGON2_TIME_COST,
@@ -274,6 +280,11 @@ pub fn vault_crea(password: String, state: State<'_, VaultState>) -> Result<(), 
 /// - DB orfano → cleanup.
 #[tauri::command]
 pub fn vault_crea_aperto(state: State<'_, VaultState>) -> Result<(), PapErrore> {
+    vault_crea_aperto_impl(&state)
+}
+
+/// M7 PR-1: logica testabile di `vault_crea_aperto`.
+pub(crate) fn vault_crea_aperto_impl(state: &VaultState) -> Result<(), PapErrore> {
     if state.aperto() {
         return Err(PapErrore::VaultGiaAperto);
     }
@@ -337,6 +348,11 @@ pub fn vault_crea_aperto(state: State<'_, VaultState>) -> Result<(), PapErrore> 
 /// Verifica se il vault è cifrato.
 #[tauri::command]
 pub fn vault_cifrato(state: State<'_, VaultState>) -> Result<bool, PapErrore> {
+    vault_cifrato_impl(&state)
+}
+
+/// M7 PR-1: logica testabile di `vault_cifrato`.
+pub(crate) fn vault_cifrato_impl(state: &VaultState) -> Result<bool, PapErrore> {
     if !state.esiste() {
         return Err(PapErrore::VaultNonEsiste);
     }
@@ -347,6 +363,11 @@ pub fn vault_cifrato(state: State<'_, VaultState>) -> Result<bool, PapErrore> {
 /// Sblocca il vault esistente con la password.
 #[tauri::command]
 pub fn vault_unlock(password: String, state: State<'_, VaultState>) -> Result<(), PapErrore> {
+    vault_unlock_impl(&password, &state)
+}
+
+/// M7 PR-1: logica testabile di `vault_unlock`.
+pub(crate) fn vault_unlock_impl(password: &str, state: &VaultState) -> Result<(), PapErrore> {
     if state.aperto() {
         return Err(PapErrore::VaultGiaAperto);
     }
@@ -361,7 +382,7 @@ pub fn vault_unlock(password: String, state: State<'_, VaultState>) -> Result<()
     if meta.cifrato {
         let salt = hex_a_bytes(&meta.salt_hex)?;
         let chiave = deriva_chiave(
-            &password,
+            password,
             &salt,
             meta.argon2_memory_kib,
             meta.argon2_time_cost,
@@ -385,6 +406,11 @@ pub fn vault_unlock(password: String, state: State<'_, VaultState>) -> Result<()
 /// Chiude il vault (blocca).
 #[tauri::command]
 pub fn vault_lock(state: State<'_, VaultState>) -> Result<(), PapErrore> {
+    vault_lock_impl(&state)
+}
+
+/// M7 PR-1: logica testabile di `vault_lock`.
+pub(crate) fn vault_lock_impl(state: &VaultState) -> Result<(), PapErrore> {
     let mut guard = state.conn.lock().unwrap();
     if let Some(conn) = guard.as_ref() {
         crate::audit::registra(conn, "vault.bloccato", "Vault", "", None);
@@ -403,6 +429,15 @@ pub fn vault_cambia_password(
     password_nuova: String,
     state: State<'_, VaultState>,
 ) -> Result<(), PapErrore> {
+    vault_cambia_password_impl(&password_vecchia, &password_nuova, &state)
+}
+
+/// M7 PR-1: logica testabile di `vault_cambia_password`.
+pub(crate) fn vault_cambia_password_impl(
+    password_vecchia: &str,
+    password_nuova: &str,
+    state: &VaultState,
+) -> Result<(), PapErrore> {
     if password_nuova.len() < PASSWORD_MIN_LEN {
         return Err(PapErrore::PasswordTroppoCorta);
     }
@@ -415,7 +450,7 @@ pub fn vault_cambia_password(
     let meta = leggi_meta(&state.meta_path())?;
     let salt_vecchio = hex_a_bytes(&meta.salt_hex)?;
     let chiave_vecchia = deriva_chiave(
-        &password_vecchia,
+        password_vecchia,
         &salt_vecchio,
         meta.argon2_memory_kib,
         meta.argon2_time_cost,
@@ -436,7 +471,7 @@ pub fn vault_cambia_password(
     // Genera nuovo salt e nuova chiave
     let salt_nuovo = genera_salt();
     let chiave_nuova = deriva_chiave(
-        &password_nuova,
+        password_nuova,
         &salt_nuovo,
         ARGON2_MEMORY_KIB,
         ARGON2_TIME_COST,
@@ -474,6 +509,11 @@ pub fn vault_percorso(state: State<'_, VaultState>) -> String {
 /// Elimina il vault: chiude la connessione e cancella i file.
 #[tauri::command]
 pub fn vault_elimina(state: State<'_, VaultState>) -> Result<(), PapErrore> {
+    vault_elimina_impl(&state)
+}
+
+/// M7 PR-1: logica testabile di `vault_elimina`.
+pub(crate) fn vault_elimina_impl(state: &VaultState) -> Result<(), PapErrore> {
     let mut guard = state.conn.lock().unwrap();
     *guard = None;
 
@@ -699,5 +739,208 @@ mod test {
         let conn = Connection::open(state.db_path()).unwrap();
         applica_chiave(&conn, &chiave2).unwrap();
         verifica_chiave(&conn).unwrap();
+    }
+
+    // ─── M7 PR-1: copertura command vault_*_impl ────────────────────
+
+    #[test]
+    fn crea_impl_password_corta_errore() {
+        let (_dir, state) = vault_temp();
+        let r = vault_crea_impl("short", &state);
+        assert!(matches!(r, Err(PapErrore::PasswordTroppoCorta)));
+        assert!(!state.esiste());
+    }
+
+    #[test]
+    fn crea_impl_happy_path() {
+        let (_dir, state) = vault_temp();
+        vault_crea_impl("password_lunga_ok", &state).unwrap();
+        assert!(state.esiste());
+        assert!(state.aperto());
+        // Meta deve dire cifrato=true
+        let cifrato = vault_cifrato_impl(&state).unwrap();
+        assert!(cifrato);
+    }
+
+    #[test]
+    fn crea_impl_vault_gia_aperto_errore() {
+        let (_dir, state) = vault_temp();
+        vault_crea_impl("password_lunga_ok", &state).unwrap();
+        // Secondo tentativo con vault gia' aperto in memoria
+        let r = vault_crea_impl("password_lunga_ok", &state);
+        assert!(matches!(r, Err(PapErrore::VaultGiaAperto)));
+    }
+
+    #[test]
+    fn crea_impl_idempotente_su_vault_esistente() {
+        let (_dir, state) = vault_temp();
+        vault_crea_impl("password_ok_123", &state).unwrap();
+        // Simula app restart: rilascia lock
+        {
+            let mut g = state.conn.lock().unwrap();
+            *g = None;
+        }
+        assert!(!state.aperto());
+        // Re-chiama crea -> tenta unlock idempotente con stessa password
+        vault_crea_impl("password_ok_123", &state).unwrap();
+        assert!(state.aperto());
+    }
+
+    #[test]
+    fn crea_impl_db_orfano_viene_rimosso() {
+        let (_dir, state) = vault_temp();
+        // Crea un file orfano dove starebbe il DB (no meta)
+        std::fs::write(state.db_path(), b"junk-orphan-db").unwrap();
+        assert!(state.db_path().exists());
+        assert!(!state.esiste()); // niente meta -> non e' un vault valido
+        // crea_impl deve rimuoverlo e procedere
+        vault_crea_impl("password_ok_123", &state).unwrap();
+        assert!(state.esiste());
+    }
+
+    #[test]
+    fn unlock_impl_vault_non_esiste() {
+        let (_dir, state) = vault_temp();
+        let r = vault_unlock_impl("qualsiasi_password", &state);
+        assert!(matches!(r, Err(PapErrore::VaultNonEsiste)));
+    }
+
+    #[test]
+    fn unlock_impl_password_errata() {
+        let (_dir, state) = vault_temp();
+        vault_crea_impl("password_corretta_xx", &state).unwrap();
+        // Lock per riaprire
+        vault_lock_impl(&state).unwrap();
+        // Tentativo unlock con password sbagliata
+        let r = vault_unlock_impl("password_sbagliata_yy", &state);
+        assert!(matches!(r, Err(PapErrore::PasswordErrata)));
+        assert!(!state.aperto());
+    }
+
+    #[test]
+    fn unlock_impl_vault_gia_aperto() {
+        let (_dir, state) = vault_temp();
+        vault_crea_impl("password_ok_123", &state).unwrap();
+        let r = vault_unlock_impl("password_ok_123", &state);
+        assert!(matches!(r, Err(PapErrore::VaultGiaAperto)));
+    }
+
+    #[test]
+    fn cambia_password_impl_happy_path() {
+        let (_dir, state) = vault_temp();
+        vault_crea_impl("password_iniziale", &state).unwrap();
+        vault_cambia_password_impl("password_iniziale", "password_nuova_xx", &state).unwrap();
+        // Verifica: la nuova password sblocca dopo lock
+        vault_lock_impl(&state).unwrap();
+        vault_unlock_impl("password_nuova_xx", &state).unwrap();
+        assert!(state.aperto());
+    }
+
+    #[test]
+    fn cambia_password_impl_nuova_corta_errore() {
+        let (_dir, state) = vault_temp();
+        vault_crea_impl("password_ok_123", &state).unwrap();
+        let r = vault_cambia_password_impl("password_ok_123", "x", &state);
+        assert!(matches!(r, Err(PapErrore::PasswordTroppoCorta)));
+    }
+
+    #[test]
+    fn cambia_password_impl_vault_chiuso() {
+        let (_dir, state) = vault_temp();
+        // Niente vault_crea -> vault non aperto
+        let r = vault_cambia_password_impl("any", "password_nuova", &state);
+        assert!(matches!(r, Err(PapErrore::VaultChiuso)));
+    }
+
+    #[test]
+    fn cambia_password_impl_vecchia_errata() {
+        let (_dir, state) = vault_temp();
+        vault_crea_impl("password_giusta", &state).unwrap();
+        let r = vault_cambia_password_impl("password_sbagliata", "password_nuova_xx", &state);
+        assert!(matches!(r, Err(PapErrore::PasswordErrata)));
+    }
+
+    #[test]
+    fn lock_impl_su_vault_chiuso_errore() {
+        let (_dir, state) = vault_temp();
+        let r = vault_lock_impl(&state);
+        assert!(matches!(r, Err(PapErrore::VaultChiuso)));
+    }
+
+    #[test]
+    fn lock_impl_e_riapri() {
+        let (_dir, state) = vault_temp();
+        vault_crea_impl("password_ok_123", &state).unwrap();
+        assert!(state.aperto());
+        vault_lock_impl(&state).unwrap();
+        assert!(!state.aperto());
+        assert!(state.esiste()); // file su disco preservati
+    }
+
+    #[test]
+    fn elimina_impl_rimuove_file() {
+        let (_dir, state) = vault_temp();
+        vault_crea_impl("password_ok_123", &state).unwrap();
+        assert!(state.esiste());
+        vault_elimina_impl(&state).unwrap();
+        assert!(!state.esiste());
+        assert!(!state.aperto());
+        assert!(!state.db_path().exists());
+        assert!(!state.meta_path().exists());
+    }
+
+    #[test]
+    fn elimina_impl_idempotente_su_vault_inesistente() {
+        let (_dir, state) = vault_temp();
+        // Nessun vault creato; elimina non deve fallire (idempotente)
+        vault_elimina_impl(&state).unwrap();
+    }
+
+    #[test]
+    fn crea_aperto_impl_happy_path() {
+        let (_dir, state) = vault_temp();
+        vault_crea_aperto_impl(&state).unwrap();
+        assert!(state.aperto());
+        let cifrato = vault_cifrato_impl(&state).unwrap();
+        assert!(!cifrato, "vault_crea_aperto deve creare vault NON cifrato");
+    }
+
+    #[test]
+    fn crea_aperto_impl_su_vault_cifrato_esistente_rifiutato() {
+        let (_dir, state) = vault_temp();
+        vault_crea_impl("password_cifrato", &state).unwrap();
+        vault_lock_impl(&state).unwrap();
+        let r = vault_crea_aperto_impl(&state);
+        assert!(matches!(r, Err(PapErrore::PasswordErrata)),
+            "crea_aperto su vault cifrato deve rifiutare");
+    }
+
+    #[test]
+    fn crea_aperto_impl_idempotente_su_vault_non_cifrato_esistente() {
+        let (_dir, state) = vault_temp();
+        vault_crea_aperto_impl(&state).unwrap();
+        // Simula restart
+        {
+            let mut g = state.conn.lock().unwrap();
+            *g = None;
+        }
+        // Re-crea_aperto: deve aprire idempotentemente
+        vault_crea_aperto_impl(&state).unwrap();
+        assert!(state.aperto());
+    }
+
+    #[test]
+    fn crea_aperto_impl_vault_gia_aperto_errore() {
+        let (_dir, state) = vault_temp();
+        vault_crea_aperto_impl(&state).unwrap();
+        let r = vault_crea_aperto_impl(&state);
+        assert!(matches!(r, Err(PapErrore::VaultGiaAperto)));
+    }
+
+    #[test]
+    fn cifrato_impl_vault_non_esiste() {
+        let (_dir, state) = vault_temp();
+        let r = vault_cifrato_impl(&state);
+        assert!(matches!(r, Err(PapErrore::VaultNonEsiste)));
     }
 }
