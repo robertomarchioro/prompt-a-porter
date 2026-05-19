@@ -49,8 +49,8 @@ jobs:
       - name: Type check
         run: pnpm --filter @pap/client check
 
-      - name: Test TypeScript
-        run: pnpm --filter @pap/client test
+      - name: Test TypeScript con coverage (gate 70%)
+        run: pnpm --filter @pap/client test:coverage
 
   rust-test:
     runs-on: ubuntu-latest
