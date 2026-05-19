@@ -27,6 +27,9 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
+import { sanitizzaFts } from "./lib/fts.js";
+import { compila, estraiSegnaposti } from "./lib/template.js";
+
 // ─── Vault path discovery ───
 
 const IDENTIFIER = "com.pap.app";
@@ -79,17 +82,6 @@ interface PromptDettaglio extends PromptRow {
 }
 
 const db = new Database(VAULT_PATH, { readonly: true, fileMustExist: true });
-
-function sanitizzaFts(query: string): string {
-  return query
-    .split(/\s+/)
-    .map((w) => {
-      const pulito = w.replace(/[^\p{L}\p{N}_]/gu, "");
-      return pulito ? `${pulito}*` : "";
-    })
-    .filter(Boolean)
-    .join(" ");
-}
 
 function tagsPerPrompt(promptId: string): string[] {
   const stmt = db.prepare(
@@ -182,31 +174,6 @@ function promptListRecent(limit: number): PromptRow[] {
        LIMIT ?`,
     )
     .all(lim) as PromptRow[];
-}
-
-// ─── Template render ───
-
-const RE_SEGNAPOSTO = /\{\{\s*(\w+)\s*\}\}/g;
-
-function compila(body: string, valori: Record<string, string>): string {
-  return body.replace(
-    RE_SEGNAPOSTO,
-    (_, nome: string) => valori[nome]?.trim() || `{{${nome}}}`,
-  );
-}
-
-function estraiSegnaposti(body: string): string[] {
-  const visti = new Set<string>();
-  const out: string[] = [];
-  RE_SEGNAPOSTO.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = RE_SEGNAPOSTO.exec(body)) !== null) {
-    if (!visti.has(m[1])) {
-      visti.add(m[1]);
-      out.push(m[1]);
-    }
-  }
-  return out;
 }
 
 // ─── MCP Server setup ───

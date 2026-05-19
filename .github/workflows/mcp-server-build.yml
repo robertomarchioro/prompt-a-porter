@@ -40,6 +40,9 @@ jobs:
       - name: Type-check (lint)
         run: pnpm --filter @pap/mcp-server lint
 
+      - name: Test con coverage (gate 80%)
+        run: pnpm --filter @pap/mcp-server test:coverage
+
       - name: Build TypeScript
         run: pnpm --filter @pap/mcp-server build
 
