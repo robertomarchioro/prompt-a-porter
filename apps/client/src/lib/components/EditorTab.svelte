@@ -1,7 +1,13 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack } from "svelte";
-  import { EditorView, lineNumbers, keymap } from "@codemirror/view";
+  import {
+    EditorView,
+    lineNumbers,
+    highlightActiveLine,
+    keymap,
+  } from "@codemirror/view";
   import { EditorState } from "@codemirror/state";
+  import { indentUnit } from "@codemirror/language";
   import {
     defaultKeymap,
     history,
@@ -19,6 +25,7 @@
     segnapostoTheme,
   } from "$lib/codemirror/placeholder-highlight";
   import { importAutocompletion } from "$lib/codemirror/import-autocomplete";
+  import { statoEditor } from "$lib/stores/preferenze.svelte";
 
   interface Props {
     body: string;
@@ -60,50 +67,59 @@
   function montaEditor(initial: string): void {
     if (!container) return;
     smontaEditor();
-    const state = EditorState.create({
-      doc: initial,
-      extensions: [
-        lineNumbers(),
-        history(),
-        keymap.of([
-          ...defaultKeymap,
-          ...historyKeymap,
-          ...searchKeymap,
-          indentWithTab,
-        ]),
-        markdown(),
-        importTokens({ onapri: onApriPrompt }),
-        importTheme,
-        // M4 PR-3: intellisense autocomplete `{{import "...`. Callback
-        // legge promptId al momento dell'invocazione per escludere self.
-        importAutocompletion({ getPromptId: () => promptId }),
-        segnapostoHighlight,
-        segnapostoTheme,
-        EditorView.lineWrapping,
-        EditorView.updateListener.of((u) => {
-          if (u.docChanged) {
-            const text = u.state.doc.toString();
-            bodyInterno = text;
-            if (ignoraProssimoCambio) {
-              // Cambio programmatico (switch prompt): non propagare a
-              // DetailPane, altrimenti dirty=true fantasma. Issue #167.
-              ignoraProssimoCambio = false;
-            } else {
-              onChangeBody(text);
-            }
-          }
-          if ((u.docChanged || u.selectionSet) && onSelectionChange) {
-            const sel = u.state.selection.main;
-            const linea = u.state.doc.lineAt(sel.head);
-            onSelectionChange({
-              righe: u.state.doc.lines,
-              colonna: sel.head - linea.from + 1,
-              chars: u.state.doc.length,
-            });
-          }
-        }),
-      ],
+    // M10 — preferenze editor (rimonto su cambio prefs via $effect sotto;
+    // il pattern Compartment darebbe granularita' migliore ma il rimonto
+    // e' semplice e i cambi sono rari).
+    const indentString = " ".repeat(statoEditor.indentSize);
+    const fontTheme = EditorView.theme({
+      "&": { fontSize: `${statoEditor.fontSize}px` },
     });
+    const updateListener = EditorView.updateListener.of((u) => {
+      if (u.docChanged) {
+        const text = u.state.doc.toString();
+        bodyInterno = text;
+        if (ignoraProssimoCambio) {
+          // Cambio programmatico (switch prompt): non propagare a
+          // DetailPane, altrimenti dirty=true fantasma. Issue #167.
+          ignoraProssimoCambio = false;
+        } else {
+          onChangeBody(text);
+        }
+      }
+      if ((u.docChanged || u.selectionSet) && onSelectionChange) {
+        const sel = u.state.selection.main;
+        const linea = u.state.doc.lineAt(sel.head);
+        onSelectionChange({
+          righe: u.state.doc.lines,
+          colonna: sel.head - linea.from + 1,
+          chars: u.state.doc.length,
+        });
+      }
+    });
+    const extensions = [
+      history(),
+      keymap.of([
+        ...defaultKeymap,
+        ...historyKeymap,
+        ...searchKeymap,
+        indentWithTab,
+      ]),
+      markdown(),
+      indentUnit.of(indentString),
+      fontTheme,
+      importTokens({ onapri: onApriPrompt }),
+      importTheme,
+      // M4 PR-3: intellisense autocomplete `{{import "...`. Callback
+      // legge promptId al momento dell'invocazione per escludere self.
+      importAutocompletion({ getPromptId: () => promptId }),
+      segnapostoHighlight,
+      segnapostoTheme,
+      updateListener,
+    ];
+    if (statoEditor.showLineNumbers) extensions.push(lineNumbers());
+    if (statoEditor.lineWrapping) extensions.push(EditorView.lineWrapping);
+    if (statoEditor.highlightActiveLine) extensions.push(highlightActiveLine());
+    const state = EditorState.create({ doc: initial, extensions });
     view = new EditorView({ state, parent: container });
     editorView = view;
     if (onSelectionChange) {
@@ -143,6 +159,47 @@
       });
       bodyInterno = body;
     }
+  });
+
+  // M10 — Rimonta l'editor quando cambia una preferenza editor. Le
+  // dipendenze reattive sono lette dentro $effect cosi' Svelte 5 le
+  // traccia correttamente. Salta il primo run (montaggio gia' fatto
+  // da onMount) controllando che `view` esista e che i valori siano
+  // diversi da quelli usati al monta.
+  let prefsSnapshot = $state({
+    autosaveDelayMs: statoEditor.autosaveDelayMs,
+    lineWrapping: statoEditor.lineWrapping,
+    indentSize: statoEditor.indentSize,
+    fontSize: statoEditor.fontSize,
+    showLineNumbers: statoEditor.showLineNumbers,
+    highlightActiveLine: statoEditor.highlightActiveLine,
+  });
+  $effect(() => {
+    const curr = {
+      autosaveDelayMs: statoEditor.autosaveDelayMs,
+      lineWrapping: statoEditor.lineWrapping,
+      indentSize: statoEditor.indentSize,
+      fontSize: statoEditor.fontSize,
+      showLineNumbers: statoEditor.showLineNumbers,
+      highlightActiveLine: statoEditor.highlightActiveLine,
+    };
+    // autosaveDelayMs e' gestito da DetailPane (non rimontare l'editor).
+    const rilevanti = [
+      "lineWrapping",
+      "indentSize",
+      "fontSize",
+      "showLineNumbers",
+      "highlightActiveLine",
+    ] as const;
+    const cambiato = rilevanti.some(
+      (k) => curr[k] !== prefsSnapshot[k],
+    );
+    if (cambiato && view) {
+      const corrente = view.state.doc.toString();
+      bodyInterno = corrente;
+      montaEditor(corrente);
+    }
+    prefsSnapshot = curr;
   });
 </script>
 
