@@ -50,7 +50,7 @@ Item che vivono nel branch della release v0.2 ma aspettavano il cert Authenticod
 Sub-step di feature già atterrate, recuperati come must-have v1.0. Vedi [`v1.0-personale.md`](./v1.0-personale.md) per il piano completo.
 
 ### Da Fase 2 Step 4 — Import/export
-- 📋 → v1.0 M6: **Markdown import/export** (oggi solo JSON con schema v1)
+- ✅ M6 PR-1..4 (#216-219, 2026-05-19): **Markdown import/export** — parser front-matter, walker directory ricorsivo, export zip vault, UI Impostazioni → Dati, doc utente Obsidian/Foam compatibility (`docs/utente/markdown-import-export.md`).
 
 ### Da Fase 3 Step 5 — Linting
 - 📋 → v1.0 nice-to-have: **regole linting nuove** per validare sintassi import scopati (`with k=v`, `version=N`)
