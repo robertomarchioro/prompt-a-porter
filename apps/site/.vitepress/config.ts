@@ -1,0 +1,204 @@
+import { defineConfig } from "vitepress";
+
+// VitePress legge i .md direttamente da docs/ (root del monorepo).
+// Sidebar e navbar filtrano cosa esporre nel sito pubblico.
+//
+// `vue.template.compilerOptions.delimiters` ridefinisce i delimitatori
+// Vue da `{{ }}` a `<% %>` cosi' che la sintassi PaP `{{nome}}`,
+// `{{globale ...}}`, `{{import "..."}}` resti testo letterale nei
+// documenti (e non venga interpretata come Vue interpolation).
+export default defineConfig({
+  vue: {
+    template: {
+      compilerOptions: {
+        delimiters: ["<%", "%>"],
+      },
+    },
+  },
+
+  title: "Prompt a Porter",
+  description:
+    "Libreria locale per prompt AI — template parametrici, vault cifrato, sync opzionale",
+  lang: "it",
+  srcDir: "../../docs",
+  base: "/prompt-a-porter/",
+  cleanUrls: true,
+  lastUpdated: true,
+
+  // Sito pubblico = solo utente/, test/ e index. Le doc tecniche
+  // (architettura, contribuire, operativo, roadmap) restano accessibili
+  // su GitHub ma non vengono publicate al sito.
+  srcExclude: [
+    "README.md",
+    "architettura/**",
+    "contribuire/**",
+    "operativo/**",
+    "roadmap/**",
+  ],
+
+  // Disabilita parsing di tag HTML inline cosi' che frammenti come
+  // `<prefix>`, `<id>`, `<data>` nei doc utente (placeholder di esempio)
+  // non vengano interpretati come tag aperti senza chiusura dal compiler
+  // Vue.
+  markdown: {
+    html: false,
+  },
+
+  // Mappa ogni `README.md` a `index.html` cosi' i path delle sezioni
+  // (es. `/utente/`, `/utente/casi-uso/`) risolvono al README esistente
+  // senza dover duplicare in `index.md`.
+  rewrites: {
+    "utente/README.md": "utente/index.md",
+    "utente/casi-uso/README.md": "utente/casi-uso/index.md",
+    "test/README.md": "test/index.md",
+  },
+  ignoreDeadLinks: [
+    // Link interni a doc tecniche (architettura/operativo/roadmap/contribuire)
+    // non inclusi nel sito pubblico utente. Restano accessibili su GitHub.
+    /\/(architettura|operativo|roadmap|contribuire)\//,
+  ],
+
+  head: [
+    ["link", { rel: "icon", href: "/prompt-a-porter/favicon.ico" }],
+    ["meta", { name: "theme-color", content: "#646cff" }],
+  ],
+
+  themeConfig: {
+    siteTitle: "Prompt a Porter",
+
+    nav: [
+      { text: "Guida", link: "/utente/getting-started" },
+      { text: "Casi d'uso", link: "/utente/casi-uso/" },
+      { text: "Sintassi", link: "/utente/glossario-sintassi" },
+      { text: "Test", link: "/test/" },
+      {
+        text: "GitHub",
+        link: "https://github.com/robertomarchioro/prompt-a-porter",
+      },
+    ],
+
+    sidebar: {
+      "/utente/": [
+        {
+          text: "Inizio",
+          items: [
+            { text: "Cos'è Prompt a Porter", link: "/utente/" },
+            { text: "Getting started", link: "/utente/getting-started" },
+            { text: "Glossario sintassi", link: "/utente/glossario-sintassi" },
+            { text: "Scorciatoie tastiera", link: "/utente/scorciatoie-tastiera" },
+            { text: "Troubleshooting", link: "/utente/troubleshooting" },
+          ],
+        },
+        {
+          text: "Casi d'uso",
+          collapsed: false,
+          items: [
+            { text: "Indice ricette", link: "/utente/casi-uso/" },
+            { text: "Email professionale", link: "/utente/casi-uso/email-professionale" },
+            { text: "Code review", link: "/utente/casi-uso/code-review" },
+            { text: "Summarize articolo", link: "/utente/casi-uso/summarize-articolo" },
+            { text: "Riscrittura tono", link: "/utente/casi-uso/riscrittura-tono" },
+            { text: "Brainstorm idee", link: "/utente/casi-uso/brainstorm-idee" },
+            { text: "Traduzione tecnica", link: "/utente/casi-uso/traduzione-tecnica" },
+            { text: "Commit message", link: "/utente/casi-uso/commit-message" },
+          ],
+        },
+        {
+          text: "Funzionalità avanzate",
+          collapsed: true,
+          items: [
+            { text: "Prompt componibili (import)", link: "/utente/prompt-componibili" },
+            { text: "Varianti A/B", link: "/utente/varianti-prompt" },
+            { text: "Fork prompt", link: "/utente/fork-prompt" },
+            { text: "Rating prompt", link: "/utente/rating-prompt" },
+            { text: "Ricerca semantica", link: "/utente/ricerca-semantica" },
+            { text: "Linting regole", link: "/utente/linting-regole" },
+            { text: "Cartelle", link: "/utente/cartelle" },
+            { text: "Regression testing", link: "/utente/regression-testing" },
+          ],
+        },
+        {
+          text: "Integrazioni",
+          collapsed: true,
+          items: [
+            { text: "CLI pap", link: "/utente/cli" },
+            { text: "MCP server", link: "/utente/mcp" },
+            { text: "Export/Import JSON", link: "/utente/formato-export-json" },
+            { text: "Markdown import/export", link: "/utente/markdown-import-export" },
+            { text: "Auto-update", link: "/utente/auto-update" },
+          ],
+        },
+      ],
+      "/test/": [
+        {
+          text: "Test plan utente",
+          items: [
+            { text: "Introduzione", link: "/test/" },
+            { text: "Catalogo test cases", link: "/test/test-cases" },
+          ],
+        },
+      ],
+    },
+
+    socialLinks: [
+      {
+        icon: "github",
+        link: "https://github.com/robertomarchioro/prompt-a-porter",
+      },
+    ],
+
+    footer: {
+      message:
+        'Rilasciato sotto licenza <a href="https://github.com/robertomarchioro/prompt-a-porter/blob/main/LICENSE">AGPL-3.0-only</a>.',
+      copyright: "Copyright © 2026 Roberto Marchioro",
+    },
+
+    editLink: {
+      pattern:
+        "https://github.com/robertomarchioro/prompt-a-porter/edit/main/docs/:path",
+      text: "Modifica questa pagina su GitHub",
+    },
+
+    search: {
+      provider: "local",
+      options: {
+        locales: {
+          root: {
+            translations: {
+              button: {
+                buttonText: "Cerca",
+                buttonAriaLabel: "Cerca nei documenti",
+              },
+              modal: {
+                noResultsText: "Nessun risultato per",
+                resetButtonTitle: "Cancella query",
+                footer: {
+                  selectText: "per selezionare",
+                  navigateText: "per navigare",
+                  closeText: "per chiudere",
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+
+    docFooter: {
+      prev: "Pagina precedente",
+      next: "Pagina successiva",
+    },
+
+    outline: {
+      label: "In questa pagina",
+    },
+
+    lastUpdatedText: "Ultimo aggiornamento",
+
+    darkModeSwitchLabel: "Tema",
+    lightModeSwitchTitle: "Passa al tema chiaro",
+    darkModeSwitchTitle: "Passa al tema scuro",
+    sidebarMenuLabel: "Menu",
+    returnToTopLabel: "Torna in cima",
+  },
+});
