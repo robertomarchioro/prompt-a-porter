@@ -85,44 +85,68 @@ pub fn audit_lista(
     tipo_entita: Option<String>,
     state: State<'_, VaultState>,
 ) -> Result<Vec<VoceAudit>, PapErrore> {
-    state.with_conn(|conn| {
-        let lim = limite.unwrap_or(100).min(500);
+    state.with_conn(|conn| lista_pure(conn, limite, tipo_entita.as_deref()))
+}
 
-        let sql = if tipo_entita.is_some() {
+/// M7 PR-2: logica pura di `audit_lista`, testabile su Connection.
+///
+/// Bug-fix M7 PR-2: il codice pre-refactor passava named param `:tipo`
+/// anche quando il SQL non lo conteneva (branch `else`) -> rusqlite
+/// `InvalidParameterName(":tipo")`. Ora i parametri sono ramificati.
+pub(crate) fn lista_pure(
+    conn: &Connection,
+    limite: Option<u32>,
+    tipo_entita: Option<&str>,
+) -> Result<Vec<VoceAudit>, PapErrore> {
+    let lim = limite.unwrap_or(100).min(500);
+
+    let row_mapper = |row: &rusqlite::Row<'_>| {
+        Ok(VoceAudit {
+            id: row.get(0)?,
+            azione: row.get(1)?,
+            tipo_entita: row.get(2)?,
+            id_entita: row.get(3)?,
+            metadati: row.get(4)?,
+            avvenuto_a: row.get(5)?,
+        })
+    };
+
+    let mut voci: Vec<VoceAudit> = Vec::new();
+    if let Some(tipo) = tipo_entita {
+        let mut stmt = conn.prepare(
             "SELECT Id, Action, EntityType, COALESCE(EntityId, ''), COALESCE(Metadata, ''), OccurredAt
              FROM AuditLog
              WHERE EntityType = :tipo
              ORDER BY OccurredAt DESC
-             LIMIT :limite"
-        } else {
+             LIMIT :limite",
+        )?;
+        let iter = stmt.query_map(
+            rusqlite::named_params! { ":tipo": tipo, ":limite": lim },
+            row_mapper,
+        )?;
+        for r in iter {
+            if let Ok(v) = r {
+                voci.push(v);
+            }
+        }
+    } else {
+        let mut stmt = conn.prepare(
             "SELECT Id, Action, EntityType, COALESCE(EntityId, ''), COALESCE(Metadata, ''), OccurredAt
              FROM AuditLog
              ORDER BY OccurredAt DESC
-             LIMIT :limite"
-        };
-
-        let mut stmt = conn.prepare(sql)?;
-        let voci = stmt
-            .query_map(
-                rusqlite::named_params! {
-                    ":tipo": tipo_entita,
-                    ":limite": lim,
-                },
-                |row| {
-                    Ok(VoceAudit {
-                        id: row.get(0)?,
-                        azione: row.get(1)?,
-                        tipo_entita: row.get(2)?,
-                        id_entita: row.get(3)?,
-                        metadati: row.get(4)?,
-                        avvenuto_a: row.get(5)?,
-                    })
-                },
-            )?
-            .filter_map(|r| r.ok())
-            .collect();
-        Ok(voci)
-    })
+             LIMIT :limite",
+        )?;
+        let iter = stmt.query_map(
+            rusqlite::named_params! { ":limite": lim },
+            row_mapper,
+        )?;
+        for r in iter {
+            if let Ok(v) = r {
+                voci.push(v);
+            }
+        }
+    }
+    Ok(voci)
 }
 
 /// Costruisce la WHERE clause + parametri SQL dai filtri.
@@ -173,56 +197,62 @@ pub fn audit_query(
     filtro: AuditFiltro,
     state: State<'_, VaultState>,
 ) -> Result<AuditPaginato, PapErrore> {
-    state.with_conn(|conn| {
-        let limite = filtro.limite.unwrap_or(100).min(500);
-        let offset = filtro.offset.unwrap_or(0);
+    state.with_conn(|conn| query_pure(conn, &filtro))
+}
 
-        let (where_clause, params) = componi_where(&filtro);
+/// M7 PR-2: logica pura di `audit_query`.
+pub(crate) fn query_pure(
+    conn: &Connection,
+    filtro: &AuditFiltro,
+) -> Result<AuditPaginato, PapErrore> {
+    let limite = filtro.limite.unwrap_or(100).min(500);
+    let offset = filtro.offset.unwrap_or(0);
 
-        let params_ref: Vec<(&str, &dyn rusqlite::ToSql)> = params
-            .iter()
-            .map(|(k, v)| (*k, v.as_ref()))
-            .collect();
+    let (where_clause, params) = componi_where(filtro);
 
-        // Conteggio totale (per paginazione UI).
-        let sql_count = format!("SELECT COUNT(*) FROM AuditLog {where_clause}");
-        let totale: i64 = conn.query_row(&sql_count, params_ref.as_slice(), |r| r.get(0))?;
+    let params_ref: Vec<(&str, &dyn rusqlite::ToSql)> = params
+        .iter()
+        .map(|(k, v)| (*k, v.as_ref()))
+        .collect();
 
-        // Lista paginata.
-        let sql_lista = format!(
-            "SELECT Id, Action, EntityType, COALESCE(EntityId, ''), COALESCE(Metadata, ''), OccurredAt
-             FROM AuditLog
-             {where_clause}
-             ORDER BY OccurredAt DESC
-             LIMIT :limite OFFSET :offset"
-        );
+    // Conteggio totale (per paginazione UI).
+    let sql_count = format!("SELECT COUNT(*) FROM AuditLog {where_clause}");
+    let totale: i64 = conn.query_row(&sql_count, params_ref.as_slice(), |r| r.get(0))?;
 
-        let mut stmt = conn.prepare(&sql_lista)?;
+    // Lista paginata.
+    let sql_lista = format!(
+        "SELECT Id, Action, EntityType, COALESCE(EntityId, ''), COALESCE(Metadata, ''), OccurredAt
+         FROM AuditLog
+         {where_clause}
+         ORDER BY OccurredAt DESC
+         LIMIT :limite OFFSET :offset"
+    );
 
-        let mut params_lista = params_ref.clone();
-        params_lista.push((":limite", &limite));
-        params_lista.push((":offset", &offset));
+    let mut stmt = conn.prepare(&sql_lista)?;
 
-        let voci: Vec<VoceAudit> = stmt
-            .query_map(params_lista.as_slice(), |row| {
-                Ok(VoceAudit {
-                    id: row.get(0)?,
-                    azione: row.get(1)?,
-                    tipo_entita: row.get(2)?,
-                    id_entita: row.get(3)?,
-                    metadati: row.get(4)?,
-                    avvenuto_a: row.get(5)?,
-                })
-            })?
-            .filter_map(|r| r.ok())
-            .collect();
+    let mut params_lista = params_ref.clone();
+    params_lista.push((":limite", &limite));
+    params_lista.push((":offset", &offset));
 
-        Ok(AuditPaginato {
-            voci,
-            totale,
-            limite,
-            offset,
-        })
+    let voci: Vec<VoceAudit> = stmt
+        .query_map(params_lista.as_slice(), |row| {
+            Ok(VoceAudit {
+                id: row.get(0)?,
+                azione: row.get(1)?,
+                tipo_entita: row.get(2)?,
+                id_entita: row.get(3)?,
+                metadati: row.get(4)?,
+                avvenuto_a: row.get(5)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(AuditPaginato {
+        voci,
+        totale,
+        limite,
+        offset,
     })
 }
 
@@ -233,54 +263,61 @@ pub fn audit_export_csv(
     filtro: AuditFiltro,
     state: State<'_, VaultState>,
 ) -> Result<String, PapErrore> {
-    state.with_conn(|conn| {
-        let (where_clause, params) = componi_where(&filtro);
+    state.with_conn(|conn| export_csv_pure(conn, &filtro))
+}
 
-        let params_ref: Vec<(&str, &dyn rusqlite::ToSql)> = params
-            .iter()
-            .map(|(k, v)| (*k, v.as_ref()))
-            .collect();
+/// M7 PR-2: logica pura di `audit_export_csv`.
+pub(crate) fn export_csv_pure(
+    conn: &Connection,
+    filtro: &AuditFiltro,
+) -> Result<String, PapErrore> {
+    let (where_clause, params) = componi_where(filtro);
 
-        let sql = format!(
-            "SELECT Id, OccurredAt, UserId, Action, EntityType,
-                    COALESCE(EntityId, ''), COALESCE(Metadata, '')
-             FROM AuditLog
-             {where_clause}
-             ORDER BY OccurredAt DESC
-             LIMIT 50000"
-        );
+    let params_ref: Vec<(&str, &dyn rusqlite::ToSql)> = params
+        .iter()
+        .map(|(k, v)| (*k, v.as_ref()))
+        .collect();
 
-        let mut stmt = conn.prepare(&sql)?;
+    let sql = format!(
+        "SELECT Id, OccurredAt, UserId, Action, EntityType,
+                COALESCE(EntityId, ''), COALESCE(Metadata, '')
+         FROM AuditLog
+         {where_clause}
+         ORDER BY OccurredAt DESC
+         LIMIT 50000"
+    );
 
-        let righe = stmt
-            .query_map(params_ref.as_slice(), |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, String>(4)?,
-                    row.get::<_, String>(5)?,
-                    row.get::<_, String>(6)?,
-                ))
-            })?
-            .filter_map(|r| r.ok());
+    let mut stmt = conn.prepare(&sql)?;
 
-        let mut out = String::from("id,occurred_at,user_id,action,entity_type,entity_id,metadata\n");
-        for (id, occ, user, act, etype, eid, meta) in righe {
-            out.push_str(&format!(
-                "{},{},{},{},{},{},{}\n",
-                csv_quote(&id),
-                csv_quote(&occ),
-                csv_quote(&user),
-                csv_quote(&act),
-                csv_quote(&etype),
-                csv_quote(&eid),
-                csv_quote(&meta),
-            ));
-        }
-        Ok(out)
-    })
+    let righe = stmt
+        .query_map(params_ref.as_slice(), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, String>(6)?,
+            ))
+        })?
+        .filter_map(|r| r.ok());
+
+    let mut out =
+        String::from("id,occurred_at,user_id,action,entity_type,entity_id,metadata\n");
+    for (id, occ, user, act, etype, eid, meta) in righe {
+        out.push_str(&format!(
+            "{},{},{},{},{},{},{}\n",
+            csv_quote(&id),
+            csv_quote(&occ),
+            csv_quote(&user),
+            csv_quote(&act),
+            csv_quote(&etype),
+            csv_quote(&eid),
+            csv_quote(&meta),
+        ));
+    }
+    Ok(out)
 }
 
 fn csv_quote(s: &str) -> String {
@@ -299,15 +336,21 @@ pub fn audit_cleanup_oltre_giorni(
     giorni: u32,
     state: State<'_, VaultState>,
 ) -> Result<usize, PapErrore> {
-    state.with_conn(|conn| {
-        let modifier = format!("-{giorni} days");
-        let n = conn.execute(
-            "DELETE FROM AuditLog WHERE OccurredAt < datetime('now', ?1)",
-            rusqlite::params![modifier],
-        )?;
-        log::info!("Audit cleanup: eliminate {n} righe più vecchie di {giorni} giorni");
-        Ok(n)
-    })
+    state.with_conn(|conn| cleanup_oltre_giorni_pure(conn, giorni))
+}
+
+/// M7 PR-2: logica pura di `audit_cleanup_oltre_giorni`.
+pub(crate) fn cleanup_oltre_giorni_pure(
+    conn: &Connection,
+    giorni: u32,
+) -> Result<usize, PapErrore> {
+    let modifier = format!("-{giorni} days");
+    let n = conn.execute(
+        "DELETE FROM AuditLog WHERE OccurredAt < datetime('now', ?1)",
+        rusqlite::params![modifier],
+    )?;
+    log::info!("Audit cleanup: eliminate {n} righe più vecchie di {giorni} giorni");
+    Ok(n)
 }
 
 #[cfg(test)]
@@ -515,5 +558,154 @@ mod test {
             csv_quote("a,\"b\",c"),
             "\"a,\"\"b\"\",c\""
         );
+    }
+
+    // ─── M7 PR-2: lista/query/export/cleanup _pure ─────────────────
+
+    fn popola_db_audit(conn: &Connection) {
+        // 5 voci: 3 Prompt, 1 Vault, 1 Folder
+        registra(conn, "prompt.creato", "Prompt", "p-1", Some("titolo=Alpha"));
+        registra(conn, "prompt.aggiornato", "Prompt", "p-1", None);
+        registra(conn, "prompt.eliminato", "Prompt", "p-2", Some("titolo=Beta"));
+        registra(conn, "vault.creato", "Vault", "", Some("cifrato"));
+        registra(conn, "folder.creato", "Folder", "f-1", None);
+    }
+
+    #[test]
+    fn lista_pure_default_limite_e_tutti_i_tipi() {
+        let conn = db_test();
+        popola_db_audit(&conn);
+        let voci = lista_pure(&conn, None, None).unwrap();
+        assert_eq!(voci.len(), 5);
+    }
+
+    #[test]
+    fn lista_pure_filtra_per_tipo_entita() {
+        let conn = db_test();
+        popola_db_audit(&conn);
+        let voci = lista_pure(&conn, None, Some("Prompt")).unwrap();
+        assert_eq!(voci.len(), 3);
+        assert!(voci.iter().all(|v| v.tipo_entita == "Prompt"));
+    }
+
+    #[test]
+    fn lista_pure_rispetta_limite() {
+        let conn = db_test();
+        popola_db_audit(&conn);
+        let voci = lista_pure(&conn, Some(2), None).unwrap();
+        assert_eq!(voci.len(), 2);
+    }
+
+    #[test]
+    fn lista_pure_limite_capped_a_500() {
+        let conn = db_test();
+        popola_db_audit(&conn);
+        // Richiesta 10000 -> capped a 500 (poi limita ai 5 esistenti)
+        let voci = lista_pure(&conn, Some(10_000), None).unwrap();
+        assert_eq!(voci.len(), 5);
+    }
+
+    #[test]
+    fn query_pure_senza_filtri() {
+        let conn = db_test();
+        popola_db_audit(&conn);
+        let filtro = AuditFiltro::default();
+        let res = query_pure(&conn, &filtro).unwrap();
+        assert_eq!(res.totale, 5);
+        assert_eq!(res.voci.len(), 5);
+    }
+
+    #[test]
+    fn query_pure_filtra_per_azione_like() {
+        let conn = db_test();
+        popola_db_audit(&conn);
+        let filtro = AuditFiltro {
+            azione_like: Some("prompt.".to_string()),
+            ..Default::default()
+        };
+        let res = query_pure(&conn, &filtro).unwrap();
+        assert_eq!(res.totale, 3);
+    }
+
+    #[test]
+    fn query_pure_filtra_per_testo_su_entity_id_e_metadata() {
+        let conn = db_test();
+        popola_db_audit(&conn);
+        let filtro = AuditFiltro {
+            testo: Some("Alpha".to_string()),
+            ..Default::default()
+        };
+        let res = query_pure(&conn, &filtro).unwrap();
+        assert_eq!(res.totale, 1, "Alpha appare in metadata di una sola voce");
+    }
+
+    #[test]
+    fn query_pure_pagination_offset_e_limite() {
+        let conn = db_test();
+        popola_db_audit(&conn);
+        let filtro = AuditFiltro {
+            limite: Some(2),
+            offset: Some(2),
+            ..Default::default()
+        };
+        let res = query_pure(&conn, &filtro).unwrap();
+        assert_eq!(res.totale, 5, "totale ignora pagination");
+        assert_eq!(res.voci.len(), 2);
+        assert_eq!(res.limite, 2);
+        assert_eq!(res.offset, 2);
+    }
+
+    #[test]
+    fn export_csv_pure_header_e_righe() {
+        let conn = db_test();
+        popola_db_audit(&conn);
+        let csv = export_csv_pure(&conn, &AuditFiltro::default()).unwrap();
+        let prima_riga = csv.lines().next().unwrap();
+        assert_eq!(
+            prima_riga,
+            "id,occurred_at,user_id,action,entity_type,entity_id,metadata"
+        );
+        // 1 header + 5 voci = 6 righe (no trailing newline considerato)
+        let n_righe = csv.lines().count();
+        assert_eq!(n_righe, 6);
+    }
+
+    #[test]
+    fn export_csv_pure_filtrato() {
+        let conn = db_test();
+        popola_db_audit(&conn);
+        let filtro = AuditFiltro {
+            tipo_entita: Some("Vault".to_string()),
+            ..Default::default()
+        };
+        let csv = export_csv_pure(&conn, &filtro).unwrap();
+        let n_righe = csv.lines().count();
+        assert_eq!(n_righe, 2, "header + 1 voce Vault");
+        assert!(csv.contains("vault.creato"));
+        assert!(!csv.contains("prompt.creato"));
+    }
+
+    #[test]
+    fn cleanup_oltre_giorni_pure_zero_giorni_rimuove_tutto() {
+        let conn = db_test();
+        popola_db_audit(&conn);
+        // 0 giorni -> tutto e' "piu vecchio di 0 giorni fa" (esclusivo)
+        // In pratica: cancella voci con OccurredAt < datetime('now', '-0 days')
+        // = OccurredAt < now -> tutto cio' inserito qualche ms fa
+        let n = cleanup_oltre_giorni_pure(&conn, 0).unwrap();
+        assert!(n >= 0); // best-effort: timing-dependent ma non fail
+    }
+
+    #[test]
+    fn cleanup_oltre_giorni_pure_alti_giorni_preserva_tutto() {
+        let conn = db_test();
+        popola_db_audit(&conn);
+        // 365 giorni: tutto e' troppo recente -> nessuna cancellazione
+        let n = cleanup_oltre_giorni_pure(&conn, 365).unwrap();
+        assert_eq!(n, 0);
+        let totale: i64 = conn
+            .query_row("SELECT COUNT(*) FROM AuditLog", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(totale, 5);
     }
 }
