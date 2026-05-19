@@ -15,6 +15,7 @@
   import CronologiaTab from "$lib/components/CronologiaTab.svelte";
   import ImportVarTab from "$lib/components/ImportVarTab.svelte";
   import { apriModale } from "$lib/stores/modale.svelte";
+  import { statoEditor } from "$lib/stores/preferenze.svelte";
 
   const META_KEY = "pap.detail.meta-collapsed";
   function caricaMetaCollapsed(): boolean {
@@ -239,7 +240,10 @@
     statoSalvataggio = "dirty";
     dirty = true;
     if (timerAutosave) clearTimeout(timerAutosave);
-    timerAutosave = setTimeout(() => void salvaBozza(), 2000);
+    timerAutosave = setTimeout(
+      () => void salvaBozza(),
+      statoEditor.autosaveDelayMs,
+    );
   }
 
   /**

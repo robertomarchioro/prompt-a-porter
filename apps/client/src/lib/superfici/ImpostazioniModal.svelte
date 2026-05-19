@@ -46,6 +46,12 @@
   import {
     statoTema,
     salvaTemaTono,
+    statoEditor,
+    salvaEditor,
+    AUTOSAVE_DELAY_MIN,
+    AUTOSAVE_DELAY_MAX,
+    FONT_SIZE_MIN,
+    FONT_SIZE_MAX,
   } from "$lib/stores/preferenze.svelte";
   import {
     caricaStato as caricaStatoLista,
@@ -1165,13 +1171,129 @@
         </div>
       {:else if sezione === "editor"}
         <h3>Editor</h3>
-        <div class="placeholder-card">
-          <strong>Configurazione editor</strong>
-          <p>
-            Le opzioni di editing (autosave delay, line wrapping, indent)
-            saranno disponibili in una prossima release. Per ora l'editor
-            usa i default.
+
+        <div class="campo">
+          <span class="campo-label">Autosave delay</span>
+          <div class="slider-row">
+            <input
+              type="range"
+              min={AUTOSAVE_DELAY_MIN}
+              max={AUTOSAVE_DELAY_MAX}
+              step="250"
+              value={statoEditor.autosaveDelayMs}
+              oninput={(e) =>
+                void salvaEditor({
+                  autosaveDelayMs: Number(
+                    (e.currentTarget as HTMLInputElement).value,
+                  ),
+                })}
+              aria-label="Ritardo autosave in millisecondi"
+            />
+            <span class="slider-value">{statoEditor.autosaveDelayMs} ms</span>
+          </div>
+          <p class="hint">
+            Quanto attende l'editor dopo l'ultima modifica prima di salvare
+            (debounce). Più basso = salvataggio più aggressivo.
           </p>
+        </div>
+
+        <div class="campo">
+          <span class="campo-label">Line wrapping (soft wrap)</span>
+          <label class="toggle-row">
+            <input
+              type="checkbox"
+              checked={statoEditor.lineWrapping}
+              onchange={(e) =>
+                void salvaEditor({
+                  lineWrapping: (e.currentTarget as HTMLInputElement).checked,
+                })}
+            />
+            <span>Manda a capo le righe lunghe</span>
+          </label>
+          <p class="hint">
+            Quando attivo, le righe lunghe vanno a capo invece di richiedere
+            scroll orizzontale. Disattiva se preferisci uno stile da editor di
+            codice.
+          </p>
+        </div>
+
+        <div class="campo">
+          <span class="campo-label">Dimensione indent</span>
+          <div class="radio-row">
+            <label>
+              <input
+                type="radio"
+                name="indent-size"
+                value="2"
+                checked={statoEditor.indentSize === 2}
+                onchange={() => void salvaEditor({ indentSize: 2 })}
+              />
+              2 spazi
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="indent-size"
+                value="4"
+                checked={statoEditor.indentSize === 4}
+                onchange={() => void salvaEditor({ indentSize: 4 })}
+              />
+              4 spazi
+            </label>
+          </div>
+        </div>
+
+        <div class="campo">
+          <span class="campo-label">Dimensione font</span>
+          <div class="slider-row">
+            <input
+              type="range"
+              min={FONT_SIZE_MIN}
+              max={FONT_SIZE_MAX}
+              step="1"
+              value={statoEditor.fontSize}
+              oninput={(e) =>
+                void salvaEditor({
+                  fontSize: Number(
+                    (e.currentTarget as HTMLInputElement).value,
+                  ),
+                })}
+              aria-label="Dimensione font editor in pixel"
+            />
+            <span class="slider-value">{statoEditor.fontSize} px</span>
+          </div>
+        </div>
+
+        <div class="campo">
+          <span class="campo-label">Numeri di riga</span>
+          <label class="toggle-row">
+            <input
+              type="checkbox"
+              checked={statoEditor.showLineNumbers}
+              onchange={(e) =>
+                void salvaEditor({
+                  showLineNumbers: (e.currentTarget as HTMLInputElement)
+                    .checked,
+                })}
+            />
+            <span>Mostra i numeri di riga nel gutter</span>
+          </label>
+        </div>
+
+        <div class="campo">
+          <span class="campo-label">Evidenzia riga attiva</span>
+          <label class="toggle-row">
+            <input
+              type="checkbox"
+              checked={statoEditor.highlightActiveLine}
+              onchange={(e) =>
+                void salvaEditor({
+                  highlightActiveLine: (e.currentTarget as HTMLInputElement)
+                    .checked,
+                })}
+            />
+            <span>Sfondo leggero sulla riga sotto il cursore</span>
+          </label>
         </div>
       {:else if sezione === "sicurezza"}
         <h3>Sicurezza</h3>
@@ -2052,6 +2174,41 @@
     opacity: 0.55;
   }
 
+  /* M10 — controlli sezione Editor */
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+  }
+
+  .slider-row input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent-team);
+  }
+
+  .slider-value {
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-sm);
+    color: var(--text-strong);
+    min-width: 60px;
+    text-align: right;
+  }
+
+  .radio-row {
+    display: flex;
+    gap: var(--sp-3);
+  }
+
+  .radio-row label,
+  .toggle-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--fs-sm);
+    color: var(--text-default);
+    cursor: pointer;
+  }
+
   .campo-label {
     font-size: var(--fs-sm);
     color: var(--text-default);
@@ -2101,26 +2258,6 @@
     margin: 0;
     font-size: var(--fs-xs);
     color: var(--text-muted);
-  }
-
-  .placeholder-card {
-    padding: var(--sp-3);
-    background: var(--bg-input);
-    border: 1px dashed var(--border-subtle);
-    border-radius: var(--radius-md);
-  }
-
-  .placeholder-card strong {
-    display: block;
-    color: var(--text-strong);
-    margin-bottom: 4px;
-    font-size: var(--fs-md);
-  }
-
-  .placeholder-card p {
-    margin: 0;
-    color: var(--text-muted);
-    font-size: var(--fs-sm);
   }
 
   input[type="range"] {

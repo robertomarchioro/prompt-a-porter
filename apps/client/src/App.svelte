@@ -25,6 +25,7 @@
   import {
     statoTema,
     caricaTemaTono,
+    caricaEditor,
     applicaThemeTone,
   } from "$lib/stores/preferenze.svelte";
 
@@ -39,6 +40,7 @@
   // adeguarsi al sistema in tempo reale.
   onMount(() => {
     void caricaTemaTono();
+    void caricaEditor();
 
     let mq: MediaQueryList | null = null;
     let onSystemChange: ((e: MediaQueryListEvent) => void) | null = null;

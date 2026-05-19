@@ -55,6 +55,32 @@ pub struct Preferenze {
     /// Vedi docs/utente/auto-update.md §"Come disabilitare il check".
     #[serde(default = "default_updater_abilitato")]
     pub updater_abilitato: bool,
+    /// M10 — Editor: ritardo autosave in millisecondi dopo l'ultima
+    /// modifica del body. Range UI 500-5000ms (clampato lato Svelte).
+    /// Default 2000ms = 2s (storico hardcoded fino a v0.8.11).
+    #[serde(default = "default_autosave_delay_ms")]
+    pub autosave_delay_ms: u32,
+    /// M10 — Editor: line wrapping (soft wrap) CodeMirror. Default true
+    /// (piu' adatto a markdown e prompt body). Quando false, lo scroll
+    /// orizzontale e' attivo.
+    #[serde(default = "default_line_wrapping")]
+    pub line_wrapping: bool,
+    /// M10 — Editor: numero di spazi per livello di indent CodeMirror.
+    /// Valori ammessi: 2 o 4 (preferenza personale). Default 2.
+    #[serde(default = "default_indent_size")]
+    pub indent_size: u8,
+    /// M10 — Editor: dimensione font in pixel. Range UI 12-20.
+    /// Default 13 (coerente con il valore CSS storico).
+    #[serde(default = "default_font_size")]
+    pub font_size: u8,
+    /// M10 — Editor: mostra i numeri di riga nel gutter sinistro.
+    /// Default true.
+    #[serde(default = "default_show_line_numbers")]
+    pub show_line_numbers: bool,
+    /// M10 — Editor: evidenzia la riga sotto il cursore. Default false
+    /// (riduce rumore visivo su body brevi).
+    #[serde(default)]
+    pub highlight_active_line: bool,
 }
 
 fn default_updater_abilitato() -> bool {
@@ -71,6 +97,26 @@ fn default_ricerca_alpha() -> f64 {
 
 fn default_idle_unload_secondi() -> u32 {
     300
+}
+
+fn default_autosave_delay_ms() -> u32 {
+    2000
+}
+
+fn default_line_wrapping() -> bool {
+    true
+}
+
+fn default_indent_size() -> u8 {
+    2
+}
+
+fn default_font_size() -> u8 {
+    13
+}
+
+fn default_show_line_numbers() -> bool {
+    true
 }
 
 impl Default for Preferenze {
@@ -93,6 +139,12 @@ impl Default for Preferenze {
             idle_unload_secondi: 300,
             debug_log_abilitato: false,
             updater_abilitato: true,
+            autosave_delay_ms: 2000,
+            line_wrapping: true,
+            indent_size: 2,
+            font_size: 13,
+            show_line_numbers: true,
+            highlight_active_line: false,
         }
     }
 }
@@ -175,6 +227,12 @@ mod test {
             idle_unload_secondi: 600,
             debug_log_abilitato: false,
             updater_abilitato: true,
+            autosave_delay_ms: 2000,
+            line_wrapping: true,
+            indent_size: 2,
+            font_size: 13,
+            show_line_numbers: true,
+            highlight_active_line: false,
         };
 
         let json = serde_json::to_string_pretty(&prefs).unwrap();
@@ -194,6 +252,12 @@ mod test {
         assert!(!prefs.onboarding_completato);
         assert_eq!(prefs.idle_unload_secondi, 300);
         assert!(prefs.updater_abilitato);
+        assert_eq!(prefs.autosave_delay_ms, 2000);
+        assert!(prefs.line_wrapping);
+        assert_eq!(prefs.indent_size, 2);
+        assert_eq!(prefs.font_size, 13);
+        assert!(prefs.show_line_numbers);
+        assert!(!prefs.highlight_active_line);
     }
 
     #[test]
@@ -235,6 +299,12 @@ mod test {
             idle_unload_secondi: 600,
             debug_log_abilitato: true,
             updater_abilitato: false,
+            autosave_delay_ms: 1500,
+            line_wrapping: false,
+            indent_size: 4,
+            font_size: 16,
+            show_line_numbers: false,
+            highlight_active_line: true,
         };
         salva_pure(dir.path(), &prefs).unwrap();
         let letto = carica_pure(&dir.path().join("preferenze.json")).unwrap();
@@ -244,6 +314,12 @@ mod test {
         assert_eq!(letto.idle_unload_secondi, 600);
         assert!(letto.debug_log_abilitato);
         assert!(!letto.updater_abilitato);
+        assert_eq!(letto.autosave_delay_ms, 1500);
+        assert!(!letto.line_wrapping);
+        assert_eq!(letto.indent_size, 4);
+        assert_eq!(letto.font_size, 16);
+        assert!(!letto.show_line_numbers);
+        assert!(letto.highlight_active_line);
     }
 
     #[test]
