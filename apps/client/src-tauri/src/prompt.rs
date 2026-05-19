@@ -1,3 +1,4 @@
+use rusqlite::Connection;
 use serde::Serialize;
 use tauri::State;
 
@@ -43,47 +44,49 @@ fn sanitizza_fts(query: &str) -> String {
         .join(" ")
 }
 
+pub fn cerca_pure(conn: &Connection, query: &str) -> Result<Vec<PromptRisultato>, PapErrore> {
+    if query.trim().is_empty() {
+        let mut stmt = conn.prepare(
+            "SELECT Id, Title, Description, Body, Visibility, IsFavorite, UseCount
+             FROM Prompts
+             WHERE DeletedAt IS NULL
+             ORDER BY COALESCE(LastUsedAt, UpdatedAt) DESC
+             LIMIT 20",
+        )?;
+        let risultati: Vec<PromptRisultato> = stmt
+            .query_map([], riga_a_prompt)?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(risultati)
+    } else {
+        let fts = sanitizza_fts(query);
+        if fts.is_empty() {
+            return Ok(vec![]);
+        }
+        let mut stmt = conn.prepare(
+            "SELECT f.PromptId, p.Title, p.Description, p.Body,
+                    p.Visibility, p.IsFavorite, p.UseCount
+             FROM PromptsFts f
+             JOIN Prompts p ON f.PromptId = p.Id
+             WHERE PromptsFts MATCH ?1
+             AND p.DeletedAt IS NULL
+             ORDER BY rank
+             LIMIT 20",
+        )?;
+        let risultati: Vec<PromptRisultato> = stmt
+            .query_map([&fts], riga_a_prompt)?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(risultati)
+    }
+}
+
 #[tauri::command]
 pub fn prompt_cerca(
     query: String,
     state: State<'_, VaultState>,
 ) -> Result<Vec<PromptRisultato>, PapErrore> {
-    state.with_conn(|conn| {
-        if query.trim().is_empty() {
-            let mut stmt = conn.prepare(
-                "SELECT Id, Title, Description, Body, Visibility, IsFavorite, UseCount
-                 FROM Prompts
-                 WHERE DeletedAt IS NULL
-                 ORDER BY COALESCE(LastUsedAt, UpdatedAt) DESC
-                 LIMIT 20",
-            )?;
-            let risultati: Vec<PromptRisultato> = stmt
-                .query_map([], riga_a_prompt)?
-                .filter_map(|r| r.ok())
-                .collect();
-            Ok(risultati)
-        } else {
-            let fts = sanitizza_fts(&query);
-            if fts.is_empty() {
-                return Ok(vec![]);
-            }
-            let mut stmt = conn.prepare(
-                "SELECT f.PromptId, p.Title, p.Description, p.Body,
-                        p.Visibility, p.IsFavorite, p.UseCount
-                 FROM PromptsFts f
-                 JOIN Prompts p ON f.PromptId = p.Id
-                 WHERE PromptsFts MATCH ?1
-                 AND p.DeletedAt IS NULL
-                 ORDER BY rank
-                 LIMIT 20",
-            )?;
-            let risultati: Vec<PromptRisultato> = stmt
-                .query_map([&fts], riga_a_prompt)?
-                .filter_map(|r| r.ok())
-                .collect();
-            Ok(risultati)
-        }
-    })
+    state.with_conn(|conn| cerca_pure(conn, &query))
 }
 
 #[cfg(test)]
@@ -177,5 +180,48 @@ mod test {
             .collect();
         assert_eq!(risultati.len(), 1);
         assert_eq!(risultati[0].titolo, "Email marketing");
+    }
+
+    fn db_test() -> Connection {
+        crate::embeddings_store::registra_auto_extension();
+        let conn = Connection::open_in_memory().unwrap();
+        crate::migrazione::esegui_migrazioni(&conn).unwrap();
+        crate::libreria::assicura_dati_base(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn cerca_pure_query_vuota_ritorna_recenti() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version, CreatedAt, UpdatedAt)
+             VALUES ('p1', 'ws-personale', 'usr-locale', 'Recente', 'b', 'private', 1, datetime('now'), datetime('now'))",
+            [],
+        ).unwrap();
+        crate::editor::ricostruisci_fts(&conn).unwrap();
+        let out = cerca_pure(&conn, "").unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].titolo, "Recente");
+    }
+
+    #[test]
+    fn cerca_pure_solo_caratteri_speciali_ritorna_vec_vuoto() {
+        let conn = db_test();
+        crate::editor::ricostruisci_fts(&conn).unwrap();
+        let out = cerca_pure(&conn, "@#$%").unwrap();
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn cerca_pure_match_via_fts() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version, CreatedAt, UpdatedAt)
+             VALUES ('p1', 'ws-personale', 'usr-locale', 'Email marketing', 'Scrivi email', 'private', 1, datetime('now'), datetime('now'))",
+            [],
+        ).unwrap();
+        crate::editor::ricostruisci_fts(&conn).unwrap();
+        let out = cerca_pure(&conn, "email").unwrap();
+        assert_eq!(out.len(), 1);
     }
 }

@@ -72,14 +72,14 @@ jobs:
       - name: Installa cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      # Threshold floor 70% anti-regressione (Step 10 Fase 3 + v0.7.0 Step 1).
-      # Coverage attuale ~74% line post v0.7 Step 1 (import_export 79%,
-      # embeddings 41%). Roadmap: portare a 78% in v0.8 focalizzando sul
-      # refactor HTTP mock di embeddings.rs (resta sotto 50%).
+      # Threshold floor 80% anti-regressione (M7 v1.0 PR-6).
+      # Coverage attuale ~80.2% line post M7 PR-1..PR-6 (vault 91%, audit 93%,
+      # cartelle 90%, libreria 92%, preferenze 91%, prompt 84%).
+      # Embeddings/sync restano sotto soglia ma compensati dai moduli core.
       # Vedi docs/operativo/coverage.md.
       - name: Cargo test + coverage gate
         working-directory: apps/client/src-tauri
-        run: cargo llvm-cov --lib --summary-only --fail-under-lines 70
+        run: cargo llvm-cov --lib --summary-only --fail-under-lines 80
 
   # La build multi-OS dei bundle è in .github/workflows/release.yml,
   # triggerata da tag `v*` per evitare di consumare minuti su ogni PR.

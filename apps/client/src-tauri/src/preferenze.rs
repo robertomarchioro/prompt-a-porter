@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -111,15 +111,25 @@ impl PreferenzeState {
     }
 }
 
-#[tauri::command]
-pub fn preferenze_carica(state: State<'_, PreferenzeState>) -> Result<Preferenze, PapErrore> {
-    let path = state.file_path();
+pub fn carica_pure(path: &Path) -> Result<Preferenze, PapErrore> {
     if !path.exists() {
         return Ok(Preferenze::default());
     }
-    let json = fs::read_to_string(&path)?;
+    let json = fs::read_to_string(path)?;
     let prefs: Preferenze = serde_json::from_str(&json)?;
     Ok(prefs)
+}
+
+pub fn salva_pure(data_dir: &Path, preferenze: &Preferenze) -> Result<(), PapErrore> {
+    fs::create_dir_all(data_dir)?;
+    let json = serde_json::to_string_pretty(preferenze)?;
+    fs::write(data_dir.join("preferenze.json"), json)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn preferenze_carica(state: State<'_, PreferenzeState>) -> Result<Preferenze, PapErrore> {
+    carica_pure(&state.file_path())
 }
 
 #[tauri::command]
@@ -127,10 +137,7 @@ pub fn preferenze_salva(
     preferenze: Preferenze,
     state: State<'_, PreferenzeState>,
 ) -> Result<(), PapErrore> {
-    fs::create_dir_all(&state.data_dir)?;
-    let json = serde_json::to_string_pretty(&preferenze)?;
-    fs::write(state.file_path(), json)?;
-    Ok(())
+    salva_pure(&state.data_dir, &preferenze)
 }
 
 #[cfg(test)]
@@ -176,5 +183,91 @@ mod test {
         let letto: Preferenze = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(letto.profilo, "team");
         assert!(letto.onboarding_completato);
+    }
+
+    #[test]
+    fn carica_pure_file_inesistente_ritorna_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("preferenze.json");
+        let prefs = carica_pure(&path).unwrap();
+        assert_eq!(prefs.profilo, "personale");
+        assert!(!prefs.onboarding_completato);
+        assert_eq!(prefs.idle_unload_secondi, 300);
+        assert!(prefs.updater_abilitato);
+    }
+
+    #[test]
+    fn carica_pure_json_malformato_errore() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("preferenze.json");
+        fs::write(&path, "{ non json").unwrap();
+        assert!(carica_pure(&path).is_err());
+    }
+
+    #[test]
+    fn salva_pure_crea_dir_se_assente() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("sub").join("dir");
+        assert!(!sub.exists());
+        let prefs = Preferenze::default();
+        salva_pure(&sub, &prefs).unwrap();
+        assert!(sub.join("preferenze.json").exists());
+    }
+
+    #[test]
+    fn round_trip_salva_carica_pure_preserva_valori() {
+        let dir = tempfile::tempdir().unwrap();
+        let prefs = Preferenze {
+            profilo: "team".to_string(),
+            hotkey: "Ctrl+Alt+P".to_string(),
+            tema: "light".to_string(),
+            tono: "slate".to_string(),
+            lingua: "en".to_string(),
+            onboarding_completato: true,
+            crea_prompt_esempio: false,
+            sync_server_url: "https://sync.example.com".to_string(),
+            sync_email: "test@example.com".to_string(),
+            sync_token: String::new(),
+            sync_intervallo_sec: 120,
+            sync_abilitato: true,
+            ricerca_semantica_abilitata: true,
+            ricerca_alpha: 0.7,
+            idle_unload_secondi: 600,
+            debug_log_abilitato: true,
+            updater_abilitato: false,
+        };
+        salva_pure(dir.path(), &prefs).unwrap();
+        let letto = carica_pure(&dir.path().join("preferenze.json")).unwrap();
+        assert_eq!(letto.profilo, "team");
+        assert_eq!(letto.hotkey, "Ctrl+Alt+P");
+        assert!(letto.onboarding_completato);
+        assert_eq!(letto.idle_unload_secondi, 600);
+        assert!(letto.debug_log_abilitato);
+        assert!(!letto.updater_abilitato);
+    }
+
+    #[test]
+    fn carica_pure_applica_default_su_campi_mancanti() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("preferenze.json");
+        // JSON con solo i campi base (no sync_*, no updater_*).
+        fs::write(
+            &path,
+            r#"{
+                "profilo": "personale",
+                "hotkey": "Ctrl+Shift+P",
+                "tema": "dark",
+                "tono": "zinc",
+                "lingua": "it",
+                "onboarding_completato": true,
+                "crea_prompt_esempio": false
+            }"#,
+        )
+        .unwrap();
+        let prefs = carica_pure(&path).unwrap();
+        assert_eq!(prefs.sync_intervallo_sec, 60);
+        assert_eq!(prefs.ricerca_alpha, 0.5);
+        assert_eq!(prefs.idle_unload_secondi, 300);
+        assert!(prefs.updater_abilitato);
     }
 }
