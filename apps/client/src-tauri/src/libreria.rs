@@ -127,29 +127,29 @@ pub fn assicura_dati_base(conn: &Connection) -> Result<(), PapErrore> {
     Ok(())
 }
 
-#[tauri::command]
-pub fn libreria_conteggi(state: State<'_, VaultState>) -> Result<ConteggiViste, PapErrore> {
-    state.with_conn(|conn| {
-        let q = |cond: &str| -> Result<i64, PapErrore> {
-            let sql = format!("SELECT COUNT(*) FROM Prompts WHERE DeletedAt IS NULL{cond}");
-            Ok(conn.query_row(&sql, [], |r| r.get(0))?)
-        };
-        Ok(ConteggiViste {
-            tutti: q("")?,
-            preferiti: q(" AND IsFavorite = 1")?,
-            privati: q(" AND Visibility = 'private'")?,
-            team: q(" AND Visibility = 'workspace'")?,
-        })
+pub fn conteggi_pure(conn: &Connection) -> Result<ConteggiViste, PapErrore> {
+    let q = |cond: &str| -> Result<i64, PapErrore> {
+        let sql = format!("SELECT COUNT(*) FROM Prompts WHERE DeletedAt IS NULL{cond}");
+        Ok(conn.query_row(&sql, [], |r| r.get(0))?)
+    };
+    Ok(ConteggiViste {
+        tutti: q("")?,
+        preferiti: q(" AND IsFavorite = 1")?,
+        privati: q(" AND Visibility = 'private'")?,
+        team: q(" AND Visibility = 'workspace'")?,
     })
 }
 
 #[tauri::command]
-pub fn libreria_lista(
-    filtro: FiltroLista,
-    state: State<'_, VaultState>,
+pub fn libreria_conteggi(state: State<'_, VaultState>) -> Result<ConteggiViste, PapErrore> {
+    state.with_conn(conteggi_pure)
+}
+
+pub fn lista_pure(
+    conn: &Connection,
+    filtro: &FiltroLista,
 ) -> Result<Vec<PromptCard>, PapErrore> {
-    state.with_conn(|conn| {
-        let cerca_param: Option<String> = filtro
+    let cerca_param: Option<String> = filtro
             .cerca
             .as_ref()
             .filter(|s| !s.trim().is_empty())
@@ -246,11 +246,48 @@ pub fn libreria_lista(
             .filter_map(|r| r.ok())
             .collect();
 
-        for card in &mut cards {
-            card.tags = carica_tags(conn, &card.id)?;
-        }
-        Ok(cards)
-    })
+    for card in &mut cards {
+        card.tags = carica_tags(conn, &card.id)?;
+    }
+    Ok(cards)
+}
+
+#[tauri::command]
+pub fn libreria_lista(
+    filtro: FiltroLista,
+    state: State<'_, VaultState>,
+) -> Result<Vec<PromptCard>, PapErrore> {
+    state.with_conn(|conn| lista_pure(conn, &filtro))
+}
+
+pub fn dettaglio_pure(conn: &Connection, id: &str) -> Result<PromptDettaglio, PapErrore> {
+    let mut det = conn.query_row(
+        "SELECT Id, Title, Description, Body, Visibility, TargetModel,
+                FolderId, IsFavorite, UseCount, CreatedAt, UpdatedAt, LastUsedAt,
+                ParentPromptId
+         FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
+        [id],
+        |row| {
+            Ok(PromptDettaglio {
+                id: row.get(0)?,
+                titolo: row.get(1)?,
+                descrizione: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                body: row.get(3)?,
+                visibilita: row.get(4)?,
+                target_model: row.get::<_, Option<String>>(5)?.unwrap_or_default(),
+                folder_id: row.get::<_, Option<String>>(6)?,
+                preferito: row.get::<_, i64>(7)? != 0,
+                uso_count: row.get(8)?,
+                creato_a: row.get::<_, Option<String>>(9)?.unwrap_or_default(),
+                aggiornato_a: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
+                ultimo_uso: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
+                tags: vec![],
+                parent_prompt_id: row.get::<_, Option<String>>(12)?,
+            })
+        },
+    )?;
+    det.tags = carica_tags(conn, &det.id)?;
+    Ok(det)
 }
 
 #[tauri::command]
@@ -258,35 +295,23 @@ pub fn libreria_dettaglio(
     id: String,
     state: State<'_, VaultState>,
 ) -> Result<PromptDettaglio, PapErrore> {
-    state.with_conn(|conn| {
-        let mut det = conn.query_row(
-            "SELECT Id, Title, Description, Body, Visibility, TargetModel,
-                    FolderId, IsFavorite, UseCount, CreatedAt, UpdatedAt, LastUsedAt,
-                    ParentPromptId
-             FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
-            [&id],
-            |row| {
-                Ok(PromptDettaglio {
-                    id: row.get(0)?,
-                    titolo: row.get(1)?,
-                    descrizione: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
-                    body: row.get(3)?,
-                    visibilita: row.get(4)?,
-                    target_model: row.get::<_, Option<String>>(5)?.unwrap_or_default(),
-                    folder_id: row.get::<_, Option<String>>(6)?,
-                    preferito: row.get::<_, i64>(7)? != 0,
-                    uso_count: row.get(8)?,
-                    creato_a: row.get::<_, Option<String>>(9)?.unwrap_or_default(),
-                    aggiornato_a: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
-                    ultimo_uso: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
-                    tags: vec![],
-                    parent_prompt_id: row.get::<_, Option<String>>(12)?,
-                })
-            },
-        )?;
-        det.tags = carica_tags(conn, &det.id)?;
-        Ok(det)
-    })
+    state.with_conn(|conn| dettaglio_pure(conn, &id))
+}
+
+pub fn toggle_preferito_pure(conn: &Connection, id: &str) -> Result<bool, PapErrore> {
+    let attuale: i64 = conn.query_row(
+        "SELECT IsFavorite FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
+        [id],
+        |r| r.get(0),
+    )?;
+    let nuovo = if attuale != 0 { 0 } else { 1 };
+    conn.execute(
+        "UPDATE Prompts SET IsFavorite = ?1, UpdatedAt = datetime('now') WHERE Id = ?2",
+        rusqlite::params![nuovo, id],
+    )?;
+    let meta = if nuovo != 0 { "aggiunto" } else { "rimosso" };
+    crate::audit::registra(conn, "prompt.preferito", "Prompt", id, Some(meta));
+    Ok(nuovo != 0)
 }
 
 #[tauri::command]
@@ -294,43 +319,31 @@ pub fn libreria_toggle_preferito(
     id: String,
     state: State<'_, VaultState>,
 ) -> Result<bool, PapErrore> {
-    state.with_conn(|conn| {
-        let attuale: i64 = conn.query_row(
-            "SELECT IsFavorite FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
-            [&id],
-            |r| r.get(0),
-        )?;
-        let nuovo = if attuale != 0 { 0 } else { 1 };
-        conn.execute(
-            "UPDATE Prompts SET IsFavorite = ?1, UpdatedAt = datetime('now') WHERE Id = ?2",
-            rusqlite::params![nuovo, id],
-        )?;
-        let meta = if nuovo != 0 { "aggiunto" } else { "rimosso" };
-        crate::audit::registra(conn, "prompt.preferito", "Prompt", &id, Some(meta));
-        Ok(nuovo != 0)
-    })
+    state.with_conn(|conn| toggle_preferito_pure(conn, &id))
+}
+
+pub fn tag_lista_pure(conn: &Connection) -> Result<Vec<TagInfo>, PapErrore> {
+    let mut stmt = conn.prepare(
+        "SELECT Id, Name, COALESCE(Color, '')
+         FROM Tags WHERE DeletedAt IS NULL
+         ORDER BY Name COLLATE NOCASE ASC",
+    )?;
+    let tags = stmt
+        .query_map([], |row| {
+            Ok(TagInfo {
+                id: row.get(0)?,
+                nome: row.get(1)?,
+                colore: row.get(2)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(tags)
 }
 
 #[tauri::command]
 pub fn libreria_tag_lista(state: State<'_, VaultState>) -> Result<Vec<TagInfo>, PapErrore> {
-    state.with_conn(|conn| {
-        let mut stmt = conn.prepare(
-            "SELECT Id, Name, COALESCE(Color, '')
-             FROM Tags WHERE DeletedAt IS NULL
-             ORDER BY Name COLLATE NOCASE ASC",
-        )?;
-        let tags = stmt
-            .query_map([], |row| {
-                Ok(TagInfo {
-                    id: row.get(0)?,
-                    nome: row.get(1)?,
-                    colore: row.get(2)?,
-                })
-            })?
-            .filter_map(|r| r.ok())
-            .collect();
-        Ok(tags)
-    })
+    state.with_conn(tag_lista_pure)
 }
 
 #[cfg(test)]
@@ -727,5 +740,177 @@ mod test {
             )
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    fn filtro_default(vista: &str) -> FiltroLista {
+        FiltroLista {
+            vista: vista.to_string(),
+            tag_id: None,
+            cerca: None,
+            ordine: "recente".to_string(),
+            target_model: None,
+            folder_id: None,
+        }
+    }
+
+    #[test]
+    fn conteggi_pure_vuoto() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        let c = conteggi_pure(&conn).unwrap();
+        assert_eq!(c.tutti, 0);
+        assert_eq!(c.preferiti, 0);
+        assert_eq!(c.privati, 0);
+        assert_eq!(c.team, 0);
+    }
+
+    #[test]
+    fn conteggi_pure_separa_per_visibilita_e_preferiti() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        inserisci_prompt(&conn, "a", "A", "private", 1, None);
+        inserisci_prompt(&conn, "b", "B", "private", 0, None);
+        inserisci_prompt(&conn, "c", "C", "workspace", 1, None);
+        let c = conteggi_pure(&conn).unwrap();
+        assert_eq!(c.tutti, 3);
+        assert_eq!(c.preferiti, 2);
+        assert_eq!(c.privati, 2);
+        assert_eq!(c.team, 1);
+    }
+
+    #[test]
+    fn lista_pure_default_ritorna_tutti_attivi() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        inserisci_prompt(&conn, "p1", "Uno", "private", 0, None);
+        inserisci_prompt(&conn, "p2", "Due", "workspace", 0, None);
+        let cards = lista_pure(&conn, &filtro_default("tutti")).unwrap();
+        assert_eq!(cards.len(), 2);
+    }
+
+    #[test]
+    fn lista_pure_vista_preferiti_filtra() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        inserisci_prompt(&conn, "p1", "Fav", "private", 1, None);
+        inserisci_prompt(&conn, "p2", "NoFav", "private", 0, None);
+        let cards = lista_pure(&conn, &filtro_default("preferiti")).unwrap();
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0].id, "p1");
+    }
+
+    #[test]
+    fn lista_pure_cerca_match_title() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        inserisci_prompt(&conn, "p1", "Reclami clienti", "private", 0, None);
+        inserisci_prompt(&conn, "p2", "Altro", "private", 0, None);
+        let mut f = filtro_default("tutti");
+        f.cerca = Some("clienti".to_string());
+        let cards = lista_pure(&conn, &f).unwrap();
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0].id, "p1");
+    }
+
+    #[test]
+    fn lista_pure_target_model_filtra() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        inserisci_prompt(&conn, "p1", "Claude", "private", 0, Some("claude-sonnet"));
+        inserisci_prompt(&conn, "p2", "GPT", "private", 0, Some("gpt-4"));
+        let mut f = filtro_default("tutti");
+        f.target_model = Some("claude-sonnet".to_string());
+        let cards = lista_pure(&conn, &f).unwrap();
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0].id, "p1");
+    }
+
+    #[test]
+    fn lista_pure_body_preview_troncato_a_800() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        let body = "x".repeat(2000);
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body,
+             Visibility, Version, CreatedAt, UpdatedAt)
+             VALUES ('p1', 'ws-personale', 'usr-locale', 'Lungo', ?1,
+             'private', 1, datetime('now'), datetime('now'))",
+            rusqlite::params![body],
+        )
+        .unwrap();
+        let cards = lista_pure(&conn, &filtro_default("tutti")).unwrap();
+        assert_eq!(cards[0].body_preview.len(), 800);
+    }
+
+    #[test]
+    fn dettaglio_pure_ritorna_prompt_e_tag() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version,
+             CreatedAt, UpdatedAt)
+             VALUES ('p1', 'ws-personale', 'usr-locale', 'Hello', 'world', 'private', 1,
+             datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO Tags (Id, WorkspaceId, Name, CreatedAt, UpdatedAt)
+             VALUES ('t1', 'ws-personale', 'rust', datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO PromptTags (PromptId, TagId) VALUES ('p1', 't1')",
+            [],
+        )
+        .unwrap();
+        let det = dettaglio_pure(&conn, "p1").unwrap();
+        assert_eq!(det.id, "p1");
+        assert_eq!(det.titolo, "Hello");
+        assert_eq!(det.body, "world");
+        assert_eq!(det.tags.len(), 1);
+        assert_eq!(det.tags[0].nome, "rust");
+    }
+
+    #[test]
+    fn dettaglio_pure_prompt_inesistente_errore() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        assert!(dettaglio_pure(&conn, "non-esiste").is_err());
+    }
+
+    #[test]
+    fn toggle_preferito_pure_inverte_stato() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        inserisci_prompt(&conn, "p1", "T", "private", 0, None);
+        let nuovo = toggle_preferito_pure(&conn, "p1").unwrap();
+        assert!(nuovo);
+        let nuovo = toggle_preferito_pure(&conn, "p1").unwrap();
+        assert!(!nuovo);
+    }
+
+    #[test]
+    fn tag_lista_pure_ordina_e_filtra_eliminati() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO Tags (Id, WorkspaceId, Name, CreatedAt, UpdatedAt)
+             VALUES ('t1', 'ws-personale', 'zebra', datetime('now'), datetime('now')),
+                    ('t2', 'ws-personale', 'alpha', datetime('now'), datetime('now')),
+                    ('t3', 'ws-personale', 'cancel', datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE Tags SET DeletedAt = datetime('now') WHERE Id = 't3'",
+            [],
+        )
+        .unwrap();
+        let tags = tag_lista_pure(&conn).unwrap();
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags[0].nome, "alpha");
+        assert_eq!(tags[1].nome, "zebra");
     }
 }
