@@ -1,5 +1,48 @@
 # Changelog — Prompt a Porter
 
+## v0.8.11 — v1.0 M2-M8: quality gate finali + documentazione utente (2026-05-19)
+
+> Release di chiusura della roadmap v1.0 "Personale". Sette milestone roadmap (M2-M8) consolidate in una singola release: a11y, recupero UI, sintassi import evoluta, editor doppia vista, markdown import/export, gate di coverage e documentazione utente completa.
+
+### Feature
+
+- **Sintassi `{{import}}` evoluta (M4)**: `version=N` per importare una versione specifica dal repository di versioni, `with k=v` per override dei segnaposti del prompt importato. Combinabile: `{{import "path" version=3 with tono=formale}}`. Intellisense CodeMirror sui titoli dei prompt durante la digitazione (#209-211).
+- **Editor doppia vista Sorgente/Compilato (M5)**: split-view nell'editor con form valori e compilazione inline live via `prompt_compila_inline`. Pattern dual-source body consolidato (#213-214).
+- **Markdown import/export (M6)**: parser front-matter YAML + walker ricorsivo di cartelle `.md`; export bulk vault/cartella → zip Deflated. Compatibile con Obsidian/Foam (#216-219).
+- **Recupero UI Fase 4 (M3)**: backend `prompt_promuovi_variante` nuovo + ripristino feature UI sparite nel redesign v0.8 (#203-207).
+
+### Qualità
+
+- **A11y svelte-check con `--fail-on-warnings` (M2)**: 18 warning → 0; gate CI attivo (#197-202).
+- **Coverage gap chiusi (M7)** — gate CI di tutti i target raggiunti (#221-226):
+  - Rust client `apps/client/src-tauri/`: **74.14% → 80.24%** line, gate alzato 70 → 80.
+  - TypeScript client `lib/*.ts`: **37.78% → 81.05%**, gate 70 attivato (`vitest --coverage`).
+  - MCP server `lib/*.ts`: **0% → 100%** su funzioni pure estratte, gate 80 attivato.
+  - Pattern consolidato: `_pure(&Connection)` / `_impl(&VaultState)` per refactor Tauri command verso unit-test diretto (10 moduli toccati).
+
+### Documentazione utente (M8)
+
+Nuovi documenti in `docs/utente/` (#228-232):
+
+- `getting-started.md` — installazione cross-platform, onboarding 3-step, primo prompt e prima compilazione.
+- `glossario-sintassi.md` — reference unificato: `{{nome}}`, `{{globale nome}}`, `{{import "path" version=N with k=v}}`, 11 codici linter LEN/PH/PII/STY/IMP.
+- `scorciatoie-tastiera.md` — tabelle complete (global, shell, palette, modali, editor CodeMirror, autocomplete M4, tray) + correzione riferimenti errati a `Ctrl+N`/`Ctrl+S` (non esistono in v1.0; autosave 2s + bottone `+ Nuovo`).
+- `troubleshooting.md` — FAQ: SmartScreen, Gatekeeper, AppImage/FUSE, password vault non recuperabile, hotkey su macOS/Linux Wayland, segnaposti malformati, import non risolti, sync, backup, debug log.
+- `casi-uso/` con 7 ricette pronte all'uso: email-professionale, code-review, summarize-articolo, riscrittura-tono, brainstorm-idee, traduzione-tecnica, commit-message. Ogni ricetta include prompt completo, esempi di input/output, varianti, anti-pattern.
+- `docs/utente/README.md` indice riorganizzato con sezione "Inizio rapido" per nuovi utenti.
+
+### Stato roadmap v1.0
+
+Con questa release, tutte le 8 milestone della roadmap "v1.0 Personale" (`docs/roadmap/v1.0-personale.md`) sono completate: M1 (signing + updater) ✅, M2 (a11y) ✅, M3 (recupero UI) ✅, M4 (import evoluta) ✅, M5 (editor doppia vista) ✅, M6 (markdown) ✅, M7 (coverage) ✅, M8 (docs) ✅.
+
+### Numeri
+
+- **~35 PR** mergiate (#197-#232 incl. doc/bump).
+- **578/578** test Rust passati, **157/157** TS client, **21/21** MCP.
+- Coverage gate finali: Rust **80%**, TS **70%**, MCP **80%**, svelte-check **0 warning**.
+
+---
+
 ## v0.8.10 — v1.0 M1: Authenticode signing + Tauri Updater attivi (2026-05-16)
 
 > Prima release pubblica con **codice firmato Authenticode** (Certum Code Signing Open Source) e **auto-update Tauri** funzionante. SmartScreen Windows mostra il publisher "Open Source Developer, Roberto Marchioro" invece di "Unknown publisher".
