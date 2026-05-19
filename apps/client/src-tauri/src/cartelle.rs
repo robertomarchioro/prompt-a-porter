@@ -119,32 +119,35 @@ fn calcola_path(conn: &Connection, parent_id: Option<&str>, nome: &str) -> Resul
 
 #[tauri::command]
 pub fn folder_lista(state: State<'_, VaultState>) -> Result<Vec<Cartella>, PapErrore> {
-    state.with_conn(|conn| {
-        let mut stmt = conn.prepare(
-            "SELECT f.Id, f.Name, f.Path, f.ParentFolderId,
-                    (SELECT COUNT(*) FROM Prompts p
-                     WHERE p.FolderId = f.Id AND p.DeletedAt IS NULL),
-                    f.CreatedAt, f.UpdatedAt
-             FROM Folders f
-             WHERE f.WorkspaceId = ?1 AND f.DeletedAt IS NULL
-             ORDER BY f.Path COLLATE NOCASE ASC",
-        )?;
-        let cartelle = stmt
-            .query_map([WORKSPACE_ID], |row| {
-                Ok(Cartella {
-                    id: row.get(0)?,
-                    nome: row.get(1)?,
-                    path: row.get(2)?,
-                    parent_folder_id: row.get(3)?,
-                    conteggio_prompt: row.get(4)?,
-                    creato_a: row.get(5)?,
-                    aggiornato_a: row.get(6)?,
-                })
-            })?
-            .filter_map(|r| r.ok())
-            .collect();
-        Ok(cartelle)
-    })
+    state.with_conn(lista_pure)
+}
+
+/// M7 PR-3: logica pura di `folder_lista`.
+pub(crate) fn lista_pure(conn: &Connection) -> Result<Vec<Cartella>, PapErrore> {
+    let mut stmt = conn.prepare(
+        "SELECT f.Id, f.Name, f.Path, f.ParentFolderId,
+                (SELECT COUNT(*) FROM Prompts p
+                 WHERE p.FolderId = f.Id AND p.DeletedAt IS NULL),
+                f.CreatedAt, f.UpdatedAt
+         FROM Folders f
+         WHERE f.WorkspaceId = ?1 AND f.DeletedAt IS NULL
+         ORDER BY f.Path COLLATE NOCASE ASC",
+    )?;
+    let cartelle = stmt
+        .query_map([WORKSPACE_ID], |row| {
+            Ok(Cartella {
+                id: row.get(0)?,
+                nome: row.get(1)?,
+                path: row.get(2)?,
+                parent_folder_id: row.get(3)?,
+                conteggio_prompt: row.get(4)?,
+                creato_a: row.get(5)?,
+                aggiornato_a: row.get(6)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(cartelle)
 }
 
 #[tauri::command]
@@ -152,25 +155,31 @@ pub fn folder_crea(
     dati: NuovaCartella,
     state: State<'_, VaultState>,
 ) -> Result<String, PapErrore> {
-    state.with_conn(|conn| {
-        let nome = nome_valido(&dati.nome)?;
-        let path = calcola_path(conn, dati.parent_folder_id.as_deref(), &nome)?;
-        let id = genera_id();
+    state.with_conn(|conn| crea_pure(conn, &dati))
+}
 
-        conn.execute(
-            "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![id, WORKSPACE_ID, dati.parent_folder_id, nome, path],
-        )
-        .map_err(|e| {
-            // Probabile violazione unique sibling name
-            PapErrore::Generico(format!("Impossibile creare cartella: {e}"))
-        })?;
+/// M7 PR-3: logica pura di `folder_crea`.
+pub(crate) fn crea_pure(
+    conn: &Connection,
+    dati: &NuovaCartella,
+) -> Result<String, PapErrore> {
+    let nome = nome_valido(&dati.nome)?;
+    let path = calcola_path(conn, dati.parent_folder_id.as_deref(), &nome)?;
+    let id = genera_id();
 
-        crate::audit::registra(conn, "folder.creato", "Folder", &id, Some(&path));
-        log::info!("Cartella creata: {path} (id {id})");
-        Ok(id)
-    })
+    conn.execute(
+        "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![id, WORKSPACE_ID, dati.parent_folder_id, nome, path],
+    )
+    .map_err(|e| {
+        // Probabile violazione unique sibling name
+        PapErrore::Generico(format!("Impossibile creare cartella: {e}"))
+    })?;
+
+    crate::audit::registra(conn, "folder.creato", "Folder", &id, Some(&path));
+    log::info!("Cartella creata: {path} (id {id})");
+    Ok(id)
 }
 
 fn rinomina_cascata(conn: &Connection, folder_id: &str, nuovo_nome: &str) -> Result<(), PapErrore> {
@@ -221,12 +230,18 @@ pub fn folder_rinomina(
     dati: RinominaCartella,
     state: State<'_, VaultState>,
 ) -> Result<(), PapErrore> {
-    state.with_conn(|conn| {
-        let nuovo_nome = nome_valido(&dati.nuovo_nome)?;
-        atomicamente(conn, |c| rinomina_cascata(c, &dati.id, &nuovo_nome))?;
-        crate::audit::registra(conn, "folder.rinominato", "Folder", &dati.id, Some(&nuovo_nome));
-        Ok(())
-    })
+    state.with_conn(|conn| rinomina_pure(conn, &dati))
+}
+
+/// M7 PR-3: logica pura di `folder_rinomina`.
+pub(crate) fn rinomina_pure(
+    conn: &Connection,
+    dati: &RinominaCartella,
+) -> Result<(), PapErrore> {
+    let nuovo_nome = nome_valido(&dati.nuovo_nome)?;
+    atomicamente(conn, |c| rinomina_cascata(c, &dati.id, &nuovo_nome))?;
+    crate::audit::registra(conn, "folder.rinominato", "Folder", &dati.id, Some(&nuovo_nome));
+    Ok(())
 }
 
 fn sposta_cascata(
@@ -297,13 +312,19 @@ pub fn folder_sposta(
     dati: SpostaCartella,
     state: State<'_, VaultState>,
 ) -> Result<(), PapErrore> {
-    state.with_conn(|conn| {
-        atomicamente(conn, |c| {
-            sposta_cascata(c, &dati.id, dati.nuovo_parent_id.as_deref())
-        })?;
-        crate::audit::registra(conn, "folder.spostato", "Folder", &dati.id, None);
-        Ok(())
-    })
+    state.with_conn(|conn| sposta_pure(conn, &dati))
+}
+
+/// M7 PR-3: logica pura di `folder_sposta`.
+pub(crate) fn sposta_pure(
+    conn: &Connection,
+    dati: &SpostaCartella,
+) -> Result<(), PapErrore> {
+    atomicamente(conn, |c| {
+        sposta_cascata(c, &dati.id, dati.nuovo_parent_id.as_deref())
+    })?;
+    crate::audit::registra(conn, "folder.spostato", "Folder", &dati.id, None);
+    Ok(())
 }
 
 /// Re-pack atomico SortOrder dei siblings di una cartella.
@@ -463,72 +484,79 @@ pub fn prompt_riordina(
 
 #[tauri::command]
 pub fn folder_elimina(id: String, state: State<'_, VaultState>) -> Result<(), PapErrore> {
-    // Soft-delete: marca DeletedAt sulla cartella e su tutti i discendenti.
-    // I prompt dentro restano (con FolderId puntante a una cartella deleted),
-    // ma il filtro libreria_lista li mostrerà comunque (non filtra per Folders.DeletedAt).
-    // Nota: per semplicità v0.2.1 NON spostiamo i prompt a root — l'UX di
-    // "elimina cartella" dovrà avvisare. Si può raffinare in PR successiva.
-    state.with_conn(|conn| {
-        let path: String = conn.query_row(
-            "SELECT Path FROM Folders WHERE Id = ?1 AND DeletedAt IS NULL",
-            [&id],
-            |r| r.get(0),
-        )?;
-        let prefisso = format!("{path}/");
-        // Self + discendenti (tutti quelli con path che inizia con `path/`)
-        conn.execute(
-            "UPDATE Folders
-             SET DeletedAt = datetime('now'), UpdatedAt = datetime('now')
-             WHERE (Id = ?1 OR Path LIKE ?2 || '%') AND DeletedAt IS NULL",
-            params![id, prefisso],
-        )?;
-        // I prompt dentro la cartella eliminata (e discendenti) tornano a root.
-        conn.execute(
-            "UPDATE Prompts
-             SET FolderId = NULL, UpdatedAt = datetime('now')
-             WHERE FolderId IN (
-                 SELECT Id FROM Folders
-                 WHERE (Id = ?1 OR Path LIKE ?2 || '%')
-             )",
-            params![id, prefisso],
-        )?;
-        crate::audit::registra(conn, "folder.eliminato", "Folder", &id, Some(&path));
-        log::info!("Cartella eliminata (soft): {path}");
-        Ok(())
-    })
+    state.with_conn(|conn| elimina_pure(conn, &id))
+}
+
+/// M7 PR-3: logica pura di `folder_elimina`.
+///
+/// Soft-delete: marca DeletedAt sulla cartella e su tutti i discendenti.
+/// I prompt dentro tornano a root (FolderId = NULL).
+pub(crate) fn elimina_pure(conn: &Connection, id: &str) -> Result<(), PapErrore> {
+    let path: String = conn.query_row(
+        "SELECT Path FROM Folders WHERE Id = ?1 AND DeletedAt IS NULL",
+        [id],
+        |r| r.get(0),
+    )?;
+    let prefisso = format!("{path}/");
+    // Self + discendenti (tutti quelli con path che inizia con `path/`)
+    conn.execute(
+        "UPDATE Folders
+         SET DeletedAt = datetime('now'), UpdatedAt = datetime('now')
+         WHERE (Id = ?1 OR Path LIKE ?2 || '%') AND DeletedAt IS NULL",
+        params![id, prefisso],
+    )?;
+    // I prompt dentro la cartella eliminata (e discendenti) tornano a root.
+    conn.execute(
+        "UPDATE Prompts
+         SET FolderId = NULL, UpdatedAt = datetime('now')
+         WHERE FolderId IN (
+             SELECT Id FROM Folders
+             WHERE (Id = ?1 OR Path LIKE ?2 || '%')
+         )",
+        params![id, prefisso],
+    )?;
+    crate::audit::registra(conn, "folder.eliminato", "Folder", id, Some(&path));
+    log::info!("Cartella eliminata (soft): {path}");
+    Ok(())
 }
 
 #[tauri::command]
 pub fn prompt_sposta(dati: SpostaPrompt, state: State<'_, VaultState>) -> Result<(), PapErrore> {
-    state.with_conn(|conn| {
-        // Verifica esistenza cartella se specificata.
-        if let Some(fid) = &dati.folder_id {
-            let exists: bool = conn
-                .query_row(
-                    "SELECT 1 FROM Folders WHERE Id = ?1 AND DeletedAt IS NULL",
-                    [fid],
-                    |_| Ok(true),
-                )
-                .unwrap_or(false);
-            if !exists {
-                return Err(PapErrore::Generico("Cartella destinazione non valida".into()));
-            }
+    state.with_conn(|conn| prompt_sposta_pure(conn, &dati))
+}
+
+/// M7 PR-3: logica pura di `prompt_sposta`.
+pub(crate) fn prompt_sposta_pure(
+    conn: &Connection,
+    dati: &SpostaPrompt,
+) -> Result<(), PapErrore> {
+    // Verifica esistenza cartella se specificata.
+    if let Some(fid) = &dati.folder_id {
+        let exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM Folders WHERE Id = ?1 AND DeletedAt IS NULL",
+                [fid],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        if !exists {
+            return Err(PapErrore::Generico("Cartella destinazione non valida".into()));
         }
-        conn.execute(
-            "UPDATE Prompts
-             SET FolderId = ?1, UpdatedAt = datetime('now')
-             WHERE Id = ?2 AND DeletedAt IS NULL",
-            params![dati.folder_id, dati.prompt_id],
-        )?;
-        crate::audit::registra(
-            conn,
-            "prompt.spostato",
-            "Prompt",
-            &dati.prompt_id,
-            dati.folder_id.as_deref(),
-        );
-        Ok(())
-    })
+    }
+    conn.execute(
+        "UPDATE Prompts
+         SET FolderId = ?1, UpdatedAt = datetime('now')
+         WHERE Id = ?2 AND DeletedAt IS NULL",
+        params![dati.folder_id, dati.prompt_id],
+    )?;
+    crate::audit::registra(
+        conn,
+        "prompt.spostato",
+        "Prompt",
+        &dati.prompt_id,
+        dati.folder_id.as_deref(),
+    );
+    Ok(())
 }
 
 /// Esegue una closure dentro una transazione esplicita BEGIN/COMMIT.
@@ -1005,5 +1033,249 @@ mod test {
         assert_eq!(p1_sort, 2);
         assert_eq!(p2_sort, 0);
         assert_eq!(p3_sort, 1);
+    }
+
+    // ─── M7 PR-3: copertura _pure wrapper command ─────────────────
+
+    #[test]
+    fn lista_pure_db_vuoto_ritorna_vec_vuoto() {
+        let conn = db_test();
+        let r = lista_pure(&conn).unwrap();
+        assert!(r.is_empty());
+    }
+
+    #[test]
+    fn lista_pure_include_conteggio_prompt() {
+        let conn = db_test();
+        let fid = crea(&conn, "marketing", None);
+        // inserisci 2 prompt nella cartella
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility,
+                FolderId, Version, CreatedAt, UpdatedAt)
+             VALUES ('p1', 'ws-personale', 'usr-locale', 'A', 'b', 'private', ?1, 1,
+                     datetime('now'), datetime('now'))",
+            params![fid],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility,
+                FolderId, Version, CreatedAt, UpdatedAt)
+             VALUES ('p2', 'ws-personale', 'usr-locale', 'B', 'b', 'private', ?1, 1,
+                     datetime('now'), datetime('now'))",
+            params![fid],
+        ).unwrap();
+        let r = lista_pure(&conn).unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].conteggio_prompt, 2);
+    }
+
+    #[test]
+    fn lista_pure_esclude_cartelle_eliminate() {
+        let conn = db_test();
+        let _vivo = crea(&conn, "vivo", None);
+        let elim = crea(&conn, "eliminata", None);
+        conn.execute(
+            "UPDATE Folders SET DeletedAt = datetime('now') WHERE Id = ?1",
+            params![elim],
+        ).unwrap();
+        let r = lista_pure(&conn).unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].nome, "vivo");
+    }
+
+    #[test]
+    fn crea_pure_happy_path() {
+        let conn = db_test();
+        let dati = NuovaCartella {
+            nome: "ricerche".to_string(),
+            parent_folder_id: None,
+        };
+        let id = crea_pure(&conn, &dati).unwrap();
+        assert!(id.starts_with("fld-"));
+        // Verifica path = /ricerche
+        let path: String = conn.query_row(
+            "SELECT Path FROM Folders WHERE Id = ?1",
+            [&id],
+            |r| r.get(0),
+        ).unwrap();
+        assert_eq!(path, "/ricerche");
+    }
+
+    #[test]
+    fn crea_pure_nome_vuoto_errore() {
+        let conn = db_test();
+        let dati = NuovaCartella {
+            nome: "".to_string(),
+            parent_folder_id: None,
+        };
+        let r = crea_pure(&conn, &dati);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn crea_pure_sibling_duplicato_errore() {
+        let conn = db_test();
+        let dati = NuovaCartella {
+            nome: "dup".to_string(),
+            parent_folder_id: None,
+        };
+        crea_pure(&conn, &dati).unwrap();
+        let r = crea_pure(&conn, &dati);
+        assert!(r.is_err(), "secondo crea con stesso nome+parent deve fallire UNIQUE");
+    }
+
+    #[test]
+    fn rinomina_pure_happy_path() {
+        let conn = db_test();
+        let id = crea(&conn, "vecchio", None);
+        let dati = RinominaCartella {
+            id: id.clone(),
+            nuovo_nome: "nuovo".to_string(),
+        };
+        rinomina_pure(&conn, &dati).unwrap();
+        let (nome, path): (String, String) = conn.query_row(
+            "SELECT Name, Path FROM Folders WHERE Id = ?1",
+            [&id], |r| Ok((r.get(0)?, r.get(1)?))
+        ).unwrap();
+        assert_eq!(nome, "nuovo");
+        assert_eq!(path, "/nuovo");
+    }
+
+    #[test]
+    fn rinomina_pure_nome_invalido_errore() {
+        let conn = db_test();
+        let id = crea(&conn, "x", None);
+        let dati = RinominaCartella {
+            id,
+            nuovo_nome: "".to_string(),
+        };
+        let r = rinomina_pure(&conn, &dati);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn sposta_pure_aggiorna_parent_e_path() {
+        let conn = db_test();
+        let parent = crea(&conn, "padre", None);
+        let child = crea(&conn, "figlio", None);
+        let dati = SpostaCartella {
+            id: child.clone(),
+            nuovo_parent_id: Some(parent.clone()),
+        };
+        sposta_pure(&conn, &dati).unwrap();
+        let (parent_id, path): (Option<String>, String) = conn.query_row(
+            "SELECT ParentFolderId, Path FROM Folders WHERE Id = ?1",
+            [&child], |r| Ok((r.get(0)?, r.get(1)?))
+        ).unwrap();
+        assert_eq!(parent_id.as_deref(), Some(parent.as_str()));
+        assert_eq!(path, "/padre/figlio");
+    }
+
+    #[test]
+    fn sposta_pure_dentro_se_stessa_errore() {
+        let conn = db_test();
+        let id = crea(&conn, "x", None);
+        let dati = SpostaCartella {
+            id: id.clone(),
+            nuovo_parent_id: Some(id),
+        };
+        let r = sposta_pure(&conn, &dati);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn elimina_pure_soft_delete_cartella_e_prompt_a_root() {
+        let conn = db_test();
+        let fid = crea(&conn, "tomb", None);
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility,
+                FolderId, Version, CreatedAt, UpdatedAt)
+             VALUES ('p1', 'ws-personale', 'usr-locale', 'P', 'b', 'private', ?1, 1,
+                     datetime('now'), datetime('now'))",
+            params![fid],
+        ).unwrap();
+
+        elimina_pure(&conn, &fid).unwrap();
+
+        // Folder DeletedAt valorizzato
+        let del: Option<String> = conn.query_row(
+            "SELECT DeletedAt FROM Folders WHERE Id = ?1",
+            [&fid], |r| r.get(0)
+        ).unwrap();
+        assert!(del.is_some());
+
+        // Prompt tornato a root (FolderId NULL)
+        let p_folder: Option<String> = conn.query_row(
+            "SELECT FolderId FROM Prompts WHERE Id = 'p1'", [], |r| r.get(0)
+        ).unwrap();
+        assert!(p_folder.is_none());
+    }
+
+    #[test]
+    fn elimina_pure_cartella_inesistente_errore() {
+        let conn = db_test();
+        let r = elimina_pure(&conn, "fld-fantasma");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn prompt_sposta_pure_a_folder_valida() {
+        let conn = db_test();
+        let fid = crea(&conn, "dest", None);
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility,
+                Version, CreatedAt, UpdatedAt)
+             VALUES ('p1', 'ws-personale', 'usr-locale', 'P', 'b', 'private', 1,
+                     datetime('now'), datetime('now'))",
+            [],
+        ).unwrap();
+        let dati = SpostaPrompt {
+            prompt_id: "p1".to_string(),
+            folder_id: Some(fid.clone()),
+        };
+        prompt_sposta_pure(&conn, &dati).unwrap();
+        let pf: Option<String> = conn.query_row(
+            "SELECT FolderId FROM Prompts WHERE Id = 'p1'", [], |r| r.get(0)
+        ).unwrap();
+        assert_eq!(pf.as_deref(), Some(fid.as_str()));
+    }
+
+    #[test]
+    fn prompt_sposta_pure_a_root() {
+        let conn = db_test();
+        let fid = crea(&conn, "src", None);
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility,
+                FolderId, Version, CreatedAt, UpdatedAt)
+             VALUES ('p1', 'ws-personale', 'usr-locale', 'P', 'b', 'private', ?1, 1,
+                     datetime('now'), datetime('now'))",
+            params![fid],
+        ).unwrap();
+        let dati = SpostaPrompt {
+            prompt_id: "p1".to_string(),
+            folder_id: None,
+        };
+        prompt_sposta_pure(&conn, &dati).unwrap();
+        let pf: Option<String> = conn.query_row(
+            "SELECT FolderId FROM Prompts WHERE Id = 'p1'", [], |r| r.get(0)
+        ).unwrap();
+        assert!(pf.is_none());
+    }
+
+    #[test]
+    fn prompt_sposta_pure_folder_inesistente_errore() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility,
+                Version, CreatedAt, UpdatedAt)
+             VALUES ('p1', 'ws-personale', 'usr-locale', 'P', 'b', 'private', 1,
+                     datetime('now'), datetime('now'))",
+            [],
+        ).unwrap();
+        let dati = SpostaPrompt {
+            prompt_id: "p1".to_string(),
+            folder_id: Some("fld-fantasma".to_string()),
+        };
+        let r = prompt_sposta_pure(&conn, &dati);
+        assert!(r.is_err());
     }
 }
