@@ -443,6 +443,7 @@ pub fn run() {
             import_export::prompt_export_markdown,
             import_export::prompt_import_markdown,
             import_export::vault_import_markdown_bulk,
+            import_export::vault_export_markdown_zip,
             statistiche::statistiche_query,
             embeddings::embeddings_status,
             embeddings::embeddings_download,

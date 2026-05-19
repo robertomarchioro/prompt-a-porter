@@ -890,6 +890,204 @@ pub fn vault_import_markdown_bulk(
     })
 }
 
+// ─── M6 PR-3: Markdown export bulk -> zip ──────────────────────────
+
+/// Sanitize titolo per uso come filename: rimuovi separatori path
+/// (`/`, `\`) e caratteri non sicuri su Windows (`<>:"|?*`), poi trim.
+/// Stringa vuota dopo sanitize -> usa fallback `prompt`.
+fn sanitize_filename(s: &str) -> String {
+    let cleaned: String = s
+        .chars()
+        .map(|c| {
+            if matches!(
+                c,
+                '/' | '\\'
+                    | '<'
+                    | '>'
+                    | ':'
+                    | '"'
+                    | '|'
+                    | '?'
+                    | '*'
+                    | '\0'
+                    | '\n'
+                    | '\r'
+                    | '\t'
+            ) {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let trimmed = cleaned.trim().trim_matches('.').to_string();
+    if trimmed.is_empty() {
+        "prompt".to_string()
+    } else {
+        trimmed
+    }
+}
+
+/// Sanitize folder path: ogni segmento separato da `/` viene
+/// sanitizzato individualmente, segmenti vuoti scartati.
+fn sanitize_folder_path(path: &str) -> String {
+    path.trim_start_matches('/')
+        .split('/')
+        .filter(|seg| !seg.is_empty())
+        .map(sanitize_filename)
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+/// Logica pura: scrive un archivio zip in `buf` contenente tutti i
+/// prompt del vault (filtrati opzionalmente per folder root).
+///
+/// Layout zip:
+/// ```
+/// <folder_path>/<title>.md
+/// ```
+/// Per prompt in root il file e' alla radice dello zip.
+/// Per titoli duplicati nella stessa cartella, viene suffissato
+/// `-{id-short}` per disambiguare.
+pub(crate) fn export_markdown_zip_pure(
+    conn: &Connection,
+    folder_id_root: Option<&str>,
+    buf: &mut std::io::Cursor<Vec<u8>>,
+) -> Result<usize, PapErrore> {
+    use std::io::Write;
+    use zip::write::SimpleFileOptions;
+
+    // Risolvi folder root path se passato (per filtrare sottoalbero).
+    let folder_root_path: Option<String> = match folder_id_root {
+        Some(id) if !id.trim().is_empty() => conn
+            .query_row(
+                "SELECT Path FROM Folders WHERE Id = ?1 AND DeletedAt IS NULL",
+                [id],
+                |r| r.get::<_, String>(0),
+            )
+            .ok(),
+        _ => None,
+    };
+
+    // SELECT prompt + folder path. Filtro:
+    // - se folder_root_path settato: FolderId == root OR Path LIKE root/%
+    // - altrimenti: tutto il vault
+    let sql = "
+        SELECT p.Id, p.Title, COALESCE(f.Path, '')
+        FROM Prompts p
+        LEFT JOIN Folders f ON f.Id = p.FolderId AND f.DeletedAt IS NULL
+        WHERE p.DeletedAt IS NULL
+          AND (:root IS NULL OR f.Path = :root OR f.Path LIKE :root_prefix)
+        ORDER BY f.Path, p.Title COLLATE NOCASE
+    ";
+    let root_param: Option<String> = folder_root_path.clone();
+    let root_prefix_param: Option<String> = folder_root_path
+        .as_ref()
+        .map(|p| format!("{p}/%"));
+
+    let mut stmt = conn.prepare(sql)?;
+    let rows: Vec<(String, String, String)> = stmt
+        .query_map(
+            rusqlite::named_params! {
+                ":root": root_param,
+                ":root_prefix": root_prefix_param,
+            },
+            |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
+            },
+        )?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let mut zipw = zip::ZipWriter::new(buf);
+    let options = SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated)
+        .unix_permissions(0o644);
+
+    // Detect collisioni nome file all'interno dello stesso folder
+    let mut nomi_per_folder: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+    let mut esportati = 0usize;
+
+    for (id, titolo, folder_path) in &rows {
+        let md = match prompt_export_markdown_pure(conn, id) {
+            Ok(s) => s,
+            Err(_) => continue, // skip silenzioso prompt rotti
+        };
+
+        let folder_zip = sanitize_folder_path(folder_path);
+        let titolo_safe = sanitize_filename(titolo);
+        let base_filename = format!("{titolo_safe}.md");
+        let nomi_in_folder = nomi_per_folder
+            .entry(folder_zip.clone())
+            .or_default();
+        let filename = if nomi_in_folder.contains(&base_filename) {
+            // Collisione: suffix id-short
+            let id_short = id.strip_prefix("prm-").unwrap_or(id);
+            let suffix_len = id_short.len().min(8);
+            format!("{titolo_safe}-{}.md", &id_short[..suffix_len])
+        } else {
+            base_filename
+        };
+        nomi_in_folder.insert(filename.clone());
+
+        let full_path = if folder_zip.is_empty() {
+            filename
+        } else {
+            format!("{folder_zip}/{filename}")
+        };
+
+        zipw.start_file(&full_path, options)
+            .map_err(|e| PapErrore::Generico(format!("zip start_file: {e}")))?;
+        zipw.write_all(md.as_bytes())
+            .map_err(|e| PapErrore::Generico(format!("zip write_all: {e}")))?;
+        esportati += 1;
+    }
+
+    zipw.finish()
+        .map_err(|e| PapErrore::Generico(format!("zip finish: {e}")))?;
+    Ok(esportati)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ZipExportResult {
+    /// Bytes del file zip serializzato. Frontend lo salva via fs API.
+    pub bytes: Vec<u8>,
+    pub totale_esportati: usize,
+}
+
+/// Tauri command: esporta tutti i prompt del vault (o di una cartella
+/// + discendenti) come archivio zip contenente file .md con
+/// front-matter YAML. Il frontend riceve i bytes e li salva tramite
+/// `dialog.save` + `fs.writeFile`.
+#[tauri::command]
+pub fn vault_export_markdown_zip(
+    folder_id: Option<String>,
+    state: State<'_, VaultState>,
+) -> Result<ZipExportResult, PapErrore> {
+    let mut buf = std::io::Cursor::new(Vec::new());
+    let totale = state.with_conn(|conn| {
+        let n = export_markdown_zip_pure(conn, folder_id.as_deref(), &mut buf)?;
+        crate::audit::registra(
+            conn,
+            "vault.exported.markdown.zip",
+            "Vault",
+            folder_id.as_deref().unwrap_or("vault"),
+            Some(&format!("totale_esportati={n}")),
+        );
+        Ok::<usize, PapErrore>(n)
+    })?;
+    log::info!("Vault esportato in zip markdown: {totale} prompt");
+    Ok(ZipExportResult {
+        bytes: buf.into_inner(),
+        totale_esportati: totale,
+    })
+}
+
 /// Helper "pure" (no Tauri State) per applicare un `ExportV1` parsato
 /// sulla connection con la modalità di gestione conflitti specificata.
 /// Riusabile dai test e dal Tauri command `vault_import_json`.
@@ -1762,5 +1960,165 @@ mod test {
             .collect();
         assert!(names.contains(&"ok.md".to_string()));
         assert!(!names.contains(&"deep.md".to_string()), "deep.md non doveva passare MAX_DEPTH=5");
+    }
+
+    // ─── M6 PR-3: export bulk -> zip ───────────────────────────────
+
+    #[test]
+    fn sanitize_filename_rimuove_caratteri_non_sicuri() {
+        assert_eq!(super::sanitize_filename("Hello World"), "Hello World");
+        assert_eq!(super::sanitize_filename("foo/bar"), "foo_bar");
+        assert_eq!(super::sanitize_filename("a<b>c:d\"e|f?g*h"), "a_b_c_d_e_f_g_h");
+        assert_eq!(super::sanitize_filename("/leading"), "_leading");
+        assert_eq!(super::sanitize_filename(""), "prompt");
+        assert_eq!(super::sanitize_filename("   "), "prompt");
+        assert_eq!(super::sanitize_filename("..."), "prompt");
+    }
+
+    #[test]
+    fn sanitize_folder_path_normale() {
+        assert_eq!(super::sanitize_folder_path(""), "");
+        assert_eq!(super::sanitize_folder_path("/"), "");
+        assert_eq!(super::sanitize_folder_path("/marketing"), "marketing");
+        assert_eq!(
+            super::sanitize_folder_path("/marketing/email"),
+            "marketing/email"
+        );
+        // Segmenti con caratteri non sicuri sanitizzati
+        assert_eq!(super::sanitize_folder_path("/a:b/c?d"), "a_b/c_d");
+    }
+
+    fn unzip_entries(bytes: &[u8]) -> Vec<(String, String)> {
+        let mut ar = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let mut out = Vec::new();
+        for i in 0..ar.len() {
+            let mut f = ar.by_index(i).unwrap();
+            let name = f.name().to_string();
+            let mut content = String::new();
+            use std::io::Read;
+            f.read_to_string(&mut content).unwrap();
+            out.push((name, content));
+        }
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
+
+    #[test]
+    fn export_zip_vault_vuoto_ritorna_zip_valido_vuoto() {
+        let conn = db_test();
+        let mut buf = std::io::Cursor::new(Vec::new());
+        let n = super::export_markdown_zip_pure(&conn, None, &mut buf).unwrap();
+        assert_eq!(n, 0);
+        // Zip vuoto e' comunque valido
+        let entries = unzip_entries(&buf.into_inner());
+        assert_eq!(entries.len(), 0);
+    }
+
+    #[test]
+    fn export_zip_include_tutti_i_prompt_root() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "Alpha", "body alpha");
+        inserisci_prompt(&conn, "prm-2", "Beta", "body beta");
+
+        let mut buf = std::io::Cursor::new(Vec::new());
+        let n = super::export_markdown_zip_pure(&conn, None, &mut buf).unwrap();
+        assert_eq!(n, 2);
+        let entries = unzip_entries(&buf.into_inner());
+        let names: Vec<String> = entries.iter().map(|(n, _)| n.clone()).collect();
+        assert!(names.contains(&"Alpha.md".to_string()));
+        assert!(names.contains(&"Beta.md".to_string()));
+        // Contenuto include front-matter
+        let alpha = entries.iter().find(|(n, _)| n == "Alpha.md").unwrap();
+        assert!(alpha.1.starts_with("---\n"));
+        assert!(alpha.1.contains("title: \"Alpha\""));
+        assert!(alpha.1.contains("body alpha"));
+    }
+
+    #[test]
+    fn export_zip_layout_con_folder() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-mkt", "Marketing", "/marketing", None);
+        inserisci_folder(&conn, "fld-mkt-mail", "Email", "/marketing/email", Some("fld-mkt"));
+
+        // 1 prompt root + 1 in /marketing + 1 in /marketing/email
+        inserisci_prompt(&conn, "prm-root", "RootP", "body root");
+        // Insert con FolderId
+        conn.execute(
+            "UPDATE Prompts SET FolderId = 'fld-mkt' WHERE Id = 'prm-root'",
+            [],
+        )
+        .ok();
+        // Reinserisci due con folder
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, FolderId, Version, CreatedAt, UpdatedAt)
+             VALUES ('prm-m', 'ws-personale', 'usr-locale', 'Mkt', 'body mkt', 'private', 'fld-mkt', 1, datetime('now'), datetime('now'))",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, FolderId, Version, CreatedAt, UpdatedAt)
+             VALUES ('prm-me', 'ws-personale', 'usr-locale', 'EmailP', 'body email', 'private', 'fld-mkt-mail', 1, datetime('now'), datetime('now'))",
+            [],
+        ).unwrap();
+
+        let mut buf = std::io::Cursor::new(Vec::new());
+        let n = super::export_markdown_zip_pure(&conn, None, &mut buf).unwrap();
+        assert_eq!(n, 3);
+        let entries = unzip_entries(&buf.into_inner());
+        let names: Vec<String> = entries.iter().map(|(n, _)| n.clone()).collect();
+        // RootP era riassegnato a fld-mkt
+        assert!(names.contains(&"marketing/RootP.md".to_string()));
+        assert!(names.contains(&"marketing/Mkt.md".to_string()));
+        assert!(names.contains(&"marketing/email/EmailP.md".to_string()));
+    }
+
+    #[test]
+    fn export_zip_filtro_per_folder_id_root_include_discendenti() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-mkt", "Marketing", "/marketing", None);
+        inserisci_folder(&conn, "fld-vendita", "Vendita", "/vendita", None);
+        inserisci_folder(&conn, "fld-mkt-mail", "Email", "/marketing/email", Some("fld-mkt"));
+
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, FolderId, Version, CreatedAt, UpdatedAt)
+             VALUES ('prm-m', 'ws-personale', 'usr-locale', 'Mkt', 'b', 'private', 'fld-mkt', 1, datetime('now'), datetime('now'))",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, FolderId, Version, CreatedAt, UpdatedAt)
+             VALUES ('prm-me', 'ws-personale', 'usr-locale', 'EmailP', 'b', 'private', 'fld-mkt-mail', 1, datetime('now'), datetime('now'))",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, FolderId, Version, CreatedAt, UpdatedAt)
+             VALUES ('prm-v', 'ws-personale', 'usr-locale', 'Vend', 'b', 'private', 'fld-vendita', 1, datetime('now'), datetime('now'))",
+            [],
+        ).unwrap();
+
+        let mut buf = std::io::Cursor::new(Vec::new());
+        // Filtra solo subtree /marketing -> Mkt + EmailP, NO Vend
+        let n =
+            super::export_markdown_zip_pure(&conn, Some("fld-mkt"), &mut buf).unwrap();
+        assert_eq!(n, 2);
+        let entries = unzip_entries(&buf.into_inner());
+        let names: Vec<String> = entries.iter().map(|(n, _)| n.clone()).collect();
+        assert!(names.iter().any(|n| n.contains("Mkt.md")));
+        assert!(names.iter().any(|n| n.contains("EmailP.md")));
+        assert!(!names.iter().any(|n| n.contains("Vend.md")));
+    }
+
+    #[test]
+    fn export_zip_collisione_titoli_disambigua_con_id() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-abc12345", "Duplicato", "uno");
+        inserisci_prompt(&conn, "prm-def67890", "Duplicato", "due");
+
+        let mut buf = std::io::Cursor::new(Vec::new());
+        let n = super::export_markdown_zip_pure(&conn, None, &mut buf).unwrap();
+        assert_eq!(n, 2);
+        let entries = unzip_entries(&buf.into_inner());
+        let names: Vec<String> = entries.iter().map(|(n, _)| n.clone()).collect();
+        // Entrambi presenti, uno con suffisso id-short
+        assert!(names.contains(&"Duplicato.md".to_string()));
+        assert!(names.iter().any(|n| n.starts_with("Duplicato-")), "atteso suffisso id, got {names:?}");
     }
 }
