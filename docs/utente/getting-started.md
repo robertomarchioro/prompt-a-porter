@@ -71,7 +71,7 @@ In alto: barra di ricerca + filtri rapidi. In basso: status bar con conteggio pr
 
 ## Il tuo primo prompt
 
-1. Clicca **Nuovo prompt** in alto a destra (o `Ctrl+N`).
+1. Clicca **+ Nuovo** in alto nel ListPane (la colonna centrale).
 2. Compila i campi:
    - **Titolo:** "Email di reclamo professionale"
    - **Descrizione:** una riga che spieghi cosa fa il prompt (opzionale ma consigliata: appare nella ricerca).
@@ -91,7 +91,7 @@ In alto: barra di ricerca + filtri rapidi. In basso: status bar con conteggio pr
 
 3. Imposta **Modello target** (es. `claude-sonnet`, `gpt-4`) se il prompt è ottimizzato per un modello specifico.
 4. Aggiungi **tag** (es. `email`, `clienti`, `reclami`) per ritrovarlo facilmente.
-5. Salva con `Ctrl+S` o il pulsante in alto.
+5. Le modifiche vengono salvate **automaticamente** ~2 secondi dopo l'ultima edit (autosave debounced). Nessuna azione esplicita richiesta.
 
 ## La tua prima compilazione
 
