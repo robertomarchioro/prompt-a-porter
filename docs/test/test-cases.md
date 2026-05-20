@@ -1083,6 +1083,132 @@ Vedi `TC-IMPORT-006`.
 
 ---
 
+## EDITORPREF — Preferenze editor (M10)
+
+Le 6 opzioni configurabili in **Impostazioni → Editor**. Vedi anche `docs/utente/scorciatoie-tastiera.md` ed eventuali default in `apps/client/src-tauri/src/preferenze.rs`.
+
+### `TC-EDITORPREF-001` 🟡 🎯 Autosave delay — slider modifica il valore
+
+**Setup**: vault aperto, Impostazioni → Editor.
+
+**Steps**:
+1. Trascina lo slider "Autosave delay" (range 500-5000 ms, step 250).
+2. Osserva il valore numerico accanto allo slider.
+
+**Atteso**: il valore mostrato segue lo slider (es. "1500 ms"). Default iniziale 2000 ms.
+
+---
+
+### `TC-EDITORPREF-002` 🟡 🎯 Autosave delay — effetto sul salvataggio
+
+**Setup**: autosave delay impostato a 500 ms.
+
+**Steps**:
+1. Apri un prompt, modifica il body.
+2. Smetti di scrivere e conta ~0.5s.
+
+**Atteso**: il salvataggio scatta dopo ~500 ms (indicatore "Salvato"). Imposta 5000 ms e verifica che ora attende ~5s.
+
+---
+
+### `TC-EDITORPREF-003` 🟡 🎯 Line wrapping — toggle ON/OFF
+
+**Setup**: prompt con una riga molto lunga (oltre la larghezza dell'editor).
+
+**Steps**:
+1. Impostazioni → Editor → "Line wrapping" OFF.
+2. Torna all'editor.
+3. Riattiva ON.
+
+**Atteso**: OFF → la riga lunga richiede scroll orizzontale. ON → la riga va a capo (soft wrap). Default ON.
+
+---
+
+### `TC-EDITORPREF-004` 🔵 🎯 Indent size — 2 vs 4 spazi
+
+**Setup**: editor aperto.
+
+**Steps**:
+1. Impostazioni → Editor → Indent size = 4.
+2. Nell'editor, posizionati a inizio riga e premi Tab.
+
+**Atteso**: con 4 selezionato, Tab inserisce 4 spazi; con 2, ne inserisce 2. Default 2.
+
+---
+
+### `TC-EDITORPREF-005` 🔵 🎯 Font size — slider 12-20px
+
+**Setup**: editor aperto.
+
+**Steps**:
+1. Impostazioni → Editor → trascina "Dimensione font" a 18.
+2. Torna all'editor.
+
+**Atteso**: il testo dell'editor diventa più grande (18px). Valore mostrato "18 px". Default 13 px. Range clampato 12-20.
+
+---
+
+### `TC-EDITORPREF-006` 🔵 🎯 Mostra numeri di riga — toggle
+
+**Setup**: editor aperto.
+
+**Steps**:
+1. Impostazioni → Editor → "Numeri di riga" OFF.
+2. Torna all'editor.
+
+**Atteso**: OFF → gutter sinistro senza numeri. ON → numeri visibili. Default ON.
+
+---
+
+### `TC-EDITORPREF-007` 🔵 🎯 Evidenzia riga attiva — toggle
+
+**Setup**: editor aperto.
+
+**Steps**:
+1. Impostazioni → Editor → "Evidenzia riga attiva" ON.
+2. Torna all'editor, clicca su una riga.
+
+**Atteso**: la riga sotto il cursore ha uno sfondo leggermente diverso. OFF → nessun highlight. Default OFF.
+
+---
+
+### `TC-EDITORPREF-008` 🟡 🎯 Persistenza preferenze dopo riavvio
+
+**Setup**: modifica tutte e 6 le preferenze a valori non-default.
+
+**Steps**:
+1. Imposta: autosave 1000ms, wrapping OFF, indent 4, font 16, numeri OFF, highlight ON.
+2. Chiudi e riapri l'app.
+3. Apri Impostazioni → Editor.
+
+**Atteso**: tutti i 6 valori riflettono le scelte (persistiti in `preferenze.json`). L'editor li applica al primo prompt aperto.
+
+---
+
+### `TC-EDITORPREF-009` 🔵 🧪 Forward-compat con preferenze.json vecchio
+
+**Setup**: un `preferenze.json` salvato da una versione < M10 (senza i 6 campi editor).
+
+**Steps**:
+1. Avvia l'app con quel file.
+2. Apri Impostazioni → Editor.
+
+**Atteso**: i controlli mostrano i default (autosave 2000, wrapping ON, indent 2, font 13, numeri ON, highlight OFF) senza crash. Al primo salvataggio, i campi vengono aggiunti al file.
+
+---
+
+### `TC-EDITORPREF-010` 🔵 ⚡ Cambio prefs senza perdere il contenuto editor
+
+**Setup**: editor aperto con body non vuoto, modifiche non ancora salvate.
+
+**Steps**:
+1. Cambia una preferenza che rimonta l'editor (es. font size).
+2. Torna all'editor.
+
+**Atteso**: il contenuto del body è preservato (il re-mount usa il testo corrente). Nessuna perdita di testo, nessun dirty fantasma.
+
+---
+
 ## HOTKEY — Global hotkey
 
 ### `TC-HOTKEY-001` 🔴 🎯 Hotkey default `Ctrl+Shift+P`
