@@ -21,7 +21,7 @@ Se un test case non passa:
 
 | Area | Doc | TC count | Cosa copre |
 |---|---|---|---|
-| Tutti i test cases | [`test-cases.md`](./test-cases.md) | ~120 | Catalogo completo numerato per area |
+| Tutti i test cases | [`test-cases.md`](./test-cases.md) | ~146 | Catalogo completo numerato per area |
 
 ## Aree coperte (in `test-cases.md`)
 
@@ -42,6 +42,7 @@ Se un test case non passa:
 - **RATING** — rating discreto + badge
 - **CRONOLOGIA** — versioning + rollback
 - **EDITOR** — editor doppia vista Sorgente/Compilato
+- **EDITORPREF** — preferenze editor (autosave delay, line wrapping, indent, font size, numeri di riga, highlight riga attiva)
 - **HOTKEY** — global hotkey + configurazione
 - **PALETTE** — command palette
 - **TRAY** — tray icon menu
