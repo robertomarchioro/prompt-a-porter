@@ -71,13 +71,17 @@ fn valida_rating(rating: i64) -> Result<(), PapErrore> {
 }
 
 fn verifica_prompt_esiste(conn: &Connection, prompt_id: &str) -> Result<(), PapErrore> {
-    let exists: bool = conn
-        .query_row(
-            "SELECT 1 FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
-            [prompt_id],
-            |_| Ok(true),
-        )
-        .unwrap_or(false);
+    // Distingue "nessuna riga" (prompt assente -> false) da un vero errore
+    // DB (propagato): prima unwrap_or(false) mascherava entrambi come false.
+    let exists: bool = match conn.query_row(
+        "SELECT 1 FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
+        [prompt_id],
+        |_| Ok(true),
+    ) {
+        Ok(v) => v,
+        Err(rusqlite::Error::QueryReturnedNoRows) => false,
+        Err(e) => return Err(e.into()),
+    };
     if !exists {
         return Err(PapErrore::Generico(format!(
             "Prompt '{prompt_id}' non esiste o è eliminato"

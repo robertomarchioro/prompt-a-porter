@@ -532,13 +532,17 @@ pub(crate) fn prompt_sposta_pure(
 ) -> Result<(), PapErrore> {
     // Verifica esistenza cartella se specificata.
     if let Some(fid) = &dati.folder_id {
-        let exists: bool = conn
-            .query_row(
-                "SELECT 1 FROM Folders WHERE Id = ?1 AND DeletedAt IS NULL",
-                [fid],
-                |_| Ok(true),
-            )
-            .unwrap_or(false);
+        // Distingue "cartella assente" (-> errore "non valida") da un vero
+        // errore DB (propagato): prima unwrap_or(false) li mascherava insieme.
+        let exists: bool = match conn.query_row(
+            "SELECT 1 FROM Folders WHERE Id = ?1 AND DeletedAt IS NULL",
+            [fid],
+            |_| Ok(true),
+        ) {
+            Ok(v) => v,
+            Err(rusqlite::Error::QueryReturnedNoRows) => false,
+            Err(e) => return Err(e.into()),
+        };
         if !exists {
             return Err(PapErrore::Generico("Cartella destinazione non valida".into()));
         }

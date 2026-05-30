@@ -290,41 +290,58 @@ pub(crate) fn promuovi_pure(
         ))
     })?;
 
-    // 3. Ri-aggancia le sister al nuovo main (variant_id).
-    //    Esclude variant_id stesso (sta passando a main, non variante).
-    conn.execute(
-        "UPDATE Prompts
-         SET ParentPromptId = ?1
-         WHERE ParentPromptId = ?2 AND Id != ?1 AND DeletedAt IS NULL",
-        params![variant_id, old_main_id],
-    )?;
+    // I tre UPDATE che seguono sono uno swap atomico: un errore a metà
+    // lascerebbe i prompt in stato corrotto (half-swap). BEGIN/COMMIT, con
+    // ROLLBACK best-effort su errore. (SQLite accetta BEGIN/COMMIT come
+    // statement plain, quindi basta &Connection.)
+    conn.execute_batch("BEGIN")?;
+    let res = (|| -> Result<(), PapErrore> {
+        // 3. Ri-aggancia le sister al nuovo main (variant_id).
+        //    Esclude variant_id stesso (sta passando a main, non variante).
+        conn.execute(
+            "UPDATE Prompts
+             SET ParentPromptId = ?1
+             WHERE ParentPromptId = ?2 AND Id != ?1 AND DeletedAt IS NULL",
+            params![variant_id, old_main_id],
+        )?;
 
-    // 4a. Calcola label per ex-main: prossima libera fra le sister
-    //     attuali (dopo lo step 3). Le sister ora includono tutti i
-    //     fratelli + l'ex-main che sta per diventare variante. La
-    //     variante promossa NON e' piu' sister (sta per essere main).
-    let usate_dopo_swap = etichette_usate(conn, variant_id)?;
-    let label_old_main = prossima_etichetta(&usate_dopo_swap);
+        // 4a. Calcola label per ex-main: prossima libera fra le sister
+        //     attuali (dopo lo step 3). Le sister ora includono tutti i
+        //     fratelli + l'ex-main che sta per diventare variante. La
+        //     variante promossa NON e' piu' sister (sta per essere main).
+        let usate_dopo_swap = etichette_usate(conn, variant_id)?;
+        let label_old_main = prossima_etichetta(&usate_dopo_swap);
 
-    // 4b. Old main: diventa variante.
-    conn.execute(
-        "UPDATE Prompts
-         SET ParentPromptId = ?1, IsVariant = 1, VariantLabel = ?2,
-             UpdatedAt = datetime('now')
-         WHERE Id = ?3 AND DeletedAt IS NULL",
-        params![variant_id, label_old_main, old_main_id],
-    )?;
+        // 4b. Old main: diventa variante.
+        conn.execute(
+            "UPDATE Prompts
+             SET ParentPromptId = ?1, IsVariant = 1, VariantLabel = ?2,
+                 UpdatedAt = datetime('now')
+             WHERE Id = ?3 AND DeletedAt IS NULL",
+            params![variant_id, label_old_main, old_main_id],
+        )?;
 
-    // 5. Variante promossa: diventa main.
-    conn.execute(
-        "UPDATE Prompts
-         SET ParentPromptId = NULL, IsVariant = 0, VariantLabel = NULL,
-             UpdatedAt = datetime('now')
-         WHERE Id = ?1 AND DeletedAt IS NULL",
-        params![variant_id],
-    )?;
+        // 5. Variante promossa: diventa main.
+        conn.execute(
+            "UPDATE Prompts
+             SET ParentPromptId = NULL, IsVariant = 0, VariantLabel = NULL,
+                 UpdatedAt = datetime('now')
+             WHERE Id = ?1 AND DeletedAt IS NULL",
+            params![variant_id],
+        )?;
+        Ok(())
+    })();
 
-    Ok(())
+    match res {
+        Ok(()) => {
+            conn.execute_batch("COMMIT")?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
