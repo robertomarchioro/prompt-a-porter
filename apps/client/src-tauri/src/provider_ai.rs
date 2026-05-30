@@ -164,7 +164,9 @@ impl AIProvider for OllamaProvider {
 
 // ─────────── Anthropic ───────────
 
-#[derive(Debug, Clone)]
+// No `Debug`: contiene `api_key`. Evita leak accidentali via `{:?}`/log;
+// se servisse Debug, implementarlo a mano mascherando la chiave.
+#[derive(Clone)]
 pub struct AnthropicProvider {
     pub base_url: String,
     pub api_key: String,
@@ -212,8 +214,6 @@ struct AnthropicContentBlock {
 struct AnthropicUsage {
     #[serde(default)]
     output_tokens: u32,
-    #[serde(default)]
-    input_tokens: u32,
 }
 
 #[derive(Deserialize)]
@@ -292,7 +292,8 @@ impl AIProvider for AnthropicProvider {
 
 // ─────────── OpenAI ───────────
 
-#[derive(Debug, Clone)]
+// No `Debug`: contiene `api_key`.
+#[derive(Clone)]
 pub struct OpenAIProvider {
     pub base_url: String,
     pub api_key: String,
@@ -423,7 +424,8 @@ impl AIProvider for OpenAIProvider {
 
 // ─────────── Gemini (Google AI) ───────────
 
-#[derive(Debug, Clone)]
+// No `Debug`: contiene `api_key`.
+#[derive(Clone)]
 pub struct GeminiProvider {
     pub base_url: String,
     pub api_key: String,
@@ -571,7 +573,8 @@ impl AIProvider for GeminiProvider {
 
 // ─────────── ProviderConfig storage (V010) ───────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// No `Debug`: può contenere `api_key`.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ProviderConfigItem {
     pub provider: String,
     /// `None` quando il chiamante è la UI di lista — non rinviamo mai
@@ -586,7 +589,8 @@ pub struct ProviderConfigItem {
     pub aggiornato_a: String,
 }
 
-#[derive(Debug, Deserialize)]
+// No `Debug`: può contenere `api_key`.
+#[derive(Deserialize)]
 pub struct ProviderConfigInput {
     pub provider: String,
     /// `None` o stringa vuota = "non toccare la chiave esistente". Utile
