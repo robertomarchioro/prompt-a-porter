@@ -241,6 +241,30 @@ func (h *Handler) pushDelta(workspaceId, userId string, req *models.SyncPushRequ
 	}
 
 	for _, pt := range req.PromptTags {
+		// Verifica che sia il prompt sia il tag appartengano al workspace
+		// del chiamante prima di creare l'associazione. Senza questo check
+		// un client autenticato in un workspace potrebbe collegare prompt e
+		// tag di altri workspace (CWE-639, Authorization Bypass Through
+		// User-Controlled Key). Coerente con i controlli dei loop Tags e
+		// Prompts sopra. La SELECT gira dentro la stessa tx, quindi vede
+		// anche prompt/tag inseriti poco prima in questo stesso push.
+		var promptWs, tagWs string
+		if err := tx.QueryRow("SELECT WorkspaceId FROM Prompts WHERE Id = ?", pt.PromptId).Scan(&promptWs); err != nil {
+			if err == sql.ErrNoRows {
+				continue
+			}
+			return 0, 0, err
+		}
+		if err := tx.QueryRow("SELECT WorkspaceId FROM Tags WHERE Id = ?", pt.TagId).Scan(&tagWs); err != nil {
+			if err == sql.ErrNoRows {
+				continue
+			}
+			return 0, 0, err
+		}
+		if promptWs != workspaceId || tagWs != workspaceId {
+			continue
+		}
+
 		_, err := tx.Exec(`INSERT OR REPLACE INTO PromptTags (PromptId, TagId) VALUES (?, ?)`,
 			pt.PromptId, pt.TagId)
 		if err != nil {

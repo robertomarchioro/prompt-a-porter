@@ -93,6 +93,34 @@ func doLogin(t *testing.T, r *chi.Mux) models.LoginResponse {
 	return resp
 }
 
+func loginAs(t *testing.T, r *chi.Mux, email, password string) models.LoginResponse {
+	t.Helper()
+	body, _ := json.Marshal(models.LoginRequest{Email: email, Password: password})
+	req := httptest.NewRequest("POST", "/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("login %s atteso 200, ottenuto %d: %s", email, rec.Code, rec.Body.String())
+	}
+	var resp models.LoginResponse
+	json.NewDecoder(rec.Body).Decode(&resp)
+	return resp
+}
+
+func pushAs(t *testing.T, r *chi.Mux, token string, body models.SyncPushRequest) {
+	t.Helper()
+	data, _ := json.Marshal(body)
+	req := httptest.NewRequest("POST", "/sync/push", bytes.NewReader(data))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("push atteso 200, ottenuto %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestLoginValido(t *testing.T) {
 	r, _, cleanup := setupTestServer(t)
 	defer cleanup()
@@ -266,6 +294,61 @@ func TestSyncPushEPull(t *testing.T) {
 	}
 	if len(delta.PromptTags) != 1 {
 		t.Fatalf("attesa 1 associazione, ottenute %d", len(delta.PromptTags))
+	}
+}
+
+// TestSyncPushPromptTagCrossWorkspaceRifiutato verifica che un client
+// autenticato in un workspace NON possa creare associazioni PromptTag che
+// puntano a prompt/tag di un altro workspace (CWE-639). Regressione per il
+// fix in sync/handler.go pushDelta.
+func TestSyncPushPromptTagCrossWorkspaceRifiutato(t *testing.T) {
+	r, db, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// WS1 (admin di default): inserisce un prompt e un tag legittimi.
+	login1 := doLogin(t, r)
+	var ws1 string
+	db.QueryRow("SELECT WorkspaceId FROM Users WHERE Email = 'admin@test.com'").Scan(&ws1)
+
+	now := models.NowUTC()
+	pushAs(t, r, login1.Token, models.SyncPushRequest{
+		Prompts: []models.Prompt{{
+			Id: "prm-ws1", WorkspaceId: ws1, AuthorUserId: login1.User.Id,
+			Title: "WS1 prompt", Body: "x", Visibility: "workspace",
+			Version: 1, CreatedAt: now, UpdatedAt: now,
+		}},
+		Tags: []models.Tag{{
+			Id: "tag-ws1", WorkspaceId: ws1, Name: "ws1tag",
+			CreatedAt: now, UpdatedAt: now,
+		}},
+	})
+
+	// WS2 (secondo admin in workspace separato).
+	if err := db.SeedAdmin("evil@test.com", "Password123!", "EvilTeam"); err != nil {
+		t.Fatalf("seed evil: %v", err)
+	}
+	login2 := loginAs(t, r, "evil@test.com", "Password123!")
+
+	// WS2 tenta di collegare prompt+tag di WS1: deve essere ignorato.
+	pushAs(t, r, login2.Token, models.SyncPushRequest{
+		PromptTags: []models.PromptTag{{PromptId: "prm-ws1", TagId: "tag-ws1"}},
+	})
+
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM PromptTags WHERE PromptId = 'prm-ws1' AND TagId = 'tag-ws1'").
+		Scan(&count)
+	if count != 0 {
+		t.Fatalf("PromptTag cross-workspace non deve essere inserito, trovate %d righe", count)
+	}
+
+	// Sanita': WS1 puo' ancora associare i propri prompt/tag.
+	pushAs(t, r, login1.Token, models.SyncPushRequest{
+		PromptTags: []models.PromptTag{{PromptId: "prm-ws1", TagId: "tag-ws1"}},
+	})
+	db.QueryRow("SELECT COUNT(*) FROM PromptTags WHERE PromptId = 'prm-ws1' AND TagId = 'tag-ws1'").
+		Scan(&count)
+	if count != 1 {
+		t.Fatalf("PromptTag legittimo stesso-workspace deve essere inserito, trovate %d righe", count)
 	}
 }
 
