@@ -94,7 +94,11 @@ fn parse_modifiers(raw: &str) -> (Option<i64>, Vec<(String, String)>) {
     let re_ver = RE_VER.get_or_init(|| Regex::new(r"^version\s*=\s*(\d+)\b").unwrap());
 
     let (version, remaining) = if let Some(cap) = re_ver.captures(trimmed) {
-        let v: i64 = cap[1].parse().unwrap_or(0);
+        // `\d+` può eccedere i64 (es. version=99999999999999999999): in
+        // overflow usiamo i64::MAX così la risoluzione fallisce con un
+        // chiaro "versione non trovata" invece di mappare silenziosamente a 0
+        // (che sembrerebbe una versione valida).
+        let v: i64 = cap[1].parse().unwrap_or(i64::MAX);
         let consumed = cap.get(0).unwrap().end();
         (Some(v), trimmed[consumed..].trim_start())
     } else {
@@ -325,18 +329,29 @@ fn compila_ricorsivo(
                     visitati,
                     depth + 1,
                 )?;
+                // Verifica il cap PRIMA di accodare l'espansione del child:
+                // evita di gonfiare transitoriamente `out` fino a
+                // MAX_OUTPUT_BYTES + espanso.len() (anti bomba di import).
+                if out.len() + espanso.len() > MAX_OUTPUT_BYTES {
+                    visitati.remove(prompt_id);
+                    return Err(PapErrore::Generico(format!(
+                        "Output di compilazione eccede {MAX_OUTPUT_BYTES} byte. Possibile bomba di import."
+                    )));
+                }
                 out.push_str(&espanso);
             }
         }
 
-        if out.len() > MAX_OUTPUT_BYTES {
-            visitati.remove(prompt_id);
-            return Err(PapErrore::Generico(format!(
-                "Output di compilazione eccede {MAX_OUTPUT_BYTES} byte. Possibile bomba di import."
-            )));
-        }
-
         cursor = imp.byte_end;
+    }
+    // La coda dopo l'ultimo import va conteggiata nel cap: senza questo
+    // check un body con coda molto grande dopo un singolo import aggira il
+    // limite, perché l'append era post-loop e non verificato.
+    if out.len() + (body.len() - cursor) > MAX_OUTPUT_BYTES {
+        visitati.remove(prompt_id);
+        return Err(PapErrore::Generico(format!(
+            "Output di compilazione eccede {MAX_OUTPUT_BYTES} byte. Possibile bomba di import."
+        )));
     }
     out.push_str(&body[cursor..]);
     visitati.remove(prompt_id);
@@ -552,6 +567,35 @@ mod test {
     fn parse_zero_import() {
         let imps = parse_imports("Niente import qui dentro.");
         assert_eq!(imps.len(), 0);
+    }
+
+    #[test]
+    fn cap_output_coda_grande_dopo_import_fallisce() {
+        // Regressione: una coda > MAX_OUTPUT_BYTES dopo l'ultimo import
+        // deve far fallire la compilazione. Prima del fix l'append della
+        // coda era post-loop e non verificato → bypass del cap.
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-child", "child", "piccolo", None);
+        let coda = "x".repeat(MAX_OUTPUT_BYTES + 10);
+        let body = format!("{}{}", r#"{{import "child"}}"#, coda);
+        let mut visitati = HashSet::new();
+        let res = compila_ricorsivo(&conn, "prm-main", &body, &mut visitati, 0);
+        assert!(res.is_err(), "coda oltre il cap deve fallire");
+        assert!(res.unwrap_err().to_string().contains("eccede"));
+    }
+
+    #[test]
+    fn cap_output_somma_espansioni_fallisce() {
+        // Regressione: due import dello stesso prompt da ~600KB sommano a
+        // 1.2MB > cap. Il check ora avviene PRIMA del push dell'espansione.
+        let conn = db_test();
+        let grande = "y".repeat(600_000);
+        inserisci_prompt(&conn, "prm-big", "big", &grande, None);
+        let body = r#"{{import "big"}} {{import "big"}}"#.to_string();
+        let mut visitati = HashSet::new();
+        let res = compila_ricorsivo(&conn, "prm-main2", &body, &mut visitati, 0);
+        assert!(res.is_err(), "somma espansioni oltre il cap deve fallire");
+        assert!(res.unwrap_err().to_string().contains("eccede"));
     }
 
     #[test]
