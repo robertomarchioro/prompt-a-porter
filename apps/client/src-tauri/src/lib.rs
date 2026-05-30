@@ -261,7 +261,7 @@ pub fn run() {
             let data_dir = app
                 .path()
                 .app_data_dir()
-                .expect("Impossibile ottenere la directory dati dell'app");
+                .map_err(|e| format!("Impossibile ottenere la directory dati dell'app: {e}"))?;
 
             // v0.8.7 Sezione Sviluppo → Debug log: applica livello dalla
             // preferenza dell'utente. Default WARN (file leggero), DEBUG

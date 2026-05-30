@@ -386,6 +386,11 @@ fn insert_observation(conn: &Connection, obs: &Observation) -> Result<(), PapErr
 /// catturati e salvati come observation con `Errore` valorizzato e
 /// `Passed = false` — non bubbled-up al chiamante. Errori di lookup DB
 /// (golden inesistente, prompt eliminato) sono invece propagati.
+///
+/// Usata solo dai test (wrapper senza giudice): `#[cfg(test)]` evita il
+/// warning dead-code nei build non-test, dove i call site reali passano
+/// per `esegui_pure_con_ctx`.
+#[cfg(test)]
 pub(crate) fn esegui_pure_con_provider(
     conn: &Connection,
     rt: Option<&EmbeddingsState>,

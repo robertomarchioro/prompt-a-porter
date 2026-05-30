@@ -175,7 +175,19 @@ pub fn carica_pure(path: &Path) -> Result<Preferenze, PapErrore> {
 pub fn salva_pure(data_dir: &Path, preferenze: &Preferenze) -> Result<(), PapErrore> {
     fs::create_dir_all(data_dir)?;
     let json = serde_json::to_string_pretty(preferenze)?;
-    fs::write(data_dir.join("preferenze.json"), json)?;
+    let path = data_dir.join("preferenze.json");
+    fs::write(&path, json)?;
+    // SECURITY: preferenze.json contiene `sync_token` in chiaro. Su Unix
+    // restringiamo i permessi a 0600 (solo owner) per ridurre l'esposizione
+    // su sistemi multi-utente. Su Windows l'AppData è già per-utente.
+    // TODO: spostare i segreti nel keychain OS (crate `keyring`).
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(e) = fs::set_permissions(&path, fs::Permissions::from_mode(0o600)) {
+            log::warn!("set_permissions 0600 su preferenze.json fallito: {e}");
+        }
+    }
     Ok(())
 }
 
