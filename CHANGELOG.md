@@ -1,5 +1,35 @@
 # Changelog — Prompt a Porter
 
+## Unreleased — Audit di sicurezza + remediation Rust (post v0.8.11)
+
+> Esito di un audit di sicurezza (`/security-bounty-hunter` sul sync server Go) e di una code review Rust completa (`/rust-review` su tutta la codebase del client). Nessuna vulnerabilità critica/remota trovata; chiusi un controllo di autorizzazione mancante lato server e una serie di hardening/silent-failure lato client. 10 PR atomiche (#239-248), una per modulo (ogni file toccato una sola volta). 568 test Rust verdi.
+
+### Sicurezza
+
+- **Server sync — autorizzazione PromptTags (CWE-639)** (#239): il loop `PromptTags` in `pushDelta` inseriva associazioni prompt-tag senza verificare che gli ID appartenessero al workspace del chiamante (a differenza dei loop Tags/Prompts). Un client autenticato poteva creare associazioni cross-workspace. Aggiunta validazione di ownership in transazione + test di regressione. Exploitabilità reale bassa (FK ON + ID a 32 bit casuali + nessun percorso di disclosure), ma controllo mancante che il codice intorno intendeva applicare.
+- **Client — validazione `visibility` al trust boundary** (#241): `sync_applica_delta` ora valida `visibility ∈ {private, workspace}` sui record provenienti dal server (skip-with-log) invece di lasciar abortire l'intero delta sul CHECK del DB; existence-check `COUNT(*)` → `EXISTS` con errore DB propagato.
+- **Client — `api_key` non esposta via Debug** (#242): rimosso `derive(Debug)` dalle struct provider (Anthropic/OpenAI/Gemini) e da `ProviderConfigItem`/`Input`; un futuro `{:?}`/log non compilerà più. (Nessun leak attivo: il comando frontend già azzera la chiave.)
+- **Client — `preferenze.json` con permessi 0600 su Unix** (#248): il file contiene `sync_token` in chiaro; ristretti i permessi al solo owner (best-effort). TODO documentato: spostare i segreti nel keychain OS.
+- **Client — cap anti-bomba import a tenuta** (#240): chiusi due bypass del limite `MAX_OUTPUT_BYTES` (1 MB) in `compila_ricorsivo` — il check ora avviene prima di accodare l'espansione del child e include la coda dopo l'ultimo import. Rilevante perché i body possono arrivare via team sync. + 2 test di regressione.
+
+### Robustezza
+
+- **Lock poison-tolerant su stato a lunga vita** (#244, #245): tutti i `Mutex::lock().unwrap()` di `VaultState` (11 site) e `EmbeddingsState` ora recuperano il guard anche su mutex avvelenato (`unwrap_or_else(into_inner)`). Un panic mentre si tiene il lock non crasha più a cascata ogni operazione successiva.
+- **Transazione su promozione variante** (#247): i 3 `UPDATE` dello swap variante↔principale in `promuovi_pure` girano in `BEGIN/COMMIT` con `ROLLBACK` su errore (prima un errore a metà lasciava i prompt in stato corrotto).
+- **Errori DB non più mascherati** (#247): le existence-check `query_row(...).unwrap_or(false/None)` in `rating`/`fork`/`cartelle` distinguono ora "riga assente" da un vero errore DB (propagato).
+- **Errori di scrittura import non più silenziati** (#246): in `import_pure` gli errori su `PromptTags`/`PromptVersions` finiscono in `report.errori`; il rebuild FTS post-bulk-import logga l'errore; i due `unreachable!()` sui rami modalità-conflitto → `Err` esplicito.
+- **`audit::registra` osservabile** (#247): il fallimento dell'INSERT di audit è loggato invece di scartato (firma invariata).
+- **Guardia su input malformati** (#244): `hex_a_bytes` non panica più su stringa di lunghezza dispari; `version=N` in overflow `i64` dà un errore chiaro invece di mappare a `0`; `app_data_dir()` in setup ritorna errore invece di panicare l'avvio (#248); `remove_file` del DB orfano in `vault_crea` propaga l'errore (#244).
+
+### Qualità
+
+- **Pulizia clippy** (#243): `linting.rs` — `format!` inutile → `.to_string()`, `sort_by` → `sort_by_key(Reverse)`, `HashMap::with_capacity`, rimossa variabile a rami identici (bug di pluralizzazione dormiente). `EmbeddingsState` ora implementa `Default` (#245); rimosso campo morto `AnthropicUsage.input_tokens` (#242); `regression::esegui_pure_con_provider` (solo-test) marcata `#[cfg(test)]` (#248); fix di un doctest che falliva la compilazione (#246).
+
+### Note
+
+- Falso positivo confermato e **non** modificato: il "deadlock" embeddings segnalato in review — in `unload_se_idle` il guard di `last_used` è un temporary rilasciato prima di acquisire `inner`, i due lock non sono mai tenuti insieme.
+- Deferiti consapevolmente (basso valore / alto churn su app local single-user cifrata): conversione `filter_map(|r| r.ok())` nei list-helper residui, N+1 bounded in `libreria::lista_pure`, split di funzioni lunghe.
+
 ## v0.8.11 — v1.0 M2-M8: quality gate finali + documentazione utente (2026-05-19)
 
 > Release di chiusura della roadmap v1.0 "Personale". Sette milestone roadmap (M2-M8) consolidate in una singola release: a11y, recupero UI, sintassi import evoluta, editor doppia vista, markdown import/export, gate di coverage e documentazione utente completa.
