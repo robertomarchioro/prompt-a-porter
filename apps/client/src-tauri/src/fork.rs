@@ -139,13 +139,17 @@ pub(crate) fn info_pure(
     conn: &Connection,
     prompt_id: &str,
 ) -> Result<Option<ForkOfInfo>, PapErrore> {
-    let original_id: Option<String> = conn
-        .query_row(
-            "SELECT ForkOfPromptId FROM Prompts WHERE Id = ?1",
-            [prompt_id],
-            |r| r.get(0),
-        )
-        .unwrap_or(None);
+    // Distingue "prompt assente" (-> None) da un vero errore DB (propagato):
+    // prima unwrap_or(None) mascherava entrambi come None.
+    let original_id: Option<String> = match conn.query_row(
+        "SELECT ForkOfPromptId FROM Prompts WHERE Id = ?1",
+        [prompt_id],
+        |r| r.get(0),
+    ) {
+        Ok(v) => v,
+        Err(rusqlite::Error::QueryReturnedNoRows) => None,
+        Err(e) => return Err(e.into()),
+    };
 
     let Some(original_id) = original_id else {
         return Ok(None);

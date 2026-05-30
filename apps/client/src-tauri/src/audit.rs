@@ -59,11 +59,16 @@ pub fn registra(
     metadati: Option<&str>,
 ) {
     let id = formato_id_audit();
-    let _ = conn.execute(
+    // Fire-and-forget by design (la firma resta `-> ()` per non appesantire
+    // le decine di call site), ma un fallimento dell'audit non deve sparire
+    // del tutto: lo logghiamo per renderlo osservabile.
+    if let Err(e) = conn.execute(
         "INSERT INTO AuditLog (Id, WorkspaceId, UserId, Action, EntityType, EntityId, Metadata, OccurredAt)
          VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, ?4, ?5, datetime('now'))",
         rusqlite::params![id, azione, tipo_entita, id_entita, metadati],
-    );
+    ) {
+        log::warn!("audit registra fallito (azione={azione}): {e}");
+    }
 }
 
 fn formato_id_audit() -> String {
