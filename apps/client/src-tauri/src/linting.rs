@@ -249,9 +249,8 @@ fn regola_pii003_carta_credito(body: &str, out: &mut Vec<Issue>) {
             out.push(Issue {
                 code: "PII003",
                 severita: Severita::Error,
-                messaggio: format!(
-                    "Possibile numero di carta di credito (Luhn-valido). Rimuovi prima di salvare il prompt."
-                ),
+                messaggio: "Possibile numero di carta di credito (Luhn-valido). Rimuovi prima di salvare il prompt."
+                    .to_string(),
                 linea: Some(linea),
                 colonna: Some(colonna),
             });
@@ -283,7 +282,7 @@ fn regola_sty001_ripetizione(body: &str, out: &mut Vec<Issue>) {
     if parole.len() < NGRAM_SIZE {
         return;
     }
-    let mut conteggi: HashMap<String, usize> = HashMap::new();
+    let mut conteggi: HashMap<String, usize> = HashMap::with_capacity(parole.len());
     for finestra in parole.windows(NGRAM_SIZE) {
         let key = finestra.join(" ").to_lowercase();
         *conteggi.entry(key).or_insert(0) += 1;
@@ -292,7 +291,7 @@ fn regola_sty001_ripetizione(body: &str, out: &mut Vec<Issue>) {
         .into_iter()
         .filter(|(_, c)| *c >= NGRAM_THRESHOLD)
         .collect();
-    ripetuti.sort_by(|a, b| b.1.cmp(&a.1));
+    ripetuti.sort_by_key(|(_, c)| std::cmp::Reverse(*c));
 
     for (ngram, count) in ripetuti.into_iter().take(3) {
         out.push(Issue {
@@ -415,15 +414,16 @@ fn regole_imp(
             )
             .unwrap_or(0);
         if count > 0 {
-            let plurale = if count == 1 { "prompt" } else { "prompt" };
+            // "prompt" è invariante in italiano (1 altro prompt / N altri
+            // prompt): la differenza singolare/plurale è già nei due rami
+            // "1 altro" vs "{count} altri", quindi niente variabile plurale.
             let messaggio = if count == 1 {
-                format!(
-                    "Questo prompt è importato da 1 altro {plurale}. \
-                     Modifiche al body si propagano alla compilazione di chi lo importa."
-                )
+                "Questo prompt è importato da 1 altro prompt. \
+                 Modifiche al body si propagano alla compilazione di chi lo importa."
+                    .to_string()
             } else {
                 format!(
-                    "Questo prompt è importato da {count} altri {plurale}. \
+                    "Questo prompt è importato da {count} altri prompt. \
                      Modifiche al body si propagano alla compilazione di chi lo importa."
                 )
             };
