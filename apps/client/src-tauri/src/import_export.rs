@@ -857,8 +857,12 @@ pub fn vault_import_markdown_bulk(
             }
         }
 
-        // FTS rebuild una volta sola a fine batch (evita N rebuild costosi)
-        let _ = crate::editor::ricostruisci_fts(conn);
+        // FTS rebuild una volta sola a fine batch (evita N rebuild costosi).
+        // Errore loggato: un FTS stantio rende la ricerca incompleta, ma non
+        // deve far fallire un import altrimenti riuscito.
+        if let Err(e) = crate::editor::ricostruisci_fts(conn) {
+            log::error!("ricostruisci_fts fallita dopo bulk import markdown: {e}");
+        }
         crate::audit::registra(
             conn,
             "vault.imported.markdown.bulk",
@@ -943,7 +947,7 @@ fn sanitize_folder_path(path: &str) -> String {
 /// prompt del vault (filtrati opzionalmente per folder root).
 ///
 /// Layout zip:
-/// ```
+/// ```text
 /// <folder_path>/<title>.md
 /// ```
 /// Per prompt in root il file e' alla radice dello zip.
@@ -1143,7 +1147,11 @@ pub(crate) fn import_pure(
                     report.aggiornati += 1;
                 }
             }
-            _ => unreachable!("modalita validata in ingresso"),
+            (_, altro) => {
+                return Err(PapErrore::Generico(format!(
+                    "Modalità import non gestita: {altro}"
+                )))
+            }
         }
     }
 
@@ -1165,7 +1173,11 @@ pub(crate) fn import_pure(
             }
             (true, "overwrite") => prompt.id.clone(),
             (true, "rename") => format!("{}-imp", prompt.id),
-            _ => unreachable!(),
+            (_, altro) => {
+                return Err(PapErrore::Generico(format!(
+                    "Modalità import non gestita: {altro}"
+                )))
+            }
         };
 
         let title = if id_effettivo == prompt.id {
@@ -1231,22 +1243,32 @@ pub(crate) fn import_pure(
             _ => continue,
         }
 
-        // Riassocia tag.
-        let _ = conn.execute(
+        // Riassocia tag. Gli errori non bloccano l'import ma sono riportati
+        // (prima venivano scartati silenziosamente -> dati tag incompleti).
+        if let Err(e) = conn.execute(
             "DELETE FROM PromptTags WHERE PromptId = ?1",
             [&id_effettivo],
-        );
+        ) {
+            report
+                .errori
+                .push(format!("PromptTags delete {id_effettivo}: {e}"));
+        }
         for tag_id in &prompt.tag_ids {
-            let _ = conn.execute(
+            if let Err(e) = conn.execute(
                 "INSERT OR IGNORE INTO PromptTags (PromptId, TagId) VALUES (?1, ?2)",
                 rusqlite::params![id_effettivo, tag_id],
-            );
+            ) {
+                report
+                    .errori
+                    .push(format!("PromptTag {id_effettivo}/{tag_id}: {e}"));
+            }
         }
     }
 
-    // Versioni storiche (best-effort, INSERT OR IGNORE per UNIQUE constraint).
+    // Versioni storiche (INSERT OR IGNORE per UNIQUE constraint). Errori
+    // riportati invece di scartati silenziosamente.
     for ver in &export.versions {
-        let _ = conn.execute(
+        if let Err(e) = conn.execute(
             "INSERT OR IGNORE INTO PromptVersions
                 (Id, PromptId, Version, Title, Description, Body, Visibility,
                  TargetModel, CreatedAt, CreatedByUserId)
@@ -1263,7 +1285,9 @@ pub(crate) fn import_pure(
                 ver.created_at,
                 ver.created_by_user_id,
             ],
-        );
+        ) {
+            report.errori.push(format!("Versione {}: {e}", ver.id));
+        }
     }
 
     crate::editor::ricostruisci_fts(conn)?;
