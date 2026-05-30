@@ -85,6 +85,12 @@ impl EmbeddingsState {
     }
 }
 
+impl Default for EmbeddingsState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ─────────── Status ───────────
 
 #[derive(Debug, Serialize)]
@@ -159,7 +165,7 @@ pub fn embeddings_status(
     state: State<'_, VaultState>,
     rt_state: State<'_, EmbeddingsState>,
 ) -> Result<EmbeddingsStato, PapErrore> {
-    if rt_state.inner.lock().unwrap().is_some() {
+    if rt_state.inner.lock().unwrap_or_else(|p| p.into_inner()).is_some() {
         return Ok(EmbeddingsStato::Caricato {
             model_id: MODEL_ID.to_string(),
             dimensione: EMBEDDING_DIM,
@@ -455,7 +461,7 @@ pub fn init_session_pure(
     vault_state: &VaultState,
 ) -> Result<bool, PapErrore> {
     {
-        let guard = rt_state.inner.lock().unwrap();
+        let guard = rt_state.inner.lock().unwrap_or_else(|p| p.into_inner());
         if guard.is_some() {
             return Ok(false);
         }
@@ -491,11 +497,11 @@ pub fn init_session_pure(
     let tokenizer = Tokenizer::from_file(&tokenizer_path)
         .map_err(|e| PapErrore::Generico(format!("Tokenizer load: {e}")))?;
 
-    let mut guard = rt_state.inner.lock().unwrap();
+    let mut guard = rt_state.inner.lock().unwrap_or_else(|p| p.into_inner());
     *guard = Some(EmbeddingsLoaded { session, tokenizer });
     // Marca l'init come "uso recente" così il timer di idle-unload non
     // droppa subito una Session appena caricata.
-    *rt_state.last_used.lock().unwrap() = Some(Instant::now());
+    *rt_state.last_used.lock().unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
 
     Ok(true)
 }
@@ -581,12 +587,12 @@ pub(crate) fn compute_embedding_opt(
     rt_state: &EmbeddingsState,
     testo: &str,
 ) -> Result<Option<Vec<f32>>, PapErrore> {
-    let mut guard = rt_state.inner.lock().unwrap();
+    let mut guard = rt_state.inner.lock().unwrap_or_else(|p| p.into_inner());
     let Some(loaded) = guard.as_mut() else {
         return Ok(None);
     };
     let result = compute_with_loaded(loaded, testo)?;
-    *rt_state.last_used.lock().unwrap() = Some(Instant::now());
+    *rt_state.last_used.lock().unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
     Ok(Some(result))
 }
 
@@ -611,14 +617,14 @@ pub fn unload_se_idle(rt_state: &EmbeddingsState, soglia: Duration) -> bool {
     if soglia < SOGLIA_MIN_UNLOAD {
         return false;
     }
-    let last = *rt_state.last_used.lock().unwrap();
+    let last = *rt_state.last_used.lock().unwrap_or_else(|p| p.into_inner());
     let Some(last) = last else {
         return false;
     };
     if last.elapsed() < soglia {
         return false;
     }
-    let mut guard = rt_state.inner.lock().unwrap();
+    let mut guard = rt_state.inner.lock().unwrap_or_else(|p| p.into_inner());
     if guard.is_some() {
         *guard = None;
         log::info!(
@@ -634,12 +640,12 @@ pub fn unload_se_idle(rt_state: &EmbeddingsState, soglia: Duration) -> bool {
 /// Restituisce l'`Instant` dell'ultimo uso della Session. Esposto per i
 /// test e per il task background.
 pub fn ultimo_uso(rt_state: &EmbeddingsState) -> Option<Instant> {
-    *rt_state.last_used.lock().unwrap()
+    *rt_state.last_used.lock().unwrap_or_else(|p| p.into_inner())
 }
 
 /// `true` se la Session è caricata. Esposto per i test e per UI status.
 pub fn session_caricata(rt_state: &EmbeddingsState) -> bool {
-    rt_state.inner.lock().unwrap().is_some()
+    rt_state.inner.lock().unwrap_or_else(|p| p.into_inner()).is_some()
 }
 
 fn compute_with_loaded(
