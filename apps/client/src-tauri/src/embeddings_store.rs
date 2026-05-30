@@ -130,8 +130,7 @@ pub fn search_nearest(
         .query_map(params![bytes, k as i64], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
 }
 
@@ -206,8 +205,7 @@ pub fn search_nearest_tags(
         .query_map(params![bytes, k as i64], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
 }
 
@@ -234,8 +232,7 @@ pub fn tag_senza_embedding(
         .query_map(params![limite as i64], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
 }
 
@@ -257,8 +254,7 @@ pub fn prompt_senza_embedding(
     )?;
     let ids = stmt
         .query_map(params![limite as i64], |row| row.get::<_, String>(0))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(ids)
 }
 
