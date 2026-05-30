@@ -79,7 +79,16 @@ impl VaultState {
 
     /// True se la connessione è aperta.
     pub fn aperto(&self) -> bool {
-        self.conn.lock().unwrap().is_some()
+        self.lock_conn().is_some()
+    }
+
+    /// Lock poison-tolerant del Mutex della connessione. Se un thread è
+    /// panicato tenendo il lock, recuperiamo comunque il guard: i dati
+    /// SQLite sottostanti non sono corrotti da un panic Rust, e far
+    /// panicare con PoisonError ogni operazione successiva (crash a
+    /// cascata dell'intero processo) sarebbe peggio.
+    fn lock_conn(&self) -> std::sync::MutexGuard<'_, Option<Connection>> {
+        self.conn.lock().unwrap_or_else(|p| p.into_inner())
     }
 
     /// Accesso alla connessione per query. Restituisce errore se il vault è chiuso.
@@ -87,7 +96,7 @@ impl VaultState {
     where
         F: FnOnce(&Connection) -> Result<T, PapErrore>,
     {
-        let guard = self.conn.lock().unwrap();
+        let guard = self.lock_conn();
         let conn = guard.as_ref().ok_or(PapErrore::VaultChiuso)?;
         f(conn)
     }
@@ -106,6 +115,11 @@ fn bytes_a_hex(bytes: &[u8]) -> String {
 }
 
 fn hex_a_bytes(hex: &str) -> Result<Vec<u8>, PapErrore> {
+    if hex.len() % 2 != 0 {
+        // Senza questa guardia lo slicing `&hex[i..i+2]` sull'ultimo step
+        // panica (out-of-bounds) su input di lunghezza dispari.
+        return Err(PapErrore::Argon2("hex di lunghezza dispari".into()));
+    }
     (0..hex.len())
         .step_by(2)
         .map(|i| {
@@ -226,7 +240,12 @@ pub(crate) fn vault_crea_impl(password: &str, state: &VaultState) -> Result<(), 
             "vault_crea: DB orfano trovato (no meta) in {} → rimozione",
             db_path.display()
         );
-        let _ = fs::remove_file(&db_path);
+        // Il DB orfano DEVE essere rimosso prima di crearne uno nuovo sullo
+        // stesso path: se la rimozione fallisce, l'errore va propagato
+        // (altrimenti riapriremmo il file corrotto e la migrazione
+        // fallirebbe con un errore opaco). Il file esiste (controllato sopra),
+        // quindi qui non c'è il caso NotFound.
+        fs::remove_file(&db_path)?;
     }
 
     // Assicura che la directory dati esista
@@ -264,7 +283,7 @@ pub(crate) fn vault_crea_impl(password: &str, state: &VaultState) -> Result<(), 
     crate::audit::registra(&conn, "vault.creato", "Vault", "", Some("cifrato"));
 
     // Metti la connessione nello stato globale
-    let mut guard = state.conn.lock().unwrap();
+    let mut guard = state.lock_conn();
     *guard = Some(conn);
 
     log::info!("Vault creato: {}", db_path.display());
@@ -304,7 +323,7 @@ pub(crate) fn vault_crea_aperto_impl(state: &VaultState) -> Result<(), PapErrore
         let conn = Connection::open(state.db_path())?;
         migrazione::esegui_migrazioni(&conn)?;
         crate::libreria::assicura_dati_base(&conn)?;
-        let mut guard = state.conn.lock().unwrap();
+        let mut guard = state.lock_conn();
         *guard = Some(conn);
         return Ok(());
     }
@@ -315,7 +334,12 @@ pub(crate) fn vault_crea_aperto_impl(state: &VaultState) -> Result<(), PapErrore
             "vault_crea_aperto: DB orfano trovato (no meta) in {} → rimozione",
             db_path.display()
         );
-        let _ = fs::remove_file(&db_path);
+        // Il DB orfano DEVE essere rimosso prima di crearne uno nuovo sullo
+        // stesso path: se la rimozione fallisce, l'errore va propagato
+        // (altrimenti riapriremmo il file corrotto e la migrazione
+        // fallirebbe con un errore opaco). Il file esiste (controllato sopra),
+        // quindi qui non c'è il caso NotFound.
+        fs::remove_file(&db_path)?;
     }
 
     fs::create_dir_all(&state.data_dir)?;
@@ -338,7 +362,7 @@ pub(crate) fn vault_crea_aperto_impl(state: &VaultState) -> Result<(), PapErrore
 
     crate::audit::registra(&conn, "vault.creato", "Vault", "", Some("non_cifrato"));
 
-    let mut guard = state.conn.lock().unwrap();
+    let mut guard = state.lock_conn();
     *guard = Some(conn);
 
     log::info!("Vault creato (non cifrato): {}", db_path.display());
@@ -396,7 +420,7 @@ pub(crate) fn vault_unlock_impl(password: &str, state: &VaultState) -> Result<()
     crate::libreria::assicura_dati_base(&conn)?;
     crate::audit::registra(&conn, "vault.sbloccato", "Vault", "", None);
 
-    let mut guard = state.conn.lock().unwrap();
+    let mut guard = state.lock_conn();
     *guard = Some(conn);
 
     log::info!("Vault sbloccato.");
@@ -411,7 +435,7 @@ pub fn vault_lock(state: State<'_, VaultState>) -> Result<(), PapErrore> {
 
 /// M7 PR-1: logica testabile di `vault_lock`.
 pub(crate) fn vault_lock_impl(state: &VaultState) -> Result<(), PapErrore> {
-    let mut guard = state.conn.lock().unwrap();
+    let mut guard = state.lock_conn();
     if let Some(conn) = guard.as_ref() {
         crate::audit::registra(conn, "vault.bloccato", "Vault", "", None);
     } else {
@@ -457,7 +481,7 @@ pub(crate) fn vault_cambia_password_impl(
         meta.argon2_parallelism,
     )?;
 
-    let guard = state.conn.lock().unwrap();
+    let guard = state.lock_conn();
     let conn = guard.as_ref().ok_or(PapErrore::VaultChiuso)?;
 
     // Verifica che la chiave vecchia sia corretta tramite test query
@@ -514,7 +538,7 @@ pub fn vault_elimina(state: State<'_, VaultState>) -> Result<(), PapErrore> {
 
 /// M7 PR-1: logica testabile di `vault_elimina`.
 pub(crate) fn vault_elimina_impl(state: &VaultState) -> Result<(), PapErrore> {
-    let mut guard = state.conn.lock().unwrap();
+    let mut guard = state.lock_conn();
     *guard = None;
 
     let db = state.db_path();
@@ -644,6 +668,10 @@ mod test {
 
         let r = hex_a_bytes("xy01");
         assert!(r.is_err());
+
+        // Lunghezza dispari → Err (prima panicava per out-of-bounds).
+        let r = hex_a_bytes("abc");
+        assert!(r.is_err(), "hex di lunghezza dispari deve produrre Err");
 
         // Stringa vuota → Vec vuoto valido.
         let r = hex_a_bytes("").unwrap();
@@ -777,7 +805,7 @@ mod test {
         vault_crea_impl("password_ok_123", &state).unwrap();
         // Simula app restart: rilascia lock
         {
-            let mut g = state.conn.lock().unwrap();
+            let mut g = state.lock_conn();
             *g = None;
         }
         assert!(!state.aperto());
@@ -921,7 +949,7 @@ mod test {
         vault_crea_aperto_impl(&state).unwrap();
         // Simula restart
         {
-            let mut g = state.conn.lock().unwrap();
+            let mut g = state.lock_conn();
             *g = None;
         }
         // Re-crea_aperto: deve aprire idempotentemente
