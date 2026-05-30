@@ -59,12 +59,13 @@ pub fn sync_applica_delta(delta: SyncDelta, state: State<'_, VaultState>) -> Res
         let mut applicati: u32 = 0;
 
         for tag in &delta.tags {
-            let esiste: bool = conn
-                .query_row("SELECT COUNT(*) FROM Tags WHERE Id = ?1", [&tag.id], |r| {
-                    r.get::<_, i32>(0)
-                })
-                .map(|c| c > 0)
-                .unwrap_or(false);
+            // EXISTS invece di COUNT(*); l'errore DB viene propagato (`?`)
+            // invece di essere mascherato in `false` da `unwrap_or`.
+            let esiste: bool = conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM Tags WHERE Id = ?1)",
+                [&tag.id],
+                |r| r.get::<_, i32>(0),
+            )? > 0;
 
             if esiste {
                 conn.execute(
@@ -91,14 +92,27 @@ pub fn sync_applica_delta(delta: SyncDelta, state: State<'_, VaultState>) -> Res
         }
 
         for p in &delta.prompts {
-            let esiste: bool = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM Prompts WHERE Id = ?1",
-                    [&p.id],
-                    |r| r.get::<_, i32>(0),
-                )
-                .map(|c| c > 0)
-                .unwrap_or(false);
+            // Trust boundary: il delta arriva dal server di sync. Validiamo
+            // `visibility` contro il set ammesso PRIMA di scrivere: un record
+            // malformato viene saltato (con log) invece di far abortire
+            // l'intero delta sul CHECK del DB. (workspace_id/author_user_id
+            // non sono ancora validati: multi-workspace non implementato.)
+            if !matches!(p.visibility.as_str(), "private" | "workspace") {
+                log::warn!(
+                    "sync: prompt {} scartato, visibility non valida: {:?}",
+                    p.id,
+                    p.visibility
+                );
+                continue;
+            }
+
+            // EXISTS invece di COUNT(*); errore DB propagato invece di
+            // mascherato in `false`.
+            let esiste: bool = conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM Prompts WHERE Id = ?1)",
+                [&p.id],
+                |r| r.get::<_, i32>(0),
+            )? > 0;
 
             if esiste {
                 conn.execute(
