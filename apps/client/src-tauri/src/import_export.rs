@@ -47,6 +47,16 @@ pub struct PromptExport {
     pub created_at: String,
     pub updated_at: String,
     pub tag_ids: Vec<String>,
+    // Metadati varianti/fork (additivi, opzionali → compatibili con gli
+    // export v1 esistenti privi di questi campi grazie a #[serde(default)]).
+    #[serde(default)]
+    pub parent_prompt_id: Option<String>,
+    #[serde(default)]
+    pub is_variant: bool,
+    #[serde(default)]
+    pub variant_label: Option<String>,
+    #[serde(default)]
+    pub fork_of_prompt_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -165,15 +175,18 @@ pub(crate) fn export_pure_filter(
     // Costruzione query Prompts. Se folder_id specificato, risolvi il
     // Path della folder e filtra i prompt nel sotto-albero (path esatto
     // OR path LIKE "<folder_path>/%").
+    #[allow(clippy::type_complexity)]
     type PromptRaw = (String, String, Option<String>, String, String,
                      Option<String>, Option<String>, i64, i64,
-                     Option<String>, i64, String, String);
+                     Option<String>, i64, String, String,
+                     Option<String>, i64, Option<String>, Option<String>);
 
     fn collect_row(r: &rusqlite::Row) -> rusqlite::Result<PromptRaw> {
         Ok((
             r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?,
             r.get(5)?, r.get(6)?, r.get::<_, i64>(7)?, r.get(8)?,
             r.get(9)?, r.get(10)?, r.get(11)?, r.get(12)?,
+            r.get(13)?, r.get::<_, i64>(14)?, r.get(15)?, r.get(16)?,
         ))
     }
 
@@ -188,7 +201,8 @@ pub(crate) fn export_pure_filter(
         let mut stmt = conn.prepare(
             "SELECT p.Id, p.Title, p.Description, p.Body, p.Visibility, p.TargetModel,
                     p.FolderId, p.IsFavorite, p.UseCount, p.LastUsedAt, p.Version,
-                    p.CreatedAt, p.UpdatedAt
+                    p.CreatedAt, p.UpdatedAt,
+                    p.ParentPromptId, p.IsVariant, p.VariantLabel, p.ForkOfPromptId
              FROM Prompts p
              JOIN Folders f ON f.Id = p.FolderId
              WHERE p.DeletedAt IS NULL
@@ -206,7 +220,8 @@ pub(crate) fn export_pure_filter(
         let mut stmt = conn.prepare(
             "SELECT Id, Title, Description, Body, Visibility, TargetModel,
                     FolderId, IsFavorite, UseCount, LastUsedAt, Version,
-                    CreatedAt, UpdatedAt
+                    CreatedAt, UpdatedAt,
+                    ParentPromptId, IsVariant, VariantLabel, ForkOfPromptId
              FROM Prompts
              WHERE DeletedAt IS NULL
              ORDER BY CreatedAt ASC",
@@ -244,6 +259,10 @@ pub(crate) fn export_pure_filter(
             created_at: p.11,
             updated_at: p.12,
             tag_ids,
+            parent_prompt_id: p.13,
+            is_variant: p.14 != 0,
+            variant_label: p.15,
+            fork_of_prompt_id: p.16,
         });
     }
 
@@ -1267,7 +1286,11 @@ pub(crate) fn import_pure(
         }
     }
 
-    // Prompts.
+    // Prompts. `id_map` mappa l'id originale dell'export all'id effettivo nel
+    // DB (diverso solo in modalità rename) per i prompt davvero scritti;
+    // serve alla seconda passata che collega varianti/fork (FK self-ref).
+    let mut id_map: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
     for prompt in &export.prompts {
         let esiste: bool = conn
             .query_row(
@@ -1323,6 +1346,7 @@ pub(crate) fn import_pure(
                 "UPDATE Prompts SET Title = ?1, Description = ?2, Body = ?3,
                         Visibility = ?4, TargetModel = ?5, IsFavorite = ?6,
                         UseCount = ?7, LastUsedAt = ?8, Version = ?9, FolderId = ?11,
+                        IsVariant = ?12, VariantLabel = ?13,
                         UpdatedAt = datetime('now')
                  WHERE Id = ?10",
                 rusqlite::params![
@@ -1336,7 +1360,9 @@ pub(crate) fn import_pure(
                     prompt.last_used_at,
                     prompt.version,
                     prompt.id,
-                    folder_ref
+                    folder_ref,
+                    prompt.is_variant as i64,
+                    prompt.variant_label
                 ],
             )
             .map(|_| "agg")
@@ -1345,9 +1371,9 @@ pub(crate) fn import_pure(
                 "INSERT INTO Prompts
                     (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
                      Visibility, TargetModel, IsFavorite, UseCount, LastUsedAt,
-                     Version, CreatedAt, UpdatedAt, FolderId)
+                     Version, CreatedAt, UpdatedAt, FolderId, IsVariant, VariantLabel)
                  VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, ?4, ?5, ?6,
-                         ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                         ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
                 rusqlite::params![
                     id_effettivo,
                     title,
@@ -1361,7 +1387,9 @@ pub(crate) fn import_pure(
                     prompt.version,
                     prompt.created_at,
                     prompt.updated_at,
-                    folder_ref
+                    folder_ref,
+                    prompt.is_variant as i64,
+                    prompt.variant_label
                 ],
             )
             .map(|_| "new")
@@ -1376,6 +1404,7 @@ pub(crate) fn import_pure(
             }
             _ => continue,
         }
+        id_map.insert(prompt.id.clone(), id_effettivo.clone());
 
         // Riassocia tag. Gli errori non bloccano l'import ma sono riportati
         // (prima venivano scartati silenziosamente -> dati tag incompleti).
@@ -1396,6 +1425,49 @@ pub(crate) fn import_pure(
                     .errori
                     .push(format!("PromptTag {id_effettivo}/{tag_id}: {e}"));
             }
+        }
+    }
+
+    // Seconda passata: ParentPromptId / ForkOfPromptId sono FK
+    // self-referenziali su Prompts(Id); li popoliamo solo ora che tutti i
+    // prompt sono inseriti. I riferimenti sono mappati attraverso `id_map`
+    // (gestisce la modalità rename); se il prompt referenziato non è presente
+    // (né importato né preesistente) il riferimento resta NULL.
+    let risolvi_rif = |rif: &Option<String>| -> Option<String> {
+        let r = rif.as_ref()?;
+        if let Some(mapped) = id_map.get(r) {
+            return Some(mapped.clone());
+        }
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM Prompts WHERE Id = ?1)",
+                [r],
+                |x| x.get(0),
+            )
+            .unwrap_or(false);
+        if exists {
+            Some(r.clone())
+        } else {
+            None
+        }
+    };
+    for prompt in &export.prompts {
+        if prompt.parent_prompt_id.is_none() && prompt.fork_of_prompt_id.is_none() {
+            continue;
+        }
+        // Aggiorna solo i prompt effettivamente scritti in questo import.
+        let Some(self_id) = id_map.get(&prompt.id) else {
+            continue;
+        };
+        let parent = risolvi_rif(&prompt.parent_prompt_id);
+        let fork = risolvi_rif(&prompt.fork_of_prompt_id);
+        if let Err(e) = conn.execute(
+            "UPDATE Prompts SET ParentPromptId = ?1, ForkOfPromptId = ?2 WHERE Id = ?3",
+            rusqlite::params![parent, fork, self_id],
+        ) {
+            report
+                .errori
+                .push(format!("Link variante/fork {self_id}: {e}"));
         }
     }
 
@@ -1545,6 +1617,10 @@ mod test {
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-02T00:00:00Z".into(),
                 tag_ids: vec!["tag-a".into(), "tag-b".into()],
+                parent_prompt_id: None,
+                is_variant: false,
+                variant_label: None,
+                fork_of_prompt_id: None,
             }],
             versions: vec![],
             tags: vec![],
@@ -1671,6 +1747,10 @@ mod test {
                 created_at: "2026-05-07T00:00:00Z".into(),
                 updated_at: "2026-05-07T00:00:00Z".into(),
                 tag_ids: vec![],
+                parent_prompt_id: None,
+                is_variant: false,
+                variant_label: None,
+                fork_of_prompt_id: None,
             }],
             versions: vec![],
             tags: vec![],
@@ -1874,6 +1954,77 @@ mod test {
             })
             .unwrap();
         assert_eq!(folder_id, None);
+    }
+
+    #[test]
+    fn round_trip_varianti_e_fork_ricostruisce_relazioni() {
+        let conn1 = db_test();
+        inserisci_prompt(&conn1, "prm-main", "Principale", "body");
+        conn1
+            .execute(
+                "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility,
+                    Version, ParentPromptId, IsVariant, VariantLabel, CreatedAt, UpdatedAt)
+                 VALUES ('prm-var','ws-personale','usr-locale','Variante B','body','private',
+                    1,'prm-main',1,'B',datetime('now'),datetime('now'))",
+                [],
+            )
+            .unwrap();
+        conn1
+            .execute(
+                "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility,
+                    Version, ForkOfPromptId, CreatedAt, UpdatedAt)
+                 VALUES ('prm-fork','ws-personale','usr-locale','Fork','body','private',
+                    1,'prm-main',datetime('now'),datetime('now'))",
+                [],
+            )
+            .unwrap();
+
+        let exp = export_pure(&conn1).unwrap();
+        let var = exp.prompts.iter().find(|p| p.id == "prm-var").unwrap();
+        assert_eq!(var.parent_prompt_id.as_deref(), Some("prm-main"));
+        assert!(var.is_variant);
+        assert_eq!(var.variant_label.as_deref(), Some("B"));
+        let fork = exp.prompts.iter().find(|p| p.id == "prm-fork").unwrap();
+        assert_eq!(fork.fork_of_prompt_id.as_deref(), Some("prm-main"));
+
+        // Import su DB pulito: la seconda passata ricollega varianti/fork.
+        let conn2 = db_test();
+        let report = import_pure(&conn2, &exp, "skip").unwrap();
+        assert!(report.errori.is_empty(), "errori: {:?}", report.errori);
+
+        let (parent, is_var, label): (Option<String>, i64, Option<String>) = conn2
+            .query_row(
+                "SELECT ParentPromptId, IsVariant, VariantLabel FROM Prompts WHERE Id='prm-var'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(parent.as_deref(), Some("prm-main"));
+        assert_eq!(is_var, 1);
+        assert_eq!(label.as_deref(), Some("B"));
+
+        let fork_of: Option<String> = conn2
+            .query_row("SELECT ForkOfPromptId FROM Prompts WHERE Id='prm-fork'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(fork_of.as_deref(), Some("prm-main"));
+    }
+
+    #[test]
+    fn import_riferimento_variante_mancante_resta_null() {
+        let conn = db_test();
+        let mut exp = payload_minimo("prm-orfano", "Orfano");
+        exp.prompts[0].parent_prompt_id = Some("prm-non-esiste".into());
+        exp.prompts[0].is_variant = true;
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+        assert!(report.errori.is_empty(), "errori: {:?}", report.errori);
+        let parent: Option<String> = conn
+            .query_row("SELECT ParentPromptId FROM Prompts WHERE Id='prm-orfano'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(parent, None);
     }
 
     // ─────────── v0.7.0 Step 2: export_pure_filter (cartella) ───────────

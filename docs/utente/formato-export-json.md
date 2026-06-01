@@ -101,6 +101,12 @@ Struttura di un singolo prompt:
 | `created_at` | string ISO 8601 | Creazione. |
 | `updated_at` | string ISO 8601 | Ultimo aggiornamento. |
 | `tag_ids` | string[] | Array di ID tag associati (referenziano `tags[].id`). |
+| `parent_prompt_id` | string \| null | Se è una **variante**, ID del prompt principale (referenzia un altro `prompts[].id`). Opzionale: assente negli export pre-varianti. |
+| `is_variant` | boolean | `true` se il prompt è una variante. Default `false` se assente. |
+| `variant_label` | string \| null | Etichetta della variante (es. `B`, `C`). |
+| `fork_of_prompt_id` | string \| null | Se è un **fork**, ID del prompt originale. La tracciabilità sopravvive alla cancellazione dell'originale. |
+
+> I riferimenti `parent_prompt_id` e `fork_of_prompt_id` puntano ad altri prompt dell'export. In import vengono risolti in una seconda passata (i prompt sono inseriti tutti prima); se il prompt referenziato non è presente né già nel vault, il riferimento resta `null`.
 
 ### `versions[]`
 

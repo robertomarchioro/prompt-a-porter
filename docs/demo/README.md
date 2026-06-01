@@ -1,6 +1,6 @@
 # Vault demo per screenshot
 
-`demo-vault.json` è una libreria di esempio (15 prompt, 8 tag, 3 versioni storiche) pensata per popolare l'app prima di catturare gli screenshot del sito. È nel formato di export v1 (vedi [`../utente/formato-export-json.md`](../utente/formato-export-json.md)).
+`demo-vault.json` è una libreria di esempio (17 prompt — di cui 1 variante e 1 fork —, 7 cartelle, 8 tag, 3 versioni storiche) pensata per popolare l'app prima di catturare gli screenshot del sito. È nel formato di export v1 (vedi [`../utente/formato-export-json.md`](../utente/formato-export-json.md)).
 
 ## Come usarlo
 
@@ -17,6 +17,7 @@
 - **Segnaposti `{{nome}}`** in quasi tutti i body → modale Compila.
 - **Import fra prompt** `{{import "..."}}`: `Email cold outreach`, `Code review strutturata` e `Genera test unitari` importano i due prompt "Ruolo …". L'highlighting del token e l'anteprima risolta funzionano subito.
 - **Cronologia**: `Email professionale parametrica` ha 3 versioni → tab Cronologia + diff.
+- **Varianti e fork**: `Email professionale parametrica` ha una **variante B**; `Code review strutturata` ha un **fork** ("Code review strutturata (fork)", adattato a Rust). Le relazioni sono ricreate automaticamente dall'import.
 
 ## Setup manuale per screenshot completi (1 minuto)
 
@@ -27,8 +28,6 @@ Le cartelle ora sono incluse nell'import. Resta da impostare a mano solo una cos
   - `ruolo` = `Product Manager`
   - `azienda` = `Acme S.r.l.`
   - `email` = `mario.rossi@acme.example`
-
-> **Varianti / fork**: non sono rappresentabili nell'export v1 (manca `ParentPromptId`/`ForkOfPromptId`). Per screenshot di varianti A/B, creale a mano da un prompt dopo l'import.
 
 ## Manutenzione
 
