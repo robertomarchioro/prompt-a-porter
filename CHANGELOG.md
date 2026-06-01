@@ -1,8 +1,8 @@
 # Changelog — Prompt a Porter
 
-## Unreleased — Audit di sicurezza + remediation Rust (post v0.8.11)
+## Unreleased — Audit sicurezza + remediation Rust + export lossless (post v0.8.11)
 
-> Esito di un audit di sicurezza (`/security-bounty-hunter` sul sync server Go) e di una code review Rust completa (`/rust-review` su tutta la codebase del client). Nessuna vulnerabilità critica/remota trovata; chiusi un controllo di autorizzazione mancante lato server e una serie di hardening/silent-failure lato client. 10 PR atomiche (#239-248), una per modulo (ogni file toccato una sola volta). 568 test Rust verdi.
+> Esito di un audit di sicurezza (`/security-bounty-hunter` sul sync server Go) e di una code review Rust completa (`/rust-review` su tutta la codebase del client). Nessuna vulnerabilità critica/remota trovata; chiusi un controllo di autorizzazione mancante lato server e una serie di hardening/silent-failure lato client. 10 PR atomiche (#239-248), una per modulo (ogni file toccato una sola volta). Inoltre: completato il round-trip dell'export JSON (cartelle + varianti/fork) e aggiunto un vault demo per gli screenshot.
 
 ### Sicurezza
 
@@ -24,6 +24,12 @@
 ### Qualità
 
 - **Pulizia clippy** (#243): `linting.rs` — `format!` inutile → `.to_string()`, `sort_by` → `sort_by_key(Reverse)`, `HashMap::with_capacity`, rimossa variabile a rami identici (bug di pluralizzazione dormiente). `EmbeddingsState` ora implementa `Default` (#245); rimosso campo morto `AnthropicUsage.input_tokens` (#242); `regression::esegui_pure_con_provider` (solo-test) marcata `#[cfg(test)]` (#248); fix di un doctest che falliva la compilazione (#246).
+
+### Portabilità ed export
+
+- **Round-trip cartelle nell'export JSON** (#185): l'export ora popola `folders[]` (ordinate per `path`, padre prima dei figli) e l'import le ricrea prima dei prompt risolvendo `parent_folder_id` (parent mancante → root); il prompt importato imposta `folder_id` (cartella assente → NULL). Prima le cartelle andavano perse nel round-trip, contraddicendo la garanzia "lossless" del formato.
+- **Round-trip varianti e fork nell'export JSON** (#186): aggiunti 4 campi opzionali a `prompts[]` — `parent_prompt_id`, `is_variant`, `variant_label`, `fork_of_prompt_id`. Import a due passate: tutti i prompt prima, poi risoluzione dei FK self-referenziali (mappa id→id effettivo + fallback su prompt già nel vault; riferimento irrisolvibile → NULL). Additivo e retro-compatibile (`#[serde(default)]`, nessun bump `schemaVersion`). L'export è ora lossless tranne audit log e chiavi di sicurezza (esclusi per design).
+- **Vault demo per screenshot** (#184): nuovo `docs/demo/demo-vault.json` (17 prompt — 1 variante + 1 fork —, 7 cartelle con nesting, 8 tag, 3 versioni storiche, import fra prompt) per popolare l'app prima di catturare gli screenshot del sito. Coperto dal test `import_export::test::demo_vault_importa_pulito`. Documentazione del formato aggiornata con cartelle e campi varianti/fork.
 
 ### Note
 
