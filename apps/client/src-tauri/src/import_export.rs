@@ -1560,6 +1560,43 @@ mod test {
         assert_eq!(count, 1);
     }
 
+    /// Il vault demo committato (`docs/demo/demo-vault.json`) deve sempre
+    /// deserializzare come ExportV1 v1 e importarsi senza errori. Guardia
+    /// contro la deriva dello schema: se l'export cambia, questo test rompe
+    /// e ricorda di rigenerare il demo.
+    #[test]
+    fn demo_vault_importa_pulito() {
+        let json = include_str!("../../../../docs/demo/demo-vault.json");
+        let export: ExportV1 =
+            serde_json::from_str(json).expect("demo-vault.json deve essere ExportV1 valido");
+        assert_eq!(export.schema_version, 1);
+
+        let conn = db_test();
+        let report = import_pure(&conn, &export, "skip").unwrap();
+        assert!(
+            report.errori.is_empty(),
+            "import demo con errori: {:?}",
+            report.errori
+        );
+        assert_eq!(report.conflitti, 0);
+
+        // Tutti i prompt e i tag del payload finiscono nel DB.
+        let n_prompt: i64 = conn
+            .query_row("SELECT COUNT(*) FROM Prompts", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n_prompt as usize, export.prompts.len());
+        let n_tag: i64 = conn
+            .query_row("SELECT COUNT(*) FROM Tags", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n_tag as usize, export.tags.len());
+
+        // Le associazioni tag dei prompt devono risolvere ai tag importati.
+        let n_pt: i64 = conn
+            .query_row("SELECT COUNT(*) FROM PromptTags", [], |r| r.get(0))
+            .unwrap();
+        assert!(n_pt > 0, "nessuna associazione prompt-tag importata");
+    }
+
     #[test]
     fn import_pure_modalita_skip_su_id_esistente_incrementa_conflitti() {
         let conn = db_test();
