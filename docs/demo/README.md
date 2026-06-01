@@ -10,6 +10,7 @@
 
 ## Cosa mostra (già pronto dopo l'import)
 
+- **Cartelle** già organizzate (con un livello di nesting `Scrittura/Email`): `Scrittura`, `Sviluppo`, `Marketing`, `Produttività`, `Traduzione`, `Ruoli`. I prompt sono già nelle cartelle giuste.
 - **Libreria popolata** con descrizioni, badge modello (`claude-sonnet`, `claude-opus`, `gpt-4`, …), preferiti e conteggi d'uso → ordinamenti "popolari"/"recenti".
 - **Tag colorati** in sidebar e filtro per tag.
 - **Viste**: alcuni prompt sono `workspace` (vista Team) e altri `private`.
@@ -17,16 +18,10 @@
 - **Import fra prompt** `{{import "..."}}`: `Email cold outreach`, `Code review strutturata` e `Genera test unitari` importano i due prompt "Ruolo …". L'highlighting del token e l'anteprima risolta funzionano subito.
 - **Cronologia**: `Email professionale parametrica` ha 3 versioni → tab Cronologia + diff.
 
-## Setup manuale per screenshot completi (2 minuti)
+## Setup manuale per screenshot completi (1 minuto)
 
-L'import JSON v1 **non** ripristina cartelle e segnaposti globali (vivono fuori dallo schema di export). Per gli screenshot che li mostrano:
+Le cartelle ora sono incluse nell'import. Resta da impostare a mano solo una cosa, perché i **segnaposti globali** vivono fuori dallo schema di export:
 
-- **Cartelle**: crea ~5 cartelle e trascina i prompt:
-  - `Scrittura` → email professionale, riscrivi tono, spiega concetto
-  - `Sviluppo` → code review, commit, test unitari, ruolo engineer
-  - `Marketing` → cold outreach, nomi prodotto, ruolo marketing
-  - `Produttività` → summarize, brainstorm, note riunione
-  - `Traduzione` → traduzione tecnica
 - **Segnaposti globali** (Impostazioni → Segnaposti globali), usati da `Firma email standard` e `Email professionale parametrica`:
   - `autore` = `Mario Rossi`
   - `ruolo` = `Product Manager`

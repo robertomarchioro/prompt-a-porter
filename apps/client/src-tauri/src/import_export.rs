@@ -142,9 +142,10 @@ pub(crate) fn export_pure(conn: &Connection) -> Result<ExportV1, PapErrore> {
 /// con LIKE prefix). Se `None`, esporta tutti i prompt attivi.
 /// v0.7.0 Step 2.
 ///
-/// Nota: le `folders` nel payload restano `Vec::new()` per coerenza
-/// con il flusso di import attuale che non le gestisce. Il roundtrip
-/// folders è scope v0.8.
+/// Le `folders` del workspace (o del solo sotto-albero, se filtrato) sono
+/// incluse nel payload e ricreate dall'import → round-trip lossless delle
+/// cartelle. Ordinate per `Path` (parent prima dei figli) così l'import
+/// soddisfa il FK `ParentFolderId`.
 pub(crate) fn export_pure_filter(
     conn: &Connection,
     folder_id: Option<&str>,
@@ -287,6 +288,49 @@ pub(crate) fn export_pure_filter(
         .filter_map(|r| r.ok())
         .collect();
 
+    // Folders: tutte le cartelle attive del workspace, oppure (se filtrato)
+    // la cartella root + il suo sotto-albero. ORDER BY Path → parent prima
+    // dei figli, requisito per l'import (FK ParentFolderId).
+    let map_folder = |r: &rusqlite::Row| -> rusqlite::Result<FolderExport> {
+        Ok(FolderExport {
+            id: r.get(0)?,
+            parent_folder_id: r.get(1)?,
+            name: r.get(2)?,
+            path: r.get(3)?,
+            created_at: r.get(4)?,
+            updated_at: r.get(5)?,
+        })
+    };
+    let folders: Vec<FolderExport> = if let Some(fid) = folder_id {
+        let folder_path: String = conn.query_row(
+            "SELECT Path FROM Folders WHERE Id = ?1 AND DeletedAt IS NULL",
+            [fid],
+            |r| r.get(0),
+        )?;
+        let prefix_like = format!("{folder_path}/%");
+        let mut stmt_f = conn.prepare(
+            "SELECT Id, ParentFolderId, Name, Path, CreatedAt, UpdatedAt
+             FROM Folders
+             WHERE DeletedAt IS NULL AND (Path = ?1 OR Path LIKE ?2)
+             ORDER BY Path ASC",
+        )?;
+        let out = stmt_f
+            .query_map(rusqlite::params![folder_path, prefix_like], map_folder)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        out
+    } else {
+        let mut stmt_f = conn.prepare(
+            "SELECT Id, ParentFolderId, Name, Path, CreatedAt, UpdatedAt
+             FROM Folders
+             WHERE DeletedAt IS NULL
+             ORDER BY Path ASC",
+        )?;
+        let out = stmt_f
+            .query_map([], map_folder)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        out
+    };
+
     Ok(ExportV1 {
         schema_version: SCHEMA_VERSION,
         exported_at: ora_iso(),
@@ -294,7 +338,7 @@ pub(crate) fn export_pure_filter(
         prompts,
         versions,
         tags,
-        folders: Vec::new(),
+        folders,
     })
 }
 
@@ -1111,6 +1155,74 @@ pub(crate) fn import_pure(
         errori: Vec::new(),
     };
 
+    // Folders prima di tutto: i prompt referenziano FolderId (FK). L'export
+    // le ordina per Path (parent prima dei figli). Se il parent non è
+    // risolvibile (es. export di sotto-albero), la cartella diventa root.
+    for folder in &export.folders {
+        let esiste: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM Folders WHERE Id = ?1)",
+                [&folder.id],
+                |r| r.get(0),
+            )
+            .unwrap_or(false);
+
+        let parent: Option<String> = match &folder.parent_folder_id {
+            Some(pid) => {
+                let pexists: bool = conn
+                    .query_row(
+                        "SELECT EXISTS(SELECT 1 FROM Folders WHERE Id = ?1)",
+                        [pid],
+                        |r| r.get(0),
+                    )
+                    .unwrap_or(false);
+                if pexists {
+                    Some(pid.clone())
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
+
+        match (esiste, modalita) {
+            (false, _) => {
+                if let Err(e) = conn.execute(
+                    "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path, CreatedAt, UpdatedAt)
+                     VALUES (?1, 'ws-personale', ?2, ?3, ?4, ?5, ?6)",
+                    rusqlite::params![
+                        folder.id,
+                        parent,
+                        folder.name,
+                        folder.path,
+                        folder.created_at,
+                        folder.updated_at
+                    ],
+                ) {
+                    report.errori.push(format!("Folder {}: {}", folder.id, e));
+                } else {
+                    report.nuovi += 1;
+                }
+            }
+            (true, "overwrite") => {
+                if let Err(e) = conn.execute(
+                    "UPDATE Folders SET ParentFolderId = ?1, Name = ?2, Path = ?3,
+                            UpdatedAt = datetime('now')
+                     WHERE Id = ?4",
+                    rusqlite::params![parent, folder.name, folder.path, folder.id],
+                ) {
+                    report.errori.push(format!("Folder {}: {}", folder.id, e));
+                } else {
+                    report.aggiornati += 1;
+                }
+            }
+            // skip / rename: non duplichiamo alberi di cartelle.
+            (true, _) => {
+                report.conflitti += 1;
+            }
+        }
+    }
+
     // Tags prima.
     for tag in &export.tags {
         let esiste: bool = conn
@@ -1186,11 +1298,31 @@ pub(crate) fn import_pure(
             format!("{} (importato)", prompt.title)
         };
 
+        // FolderId è un FK: includilo solo se la cartella esiste già nel DB
+        // (importata sopra o preesistente). Altrimenti il prompt va a root.
+        let folder_ref: Option<String> = match &prompt.folder_id {
+            Some(fid) => {
+                let fexists: bool = conn
+                    .query_row(
+                        "SELECT EXISTS(SELECT 1 FROM Folders WHERE Id = ?1)",
+                        [fid],
+                        |r| r.get(0),
+                    )
+                    .unwrap_or(false);
+                if fexists {
+                    Some(fid.clone())
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
+
         let esito = if esiste && modalita == "overwrite" {
             conn.execute(
                 "UPDATE Prompts SET Title = ?1, Description = ?2, Body = ?3,
                         Visibility = ?4, TargetModel = ?5, IsFavorite = ?6,
-                        UseCount = ?7, LastUsedAt = ?8, Version = ?9,
+                        UseCount = ?7, LastUsedAt = ?8, Version = ?9, FolderId = ?11,
                         UpdatedAt = datetime('now')
                  WHERE Id = ?10",
                 rusqlite::params![
@@ -1203,7 +1335,8 @@ pub(crate) fn import_pure(
                     prompt.use_count,
                     prompt.last_used_at,
                     prompt.version,
-                    prompt.id
+                    prompt.id,
+                    folder_ref
                 ],
             )
             .map(|_| "agg")
@@ -1212,9 +1345,9 @@ pub(crate) fn import_pure(
                 "INSERT INTO Prompts
                     (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
                      Visibility, TargetModel, IsFavorite, UseCount, LastUsedAt,
-                     Version, CreatedAt, UpdatedAt)
+                     Version, CreatedAt, UpdatedAt, FolderId)
                  VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, ?4, ?5, ?6,
-                         ?7, ?8, ?9, ?10, ?11, ?12)",
+                         ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                 rusqlite::params![
                     id_effettivo,
                     title,
@@ -1227,7 +1360,8 @@ pub(crate) fn import_pure(
                     prompt.last_used_at,
                     prompt.version,
                     prompt.created_at,
-                    prompt.updated_at
+                    prompt.updated_at,
+                    folder_ref
                 ],
             )
             .map(|_| "new")
@@ -1589,6 +1723,10 @@ mod test {
             .query_row("SELECT COUNT(*) FROM Tags", [], |r| r.get(0))
             .unwrap();
         assert_eq!(n_tag as usize, export.tags.len());
+        let n_folder: i64 = conn
+            .query_row("SELECT COUNT(*) FROM Folders", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n_folder as usize, export.folders.len());
 
         // Le associazioni tag dei prompt devono risolvere ai tag importati.
         let n_pt: i64 = conn
@@ -1671,6 +1809,71 @@ mod test {
         assert_eq!(exp2.prompts.len(), 1);
         assert_eq!(exp2.prompts[0].id, "prm-1");
         assert_eq!(exp2.prompts[0].title, "Test");
+    }
+
+    #[test]
+    fn round_trip_cartelle_ricostruisce_albero_e_appartenenza() {
+        // Albero: /marketing -> /marketing/email ; prompt nella sotto-cartella.
+        let conn1 = db_test();
+        inserisci_folder(&conn1, "fld-mkt", "marketing", "/marketing", None);
+        inserisci_folder(
+            &conn1,
+            "fld-email",
+            "email",
+            "/marketing/email",
+            Some("fld-mkt"),
+        );
+        inserisci_prompt_in_folder(&conn1, "prm-1", "Cold outreach", Some("fld-email"));
+        inserisci_prompt_in_folder(&conn1, "prm-root", "A root", None);
+
+        let exp = export_pure(&conn1).unwrap();
+        assert_eq!(exp.folders.len(), 2, "export deve includere le 2 cartelle");
+
+        // Import su DB pulito.
+        let conn2 = db_test();
+        let report = import_pure(&conn2, &exp, "skip").unwrap();
+        assert!(report.errori.is_empty(), "errori import: {:?}", report.errori);
+
+        // Le cartelle sono ricreate con gerarchia e path.
+        let (parent, path): (Option<String>, String) = conn2
+            .query_row(
+                "SELECT ParentFolderId, Path FROM Folders WHERE Id = 'fld-email'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(parent.as_deref(), Some("fld-mkt"));
+        assert_eq!(path, "/marketing/email");
+
+        // Il prompt mantiene l'appartenenza alla sotto-cartella.
+        let folder_id: Option<String> = conn2
+            .query_row("SELECT FolderId FROM Prompts WHERE Id = 'prm-1'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(folder_id.as_deref(), Some("fld-email"));
+
+        // Re-export equivalente sulle cartelle.
+        let exp2 = export_pure(&conn2).unwrap();
+        assert_eq!(exp2.folders.len(), 2);
+    }
+
+    #[test]
+    fn import_prompt_con_folder_inesistente_va_a_root() {
+        // Un prompt che referenzia una cartella non presente nell'export
+        // non deve far fallire l'import: FolderId -> NULL (root).
+        let conn = db_test();
+        let mut exp = payload_minimo("prm-orfano", "Orfano");
+        exp.prompts[0].folder_id = Some("fld-non-esiste".to_string());
+
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+        assert!(report.errori.is_empty(), "errori: {:?}", report.errori);
+        let folder_id: Option<String> = conn
+            .query_row("SELECT FolderId FROM Prompts WHERE Id = 'prm-orfano'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(folder_id, None);
     }
 
     // ─────────── v0.7.0 Step 2: export_pure_filter (cartella) ───────────

@@ -79,7 +79,7 @@ Il formato JSON di export è il contratto pubblico del vault Prompt a Porter. Pe
 | `prompts` | array | Tutti i prompt del workspace (esclusi tombstoned). |
 | `versions` | array | Tutte le versioni storiche di tutti i prompt esportati. |
 | `tags` | array | Tag del workspace. |
-| `folders` | array | Cartelle del workspace. Vuoto fino a Fase 3. |
+| `folders` | array | Cartelle del workspace, ordinate per `path` (parent prima dei figli). Ricreate dall'import → round-trip lossless. |
 
 ### `prompts[]`
 
@@ -93,7 +93,7 @@ Struttura di un singolo prompt:
 | `body` | string | Corpo del template, può contenere `{{segnaposti}}`. |
 | `visibility` | enum | `private` \| `workspace`. |
 | `target_model` | string \| null | Modello AI target (es. `claude-sonnet`). Anticipato da Fase 3. |
-| `folder_id` | string \| null | ID cartella di appartenenza. Anticipato da Fase 3, fino ad allora sempre `null`. |
+| `folder_id` | string \| null | ID cartella di appartenenza (`null` = root). Se la cartella referenziata non è presente nell'import, il prompt va a root. |
 | `is_favorite` | boolean | Flag preferiti. |
 | `use_count` | integer | Contatore d'uso. |
 | `last_used_at` | string ISO 8601 \| null | Ultimo uso. |
@@ -126,14 +126,14 @@ Struttura di una versione storica:
 
 ### `folders[]`
 
-> Vuoto fino a Fase 3. La struttura è documentata qui per forward compatibility:
+Le cartelle sono incluse nell'export e ricreate dall'import (round-trip lossless). Sono ordinate per `path` così che ogni cartella padre preceda i propri figli (requisito per il vincolo `parent_folder_id`). In import, se un `parent_folder_id` non è risolvibile (es. export di un solo sotto-albero), la cartella viene creata come root.
 
 ```json
 {
   "id": "fld-abc",
   "parent_folder_id": null,
   "name": "Marketing",
-  "path": "/marketing",
+  "path": "/Marketing",
   "created_at": "...",
   "updated_at": "..."
 }
