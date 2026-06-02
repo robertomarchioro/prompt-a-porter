@@ -291,7 +291,9 @@ Set-Location $WorkDir
 Write-Host "[OK] WorkDir pronta: $WorkDir"
 
 # 3. Download asset firmabili (+ updater artifacts se re-signing attivo)
-$signablePatterns = @('*.exe', '*.msi')
+# NB: l'MSI è stato rimosso dalla release (release.yml `--bundles nsis`):
+# solo NSIS setup.exe per-utente + portable. Niente più pattern `*.msi`.
+$signablePatterns = @('*.exe')
 $zipPattern = '*portable*.zip'
 $updaterPatterns = @('*.sig', 'latest.json')
 
@@ -322,11 +324,22 @@ if ($doUpdaterReSign) {
 }
 
 Write-Host ""
-Write-Host "Scarico asset (.exe, .msi, .zip portable$(if($doUpdaterReSign){', .sig, latest.json'}))..."
+Write-Host "Scarico asset (.exe, .zip portable$(if($doUpdaterReSign){', .sig, latest.json'}))..."
 $downloadPatterns = $signablePatterns + $zipPattern
 if ($doUpdaterReSign) { $downloadPatterns += $updaterPatterns }
 foreach ($pattern in $downloadPatterns) {
-    & gh release download $Tag --repo $Repo --pattern $pattern --skip-existing 2>&1 | Out-Null
+    # `gh release download` esce non-zero quando nessun asset combacia col
+    # pattern; con $ErrorActionPreference='Stop' (+ PS 7.3 native error
+    # action) ciò diventa terminante e abortisce. Alcuni pattern sono però
+    # opzionali (es. nessun .msi: rimosso by design), quindi tolleriamo il
+    # caso "no assets match" e ri-lanciamo solo errori reali. Il controllo
+    # "$downloaded.Count -eq 0" più sotto copre il caso davvero vuoto.
+    try {
+        & gh release download $Tag --repo $Repo --pattern $pattern --skip-existing 2>&1 | Out-Null
+    } catch {
+        if ("$_" -notmatch 'no assets match') { throw }
+        Write-Host "  (pattern '$pattern': nessun asset corrispondente, skip)"
+    }
 }
 
 $downloaded = @(Get-ChildItem -Path $WorkDir -File |

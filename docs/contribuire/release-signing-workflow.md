@@ -164,7 +164,7 @@ cd path\to\prompt-a-porter
 Lo script:
 1. Verifica gh CLI, signtool, cert disponibile, release esiste, (se re-signing attivo) tauri CLI + chiave Updater
 2. Crea workdir temp `%TEMP%\pap-sign-v0.9.0\`
-3. Scarica asset firmabili (`.exe` NSIS setup, `*portable*.zip`, + `.sig` e `latest.json` se re-signing attivo). Lo script include ancora il pattern `*.msi` ma è tollerato se assente (l'MSI non è più prodotto).
+3. Scarica asset firmabili (`.exe` NSIS setup, `*portable*.zip`, + `.sig` e `latest.json` se re-signing attivo). Il pattern `*.msi` è stato rimosso (l'MSI non è più prodotto); inoltre il loop di download tollera ora il "no assets match" su qualunque pattern opzionale senza abortire.
 4. Estrae il `.zip` portable per firmare l'`.exe` interno
 5. Firma tutti i file con `signtool sign /sha1 <thumb> /tr http://time.certum.pl /td sha256 /fd sha256 /a`
 6. Verifica le firme con `signtool verify /pa /v`
