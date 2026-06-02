@@ -1,8 +1,8 @@
 # Changelog — Prompt a Porter
 
-## Unreleased — Audit sicurezza + remediation Rust + export lossless (post v0.8.11)
+## v0.8.12 — Audit sicurezza + export lossless + installer per-utente (2026-06-02)
 
-> Esito di un audit di sicurezza (`/security-bounty-hunter` sul sync server Go) e di una code review Rust completa (`/rust-review` su tutta la codebase del client). Nessuna vulnerabilità critica/remota trovata; chiusi un controllo di autorizzazione mancante lato server e una serie di hardening/silent-failure lato client. 10 PR atomiche (#239-248), una per modulo (ogni file toccato una sola volta). Inoltre: completato il round-trip dell'export JSON (cartelle + varianti/fork) e aggiunto un vault demo per gli screenshot.
+> Esito di un audit di sicurezza (`/security-bounty-hunter` sul sync server Go) e di una code review Rust completa (`/rust-review` su tutta la codebase del client). Nessuna vulnerabilità critica/remota trovata; chiusi un controllo di autorizzazione mancante lato server e una serie di hardening/silent-failure lato client. 10 PR atomiche (#239-248), una per modulo (ogni file toccato una sola volta). Inoltre: completato il round-trip dell'export JSON (cartelle + varianti/fork), aggiunto un vault demo per gli screenshot, e rimosso l'installer MSI a favore del solo NSIS per-utente (no admin).
 
 ### Sicurezza
 
@@ -30,6 +30,10 @@
 - **Round-trip cartelle nell'export JSON** (#185): l'export ora popola `folders[]` (ordinate per `path`, padre prima dei figli) e l'import le ricrea prima dei prompt risolvendo `parent_folder_id` (parent mancante → root); il prompt importato imposta `folder_id` (cartella assente → NULL). Prima le cartelle andavano perse nel round-trip, contraddicendo la garanzia "lossless" del formato.
 - **Round-trip varianti e fork nell'export JSON** (#186): aggiunti 4 campi opzionali a `prompts[]` — `parent_prompt_id`, `is_variant`, `variant_label`, `fork_of_prompt_id`. Import a due passate: tutti i prompt prima, poi risoluzione dei FK self-referenziali (mappa id→id effettivo + fallback su prompt già nel vault; riferimento irrisolvibile → NULL). Additivo e retro-compatibile (`#[serde(default)]`, nessun bump `schemaVersion`). L'export è ora lossless tranne audit log e chiavi di sicurezza (esclusi per design).
 - **Vault demo per screenshot** (#184): nuovo `docs/demo/demo-vault.json` (17 prompt — 1 variante + 1 fork —, 7 cartelle con nesting, 8 tag, 3 versioni storiche, import fra prompt) per popolare l'app prima di catturare gli screenshot del sito. Coperto dal test `import_export::test::demo_vault_importa_pulito`. Documentazione del formato aggiornata con cartelle e campi varianti/fork.
+
+### Distribuzione
+
+- **Rimosso l'installer MSI, solo NSIS per-utente + portable** (#254): la release Windows non produce più il bundle `.msi` (WiX installa per-machine in `Program Files` con UAC, contro la filosofia local-first single-user). Il job Windows di `release.yml` usa ora `--bundles nsis`: l'installer `…-setup.exe` resta per-utente (`installMode: currentUser`, `%LocalAppData%`, **nessun privilegio admin**) e il portable `.zip` è invariato. L'updater è preservato — con `createUpdaterArtifacts` riusa il bundle NSIS, quindi `latest.json` + `setup.exe.sig` sono generati regolarmente.
 
 ### Note
 
