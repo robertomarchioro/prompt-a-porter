@@ -554,7 +554,40 @@ Write-Host "[OK] Tutti gli asset firmati ricaricati."
 if ($Publish) {
     Write-Host ""
     Write-Host "-- Promuovo release a Latest published --"
-    $editArgs = @('release', 'edit', $Tag, '--repo', $Repo, '--draft=false')
+
+    # Le note generate dalla CI (release.yml releaseBody) descrivono lo
+    # stato draft PRE-firma ("Release in stato draft - signing pending /
+    # NON ancora firmati Authenticode"). Ora la release e' firmata e
+    # pubblicata, quindi sostituiamo le note con la versione "firmato/
+    # pubblicato" per non lasciare un disclaimer falso. Here-string
+    # single-quoted (i backtick markdown sono escape in PS) con
+    # placeholder __TAG__/__REPO__; testo ASCII per compat PS 5.1.
+    $notesTemplate = @'
+Build firmata dal tag `__TAG__`.
+
+Vedi [CHANGELOG.md](https://github.com/__REPO__/blob/main/CHANGELOG.md) per il dettaglio.
+
+**Release firmata Authenticode (Certum Code Signing Open Source) e pubblicata.** I file `.sig` Ed25519 dell'updater sono rigenerati sui binari firmati.
+
+**Download - due opzioni, entrambe senza privilegi admin:**
+
+- **Installer NSIS** (`...-setup.exe`): installer per-utente in `%LocalAppData%`, nessun UAC/admin. Consigliato - riceve gli auto-update.
+- **Portable** (`Prompt-a-Porter-portable-windows-x64-__TAG__.zip`): eseguibile standalone, niente installer. Estrai e lancia `Prompt a Porter.exe`.
+
+Richiede WebView2 runtime (incluso in Windows 11; su Windows 10 scaricabile [da Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/)).
+
+> Alla prima esecuzione Windows SmartScreen potrebbe ancora avvisare (reputation building del nuovo certificato): "Maggiori informazioni" -> "Esegui comunque". Sparisce con l'uso.
+
+L'installer MSI e' stato rimosso di proposito (WiX/MSI installa in `Program Files` con UAC, contro la filosofia local-first single-user di PaP).
+
+> **Nota:** i target macOS / Linux sono temporaneamente disabilitati nella build matrix (in corso di riabilitazione).
+'@
+    $publishedNotes = $notesTemplate.Replace('__TAG__', $Tag).Replace('__REPO__', $Repo)
+    $notesFile = Join-Path $WorkDir 'published-notes.md'
+    $utf8NoBomNotes = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($notesFile, $publishedNotes, $utf8NoBomNotes)
+
+    $editArgs = @('release', 'edit', $Tag, '--repo', $Repo, '--draft=false', '--notes-file', $notesFile)
     if (-not $release.isPrerelease) {
         $editArgs += '--latest'
     }
@@ -562,7 +595,7 @@ if ($Publish) {
     if ($LASTEXITCODE -ne 0) {
         throw "gh release edit FALLITO (exit $LASTEXITCODE)"
     }
-    Write-Host "[OK] Release $Tag pubblicata."
+    Write-Host "[OK] Release $Tag pubblicata (note aggiornate a stato firmato)."
 } else {
     Write-Host ""
     Write-Host "Release resta in stato draft. Per pubblicare manualmente:"
