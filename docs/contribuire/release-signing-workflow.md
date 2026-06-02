@@ -105,8 +105,10 @@ Il push del tag triggera `.github/workflows/release.yml` su GitHub Actions.
 
 La CI:
 - Builda Tauri (~10-15 min) per Windows
-- Genera `.exe` portable + `.msi` + `.exe` NSIS setup (se abilitati nel
-  matrix; in v0.8.x è temporaneamente solo portable)
+- Genera `.exe` portable + `.exe` NSIS setup (installer per-utente,
+  `installMode: currentUser`). L'MSI **non** è più prodotto: rimosso di
+  proposito perché WiX/MSI installa per-machine in `Program Files` con UAC,
+  contro la filosofia local-first single-user di PaP.
 - Genera `latest.json` + `.sig` Ed25519 (Tauri Updater signing, **separato
   da Authenticode**, fatto in CI dato che la chiave Ed25519 è in secret)
 - Crea una **release draft** su GitHub con tutti gli asset uppati
@@ -162,11 +164,11 @@ cd path\to\prompt-a-porter
 Lo script:
 1. Verifica gh CLI, signtool, cert disponibile, release esiste, (se re-signing attivo) tauri CLI + chiave Updater
 2. Crea workdir temp `%TEMP%\pap-sign-v0.9.0\`
-3. Scarica asset firmabili (`.exe`, `.msi`, `*portable*.zip`, + `.sig` e `latest.json` se re-signing attivo)
+3. Scarica asset firmabili (`.exe` NSIS setup, `*portable*.zip`, + `.sig` e `latest.json` se re-signing attivo). Lo script include ancora il pattern `*.msi` ma è tollerato se assente (l'MSI non è più prodotto).
 4. Estrae il `.zip` portable per firmare l'`.exe` interno
 5. Firma tutti i file con `signtool sign /sha1 <thumb> /tr http://time.certum.pl /td sha256 /fd sha256 /a`
 6. Verifica le firme con `signtool verify /pa /v`
-7. **(Opzione B, se `-UpdaterPrivKey` o env var presente)** Re-firma Ed25519 i target Updater (setup.exe NSIS + .msi) con `tauri signer sign`, ricomputa `latest.json` con le nuove signature + `pub_date` corrente. Senza questo step, Tauri Updater rifiuta gli update con `signature mismatch` perché i `.sig` di CI sono calcolati sui binari unsigned.
+7. **(Opzione B, se `-UpdaterPrivKey` o env var presente)** Re-firma Ed25519 il target Updater (setup.exe NSIS) con `tauri signer sign`, ricomputa `latest.json` con le nuove signature + `pub_date` corrente. Senza questo step, Tauri Updater rifiuta gli update con `signature mismatch` perché i `.sig` di CI sono calcolati sui binari unsigned.
 8. Re-zippa il portable con `.exe` firmato dentro
 9. Re-uploada gli asset firmati (+ `.sig` + `latest.json` se re-signing attivo) con `gh release upload --clobber`
 10. (Opzionale, se `-Publish`) promuove la release da draft a Latest
