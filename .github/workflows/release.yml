@@ -26,15 +26,21 @@ jobs:
           #   args: ""
           #   rust-target: x86_64-unknown-linux-gnu
           - platform: windows-latest
-            # NB: `--no-bundle` NON è usabile qui — tauri-action si
-            # aspetta artifact bundle in `target/release/bundle/` e
-            # fallisce con "No artifacts were found" se mancano (vedi
-            # build v0.8.3 25626291738). Lasciamo bundle attivo: i
-            # bundle MSI/NSIS aggiungono ~30s al build dopo cargo
-            # release (~14m), trascurabile. La release avrà 5 asset
-            # (msi/.sig + setup.exe/.sig + portable.zip), il portable
-            # .zip è l'unico documentato in releaseBody.
-            args: ""
+            # Bundle ristretto a NSIS (`--bundles nsis`): l'MSI è stato
+            # rimosso di proposito perché WiX/MSI installa per-machine in
+            # Program Files richiedendo UAC/admin, mentre PaP è local-first
+            # single-user e vuole installazione senza privilegi. NSIS è
+            # configurato `installMode: currentUser` in tauri.conf.json
+            # (%LocalAppData%, no admin). Il portable .zip resta invariato:
+            # è prodotto dal binario raw in `target/release/`, non da un
+            # bundle. NB: `--no-bundle` NON sarebbe usabile (tauri-action
+            # fallisce con "No artifacts were found"); `--bundles nsis`
+            # produce comunque un bundle, quindi va bene.
+            # Updater: con `createUpdaterArtifacts: true` l'updater riusa
+            # il bundle NSIS → `latest.json` + `setup.exe.sig` generati
+            # regolarmente (l'MSI updater era ridondante).
+            # Asset release: setup.exe (+ .sig) + latest.json + portable.zip.
+            args: "--bundles nsis"
             rust-target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.platform }}
@@ -123,10 +129,15 @@ jobs:
             clicca "Maggiori informazioni" → "Esegui comunque". L'avviso
             scompare con l'uso.
 
-            > **Nota:** in questa release i target macOS / Linux / Windows
-            > installer (.msi/.exe-setup) sono temporaneamente disabilitati
-            > per semplificare il debug delle versioni v0.8.x. Saranno
-            > rigenerati nelle release successive.
+            **Installer Windows (NSIS):** oltre al portable, la release
+            include `…-setup.exe`, un installer **per-utente** che installa
+            in `%LocalAppData%` **senza richiedere privilegi admin/UAC**.
+            L'MSI è stato rimosso di proposito: WiX/MSI installa in
+            `Program Files` ed esige elevazione, contro la filosofia
+            local-first single-user di PaP.
+
+            > **Nota:** i target macOS / Linux sono temporaneamente
+            > disabilitati nella build matrix (in corso di riabilitazione).
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
