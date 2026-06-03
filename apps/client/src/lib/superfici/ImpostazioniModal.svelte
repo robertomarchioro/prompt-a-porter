@@ -43,6 +43,7 @@
   import PannelloProviderConfig from "$lib/components/PannelloProviderConfig.svelte";
   import HotkeyInput from "$lib/components/HotkeyInput.svelte";
   import LogViewer from "$lib/components/LogViewer.svelte";
+  import { nomeFileExport } from "$lib/util/dati-export";
   import {
     statoTema,
     salvaTemaTono,
@@ -154,6 +155,41 @@
     errore: "",
   });
 
+  // --- Import/Export JSON (backup round-trip lossless) ---
+
+  type ModalitaImportJson = "skip" | "overwrite" | "rename";
+
+  interface ImportReportJson {
+    nuovi: number;
+    aggiornati: number;
+    conflitti: number;
+    errori: string[];
+  }
+
+  let inputFileJson: HTMLInputElement | undefined = $state();
+
+  let modalitaImportJson = $state<ModalitaImportJson>("skip");
+
+  let datiImportJson = $state<{
+    inCorso: boolean;
+    report: ImportReportJson | null;
+    errore: string;
+  }>({
+    inCorso: false,
+    report: null,
+    errore: "",
+  });
+
+  let datiExportJson = $state<{
+    inCorso: boolean;
+    ultimo: { byteCount: number; filename: string } | null;
+    errore: string;
+  }>({
+    inCorso: false,
+    ultimo: null,
+    errore: "",
+  });
+
   async function handleSelezioneMarkdown(e: Event): Promise<void> {
     const target = e.target as HTMLInputElement;
     const files = target.files;
@@ -208,6 +244,18 @@
     target.value = "";
   }
 
+  // Innesca il download di un Blob nel browser (pattern <a download>).
+  function scaricaBlob(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   async function esportaVaultZip(): Promise<void> {
     datiExport = { inCorso: true, ultimo: null, errore: "" };
     try {
@@ -215,20 +263,11 @@
         bytes: number[];
         totale_esportati: number;
       }>("vault_export_markdown_zip", { folderId: null });
-      const filename = `prompt-a-porter-export-${new Date()
-        .toISOString()
-        .slice(0, 10)}.zip`;
+      const filename = nomeFileExport("zip", new Date().toISOString());
       const blob = new Blob([new Uint8Array(res.bytes)], {
         type: "application/zip",
       });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      scaricaBlob(blob, filename);
       datiExport.ultimo = {
         totale: res.totale_esportati,
         byteCount: res.bytes.length,
@@ -238,6 +277,48 @@
       datiExport.errore = String(err).replace(/^Error: /, "");
     } finally {
       datiExport.inCorso = false;
+    }
+  }
+
+  async function esportaVaultJson(): Promise<void> {
+    datiExportJson = { inCorso: true, ultimo: null, errore: "" };
+    try {
+      const json = await invoke<string>("vault_export_json");
+      const filename = nomeFileExport("json", new Date().toISOString());
+      const blob = new Blob([json], { type: "application/json" });
+      scaricaBlob(blob, filename);
+      datiExportJson.ultimo = {
+        byteCount: new TextEncoder().encode(json).length,
+        filename,
+      };
+    } catch (err) {
+      datiExportJson.errore = String(err).replace(/^Error: /, "");
+    } finally {
+      datiExportJson.inCorso = false;
+    }
+  }
+
+  async function handleSelezioneJson(e: Event): Promise<void> {
+    const target = e.target as HTMLInputElement;
+    const files = target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    datiImportJson = { inCorso: true, report: null, errore: "" };
+    try {
+      const json = await file.text();
+      const report = await invoke<ImportReportJson>("vault_import_json", {
+        json,
+        modalita: modalitaImportJson,
+      });
+      datiImportJson.report = report;
+      // Notifica lista per refresh Libreria
+      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+    } catch (err) {
+      datiImportJson.errore = String(err).replace(/^Error: /, "");
+    } finally {
+      datiImportJson.inCorso = false;
+      // Reset input per permettere ri-selezione dello stesso file.
+      target.value = "";
     }
   }
 
@@ -1393,13 +1474,20 @@
       {:else if sezione === "dati"}
         <h3>Dati</h3>
         <p class="dati-intro">
-          Importa prompt da file Markdown (compatibilità Obsidian/Foam) o
-          esporta l'intero vault come archivio zip di file <code>.md</code>
-          con front-matter YAML. Vedi
+          Due formati: <strong>Markdown</strong> (interoperabile con
+          Obsidian/Foam, archivio zip di file <code>.md</code> con
+          front-matter YAML) e <strong>JSON</strong> (backup round-trip
+          completo del vault: storico versioni, tag, cartelle, fork). Vedi la
           <a
             href="https://github.com/{REPO_ORG_REPO}/blob/main/docs/utente/markdown-import-export.md"
             target="_blank"
-            rel="noopener">guida utente</a
+            rel="noopener">guida Markdown</a
+          >
+          e il
+          <a
+            href="https://github.com/{REPO_ORG_REPO}/blob/main/docs/utente/formato-export-json.md"
+            target="_blank"
+            rel="noopener">formato JSON</a
           > per i dettagli.
         </p>
 
@@ -1491,6 +1579,112 @@
           {/if}
           {#if datiExport.errore}
             <p class="dati-report-err">✗ {datiExport.errore}</p>
+          {/if}
+        </div>
+
+        <div class="dati-card">
+          <header class="dati-card-h">
+            <span class="dati-card-title">Importa JSON</span>
+            {#if datiImportJson.inCorso}
+              <span class="dati-card-status">Importazione in corso…</span>
+            {/if}
+          </header>
+          <p class="dati-card-desc">
+            Seleziona un file <code>.json</code> esportato da Prompt a Porter
+            (ripristina vault completo: prompt, versioni, tag, cartelle).
+            Scegli come gestire i prompt già presenti con lo stesso ID.
+          </p>
+          <div class="campo">
+            <span class="campo-label">Conflitti</span>
+            <div
+              class="seg-control"
+              role="radiogroup"
+              aria-label="Gestione conflitti import JSON"
+            >
+              {#each [{ v: "skip", l: "Salta esistenti" }, { v: "overwrite", l: "Sovrascrivi" }, { v: "rename", l: "Rinomina duplicati" }] as opt (opt.v)}
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={modalitaImportJson === opt.v}
+                  class:attivo={modalitaImportJson === opt.v}
+                  disabled={datiImportJson.inCorso}
+                  onclick={() =>
+                    (modalitaImportJson = opt.v as ModalitaImportJson)}
+                >
+                  {opt.l}
+                </button>
+              {/each}
+            </div>
+          </div>
+          <input
+            type="file"
+            accept=".json,application/json"
+            bind:this={inputFileJson}
+            onchange={handleSelezioneJson}
+            style="display:none"
+          />
+          <button
+            type="button"
+            class="dati-btn"
+            onclick={() => inputFileJson?.click()}
+            disabled={datiImportJson.inCorso}
+          >
+            Seleziona file JSON…
+          </button>
+          {#if datiImportJson.report}
+            <div class="dati-report">
+              <p class="dati-report-ok">
+                ✓ Import completato — {datiImportJson.report.nuovi} nuovi,
+                {datiImportJson.report.aggiornati} aggiornati,
+                {datiImportJson.report.conflitti} conflitti
+              </p>
+              {#if datiImportJson.report.errori.length > 0}
+                <p class="dati-report-err">
+                  ✗ {datiImportJson.report.errori.length} errori
+                </p>
+                <ul class="dati-report-list">
+                  {#each datiImportJson.report.errori as err, i (i)}
+                    <li>{err}</li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
+          {/if}
+          {#if datiImportJson.errore}
+            <p class="dati-report-err">✗ {datiImportJson.errore}</p>
+          {/if}
+        </div>
+
+        <div class="dati-card">
+          <header class="dati-card-h">
+            <span class="dati-card-title">Esporta Vault → JSON</span>
+            {#if datiExportJson.inCorso}
+              <span class="dati-card-status">Esportazione in corso…</span>
+            {/if}
+          </header>
+          <p class="dati-card-desc">
+            Salva un singolo file <code>.json</code> con l'intero vault in
+            formato lossless (storico versioni, tag, cartelle, fork). Ideale
+            come backup completo o per migrare tra installazioni.
+          </p>
+          <button
+            type="button"
+            class="dati-btn dati-btn-primary"
+            onclick={esportaVaultJson}
+            disabled={datiExportJson.inCorso}
+          >
+            {datiExportJson.inCorso ? "Esporto…" : "Esporta JSON"}
+          </button>
+          {#if datiExportJson.ultimo}
+            <p class="dati-report-ok">
+              ✓ Esportato ({(datiExportJson.ultimo.byteCount / 1024).toFixed(
+                1,
+              )} KB) →
+              <code>{datiExportJson.ultimo.filename}</code>
+            </p>
+          {/if}
+          {#if datiExportJson.errore}
+            <p class="dati-report-err">✗ {datiExportJson.errore}</p>
           {/if}
         </div>
       {:else if sezione === "avanzate"}
