@@ -198,13 +198,31 @@ Schermata di scelta con pro/contro espliciti:
 - Non mettere il `.db` sullo share di rete.
 - Non introdurre una modalità mista per-prompt: la scelta è per-vault.
 
-## Decisioni ancora aperte (da affrontare prima dell'implementazione)
+## Decisioni chiuse (2026-06-03)
 
-- Naming file: slug dal titolo (`email-professionale.md`) vs `id` come nome
-  file. Slug è più leggibile (no-lock-in), ma richiede gestione collisioni e
-  l'`id` deve stare nel front-matter (già previsto).
-- Migrazione vault esistente SQLite → cartella (e viceversa): comando di
-  "converti vault" o solo export? Probabile: export verso cartella + apri come
-  nuovo vault a cartella.
-- Cosa fare se l'utente cancella `.pap/` a mano (storia/rating persi): trattare
-  come degradazione graceful (contenuto resta, metadati ripartono da zero).
+1. **Naming file = slug leggibile** (es. `email-professionale.md`). L'identità
+   reale sta nell'`id` del front-matter, quindi il nome file è **cosmetico**:
+   - rename esterni innocui (l'`id` preserva l'identità);
+   - collisioni di slug risolte con suffisso `-2`, `-3`;
+   - cambio titolo in-app → rename del file per coerenza; cambio titolo
+     *esterno* → non si forza il rename (no churn/sorprese, l'`id` resta la
+     verità). Drift titolo↔nome file è accettato.
+   - Scartato: `id` come nome file (stabile ma illeggibile, annulla lo scopo).
+
+2. **Migrazione = comando wrapper, mai mutazione in-place.** "Converti vault"
+   serializza il contenuto verso una **nuova** cartella (serializer della F2,
+   piena fedeltà incluso `.pap/`) e la riapre; al contrario, ingest in un
+   **nuovo** vault SQLite. Un solo code path (lo stesso serializer/ingest),
+   zero mutazione distruttiva sullo storage esistente.
+   - Scartato: conversione in-place (mutazione rischiosa, recovery complesso).
+
+3. **Cancellazione `.pap/` = degradazione graceful.** Il contenuto `.md`
+   sopravvive sempre; all'apertura l'app ricrea `.pap/` e la cache:
+   - tag ri-derivati dai nomi presenti nel front-matter (colore default);
+   - versioni / rating / globali / audit / stats persi (ripartono da zero);
+   - warning una tantum all'utente.
+   - **Bonus**: aprire una cartella Obsidian/Foam *qualsiasi* "funziona" — il
+     `.pap/` nasce al primo ingest. È una proprietà no-lock-in forte (nessun
+     formato proprietario richiesto per iniziare).
+   - Scartato: bloccare l'apertura chiedendo ripristino (attrito alto, contro
+     lo spirito "apri qualsiasi cartella").
