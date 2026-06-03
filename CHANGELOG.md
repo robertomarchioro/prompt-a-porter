@@ -1,5 +1,13 @@
 # Changelog — Prompt a Porter
 
+## Unreleased — Import/Export JSON nella GUI (post v0.8.12)
+
+> I comandi backend `vault_import_json`/`vault_export_json` (export lossless completo del vault) erano registrati e testati ma irraggiungibili dall'interfaccia: in **Impostazioni → Dati** si poteva importare solo Markdown. Esposti entrambi nella GUI.
+
+### Portabilità ed export
+
+- **Import/Export JSON esposti in Impostazioni → Dati** (#262): nuova card "Importa JSON" (file picker `.json` + selettore modalità conflitti `skip`/`overwrite`/`rename` via `seg-control` a11y + report nuovi/aggiornati/conflitti/errori) e card "Esporta Vault → JSON" (download del backup lossless: storico versioni, tag, cartelle, fork). Prima il JSON era raggiungibile solo via comando, mai dalla UI. Backend invariato (già coperto da test); estratto `nomeFileExport()` in `util/dati-export.ts` (riusato anche dall'export zip, +3 test) e helper locale `scaricaBlob()`; intro Dati aggiornata con link a guida Markdown e formato JSON.
+
 ## v0.8.12 — Audit sicurezza + export lossless + installer per-utente (2026-06-02)
 
 > Esito di un audit di sicurezza (`/security-bounty-hunter` sul sync server Go) e di una code review Rust completa (`/rust-review` su tutta la codebase del client). Nessuna vulnerabilità critica/remota trovata; chiusi un controllo di autorizzazione mancante lato server e una serie di hardening/silent-failure lato client. 10 PR atomiche (#239-248), una per modulo (ogni file toccato una sola volta). Inoltre: completato il round-trip dell'export JSON (cartelle + varianti/fork), aggiunto un vault demo per gli screenshot, e rimosso l'installer MSI a favore del solo NSIS per-utente (no admin).
