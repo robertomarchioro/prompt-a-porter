@@ -12,6 +12,26 @@ Documentazione di **pianificazione**: timeline dei rilasci, fasi del progetto, i
 
 Una fase può ospitare 0..N rilasci; un rilascio può attraversare 0..N fasi. Le fasi sono ortogonali agli SKU: Fasi 1-4 sono confluite nello SKU Personale; Fase 5 corrisponde allo SKU Enterprise.
 
+## Indirizzo strategico (2026-06-03)
+
+Decisione di rotta dell'autore:
+
+1. **Adesso: chiudere v1.0.0 Personale "senza fronzoli".** Priorità unica =
+   far atterrare il tag `v1.0.0` con il quality gate di [`v1.0-personale.md`](./v1.0-personale.md)
+   (restano: build matrix macOS/Linux, auto-update E2E, smoke test, bump). Niente
+   feature nuove finché 1.0 non è fuori e non vediamo come viene recepito.
+2. **Poi, in base alla ricezione, biforcazione della linea Personale in due
+   roadmap** (da scrivere *dopo* 1.0, non ora):
+   - **Personale "Flat"** — fedele al progetto iniziale: *ambito personale ma
+     con feature non banali*. Polish e completamento, niente cambi di paradigma.
+   - **Personale "Deluxe"** — direzione all'avanguardia. Seme in
+     [`prompts-as-code.md`](./prompts-as-code.md) (tesi "Prompts as Code") e
+     [`vault-a-cartella.md`](./vault-a-cartella.md) (storage a file no-lock-in).
+3. **v2.0 Enterprise resta valida e invariata** — vedi [`v2.0-enterprise.md`](./v2.0-enterprise.md).
+
+> I doc `prompts-as-code.md` e `vault-a-cartella.md` sono **esplorazioni
+> post-1.0** (materiale per la futura roadmap "Deluxe"), non impegni per 1.0.
+
 La **fonte autorevole della pianificazione** è [`release-plan.md`](./release-plan.md): un'unica timeline che mappa tag → fase/tema/SKU → stato.
 
 ## Documenti
@@ -21,6 +41,8 @@ La **fonte autorevole della pianificazione** è [`release-plan.md`](./release-pl
 | [`release-plan.md`](./release-plan.md) | **Timeline completa di tutti i rilasci** (v0.1 → v2.0+). Fonte autorevole della pianificazione. Include strategia SKU v1.0 Personale / v2.0 Enterprise |
 | [`v1.0-personale.md`](./v1.0-personale.md) | **Scope chiuso PaP Personale v1.0.0** — must-have M1-M8 (auto-update, a11y, sub-step Fase 4, import scopati, doppia vista editor, Markdown, coverage, docs), quality gate, timeline indicativa, strategia branching |
 | [`v2.0-enterprise.md`](./v2.0-enterprise.md) | **Scope SKU PaP Enterprise v2.0.0** — gating domanda-driven, prerequisiti apertura branch, stream design parallelo a v1.0, strategia multi-SKU post-v2.0 |
+| [`vault-a-cartella.md`](./vault-a-cartella.md) | 🧭 *Esplorazione post-1.0 (Deluxe)* — blueprint storage a file plain-text no-lock-in, modalità per-vault SQLite-cifrato vs cartella-chiaro, sidecar `.pap/`, fasi F1-F4 |
+| [`prompts-as-code.md`](./prompts-as-code.md) | 🧭 *Esplorazione post-1.0 (Deluxe)* — idea strategica "Prompts as Code" (git=versioni, branch=varianti, golden=CI gate, pin a SHA per agent); gap competitivo, MVP, bet alternativi |
 | [`fase-1-mvp.md`](./fase-1-mvp.md) | Step 0-15 della Fase 1 (chiusa) — MVP client desktop standalone |
 | [`fase-2-foundations.md`](./fase-2-foundations.md) | Step 1-10 della Fase 2 — Foundations & Distribuzione (chiusa parziale: Step 5 → patch line `v0.2.x`/M1 v1.0, Step 6 → Fase 5/v2.0) |
 | [`fase-3-intelligence.md`](./fase-3-intelligence.md) | Step 1-11 della Fase 3 — Intelligenza & Authoring (✅ chiusa, tag `v0.3.0` rilasciato 2026-05-06) |
