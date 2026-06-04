@@ -39,6 +39,7 @@ La **fonte autorevole della pianificazione** è [`release-plan.md`](./release-pl
 | Doc | Descrizione |
 |---|---|
 | [`release-plan.md`](./release-plan.md) | **Timeline completa di tutti i rilasci** (v0.1 → v2.0+). Fonte autorevole della pianificazione. Include strategia SKU v1.0 Personale / v2.0 Enterprise |
+| [`stagioni-e-nomi-rilascio.md`](./stagioni-e-nomi-rilascio.md) | **Convenzione di naming dei rilasci** ispirata alla moda: etichetta stagionale `Autunno-Inverno ANNO · vX.Y.Z` (taglio mesi H1/H2), doppia linea `1.x` Personale / `2.x` Enterprise, codename cardine stile Ubuntu (aggettivo+sostantivo tessile allitterante) con pool di ~20 nomi |
 | [`v1.0-personale.md`](./v1.0-personale.md) | **Scope chiuso PaP Personale v1.0.0** — must-have M1-M8 (auto-update, a11y, sub-step Fase 4, import scopati, doppia vista editor, Markdown, coverage, docs), quality gate, timeline indicativa, strategia branching |
 | [`v2.0-enterprise.md`](./v2.0-enterprise.md) | **Scope SKU PaP Enterprise v2.0.0** — gating domanda-driven, prerequisiti apertura branch, stream design parallelo a v1.0, strategia multi-SKU post-v2.0 |
 | [`vault-a-cartella.md`](./vault-a-cartella.md) | 🧭 *Esplorazione post-1.0 (Deluxe)* — blueprint storage a file plain-text no-lock-in, modalità per-vault SQLite-cifrato vs cartella-chiaro, sidecar `.pap/`, fasi F1-F4 |
@@ -59,6 +60,7 @@ La **fonte autorevole della pianificazione** è [`release-plan.md`](./release-pl
 - Ogni **fase** ha Step numerati con TODO list e criteri di completamento; stato `[x]` chiuso / `[ ]` aperto / strikethrough per item spostati.
 - I **rilasci** vivono in `release-plan.md`. Quelli speciali (`v0.5.0`, `v0.6.0`) hanno una loro sezione dedicata lì dentro.
 - `rinvii.md` è il **glue** del debt tracking: ogni rinvio registrato lì con marker (🔒 esterno / 🔧 tecnico / 📋 sub-step / 🎨 polish). Il pool 📋/🎨 è naturalmente il candidate pool per `v0.5.0`.
+- Il **naming dei rilasci** (etichetta stagionale + eventuale codename cardine) segue [`stagioni-e-nomi-rilascio.md`](./stagioni-e-nomi-rilascio.md). La stagione colloca nel tempo, il numero `vX.Y.Z` è il riferimento tecnico, il codename battezza solo le release di svolta.
 
 ## Aspetti correlati in altri cluster
 
