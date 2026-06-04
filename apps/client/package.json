@@ -28,6 +28,7 @@
     "@fontsource/inter": "^5.1",
     "@fontsource/jetbrains-mono": "^5.1",
     "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-autostart": "^2.0.0",
     "@tauri-apps/plugin-global-shortcut": "^2.0.0",
     "@tauri-apps/plugin-log": "^2.0.0",
     "@tauri-apps/plugin-updater": "^2.0.0",

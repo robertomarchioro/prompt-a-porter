@@ -206,6 +206,23 @@ fn registra_hotkey(combo: String, app: tauri::AppHandle) -> Result<(), String> {
     registra_shortcut(&app, &combo)
 }
 
+/// Rileva se l'app gira in modalità portable: il pacchetto portable include
+/// un marker `.portable` accanto all'eseguibile (vedi release.yml). L'installer
+/// NSIS non lo crea. Usato per nascondere l'opzione di avvio automatico: il
+/// path dell'exe portable non è stabile (l'utente può spostare la cartella),
+/// quindi la voce di autostart si romperebbe.
+fn is_portable() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join(".portable").exists()))
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+fn app_is_portable() -> bool {
+    is_portable()
+}
+
 pub fn run() {
     // Registra sqlite-vec come auto-extension PRIMA che venga aperta qualunque
     // connessione SQLite (vault SQLCipher incluso). Idempotente via std::sync::Once.
@@ -257,6 +274,15 @@ pub fn run() {
         // L'utente invoca `check()` da Impostazioni → Sviluppo (futuro M1.4b)
         // o automaticamente al boot (decisione di policy TBD).
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // Avvio automatico al login del SO (Win registry Run per-utente,
+        // macOS LaunchAgent, Linux .desktop). L'arg `--minimized` viene
+        // aggiunto al comando registrato: al boot l'app parte e si nasconde
+        // nel tray (vedi blocco "avvio minimizzato" in .setup()). Toggle in
+        // Impostazioni → Sistema; escluso in versione portable.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
         .setup(|app| {
             let data_dir = app
                 .path()
@@ -404,6 +430,18 @@ pub fn run() {
                 }
             });
 
+            // ── Avvio minimizzato nel tray (autostart) ──
+            // Se l'app è stata lanciata al login dal plugin autostart, l'arg
+            // `--minimized` è presente: nascondiamo la finestra principale,
+            // così l'utente trova solo l'icona nel tray (la finestra è solo
+            // nascosta, non distrutta → l'app resta viva). Click sull'icona
+            // o item "Mostra libreria" la riportano in primo piano.
+            if std::env::args().any(|arg| arg == "--minimized") {
+                if let Some(finestra) = app.get_webview_window("libreria") {
+                    let _ = finestra.hide();
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -492,7 +530,21 @@ pub fn run() {
             debug_log::debug_log_esporta_zip,
             debug_log::debug_log_leggi,
             registra_hotkey,
+            app_is_portable,
         ])
         .run(tauri::generate_context!())
         .expect("Errore durante l'avvio di Prompt a Porter");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_portable_falso_senza_marker() {
+        // Nell'ambiente di test l'eseguibile è il test runner: non ha un
+        // file `.portable` accanto, quindi deve risultare NON portable.
+        // Copre il percorso current_exe()→parent()→join(".portable")→false.
+        assert!(!is_portable());
+    }
 }

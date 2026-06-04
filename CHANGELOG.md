@@ -1,5 +1,18 @@
 # Changelog — Prompt a Porter
 
+## Unreleased
+
+### Feature
+
+- **Avvio automatico al login + avvio nel tray** (#264): nuova sezione
+  Impostazioni → **Sistema** con toggle "Avvia all'avvio del computer" (plugin
+  ufficiale `tauri-plugin-autostart`: Windows registry Run per-utente — no
+  admin —, macOS LaunchAgent, Linux `.desktop`). Quando attivo, al login l'app
+  parte **ridotta nel tray** (lanciata con arg `--minimized` → finestra
+  nascosta, icona nel tray). L'opzione è **esclusa nella versione portable**
+  (il path dell'exe non è stabile): rilevata via marker `.portable` accanto
+  all'eseguibile, aggiunto al pacchetto portable in `release.yml`.
+
 ## v0.8.12 — Audit sicurezza + export lossless + installer per-utente (2026-06-02)
 
 > Esito di un audit di sicurezza (`/security-bounty-hunter` sul sync server Go) e di una code review Rust completa (`/rust-review` su tutta la codebase del client). Nessuna vulnerabilità critica/remota trovata; chiusi un controllo di autorizzazione mancante lato server e una serie di hardening/silent-failure lato client. 10 PR atomiche (#239-248), una per modulo (ogni file toccato una sola volta). Inoltre: completato il round-trip dell'export JSON (cartelle + varianti/fork), aggiunto un vault demo per gli screenshot, e rimosso l'installer MSI a favore del solo NSIS per-utente (no admin).
