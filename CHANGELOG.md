@@ -754,7 +754,7 @@ I 3 spike sotto sono stati eseguiti e mergiati a `v0.2.0-foundations` ma sblocca
 
 - File standard di presentazione GitHub: `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1 IT), `SECURITY.md` (disclosure policy + tempi risposta), `.github/ISSUE_TEMPLATE/{config,bug_report,feature_request}.yml`, `.github/PULL_REQUEST_TEMPLATE.md`
 - `CONTRIBUTING.md` esteso con DCO sign-off + Conventional Commits
-- Filter-repo per unificare gli autori dei commit (consolidati da un account precedente)
+- Filter-repo per unificare autori commit
 - Workflow `bootstrap.yml` per generare lockfile + icone in CI senza Node locale
 - Workflow `release.yml` per build multi-OS Tauri (NSIS perUser su Windows, dmg arm64 su macOS, deb/AppImage/rpm su Linux) con `tauri-action` + draft Release
 - Patch CI workflow: `paths-ignore` per `*.md`/`LICENSE`/`CHANGELOG.md` dentro `apps/*` per evitare build inutili; `workflow_dispatch` su tutti i workflow per re-run manuale; `pnpm-lock.yaml` aggiunto ai trigger paths
