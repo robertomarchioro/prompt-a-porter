@@ -11,10 +11,9 @@ Durante la fase beta, solo l'ultima minor release riceve fix di sicurezza. Dopo 
 
 ## Segnalazione di vulnerabilità
 
-Per segnalare una vulnerabilità di sicurezza **non aprire un issue pubblico su GitHub**. Usa uno dei due canali privati:
+Per segnalare una vulnerabilità di sicurezza **non aprire un issue pubblico su GitHub**. Usa il canale privato dedicato:
 
-1. **GitHub Security Advisory privato** (preferito): https://github.com/robertomarchioro/prompt-a-porter/security/advisories/new
-2. **Email**: `robertomarchioro@gmail.com` con oggetto `[PaP Security] <descrizione breve>`
+- **GitHub Security Advisory privato**: apri una segnalazione riservata dalla scheda **Security → Report a vulnerability** del repository.
 
 Includi nella segnalazione:
 
@@ -24,7 +23,7 @@ Includi nella segnalazione:
 - Eventuali Proof-of-Concept o exploit (anche solo bozza)
 - Suggerimento di fix se ne hai uno
 
-Se utilizzi l'email, **non includere dati sensibili reali** (chiavi, password, dump di vault). Se servono per illustrare la vulnerabilità, sostituiscili con sintetici.
+Nella segnalazione **non includere dati sensibili reali** (chiavi, password, dump di vault). Se servono per illustrare la vulnerabilità, sostituiscili con sintetici.
 
 PGP/GPG: rimandato. Sarà aggiunto se la severità delle segnalazioni cresce.
 

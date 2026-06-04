@@ -36,9 +36,7 @@ Questo Codice di Condotta si applica in tutti gli spazi della community, e si ap
 
 ## Segnalazioni
 
-Comportamenti abusivi, molesti o altrimenti inaccettabili possono essere segnalati ai maintainer responsabili dell'applicazione del codice all'indirizzo:
-
-**robertomarchioro@gmail.com**
+Comportamenti abusivi, molesti o altrimenti inaccettabili possono essere segnalati ai maintainer responsabili dell'applicazione del codice tramite una **segnalazione privata su GitHub** (scheda **Security → Report a vulnerability**, oppure contattando i maintainer tramite il profilo GitHub del progetto).
 
 Tutte le segnalazioni saranno esaminate e investigate prontamente e con correttezza. I maintainer sono tenuti a rispettare la privacy e la sicurezza di chi segnala.
 
