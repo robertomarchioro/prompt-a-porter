@@ -1,6 +1,8 @@
 # Changelog — Prompt a Porter
 
-## Unreleased
+## Unreleased — Import/Export JSON nella GUI + avvio automatico (post v0.8.12)
+
+> I comandi backend `vault_import_json`/`vault_export_json` (export lossless completo del vault) erano registrati e testati ma irraggiungibili dall'interfaccia: in **Impostazioni → Dati** si poteva importare solo Markdown. Esposti entrambi nella GUI. Aggiunta inoltre l'opzione di avvio automatico al login.
 
 ### Feature
 
@@ -12,6 +14,10 @@
   nascosta, icona nel tray). L'opzione è **esclusa nella versione portable**
   (il path dell'exe non è stabile): rilevata via marker `.portable` accanto
   all'eseguibile, aggiunto al pacchetto portable in `release.yml`.
+
+### Portabilità ed export
+
+- **Import/Export JSON esposti in Impostazioni → Dati** (#262): nuova card "Importa JSON" (file picker `.json` + selettore modalità conflitti `skip`/`overwrite`/`rename` via `seg-control` a11y + report nuovi/aggiornati/conflitti/errori) e card "Esporta Vault → JSON" (download del backup lossless: storico versioni, tag, cartelle, fork). Prima il JSON era raggiungibile solo via comando, mai dalla UI. Backend invariato (già coperto da test); estratto `nomeFileExport()` in `util/dati-export.ts` (riusato anche dall'export zip, +3 test) e helper locale `scaricaBlob()`; intro Dati aggiornata con link a guida Markdown e formato JSON.
 
 ## v0.8.12 — Audit sicurezza + export lossless + installer per-utente (2026-06-02)
 
