@@ -10,6 +10,11 @@
    * - Blueprint: docs/roadmap/redesign-v08/blueprint-F8.md §4 (decisione #12)
    */
   import { invoke } from "@tauri-apps/api/core";
+  import {
+    enable as autostartEnable,
+    disable as autostartDisable,
+    isEnabled as autostartIsEnabled,
+  } from "@tauri-apps/plugin-autostart";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { onMount, onDestroy, untrack } from "svelte";
   import {
@@ -71,6 +76,7 @@
   type SezioneId =
     | "aspetto"
     | "vista"
+    | "sistema"
     | "editor"
     | "sicurezza"
     | "dati"
@@ -411,6 +417,21 @@
         "righe",
         "preview",
         "lista",
+      ],
+    },
+    {
+      id: "sistema",
+      label: "Sistema",
+      keywords: [
+        "sistema",
+        "avvio",
+        "avvia",
+        "login",
+        "boot",
+        "startup",
+        "automatico",
+        "tray",
+        "icona",
       ],
     },
     {
@@ -1067,6 +1088,53 @@
       if (debugInfo === null) {
         void caricaDebugInfo();
       }
+    }
+  });
+
+  // ─── Sistema → Avvio automatico (autostart) ───
+  // Lo stato on/off vive a livello di SO (gestito dal plugin); il toggle
+  // riflette isEnabled(). In versione portable l'opzione è esclusa: il path
+  // dell'exe non è stabile e la voce di autostart si romperebbe se l'utente
+  // sposta la cartella.
+  let avvioPortable = $state(false);
+  let avvioAutomatico = $state(false);
+  let avvioCaricato = $state(false);
+  let avvioInCorso = $state(false);
+  let avvioErrore = $state("");
+
+  async function caricaStatoAvvio(): Promise<void> {
+    avvioErrore = "";
+    try {
+      avvioPortable = await invoke<boolean>("app_is_portable");
+      avvioAutomatico = avvioPortable ? false : await autostartIsEnabled();
+    } catch (e) {
+      avvioErrore = `Impossibile leggere lo stato dell'avvio automatico: ${String(e)}`;
+    } finally {
+      avvioCaricato = true;
+    }
+  }
+
+  async function toggleAvvioAutomatico(): Promise<void> {
+    if (avvioPortable || avvioInCorso) return;
+    avvioInCorso = true;
+    avvioErrore = "";
+    try {
+      if (avvioAutomatico) {
+        await autostartDisable();
+      } else {
+        await autostartEnable();
+      }
+      avvioAutomatico = await autostartIsEnabled();
+    } catch (e) {
+      avvioErrore = `Errore nell'impostare l'avvio automatico: ${String(e)}`;
+    } finally {
+      avvioInCorso = false;
+    }
+  }
+
+  $effect(() => {
+    if (sezione === "sistema" && !avvioCaricato) {
+      void caricaStatoAvvio();
     }
   });
 
@@ -2024,6 +2092,44 @@
           {#if subSezioniFiltrate.length === 0}
             <p class="hint">Nessuna sub-sezione corrisponde alla ricerca.</p>
           {/if}
+        </div>
+      {:else if sezione === "sistema"}
+        <h3>Sistema</h3>
+        <p class="hint">Integrazione con il sistema operativo.</p>
+
+        <div class="campo">
+          <div class="sviluppo-card">
+            <div class="sviluppo-card-h">
+              <span class="campo-label">Avvia all'avvio del computer</span>
+              <label class="sviluppo-toggle">
+                <input
+                  type="checkbox"
+                  checked={avvioAutomatico}
+                  onchange={() => void toggleAvvioAutomatico()}
+                  disabled={avvioPortable || avvioInCorso || !avvioCaricato}
+                  aria-label="Avvia Prompt a Porter all'avvio del computer"
+                />
+                <span>{avvioAutomatico ? "Attivo" : "Disattivo"}</span>
+              </label>
+            </div>
+            {#if avvioPortable}
+              <p class="hint">
+                Non disponibile nella versione <strong>portable</strong>: il
+                percorso dell'eseguibile non è stabile (se sposti la cartella,
+                l'avvio automatico si romperebbe). Usa l'installer per questa
+                funzione.
+              </p>
+            {:else}
+              <p class="hint">
+                Quando attivo, Prompt a Porter parte automaticamente al login e
+                si avvia <strong>ridotto nel tray</strong> (icona accanto
+                all'orologio): clicca l'icona per aprire la finestra.
+              </p>
+            {/if}
+            {#if avvioErrore}
+              <p class="msg-err">{avvioErrore}</p>
+            {/if}
+          </div>
         </div>
       {:else if sezione === "sviluppo"}
         <h3>Sviluppo</h3>

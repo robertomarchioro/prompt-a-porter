@@ -249,8 +249,19 @@ jobs:
           "@
           $readmeContent | Out-File -FilePath "$stagingDir/README.txt" -Encoding utf8
 
+          # Marker per il rilevamento "portable" a runtime
+          # (apps/client/src-tauri/src/lib.rs::is_portable): la presenza di
+          # questo file accanto all'exe segnala la versione portable, in cui
+          # l'opzione "avvia all'avvio del computer" e' esclusa (il path
+          # dell'exe portable non e' stabile). L'installer NSIS non lo crea.
+          New-Item -ItemType File -Force -Path "$stagingDir/.portable" | Out-Null
+
           $zipName = "Prompt-a-Porter-portable-windows-x64-$tag.zip"
-          Compress-Archive -Path "$stagingDir/*" -DestinationPath $zipName -Force
+          # -Force per includere anche il dotfile .portable: Compress-Archive
+          # con wildcard "$stagingDir/*" puo' saltare i file che iniziano con
+          # un punto, quindi enumeriamo esplicitamente con Get-ChildItem -Force.
+          $zipItems = Get-ChildItem -Path $stagingDir -Force
+          Compress-Archive -Path $zipItems.FullName -DestinationPath $zipName -Force
           Write-Host "Zip portable creato: $zipName"
           Get-Item $zipName | Format-List Name, Length
 

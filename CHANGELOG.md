@@ -1,8 +1,19 @@
 # Changelog — Prompt a Porter
 
-## Unreleased — Import/Export JSON nella GUI (post v0.8.12)
+## Unreleased — Import/Export JSON nella GUI + avvio automatico (post v0.8.12)
 
-> I comandi backend `vault_import_json`/`vault_export_json` (export lossless completo del vault) erano registrati e testati ma irraggiungibili dall'interfaccia: in **Impostazioni → Dati** si poteva importare solo Markdown. Esposti entrambi nella GUI.
+> I comandi backend `vault_import_json`/`vault_export_json` (export lossless completo del vault) erano registrati e testati ma irraggiungibili dall'interfaccia: in **Impostazioni → Dati** si poteva importare solo Markdown. Esposti entrambi nella GUI. Aggiunta inoltre l'opzione di avvio automatico al login.
+
+### Feature
+
+- **Avvio automatico al login + avvio nel tray** (#264): nuova sezione
+  Impostazioni → **Sistema** con toggle "Avvia all'avvio del computer" (plugin
+  ufficiale `tauri-plugin-autostart`: Windows registry Run per-utente — no
+  admin —, macOS LaunchAgent, Linux `.desktop`). Quando attivo, al login l'app
+  parte **ridotta nel tray** (lanciata con arg `--minimized` → finestra
+  nascosta, icona nel tray). L'opzione è **esclusa nella versione portable**
+  (il path dell'exe non è stabile): rilevata via marker `.portable` accanto
+  all'eseguibile, aggiunto al pacchetto portable in `release.yml`.
 
 ### Portabilità ed export
 
