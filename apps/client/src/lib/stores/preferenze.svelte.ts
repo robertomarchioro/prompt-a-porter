@@ -16,7 +16,11 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
-const TEMA_DEFAULT = "auto"; // "auto" risolto a "dark"/"light" da risolviTema
+// Issue #269: al primo avvio (nessuna preferenza salvata) il tema deve
+// essere "light". Default esplicito a "light" invece di "auto" così la
+// prima esperienza non dipende dal tema di sistema. L'utente può comunque
+// passare a "auto"/"dark" da Impostazioni o dal toggle dell'onboarding.
+const TEMA_DEFAULT = "light";
 const TONO_DEFAULT = "zinc";
 
 /**

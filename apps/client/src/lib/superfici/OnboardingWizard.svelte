@@ -24,7 +24,11 @@
   let saltaCifratura = $state(false);
   let hotkey = $state("Ctrl+Shift+P");
   let creaPromptEsempio = $state(true);
-  let tema = $state<"dark" | "light">("dark");
+  // Issue #269: tema light di default al primo avvio.
+  let tema = $state<"dark" | "light">("light");
+
+  // Issue #270: criterio reale lato backend (vault.rs PASSWORD_MIN_LEN = 8).
+  const PASSWORD_MIN_LEN = 8;
 
   let errore = $state("");
   let caricamento = $state(false);
@@ -35,8 +39,13 @@
     document.documentElement.setAttribute("data-theme", tema);
   });
 
+  // Issue #270: criteri di complessità esplicitati e validati inline.
+  const criterioLunghezza = $derived(password.length >= PASSWORD_MIN_LEN);
+  const criterioCorrispondenza = $derived(
+    password.length > 0 && password === passwordConferma,
+  );
   const passwordValida = $derived(
-    saltaCifratura || (password.length >= 8 && password === passwordConferma),
+    saltaCifratura || (criterioLunghezza && criterioCorrispondenza),
   );
   const passwordNonCorrispondono = $derived(
     !saltaCifratura &&
@@ -47,8 +56,8 @@
   function avanti() {
     if (step === 2 && !passwordValida) {
       errore =
-        !saltaCifratura && password.length < 8
-          ? "La password deve avere almeno 8 caratteri"
+        !saltaCifratura && password.length < PASSWORD_MIN_LEN
+          ? `La password deve avere almeno ${PASSWORD_MIN_LEN} caratteri`
           : "Le password non corrispondono";
       return;
     }
@@ -108,6 +117,36 @@
       });
 
       await invoke("registra_hotkey", { combo: hotkey });
+
+      // Issue #271: il flag `crea_prompt_esempio` era morto — nessuno
+      // creava il prompt. Ora, a vault creato e sbloccato, se richiesto
+      // creiamo un prompt di esempio con un segnaposto {{...}} per mostrare
+      // la feature dei segnaposti. Un fallimento qui non deve bloccare
+      // l'onboarding: logghiamo e proseguiamo.
+      if (creaPromptEsempio) {
+        try {
+          await invoke("prompt_crea", {
+            dati: {
+              titolo: "Riassunto bug report",
+              descrizione:
+                "Prompt di esempio: riassume un bug report in modo chiaro.",
+              body:
+                "Riassumi il seguente bug report in 3 punti (sintomo, " +
+                "passi per riprodurlo, impatto):\n\n{{bug report}}",
+              visibilita: "private",
+              tag_nomi: ["esempio"],
+              target_model: null,
+              folder_id: null,
+            },
+          });
+        } catch (errEsempio) {
+          console.error(
+            "[onboarding] creazione prompt di esempio fallita",
+            errEsempio,
+          );
+        }
+      }
+
       oncompletato?.();
     } catch (e) {
       errore = String(e);
@@ -237,6 +276,7 @@
         <p class="wizard-desc">
           I tuoi prompt privati saranno cifrati con AES-256. La password non
           viene mai trasmessa né recuperabile — annotala in un password manager.
+          Deve avere almeno {PASSWORD_MIN_LEN} caratteri.
         </p>
 
         {#if !saltaCifratura}
@@ -250,6 +290,33 @@
               />
             </Field>
             <StrengthMeter {password} />
+            <ul class="criteri" aria-label="Criteri password">
+              <li
+                class="criterio"
+                class:criterio--ok={criterioLunghezza}
+                aria-label={`Almeno ${PASSWORD_MIN_LEN} caratteri: ${
+                  criterioLunghezza ? "soddisfatto" : "non soddisfatto"
+                }`}
+              >
+                <span class="criterio-icona" aria-hidden="true"
+                  >{criterioLunghezza ? "✓" : "○"}</span
+                >
+                <span aria-hidden="true">Almeno {PASSWORD_MIN_LEN} caratteri</span
+                >
+              </li>
+              <li
+                class="criterio"
+                class:criterio--ok={criterioCorrispondenza}
+                aria-label={`Le due password coincidono: ${
+                  criterioCorrispondenza ? "soddisfatto" : "non soddisfatto"
+                }`}
+              >
+                <span class="criterio-icona" aria-hidden="true"
+                  >{criterioCorrispondenza ? "✓" : "○"}</span
+                >
+                <span aria-hidden="true">Le due password coincidono</span>
+              </li>
+            </ul>
             <Field
               etichetta="Conferma password"
               errore={passwordNonCorrispondono
@@ -315,7 +382,11 @@
       {/if}
 
       {#if step < 3}
-        <Button variante="primary" onclick={avanti}>Continua →</Button>
+        <Button
+          variante="primary"
+          onclick={avanti}
+          disabled={step === 2 && !passwordValida}
+        >Continua →</Button>
       {:else}
         <Button
           variante="primary"
@@ -462,6 +533,34 @@
     flex-direction: column;
     gap: var(--sp-3);
     max-width: 400px;
+  }
+
+  .criteri {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+  }
+
+  .criterio {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+
+  .criterio--ok {
+    color: var(--accent-private, var(--text-default));
+  }
+
+  .criterio-icona {
+    display: inline-flex;
+    width: 1em;
+    justify-content: center;
+    font-weight: var(--fw-bold);
   }
 
   .skip-cifratura {
