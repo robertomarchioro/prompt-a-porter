@@ -629,9 +629,53 @@
   async function bloccaVault(): Promise<void> {
     try {
       await invoke("vault_lock");
+      // Chiudi la modale e riporta l'app allo stato "vault bloccato":
+      // App.svelte ascolta `pap:vault-bloccato` e rimonta Onboarding,
+      // che rileva il vault esistente+cifrato e mostra lo sblocco
+      // (issue #273: prima il lock backend avveniva ma la UI restava
+      // sulla Shell, dando l'impressione che il pulsante non facesse
+      // nulla).
       onChiudi();
+      window.dispatchEvent(new CustomEvent("pap:vault-bloccato"));
     } catch (e) {
       console.error("[impostazioni] vault_lock", e);
+    }
+  }
+
+  // ─── Elimina vault (issue #274) ───
+  // Azione distruttiva con doppia conferma: (1) toggle che rivela il
+  // form, (2) l'utente deve digitare ELIMINA per abilitare il bottone.
+  // Il backend `vault_elimina` chiude la connessione e cancella i file
+  // su disco; poi riportiamo l'app a Onboarding (che, non trovando piu'
+  // il vault, avvia il wizard di setup).
+  const TESTO_CONFERMA_ELIMINA = "ELIMINA";
+  let mostraEliminaVault = $state(false);
+  let confermaEliminaTesto = $state("");
+  let erroreElimina = $state("");
+  let statoOpElimina = $state<"" | "in_corso">("");
+
+  function annullaEliminaVault(): void {
+    mostraEliminaVault = false;
+    confermaEliminaTesto = "";
+    erroreElimina = "";
+  }
+
+  async function eliminaVault(): Promise<void> {
+    erroreElimina = "";
+    if (confermaEliminaTesto !== TESTO_CONFERMA_ELIMINA) {
+      erroreElimina = `Digita ${TESTO_CONFERMA_ELIMINA} per confermare.`;
+      return;
+    }
+    statoOpElimina = "in_corso";
+    try {
+      await invoke("vault_elimina");
+      onChiudi();
+      // Stesso canale di routing del lock: App.svelte rimonta
+      // Onboarding, che non trovando piu' meta+db avvia il setup.
+      window.dispatchEvent(new CustomEvent("pap:vault-bloccato"));
+    } catch (e) {
+      statoOpElimina = "";
+      erroreElimina = String(e);
     }
   }
 
@@ -1174,9 +1218,14 @@
     }
     statoOpPassword = "in_corso";
     try {
+      // I nomi dei parametri devono combaciare con la firma del comando
+      // Rust `vault_cambia_password(password_vecchia, password_nuova)`.
+      // Tauri converte snake_case → camelCase, quindi servono
+      // `passwordVecchia`/`passwordNuova` (non `vecchia`/`nuova`):
+      // con i nomi sbagliati l'invoke fallisce sempre (issue #272).
       await invoke("vault_cambia_password", {
-        vecchia: vecchiaPassword,
-        nuova: nuovaPassword,
+        passwordVecchia: vecchiaPassword,
+        passwordNuova: nuovaPassword,
       });
       statoOpPassword = "ok";
       vecchiaPassword = "";
@@ -1532,6 +1581,64 @@
                     confermaPassword = "";
                     errorePassword = "";
                   }}
+                >
+                  Annulla
+                </button>
+              </div>
+            </div>
+          {/if}
+        </div>
+
+        <div class="campo campo-danger">
+          <span class="campo-label">Elimina vault</span>
+          {#if !mostraEliminaVault}
+            <button
+              type="button"
+              class="btn-ghost btn-danger"
+              onclick={() => (mostraEliminaVault = true)}
+            >
+              <Trash2 size={14} />
+              Elimina vault…
+            </button>
+            <p class="hint">
+              Cancella definitivamente il database cifrato e tutti i prompt.
+              <strong>Operazione irreversibile.</strong> Esporta un backup
+              dalla sezione "Dati" prima di procedere.
+            </p>
+          {:else}
+            <div class="form-pwd">
+              <p class="hint hint-danger">
+                Questa azione elimina <strong>tutti</strong> i tuoi prompt e
+                non è reversibile. Per confermare digita
+                <code>{TESTO_CONFERMA_ELIMINA}</code> qui sotto.
+              </p>
+              <input
+                type="text"
+                placeholder="Digita {TESTO_CONFERMA_ELIMINA}"
+                bind:value={confermaEliminaTesto}
+                autocomplete="off"
+                aria-label="Conferma eliminazione vault"
+              />
+              {#if erroreElimina}
+                <p class="msg-err">{erroreElimina}</p>
+              {/if}
+              <div class="riga-azioni">
+                <button
+                  type="button"
+                  class="btn-warn btn-elimina"
+                  onclick={eliminaVault}
+                  disabled={statoOpElimina === "in_corso" ||
+                    confermaEliminaTesto !== TESTO_CONFERMA_ELIMINA}
+                >
+                  {statoOpElimina === "in_corso"
+                    ? "Elimino…"
+                    : "Elimina definitivamente"}
+                </button>
+                <button
+                  type="button"
+                  class="btn-ghost"
+                  onclick={annullaEliminaVault}
+                  disabled={statoOpElimina === "in_corso"}
                 >
                   Annulla
                 </button>
@@ -2825,6 +2932,41 @@
   .btn-danger:hover:not(:disabled) {
     background: var(--accent-danger, #d9534f);
     color: var(--bg-canvas);
+  }
+
+  /* ── Elimina vault (issue #274): danger zone ── */
+  .campo-danger {
+    margin-top: var(--sp-3);
+    padding-top: var(--sp-3);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .form-pwd input[type="text"] {
+    padding: 6px var(--sp-2);
+    background: var(--bg-input);
+    border: 1px solid var(--accent-danger, #d9534f);
+    border-radius: var(--radius-sm);
+    color: var(--text-default);
+    font-size: var(--fs-sm);
+  }
+
+  .hint-danger {
+    color: var(--accent-danger, #d9534f);
+  }
+
+  .btn-elimina {
+    color: var(--accent-danger, #d9534f);
+    border-color: var(--accent-danger, #d9534f);
+  }
+
+  .btn-elimina:hover:not(:disabled) {
+    background: var(--accent-danger, #d9534f);
+    color: var(--bg-canvas);
+  }
+
+  .btn-elimina:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   /* ── v0.8.7 Sezione Sviluppo → Debug log ── */
