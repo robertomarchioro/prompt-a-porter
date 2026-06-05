@@ -166,14 +166,25 @@
   // traccia correttamente. Salta il primo run (montaggio gia' fatto
   // da onMount) controllando che `view` esista e che i valori siano
   // diversi da quelli usati al monta.
-  let prefsSnapshot = $state({
+  //
+  // Issue #275 (catastrofico, eco di #170): `prefsSnapshot` NON deve
+  // essere un `$state`. L'$effect leggeva `prefsSnapshot[k]` (dipendenza
+  // reattiva) e poi lo riscriveva incondizionatamente (`prefsSnapshot =
+  // curr`): siccome la riscrittura assegna un nuovo oggetto ad ogni run,
+  // l'effect dipendeva dalla propria scrittura → loop reattivo infinito
+  // che congelava tutta l'UI appena montato l'EditorTab (cioe' appena un
+  // prompt veniva selezionato; "persiste a riavvio" = ricaricando lo
+  // stesso prompt si ri-monta l'EditorTab e si ri-triggera il loop).
+  // Come semplice variabile locale (non reattiva) il confronto resta
+  // valido ma non genera dipendenza reattiva sulla propria scrittura.
+  let prefsSnapshot = {
     autosaveDelayMs: statoEditor.autosaveDelayMs,
     lineWrapping: statoEditor.lineWrapping,
     indentSize: statoEditor.indentSize,
     fontSize: statoEditor.fontSize,
     showLineNumbers: statoEditor.showLineNumbers,
     highlightActiveLine: statoEditor.highlightActiveLine,
-  });
+  };
   $effect(() => {
     const curr = {
       autosaveDelayMs: statoEditor.autosaveDelayMs,
