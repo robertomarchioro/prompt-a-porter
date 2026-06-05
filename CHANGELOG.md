@@ -1,6 +1,6 @@
 # Changelog — Prompt a Porter
 
-## Unreleased — Import/Export JSON nella GUI + avvio automatico (post v0.8.12)
+## v0.8.13 — Import/Export JSON nella GUI + avvio automatico (2026-06-05)
 
 > I comandi backend `vault_import_json`/`vault_export_json` (export lossless completo del vault) erano registrati e testati ma irraggiungibili dall'interfaccia: in **Impostazioni → Dati** si poteva importare solo Markdown. Esposti entrambi nella GUI. Aggiunta inoltre l'opzione di avvio automatico al login.
 
