@@ -19,6 +19,7 @@
    */
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { invoke } from "@tauri-apps/api/core";
   import CommandPalette from "$lib/superfici/CommandPalette.svelte";
   import Onboarding from "$lib/superfici/Onboarding.svelte";
   import Shell from "$lib/superfici/Shell.svelte";
@@ -34,6 +35,46 @@
 
   let authCompleted = $state(false);
 
+  // Issue #268: al primissimo avvio (subito dopo l'installazione) il
+  // webview può chiamare i comandi vault PRIMA che il backend abbia
+  // completato `app.manage(VaultState)` nel hook `.setup()`. In quella
+  // finestra l'invoke viene rifiutato e Onboarding mostrava un dialog
+  // "Errore / Riprova" spurio (premendo Riprova proseguiva perché nel
+  // frattempo lo state era pronto). Qui facciamo un probe idempotente di
+  // `vault_aperto` (comando infallibile by-design: ritorna sempre bool)
+  // con qualche retry prima di montare Onboarding, così l'errore non
+  // appare mai su un primo avvio legittimo.
+  let backendPronto = $state(false);
+
+  const PROBE_MAX_TENTATIVI = 20;
+  const PROBE_DELAY_MS = 100;
+
+  async function attendiBackendPronto(): Promise<void> {
+    for (let i = 0; i < PROBE_MAX_TENTATIVI; i++) {
+      try {
+        await invoke<boolean>("vault_aperto");
+        backendPronto = true;
+        return;
+      } catch {
+        // State non ancora gestito / comando non ancora registrato:
+        // attendi e riprova.
+        await new Promise((r) => setTimeout(r, PROBE_DELAY_MS));
+      }
+    }
+    // Esauriti i tentativi: monta comunque Onboarding, che gestisce
+    // internamente eventuali errori reali (file rotto, ecc.).
+    backendPronto = true;
+  }
+
+  // Issue #273/#274: quando il vault viene bloccato o eliminato dalle
+  // Impostazioni, l'app deve tornare allo stato pre-Shell. ImpostazioniModal
+  // emette `pap:vault-bloccato`; qui resettiamo authCompleted così
+  // Onboarding viene rimontato e rileva il nuovo stato del vault
+  // (cifrato esistente → schermata di sblocco; inesistente → setup).
+  function onVaultBloccato(): void {
+    authCompleted = false;
+  }
+
   // F0 PR-B: cascade reattiva tema/tono su <html> per tutte le finestre.
   // Carica una volta dal backend al mount, applica ad ogni cambio nello
   // store, e ascolta prefers-color-scheme quando tema === "auto" per
@@ -41,6 +82,11 @@
   onMount(() => {
     void caricaTemaTono();
     void caricaEditor();
+    // La palette è una finestra separata che non passa dal flusso vault.
+    if (etichetta !== "palette") {
+      void attendiBackendPronto();
+    }
+    window.addEventListener("pap:vault-bloccato", onVaultBloccato);
 
     let mq: MediaQueryList | null = null;
     let onSystemChange: ((e: MediaQueryListEvent) => void) | null = null;
@@ -57,6 +103,7 @@
       if (mq && onSystemChange) {
         mq.removeEventListener("change", onSystemChange);
       }
+      window.removeEventListener("pap:vault-bloccato", onVaultBloccato);
     };
   });
 
@@ -69,8 +116,27 @@
 
 {#if etichetta === "palette"}
   <CommandPalette />
+{:else if !backendPronto}
+  <!-- Issue #268: attesa breve che il backend sia pronto, evita il
+       dialog d'errore spurio al primo avvio. -->
+  <main class="boot-attesa">
+    <p>Avvio…</p>
+  </main>
 {:else if !authCompleted}
   <Onboarding oncompletato={() => (authCompleted = true)} />
 {:else}
   <Shell />
 {/if}
+
+<style>
+  .boot-attesa {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: var(--bg-canvas);
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+  }
+</style>
