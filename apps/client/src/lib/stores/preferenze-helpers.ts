@@ -14,9 +14,9 @@
  * - "light" → "light"
  * - "auto" o sconosciuto → matchMedia("prefers-color-scheme: dark") →
  *   "dark" se sistema preferisce dark, altrimenti "light"
- * - In ambienti senza `window.matchMedia` (test SSR) ritorna "dark" come
- *   fallback per coerenza con la default attualmente hardcoded in
- *   index.html.
+ * - In ambienti senza `window.matchMedia` (test SSR) ritorna "light" come
+ *   fallback, coerente con il default light-first del primo avvio
+ *   (issue #269).
  */
 export function risolviTema(tema: string): "dark" | "light" {
   if (tema === "dark") return "dark";
@@ -26,7 +26,7 @@ export function risolviTema(tema: string): "dark" | "light" {
       ? "dark"
       : "light";
   }
-  return "dark";
+  return "light";
 }
 
 /**
