@@ -1,5 +1,20 @@
 # Changelog — Prompt a Porter
 
+## v0.8.14 — Fix gate test round 1 (2026-06-05)
+
+> Correzioni dal primo giro di gate test su v0.8.13 (Windows 11): 8 issue, risolte in parallelo su file disgiunti (PR #276/#277/#278).
+
+### Fix
+
+- **UI congelata dopo creazione prompt** (#275): loop reattivo infinito in `EditorTab` — `prefsSnapshot` era una `$state` letta **e** riscritta nello stesso `$effect`, quindi dipendeva dalla propria scrittura → flush reattivo senza fine, interfaccia bloccata appena si selezionava un prompt (save disabilitato, tab inerti, persisteva a riavvio). Reso `prefsSnapshot` non-reattivo.
+- **Errore spurio al primo avvio** (#268): race di startup — l'onboarding invocava i comandi vault prima che `.setup()` registrasse `VaultState`. Aggiunto probe `vault_aperto` con retry prima di montare l'onboarding.
+- **Cambio password del vault falliva** (#272): mismatch dei nomi parametri nell'invoke (`vecchia/nuova` invece di `passwordVecchia/passwordNuova`). Il backend (re-key SQLCipher) era già corretto.
+- **"Blocca vault" non faceva nulla** (#273): ora `vault_lock` emette `pap:vault-bloccato` e l'app rimonta la schermata di sblocco.
+- **Manca "Elimina vault" in UI** (#274): aggiunta azione distruttiva in Impostazioni → Sicurezza con doppia conferma (digitare `ELIMINA`), che usa il comando backend `vault_elimina` esistente.
+- **Prompt di esempio non creato** (#271): la preferenza `crea_prompt_esempio` era un flag morto; ora l'onboarding crea davvero il prompt di esempio via `prompt_crea`.
+- **Tema light di default al primo avvio** (#269): il default era `auto` (seguiva il SO) → ora `light`.
+- **Criteri password non esplicitati** (#270): aggiunti criteri visibili (min 8 caratteri) + checklist inline; "Continua" disabilitato finché non soddisfatti.
+
 ## v0.8.13 — Import/Export JSON nella GUI + avvio automatico (2026-06-05)
 
 > I comandi backend `vault_import_json`/`vault_export_json` (export lossless completo del vault) erano registrati e testati ma irraggiungibili dall'interfaccia: in **Impostazioni → Dati** si poteva importare solo Markdown. Esposti entrambi nella GUI. Aggiunta inoltre l'opzione di avvio automatico al login.

@@ -6,6 +6,25 @@ Convenzioni: vedi [`README.md`](./README.md) di questa cartella.
 
 ---
 
+## Esito gate test — round 1 (v0.8.13) → fix in v0.8.14
+
+Primo giro di gate test su **v0.8.13** (Windows 11): 8 anomalie aperte come issue, **tutte risolte** su `main` (PR #276/#277/#278) e da **ri-testare** sul build **v0.8.14** (i fix NON erano nella draft v0.8.13).
+
+| Test case | Issue | Fix applicato | Stato |
+|---|---|---|---|
+| `TC-PROMPT-001` 🔴 | #275 | Loop reattivo infinito in `EditorTab` (`$state` letto e riscritto nello stesso `$effect`) → UI congelata alla selezione di un prompt. Reso `prefsSnapshot` non-reattivo | 🔁 **RITESTARE** |
+| `TC-AUTH-001` | #268 | Race di startup: onboarding invocava i comandi vault prima di `app.manage(VaultState)` → dialog "Riprova". Aggiunto probe `vault_aperto` con retry | 🔁 **RITESTARE** |
+| `TC-AUTH-001` | #269 | Default tema era `auto` (seguiva il SO) → ora **light** al primo avvio | 🔁 **RITESTARE** |
+| `TC-AUTH-001` | #270 | Aggiunti criteri password espliciti (min 8) + checklist inline + "Continua" disabilitato finché non soddisfatti | 🔁 **RITESTARE** |
+| `TC-ONBOARD-001` | #271 | `crea_prompt_esempio` era un flag morto → ora crea davvero il prompt di esempio via `prompt_crea` | 🔁 **RITESTARE** |
+| `TC-AUTH-004` | #272 | Mismatch nomi parametri invoke (`vecchia/nuova` vs `passwordVecchia/passwordNuova`) → cambio password falliva sempre. Corretti i nomi | 🔁 **RITESTARE** |
+| `TC-AUTH-006` | #273 | "Blocca vault" non instradava: ora `vault_lock` → evento `pap:vault-bloccato` → schermata di sblocco | 🔁 **RITESTARE** |
+| `TC-AUTH-007` | #274 | Mancava la UI: aggiunta "Elimina vault" in Impostazioni→Sicurezza con doppia conferma (digita `ELIMINA`) → `vault_elimina` | 🔁 **RITESTARE** |
+
+> Nota (#273): per un vault **non cifrato** (senza master password) "blocca vault" lo riapre subito — comportamento di design, non un bug.
+
+---
+
 ## AUTH — Vault e credenziali
 
 ### `TC-AUTH-001` 🔴 🎯 Creazione vault al primo avvio
