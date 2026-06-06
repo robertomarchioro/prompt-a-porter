@@ -1237,7 +1237,7 @@
       }, 1500);
     } catch (e) {
       statoOpPassword = "";
-      errorePassword = String(e);
+      errorePassword = String(e).replace(/^Error: /, "");
     }
   }
 </script>
