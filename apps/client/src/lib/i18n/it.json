@@ -78,11 +78,6 @@
   },
   "onboarding": {
     "benvenuto": "Benvenuto in Prompt a Porter",
-    "step_profilo": "Scegli il tuo profilo",
-    "profilo_personale": "Personale",
-    "profilo_personale_desc": "Solo per te. Vault locale, nessun server.",
-    "profilo_team": "Team",
-    "profilo_team_desc": "Condividi prompt con il tuo team via server sync.",
     "step_password": "Proteggi il tuo vault",
     "password_placeholder": "Password del vault",
     "password_conferma": "Conferma password",
