@@ -6,7 +6,6 @@
     descrizione: string;
     dettagli: string[];
     selezionato?: boolean;
-    variante?: "private" | "team";
     onclick?: () => void;
     icona?: Snippet;
   }
@@ -16,7 +15,6 @@
     descrizione,
     dettagli,
     selezionato = false,
-    variante = "private",
     onclick,
     icona,
   }: Props = $props();
@@ -25,7 +23,6 @@
 <button
   class="card"
   class:card--selezionato={selezionato}
-  class:card--team={variante === "team"}
   aria-pressed={selezionato}
   {onclick}
   type="button"
@@ -67,11 +64,6 @@
       background var(--motion-fast);
     font-family: var(--font-ui);
     color: var(--text-default);
-  }
-
-  .card--team {
-    --_accent: var(--accent-team);
-    --_accent-soft: var(--accent-team-soft);
   }
 
   .card:hover {
