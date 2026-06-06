@@ -12,6 +12,14 @@
   import Modale from "$lib/components/Modale.svelte";
   import demoVault from "../../../../../docs/demo/demo-vault.json";
 
+  // Forma del risultato di vault_import_json (mirrors import_export.rs::ImportReport).
+  interface ImportReport {
+    nuovi: number;
+    aggiornati: number;
+    conflitti: number;
+    errori: string[];
+  }
+
   interface Props {
     oncompletato?: () => void;
   }
@@ -131,10 +139,16 @@
       // prompt hardcoded. Un fallimento qui non deve bloccare l'onboarding.
       if (creaPromptEsempio) {
         try {
-          await invoke("vault_import_json", {
+          const report = await invoke<ImportReport>("vault_import_json", {
             json: JSON.stringify(demoVault),
             modalita: "skip",
           });
+          if (report.errori.length > 0) {
+            console.warn(
+              "[onboarding] import demo parziale — alcuni elementi ignorati:",
+              report.errori,
+            );
+          }
         } catch (errEsempio) {
           console.error(
             "[onboarding] importazione demo vault fallita",

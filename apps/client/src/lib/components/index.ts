@@ -10,7 +10,6 @@ export { default as NavItem } from "./NavItem.svelte";
 export { default as PannelloLinter } from "./PannelloLinter.svelte";
 export { default as PannelloProviderConfig } from "./PannelloProviderConfig.svelte";
 export { default as Placeholder } from "./Placeholder.svelte";
-export { default as ProfileCard } from "./ProfileCard.svelte";
 export { default as Select } from "./Select.svelte";
 export { default as Skeleton } from "./Skeleton.svelte";
 export { default as StrengthMeter } from "./StrengthMeter.svelte";
