@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { enable as autostartEnable } from "@tauri-apps/plugin-autostart";
   import {
     Badge,
     Button,
@@ -32,6 +33,9 @@
   let saltaCifratura = $state(false);
   let hotkey = $state("Ctrl+Shift+P");
   let creaPromptEsempio = $state(true);
+  // Issue #282: avvio automatico con Windows — OFF di default.
+  let avvioAutomatico = $state(false);
+  let avvioPortable = $state(false);
   // Issue #269: tema light di default al primo avvio.
   let tema = $state<"dark" | "light">("light");
 
@@ -48,6 +52,18 @@
   // l'effetto del toggle, anche prima di completare l'onboarding.
   $effect(() => {
     document.documentElement.setAttribute("data-theme", tema);
+  });
+
+  // Issue #282: rileva la modalità portable una volta sola quando il componente
+  // viene montato, così da nascondere il toggle avvio automatico se non supportato.
+  $effect(() => {
+    invoke<boolean>("app_is_portable")
+      .then((v) => {
+        avvioPortable = v;
+      })
+      .catch(() => {
+        avvioPortable = false;
+      });
   });
 
   // Issue #270: criteri di complessità esplicitati e validati inline.
@@ -104,6 +120,7 @@
         },
       });
       await invoke("registra_hotkey", { combo: "Ctrl+Shift+P" });
+      // Issue #282: "Salta tour" lascia l'avvio automatico disattivato (default OFF).
       oncompletato?.();
     } catch (e) {
       errore = String(e);
@@ -153,6 +170,20 @@
           console.error(
             "[onboarding] importazione demo vault fallita",
             errEsempio,
+          );
+        }
+      }
+
+      // Issue #282: se l'utente ha abilitato l'avvio automatico e non siamo in
+      // modalità portable, attiva il plugin. Non bloccante: un errore qui non
+      // deve impedire il completamento dell'onboarding.
+      if (avvioAutomatico && !avvioPortable) {
+        try {
+          await autostartEnable();
+        } catch (errAvvio) {
+          console.error(
+            "[onboarding] attivazione avvio automatico fallita",
+            errAvvio,
           );
         }
       }
@@ -334,6 +365,23 @@
             privato
           />
         </div>
+
+        {#if !avvioPortable}
+          <div class="avvio-automatico">
+            <div class="esempio-testo">
+              <strong class="esempio-titolo">Avvia con Windows</strong>
+              <p class="subtle">
+                Prompt a Porter parte in background all'avvio del PC — la hotkey
+                è subito disponibile. Puoi disattivarlo in Impostazioni.
+              </p>
+            </div>
+            <Switch
+              bind:attivo={avvioAutomatico}
+              etichetta="Avvia automaticamente con Windows"
+              privato
+            />
+          </div>
+        {/if}
       {/if}
     </div>
 
@@ -618,6 +666,18 @@
     background: var(--accent-private-soft);
     border-radius: var(--radius-lg);
     margin-top: var(--sp-2);
+  }
+
+  /* Issue #282: box avvio automatico — usa --accent-team-soft (viola/indigo)
+     per distinguersi dal box esempio-prompt che usa --accent-private-soft (ambra). */
+  .avvio-automatico {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    padding: var(--sp-4);
+    background: var(--accent-team-soft);
+    border-radius: var(--radius-lg);
   }
 
   .esempio-testo {
