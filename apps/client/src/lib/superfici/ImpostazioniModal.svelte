@@ -675,7 +675,7 @@
       window.dispatchEvent(new CustomEvent("pap:vault-bloccato"));
     } catch (e) {
       statoOpElimina = "";
-      erroreElimina = String(e);
+      erroreElimina = String(e).replace(/^Error: /, "");
     }
   }
 
@@ -918,7 +918,7 @@
       for (const g of lista) edit[g.name] = g.value;
       globaliEdit = edit;
     } catch (e) {
-      globaliErrore = String(e);
+      globaliErrore = String(e).replace(/^Error: /, "");
     }
   }
 
@@ -942,7 +942,7 @@
       globaleNuovoValore = "";
       await caricaGlobali();
     } catch (e) {
-      globaliErrore = String(e);
+      globaliErrore = String(e).replace(/^Error: /, "");
     }
   }
 
@@ -954,7 +954,7 @@
       });
       await caricaGlobali();
     } catch (e) {
-      globaliErrore = String(e);
+      globaliErrore = String(e).replace(/^Error: /, "");
     }
   }
 
@@ -964,7 +964,7 @@
       await invoke<void>("globale_placeholder_elimina", { name });
       await caricaGlobali();
     } catch (e) {
-      globaliErrore = String(e);
+      globaliErrore = String(e).replace(/^Error: /, "");
     }
   }
 
@@ -982,7 +982,7 @@
     try {
       embStatus = await invoke<StatoEmbeddings>("embeddings_status");
     } catch (e) {
-      embErrore = String(e);
+      embErrore = String(e).replace(/^Error: /, "");
     }
   }
 
@@ -993,7 +993,7 @@
       await invoke("embeddings_download");
       await caricaEmbStatus();
     } catch (e) {
-      embErrore = String(e);
+      embErrore = String(e).replace(/^Error: /, "");
     } finally {
       embOpInCorso = "";
       embProgressDownload = null;
@@ -1007,7 +1007,7 @@
       await invoke("embeddings_init");
       await caricaEmbStatus();
     } catch (e) {
-      embErrore = String(e);
+      embErrore = String(e).replace(/^Error: /, "");
     } finally {
       embOpInCorso = "";
     }

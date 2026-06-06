@@ -29,7 +29,7 @@ impl fmt::Display for PapErrore {
             Self::PasswordTroppoCorta => write!(f, "La password deve avere almeno 8 caratteri"),
             Self::Db(_) => write!(f, "Errore interno: database non accessibile."),
             Self::Io(_) => write!(f, "Errore interno: impossibile leggere i dati del vault."),
-            Self::Json(e) => write!(f, "Errore JSON: {e}"),
+            Self::Json(_) => write!(f, "Errore interno: dati non leggibili."),
             Self::Migrazione(msg) => write!(f, "Errore migrazione: {msg}"),
             Self::Argon2(_) => write!(f, "Errore interno: derivazione chiave fallita."),
             Self::Generico(msg) => write!(f, "{msg}"),
@@ -104,7 +104,32 @@ mod test {
     fn from_json_error() {
         let json_err = serde_json::from_str::<String>("non_json").unwrap_err();
         let pap_err = PapErrore::from(json_err);
-        assert!(pap_err.to_string().starts_with("Errore JSON"));
+        // Json(_) ora produce un messaggio opaco senza testo interno della libreria.
+        assert_eq!(pap_err.to_string(), "Errore interno: dati non leggibili.");
+        assert!(!pap_err.to_string().contains("non_json"));
+    }
+
+    /// Verifica che Json produca una stringa opaca in italiano
+    /// senza esporre byte offset o testo parsato dalla libreria serde_json.
+    #[test]
+    fn display_opaco_json() {
+        // Crea un errore serde_json con contesto interno (byte offset etc.)
+        let json_err = serde_json::from_str::<serde_json::Value>(
+            r#"{"chiave": "valore non chiuso"#,
+        )
+        .unwrap_err();
+        let inner_text = json_err.to_string();
+        let pap_err = PapErrore::Json(json_err);
+
+        assert_eq!(
+            pap_err.to_string(),
+            "Errore interno: dati non leggibili."
+        );
+        // Il testo interno della libreria non deve trapelare
+        assert!(!pap_err.to_string().contains(&inner_text));
+        // Il messaggio non deve contenere riferimenti a byte/offset
+        assert!(!pap_err.to_string().contains("line"));
+        assert!(!pap_err.to_string().contains("column"));
     }
 
     #[test]
