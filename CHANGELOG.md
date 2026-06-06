@@ -1,5 +1,21 @@
 # Changelog — Prompt a Porter
 
+## v0.8.15 — Triage onboarding + tray + errori vault (2026-06-06)
+
+> Triage di 6 issue aperte dal gate test (Windows 11, v0.8.14): 5 fix + 1 feature P0. Raggruppate per file condiviso — un cluster coordinato sull'onboarding (#283/#284/#281, stesso `OnboardingWizard.svelte`) e due isole indipendenti (#285 tray, #280 errori vault) in parallelo (PR #286/#287/#288); la feature P0 #282 in coda al cluster (PR #289).
+
+### Fix
+
+- **Menu contestuale del tray inerte a finestra chiusa** (#285): chiudendo la finestra principale, le voci del menu del tray (es. "nuovo prompt", "impostazioni") non facevano nulla — la finestra `libreria` veniva **distrutta** dalla chiusura, quindi `get_webview_window` restituiva `None` e `mostra_libreria()` era un no-op. Ora `WindowEvent::CloseRequested` sulla finestra `libreria` viene intercettato con `prevent_close()` + `hide()`, mantenendo la webview viva in background: tutte le azioni del tray restano operative dopo la chiusura.
+- **Step "personale/team" rimosso dall'onboarding** (#283): la scelta del profilo nel primo step era UI morta (v1.0 è solo personale, `profilo` era comunque forzato a `personale`). Rimossa la card Team, il componente `ProfileCard` inutilizzato e le chiavi i18n morte; primo step collassato in una welcome-card.
+- **Prompt di esempio dal vault demo educativo** (#284): "crea prompt esempio" nello step 3 ora importa il vault demo completo (`docs/demo/demo-vault.json`) via il comando esistente `vault_import_json` (modalità `skip`), invece del singolo prompt hardcoded; import non bloccante con log degli errori parziali.
+- **"Salta tour" spiega le decisioni applicate** (#281): saltare il tour applicava silenziosamente dei default (profilo personale, hotkey `Ctrl+Shift+P`, nessun prompt di esempio). Ora un modale di conferma elenca questi default prima di procedere.
+- **Messaggi di errore leggibili nel cambio password vault** (#280): gli arm `Argon2`/`Db`/`Io`/`Json` di `PapErrore` esponevano testo grezzo della libreria (offset, dettagli SQLite/OS) all'utente. Resi opachi con messaggi italiani comprensibili senza fuga di informazioni; allineati i catch UI (`erroreElimina`, `embErrore`, `globaliErrore`) con lo strip `^Error: ` già usato altrove.
+
+### Feature
+
+- **Avvio automatico con Windows nel tour di onboarding** (#282): aggiunto un toggle "Avvia con Windows" nel terzo step del wizard (OFF di default, nascosto in versione portable), in stile coerente con il box dei prompt di esempio ma con accento cromatico distinto. Riusa il plugin esistente `@tauri-apps/plugin-autostart`; non si attiva se si salta il tour; non bloccante in caso di errore.
+
 ## v0.8.14 — Fix gate test round 1 (2026-06-05)
 
 > Correzioni dal primo giro di gate test su v0.8.13 (Windows 11): 8 issue, risolte in parallelo su file disgiunti (PR #276/#277/#278).
