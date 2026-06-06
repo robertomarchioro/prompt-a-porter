@@ -33,7 +33,7 @@ pub mod versioning;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager,
+    Emitter, Manager, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_log::{RotationStrategy, Target, TargetKind};
@@ -391,6 +391,24 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            // ── Mantieni la finestra libreria viva alla chiusura ──
+            // Quando l'utente chiude la finestra (X o Alt+F4), intercettiamo
+            // CloseRequested e nascondiamo la finestra nel tray invece di
+            // lasciarla distruggere. Questo garantisce che get_webview_window
+            // ritorni sempre Some anche dopo la "chiusura", così le azioni del
+            // menu contestuale del tray (nuovo_prompt, impostazioni, ecc.)
+            // trovano sempre una finestra viva a cui emettere l'evento.
+            // Fix issue #285.
+            if let Some(finestra_libreria) = app.get_webview_window("libreria") {
+                let finestra_clone = finestra_libreria.clone();
+                finestra_libreria.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = finestra_clone.hide();
+                    }
+                });
+            }
 
             // ── Registra hotkey globale ──
 
