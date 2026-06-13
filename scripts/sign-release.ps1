@@ -418,6 +418,34 @@ foreach ($file in $toSign) {
 }
 Write-Host "[OK] Tutte le firme verificate."
 
+# 7b-pre. Costruisce le note "firmato/pubblicato" qui, prima del blocco
+# latest.json, cosi' $publishedNotes e' disponibile sia per aggiornare
+# latest.json.notes (sotto) sia per il gh release edit nel passo 10.
+# Le note generate dalla CI descrivono lo stato draft PRE-firma ("Release
+# in stato draft - signing pending / NON ancora firmati Authenticode").
+# Sostituirle subito evita che Tauri Updater mostri un avviso fuorviante.
+$notesTemplate = @'
+Build firmata dal tag `__TAG__`.
+
+Vedi [CHANGELOG.md](https://github.com/__REPO__/blob/main/CHANGELOG.md) per il dettaglio.
+
+**Release firmata Authenticode (Certum Code Signing Open Source) e pubblicata.** I file `.sig` Ed25519 dell'updater sono rigenerati sui binari firmati.
+
+**Download - due opzioni, entrambe senza privilegi admin:**
+
+- **Installer NSIS** (`...-setup.exe`): installer per-utente in `%LocalAppData%`, nessun UAC/admin. Consigliato - riceve gli auto-update.
+- **Portable** (`Prompt-a-Porter-portable-windows-x64-__TAG__.zip`): eseguibile standalone, niente installer. Estrai e lancia `Prompt a Porter.exe`.
+
+Richiede WebView2 runtime (incluso in Windows 11; su Windows 10 scaricabile [da Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/)).
+
+> Alla prima esecuzione Windows SmartScreen potrebbe ancora avvisare (reputation building del nuovo certificato): "Maggiori informazioni" -> "Esegui comunque". Sparisce con l'uso.
+
+L'installer MSI e' stato rimosso di proposito (WiX/MSI installa in `Program Files` con UAC, contro la filosofia local-first single-user di PaP).
+
+> **Nota:** i target macOS / Linux sono temporaneamente disabilitati nella build matrix (in corso di riabilitazione).
+'@
+$publishedNotes = $notesTemplate.Replace('__TAG__', $Tag).Replace('__REPO__', $Repo)
+
 # 7b. Re-signing Ed25519 Tauri Updater (opzione B v1.0 M1.2).
 # I .sig della CI sono calcolati sui binari unsigned; dopo signtool
 # il contenuto e' cambiato e i .sig sono stale -> Tauri Updater
@@ -506,6 +534,10 @@ if ($doUpdaterReSign) {
             }
         }
         $latest.pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+        # Aggiorna notes con il testo "firmato/pubblicato" costruito prima
+        # di questo blocco, cosi' Tauri Updater non mostra piu' il
+        # disclaimer "signing pending / binari NON firmati" della CI.
+        $latest.notes = $publishedNotes
 
         # Scrivi senza BOM UTF-8 (PS 5.1 Set-Content -Encoding utf8
         # aggiunge BOM; serde Rust + Tauri Updater non gradiscono).
@@ -555,34 +587,9 @@ if ($Publish) {
     Write-Host ""
     Write-Host "-- Promuovo release a Latest published --"
 
-    # Le note generate dalla CI (release.yml releaseBody) descrivono lo
-    # stato draft PRE-firma ("Release in stato draft - signing pending /
-    # NON ancora firmati Authenticode"). Ora la release e' firmata e
-    # pubblicata, quindi sostituiamo le note con la versione "firmato/
-    # pubblicato" per non lasciare un disclaimer falso. Here-string
-    # single-quoted (i backtick markdown sono escape in PS) con
-    # placeholder __TAG__/__REPO__; testo ASCII per compat PS 5.1.
-    $notesTemplate = @'
-Build firmata dal tag `__TAG__`.
-
-Vedi [CHANGELOG.md](https://github.com/__REPO__/blob/main/CHANGELOG.md) per il dettaglio.
-
-**Release firmata Authenticode (Certum Code Signing Open Source) e pubblicata.** I file `.sig` Ed25519 dell'updater sono rigenerati sui binari firmati.
-
-**Download - due opzioni, entrambe senza privilegi admin:**
-
-- **Installer NSIS** (`...-setup.exe`): installer per-utente in `%LocalAppData%`, nessun UAC/admin. Consigliato - riceve gli auto-update.
-- **Portable** (`Prompt-a-Porter-portable-windows-x64-__TAG__.zip`): eseguibile standalone, niente installer. Estrai e lancia `Prompt a Porter.exe`.
-
-Richiede WebView2 runtime (incluso in Windows 11; su Windows 10 scaricabile [da Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/)).
-
-> Alla prima esecuzione Windows SmartScreen potrebbe ancora avvisare (reputation building del nuovo certificato): "Maggiori informazioni" -> "Esegui comunque". Sparisce con l'uso.
-
-L'installer MSI e' stato rimosso di proposito (WiX/MSI installa in `Program Files` con UAC, contro la filosofia local-first single-user di PaP).
-
-> **Nota:** i target macOS / Linux sono temporaneamente disabilitati nella build matrix (in corso di riabilitazione).
-'@
-    $publishedNotes = $notesTemplate.Replace('__TAG__', $Tag).Replace('__REPO__', $Repo)
+    # $publishedNotes e' gia' costruito prima del blocco 7b (latest.json)
+    # cosi' il campo notes di latest.json e il body della release usano
+    # esattamente lo stesso testo. Nessuna ridefinizione necessaria qui.
     $notesFile = Join-Path $WorkDir 'published-notes.md'
     $utf8NoBomNotes = New-Object System.Text.UTF8Encoding $false
     [System.IO.File]::WriteAllText($notesFile, $publishedNotes, $utf8NoBomNotes)
