@@ -303,6 +303,12 @@
       "fork_of_prompt_id": "prm-demo-review"
     }
   ],
+  "global_placeholders": [
+    { "name": "autore",  "value": "Mario Rossi" },
+    { "name": "ruolo",   "value": "Project Manager" },
+    { "name": "azienda", "value": "Acme S.r.l." },
+    { "name": "email",   "value": "mario.rossi@acme.it" }
+  ],
   "versions": [
     {
       "id": "pv-demo-email-pro-001",

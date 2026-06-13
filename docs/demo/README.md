@@ -1,12 +1,12 @@
 # Vault demo per screenshot
 
-`demo-vault.json` è una libreria di esempio (17 prompt — di cui 1 variante e 1 fork —, 7 cartelle, 8 tag, 3 versioni storiche) pensata per popolare l'app prima di catturare gli screenshot del sito. È nel formato di export v1 (vedi [`../utente/formato-export-json.md`](../utente/formato-export-json.md)).
+`demo-vault.json` è una libreria di esempio (17 prompt — di cui 1 variante e 1 fork —, 7 cartelle, 8 tag, 3 versioni storiche, 4 segnaposti globali) pensata per popolare l'app prima di catturare gli screenshot del sito. È nel formato di export v1 (vedi [`../utente/formato-export-json.md`](../utente/formato-export-json.md)).
 
 ## Come usarlo
 
 1. Crea (o usa) un vault **vuoto** dedicato alle demo.
 2. **Impostazioni → Dati → Importa JSON** → seleziona `demo-vault.json` → modalità **`skip`**.
-3. Otterrai una libreria con tag colorati, preferiti, conteggi d'uso e modelli target.
+3. Otterrai una libreria completa: tag colorati, preferiti, conteggi d'uso, modelli target e segnaposti globali già impostati.
 
 ## Cosa mostra (già pronto dopo l'import)
 
@@ -18,20 +18,11 @@
 - **Import fra prompt** `{{import "..."}}`: `Email cold outreach`, `Code review strutturata` e `Genera test unitari` importano i due prompt "Ruolo …". L'highlighting del token e l'anteprima risolta funzionano subito.
 - **Cronologia**: `Email professionale parametrica` ha 3 versioni → tab Cronologia + diff.
 - **Varianti e fork**: `Email professionale parametrica` ha una **variante B**; `Code review strutturata` ha un **fork** ("Code review strutturata (fork)", adattato a Rust). Le relazioni sono ricreate automaticamente dall'import.
-
-## Setup manuale per screenshot completi (1 minuto)
-
-Le cartelle ora sono incluse nell'import. Resta da impostare a mano solo una cosa, perché i **segnaposti globali** vivono fuori dallo schema di export:
-
-- **Segnaposti globali** (Impostazioni → Segnaposti globali), usati da `Firma email standard` e `Email professionale parametrica`:
-  - `autore` = `Mario Rossi`
-  - `ruolo` = `Product Manager`
-  - `azienda` = `Acme S.r.l.`
-  - `email` = `mario.rossi@acme.example`
+- **Segnaposti globali** (Impostazioni → Segnaposti globali): `autore`, `ruolo`, `azienda`, `email` seminati automaticamente dall'import. Visibili subito nel prompt `Firma email standard` e in `Email professionale parametrica`.
 
 ## Manutenzione
 
-Il file è coperto dal test `import_export::test::demo_vault_importa_pulito`: deserializza come `ExportV1` v1 e si importa senza errori. Se cambi lo schema di export, il test rompe e va rigenerato il demo.
+Il file è coperto dai test `import_export::test::demo_vault_importa_pulito` e `import_export::test::demo_vault_semina_global_placeholders`: deserializza come `ExportV1` v1 e si importa senza errori. Se cambi lo schema di export, i test rompono e va rigenerato il demo.
 
 ## Licenza dei contenuti
 
