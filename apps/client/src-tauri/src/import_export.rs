@@ -361,6 +361,28 @@ pub(crate) fn export_pure_filter(
         out
     };
 
+    // Segnaposti globali: inclusi solo nell'export completo del vault
+    // (folder_id == None). Un export di sotto-albero NON deve includere i
+    // segnaposti globali perché questi sono workspace-wide e non appartengono
+    // a nessuna cartella specifica. ORDER BY Name ASC per output deterministico.
+    let global_placeholders: Vec<GlobalPlaceholderExport> = if folder_id.is_none() {
+        let mut stmt_gp = conn.prepare(
+            "SELECT Name, Value FROM GlobalPlaceholders ORDER BY Name ASC",
+        )?;
+        let gp: Vec<GlobalPlaceholderExport> = stmt_gp
+            .query_map([], |r| {
+                Ok(GlobalPlaceholderExport {
+                    name: r.get(0)?,
+                    value: r.get(1)?,
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+        gp
+    } else {
+        vec![]
+    };
+
     Ok(ExportV1 {
         schema_version: SCHEMA_VERSION,
         exported_at: ora_iso(),
@@ -369,7 +391,7 @@ pub(crate) fn export_pure_filter(
         versions,
         tags,
         folders,
-        global_placeholders: vec![],
+        global_placeholders,
     })
 }
 
@@ -2050,6 +2072,91 @@ mod test {
         assert_eq!(exp2.prompts.len(), 1);
         assert_eq!(exp2.prompts[0].id, "prm-1");
         assert_eq!(exp2.prompts[0].title, "Test");
+    }
+
+    // ─────────── #292 export side: global_placeholders ───────────
+
+    /// export_pure popola global_placeholders dal DB.
+    #[test]
+    fn export_pure_include_global_placeholders() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO GlobalPlaceholders (Name, Value, UpdatedAt) \
+             VALUES ('autore', 'Mario Rossi', datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO GlobalPlaceholders (Name, Value, UpdatedAt) \
+             VALUES ('email', 'mario@acme.it', datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let exp = export_pure(&conn).unwrap();
+        assert_eq!(exp.global_placeholders.len(), 2);
+        // ORDER BY Name ASC: autore < email
+        assert_eq!(exp.global_placeholders[0].name, "autore");
+        assert_eq!(exp.global_placeholders[0].value, "Mario Rossi");
+        assert_eq!(exp.global_placeholders[1].name, "email");
+        assert_eq!(exp.global_placeholders[1].value, "mario@acme.it");
+    }
+
+    /// export_pure_filter con folder_id NON include global_placeholders
+    /// (workspace-wide, non appartengono alla cartella esportata).
+    #[test]
+    fn export_pure_filter_folder_non_include_global_placeholders() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-x", "x", "/x", None);
+        inserisci_prompt_in_folder(&conn, "prm-fx", "FolderPrompt", Some("fld-x"));
+        conn.execute(
+            "INSERT INTO GlobalPlaceholders (Name, Value, UpdatedAt) \
+             VALUES ('autore', 'Mario Rossi', datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let exp = export_pure_filter(&conn, Some("fld-x")).unwrap();
+        assert!(
+            exp.global_placeholders.is_empty(),
+            "export cartella non deve includere global_placeholders: {:?}",
+            exp.global_placeholders
+        );
+    }
+
+    /// Round-trip completo: export → import su DB pulito → re-export.
+    /// I global_placeholders sopravvivono al ciclo.
+    #[test]
+    fn round_trip_global_placeholders_export_import_export() {
+        let conn1 = db_test();
+        inserisci_prompt(&conn1, "prm-1", "Test", "body");
+        conn1.execute(
+            "INSERT INTO GlobalPlaceholders (Name, Value, UpdatedAt) \
+             VALUES ('azienda', 'Acme S.r.l.', datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn1.execute(
+            "INSERT INTO GlobalPlaceholders (Name, Value, UpdatedAt) \
+             VALUES ('ruolo', 'CEO', datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let exp1 = export_pure(&conn1).unwrap();
+        assert_eq!(exp1.global_placeholders.len(), 2, "export deve includere i 2 segnaposti");
+
+        let conn2 = db_test();
+        let report = import_pure(&conn2, &exp1, "skip").unwrap();
+        assert!(report.errori.is_empty(), "errori: {:?}", report.errori);
+
+        let exp2 = export_pure(&conn2).unwrap();
+        assert_eq!(exp2.global_placeholders.len(), 2, "re-export deve includere i 2 segnaposti");
+        let nomi: Vec<&str> = exp2.global_placeholders.iter().map(|p| p.name.as_str()).collect();
+        assert!(nomi.contains(&"azienda"), "azienda mancante: {nomi:?}");
+        assert!(nomi.contains(&"ruolo"), "ruolo mancante: {nomi:?}");
+        let azienda = exp2.global_placeholders.iter().find(|p| p.name == "azienda").unwrap();
+        assert_eq!(azienda.value, "Acme S.r.l.");
     }
 
     #[test]
