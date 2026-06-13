@@ -3,6 +3,10 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { Badge, Toast } from "$lib/components";
   import { estraiSegnaposti, compila, contaCompilati } from "$lib/template";
+  import {
+    contieneImport,
+    espandiImportConToken,
+  } from "$lib/util/palette-espansione";
 
   interface PromptRisultato {
     id: string;
@@ -49,15 +53,30 @@
   let toastVisibile = $state(false);
   let vaultChiuso = $state(false);
   let inputRicerca: HTMLInputElement | undefined = $state();
+  // Issue #299: body con {{import "..."}} espansi via backend (specchio di CompilaModal #293).
+  // null = espansione non ancora completata o non necessaria (nessun import nel body).
+  let bodyEspanso = $state<string | null>(null);
+  let erroreEspansione = $state<string | null>(null);
+  // HIGH-1: contatore monotono per scartare risposte fuori-ordine (rapid switching).
+  let expansionSeq = 0;
+  // HIGH-2: true mentre prompt_compila_inline è in volo; usato per attesa in compilaECopia.
+  let espansioneInCorso = $state(false);
+
+  // Issue #299: usa il body espanso (import risolti) come sorgente per
+  // segnaposti e output. Se l'espansione non è disponibile (nessun import
+  // o errore), si usa il body raw come fallback.
+  const bodyPerCompilazione = $derived(
+    promptSelezionato ? (bodyEspanso ?? promptSelezionato.body) : "",
+  );
 
   const segnaposti = $derived(
-    promptSelezionato ? estraiSegnaposti(promptSelezionato.body) : [],
+    promptSelezionato ? estraiSegnaposti(bodyPerCompilazione) : [],
   );
 
   const numCompilati = $derived(contaCompilati(segnaposti, valoriSegnaposti));
 
   const testoCompilato = $derived(
-    promptSelezionato ? compila(promptSelezionato.body, valoriSegnaposti) : "",
+    promptSelezionato ? compila(bodyPerCompilazione, valoriSegnaposti) : "",
   );
 
   let timeoutRicerca: ReturnType<typeof setTimeout>;
@@ -146,23 +165,111 @@
     }
   }
 
+  /**
+   * Issue #299: espande i {{import "..."}} del body via backend, specchio di
+   * CompilaModal.svelte. Usa `prompt_compila_inline` con il body raw e
+   * l'id del prompt selezionato (per cycle detection corretta).
+   *
+   * HIGH-1: guard monotona su `expansionSeq` — risposte fuori-ordine vengono
+   * scartate silenziosamente (rapid prompt switching).
+   * HIGH-2: imposta `espansioneInCorso` true/false per permettere a
+   * `compilaECopia` di attendere il completamento prima di copiare.
+   * MEDIUM-2: guard usa `{{import "` (con virgoletta) per non colpire
+   * segnaposti come `{{importanza}}`.
+   *
+   * Risultato:
+   * - bodyEspanso = stringa espansa  →  segnaposti e output derivano da essa
+   * - bodyEspanso = null, erroreEspansione = msg  →  body raw di fallback
+   */
+  async function espandiImport(rawBody: string, pid: string): Promise<void> {
+    // HIGH-2: segnala inizio espansione (anche se non ci sono import, reset è istantaneo)
+    espansioneInCorso = contieneImport(rawBody);
+    if (!espansioneInCorso) {
+      bodyEspanso = null;
+      erroreEspansione = null;
+      return;
+    }
+    // HIGH-1: stamp sequenziale prima dell'await
+    const seq = ++expansionSeq;
+    try {
+      const risultato = await espandiImportConToken(
+        rawBody,
+        pid,
+        (body, promptId) =>
+          invoke<string>("prompt_compila_inline", { body, promptId }),
+        seq,
+        () => expansionSeq,
+      );
+      // HIGH-1: risultato null = risposta fuori-ordine, ignora
+      if (risultato === null) return;
+      bodyEspanso = risultato.bodyEspanso;
+      erroreEspansione = risultato.erroreEspansione;
+    } finally {
+      // HIGH-2: disattiva solo se questo è ancora il token corrente
+      // (se un'altra espansione è già partita, non toccare il suo stato)
+      if (seq === expansionSeq) {
+        espansioneInCorso = false;
+      }
+    }
+  }
+
   function seleziona(prompt: PromptRisultato) {
+    // Reset eager PRIMA di ogni await: il body espanso del prompt precedente
+    // non deve restare visibile mentre l'espansione del nuovo prompt risolve
+    // (lezione review #297, HIGH — no stale expansion).
+    // HIGH-1: incrementa expansionSeq per invalidare le espansioni in volo.
+    expansionSeq++;
+    bodyEspanso = null;
+    erroreEspansione = null;
+    espansioneInCorso = false;
     promptSelezionato = prompt;
     valoriSegnaposti = {};
     modalita = "compila";
+    void espandiImport(prompt.body, prompt.id);
   }
 
   function tornaARicerca() {
+    // HIGH-1: cancella qualsiasi espansione in volo (le risposte pending
+    // arriveranno con token vecchio e verranno scartate).
+    expansionSeq++;
     modalita = "ricerca";
     promptSelezionato = null;
     valoriSegnaposti = {};
+    bodyEspanso = null;
+    erroreEspansione = null;
+    espansioneInCorso = false;
     inputRicerca?.focus();
   }
 
   async function compilaECopia() {
     if (!promptSelezionato) return;
-    const testo = compila(promptSelezionato.body, valoriSegnaposti);
-    await navigator.clipboard.writeText(testo);
+    // HIGH-2: se l'espansione import è ancora in volo, attendila prima di copiare.
+    // Questo assicura che Ctrl+Enter subito dopo la selezione usi il body espanso
+    // e non quello raw (che conterrebbe ancora i token {{import "..."}}).
+    if (espansioneInCorso) {
+      // Attesa attiva: polling sul flag fino a risoluzione.
+      await new Promise<void>((resolve) => {
+        const check = () => {
+          if (!espansioneInCorso) {
+            resolve();
+          } else {
+            requestAnimationFrame(check);
+          }
+        };
+        requestAnimationFrame(check);
+      });
+    }
+    // Issue #299: usa bodyPerCompilazione (body espanso se disponibile,
+    // raw come fallback) invece del body raw diretto — allineato a CompilaModal.
+    const testo = compila(bodyPerCompilazione, valoriSegnaposti);
+    // MEDIUM-3: clipboard può rigettare (contesto insicuro / permesso negato).
+    // Non silenziare il fallimento: mostra errore invece di fingere successo.
+    try {
+      await navigator.clipboard.writeText(testo);
+    } catch (e) {
+      erroreEspansione = `Copia fallita: ${String(e).replace(/^Error: /, "")}`;
+      return;
+    }
     toastVisibile = true;
     setTimeout(() => {
       toastVisibile = false;
@@ -170,6 +277,8 @@
       modalita = "ricerca";
       promptSelezionato = null;
       valoriSegnaposti = {};
+      bodyEspanso = null;
+      erroreEspansione = null;
       finestra.hide();
     }, 600);
   }
@@ -343,12 +452,21 @@
       <div class="palette-header-sezione">
         <span class="eyebrow">Anteprima</span>
       </div>
+      {#if erroreEspansione}
+        <p class="palette-errore-import" title={erroreEspansione}>
+          Import non risolvibile: <code>{erroreEspansione}</code>
+        </p>
+      {/if}
       <pre class="palette-anteprima">{testoCompilato}</pre>
     </div>
 
     <div class="palette-footer">
       <span class="palette-hint">
-        <kbd>Esc</kbd> indietro · <kbd>Ctrl</kbd>+<kbd>⏎</kbd> compila e copia
+        {#if espansioneInCorso}
+          <span class="palette-hint-inCorso">espansione in corso…</span>
+        {:else}
+          <kbd>Esc</kbd> indietro · <kbd>Ctrl</kbd>+<kbd>⏎</kbd> compila e copia
+        {/if}
       </span>
     </div>
   {/if}
@@ -589,6 +707,22 @@
 
   /* ── Anteprima ── */
 
+  /* Issue #299: avviso espansione import fallita (specchio di CompilaModal) */
+  .palette-errore-import {
+    margin: 0 var(--sp-4) var(--sp-1);
+    padding: 4px 8px;
+    background: rgba(220, 80, 80, 0.08);
+    color: var(--danger);
+    font-size: var(--fs-xs);
+    border-radius: var(--radius-sm);
+  }
+
+  .palette-errore-import code {
+    font-family: var(--font-mono);
+    background: transparent;
+    padding: 0;
+  }
+
   .palette-anteprima {
     margin: 0 var(--sp-4);
     padding: var(--sp-3);
@@ -637,5 +771,12 @@
     background: var(--bg-overlay);
     border: 1px solid var(--border-subtle);
     border-radius: 3px;
+  }
+
+  /* HIGH-2: hint visivo durante espansione import in volo */
+  .palette-hint-inCorso {
+    font-size: var(--fs-xs);
+    color: var(--text-subtle);
+    font-style: italic;
   }
 </style>
