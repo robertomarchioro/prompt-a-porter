@@ -109,6 +109,12 @@
    *   cancelli il suo lavoro). Default false al primo mount (reset puro).
    */
   async function carica(preservaValori = false): Promise<void> {
+    // Reset eager PRIMA di ogni await: allo switch di variante il
+    // body espanso del vecchio prompt resterebbe altrimenti visibile a
+    // $derived(bodyPerCompilazione) per un frame, mostrando i segnaposti
+    // sbagliati finché espandiImport non risolve (review #297, HIGH).
+    bodyEspanso = null;
+    erroreEspansione = null;
     try {
       const [det, glob] = await Promise.all([
         invoke<PromptDettaglio>("libreria_dettaglio", { id: promptIdAttivo }),
