@@ -42,6 +42,10 @@
   type Rating = -1 | 0 | 1;
 
   let dettaglio = $state<PromptDettaglio | null>(null);
+  // Issue #293: body con {{import}} espansi via backend (specchio di AnteprimaTab).
+  // null = espansione non ancora completata o non necessaria (nessun import nel body).
+  let bodyEspanso = $state<string | null>(null);
+  let erroreEspansione = $state<string | null>(null);
   let valori = $state<Record<string, string>>({});
   // Issue #159: resolver separato per `{{globale nome}}` — pre-fill dal DB.
   let valoriGlobali = $state<Record<string, string>>({});
@@ -69,6 +73,34 @@
   let varianti = $state<VariantInfo[]>([]);
 
   /**
+   * Issue #293: espande i {{import}} del body via backend, specchio di
+   * AnteprimaTab.svelte. Usa `prompt_compila_inline` con il body raw e
+   * l'id del prompt attivo (per cycle detection corretta).
+   *
+   * Risultato:
+   * - bodyEspanso = stringa espansa  →  segnaposti e output derivano da essa
+   * - bodyEspanso = null, erroreEspansione = msg  →  body raw di fallback
+   */
+  async function espandiImport(rawBody: string, pid: string): Promise<void> {
+    if (!rawBody.includes("{{import")) {
+      bodyEspanso = null;
+      erroreEspansione = null;
+      return;
+    }
+    try {
+      const espanso = await invoke<string>("prompt_compila_inline", {
+        body: rawBody,
+        promptId: pid,
+      });
+      bodyEspanso = espanso;
+      erroreEspansione = null;
+    } catch (e) {
+      bodyEspanso = null;
+      erroreEspansione = String(e).replace(/^Error: /, "");
+    }
+  }
+
+  /**
    * Carica dettaglio + globali per `promptIdAttivo`.
    *
    * @param preservaValori M3 PR-4: se true (switch variante), preserva i
@@ -83,7 +115,16 @@
         invoke<PlaceholderGlobale[]>("globale_placeholder_lista"),
       ]);
       dettaglio = det;
-      const seg = estraiSegnaposti(det.body);
+
+      // Issue #293: espandi gli import PRIMA di estrarre i segnaposti,
+      // così il form mostra i segnaposti del body finale (compresi quelli
+      // introdotti dagli import) e l'output li include correttamente.
+      await espandiImport(det.body, promptIdAttivo);
+
+      // Usa il body espanso (se disponibile) per estrarre i segnaposti,
+      // così il form mostra i campi giusti anche per import annidati.
+      const bodyPerSegnaposti = bodyEspanso ?? det.body;
+      const seg = estraiSegnaposti(bodyPerSegnaposti);
       const initN: Record<string, string> = {};
       const initG: Record<string, string> = {};
       const mapGlob = new Map(glob.map((g) => [g.name, g.value]));
@@ -141,9 +182,14 @@
     await carica(true);
   }
 
-  const segnaposti = $derived(
-    dettaglio ? estraiSegnaposti(dettaglio.body) : [],
+  // Issue #293: usa il body espanso (import risolti) come sorgente per
+  // segnaposti e output. Se l'espansione non è disponibile (nessun import
+  // o errore), si usa il body raw come fallback.
+  const bodyPerCompilazione = $derived(
+    dettaglio ? (bodyEspanso ?? dettaglio.body) : "",
   );
+
+  const segnaposti = $derived(estraiSegnaposti(bodyPerCompilazione));
   const totaleSegnaposti = $derived(segnaposti.length);
   const compilati = $derived(
     contaCompilati(segnaposti, valori, valoriGlobali),
@@ -154,7 +200,7 @@
 
   const output = $derived.by(() => {
     if (!dettaglio) return "";
-    const testo = compila(dettaglio.body, valori, valoriGlobali);
+    const testo = compila(bodyPerCompilazione, valori, valoriGlobali);
     if (formato === "testo") return testo;
     if (formato === "markdown") {
       return `\`\`\`\n${testo}\n\`\`\``;
@@ -393,6 +439,11 @@
             {/if}
           </button>
         </header>
+        {#if erroreEspansione}
+          <p class="errore-espansione" title={erroreEspansione}>
+            Import non risolvibile: <code>{erroreEspansione}</code>
+          </p>
+        {/if}
         <pre class="output">{output}</pre>
       </div>
     </div>
@@ -704,6 +755,22 @@
   .errore {
     color: var(--danger);
     text-align: center;
+  }
+
+  /* Issue #293: avviso espansione import fallita */
+  .errore-espansione {
+    margin: 0 0 var(--sp-1);
+    padding: 4px 8px;
+    background: rgba(220, 80, 80, 0.08);
+    color: var(--danger);
+    font-size: var(--fs-xs);
+    border-radius: var(--radius-sm);
+  }
+
+  .errore-espansione code {
+    font-family: var(--font-mono);
+    background: transparent;
+    padding: 0;
   }
 
   .muted {
