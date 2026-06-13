@@ -49,15 +49,26 @@
   let toastVisibile = $state(false);
   let vaultChiuso = $state(false);
   let inputRicerca: HTMLInputElement | undefined = $state();
+  // Issue #299: body con {{import}} espansi via backend (specchio di CompilaModal #293).
+  // null = espansione non ancora completata o non necessaria (nessun import nel body).
+  let bodyEspanso = $state<string | null>(null);
+  let erroreEspansione = $state<string | null>(null);
+
+  // Issue #299: usa il body espanso (import risolti) come sorgente per
+  // segnaposti e output. Se l'espansione non è disponibile (nessun import
+  // o errore), si usa il body raw come fallback.
+  const bodyPerCompilazione = $derived(
+    promptSelezionato ? (bodyEspanso ?? promptSelezionato.body) : "",
+  );
 
   const segnaposti = $derived(
-    promptSelezionato ? estraiSegnaposti(promptSelezionato.body) : [],
+    promptSelezionato ? estraiSegnaposti(bodyPerCompilazione) : [],
   );
 
   const numCompilati = $derived(contaCompilati(segnaposti, valoriSegnaposti));
 
   const testoCompilato = $derived(
-    promptSelezionato ? compila(promptSelezionato.body, valoriSegnaposti) : "",
+    promptSelezionato ? compila(bodyPerCompilazione, valoriSegnaposti) : "",
   );
 
   let timeoutRicerca: ReturnType<typeof setTimeout>;
@@ -146,22 +157,60 @@
     }
   }
 
+  /**
+   * Issue #299: espande i {{import}} del body via backend, specchio di
+   * CompilaModal.svelte. Usa `prompt_compila_inline` con il body raw e
+   * l'id del prompt selezionato (per cycle detection corretta).
+   *
+   * Risultato:
+   * - bodyEspanso = stringa espansa  →  segnaposti e output derivano da essa
+   * - bodyEspanso = null, erroreEspansione = msg  →  body raw di fallback
+   */
+  async function espandiImport(rawBody: string, pid: string): Promise<void> {
+    if (!rawBody.includes("{{import")) {
+      bodyEspanso = null;
+      erroreEspansione = null;
+      return;
+    }
+    try {
+      const espanso = await invoke<string>("prompt_compila_inline", {
+        body: rawBody,
+        promptId: pid,
+      });
+      bodyEspanso = espanso;
+      erroreEspansione = null;
+    } catch (e) {
+      bodyEspanso = null;
+      erroreEspansione = String(e).replace(/^Error: /, "");
+    }
+  }
+
   function seleziona(prompt: PromptRisultato) {
+    // Reset eager PRIMA di ogni await: il body espanso del prompt precedente
+    // non deve restare visibile mentre l'espansione del nuovo prompt risolve
+    // (lezione review #297, HIGH — no stale expansion).
+    bodyEspanso = null;
+    erroreEspansione = null;
     promptSelezionato = prompt;
     valoriSegnaposti = {};
     modalita = "compila";
+    void espandiImport(prompt.body, prompt.id);
   }
 
   function tornaARicerca() {
     modalita = "ricerca";
     promptSelezionato = null;
     valoriSegnaposti = {};
+    bodyEspanso = null;
+    erroreEspansione = null;
     inputRicerca?.focus();
   }
 
   async function compilaECopia() {
     if (!promptSelezionato) return;
-    const testo = compila(promptSelezionato.body, valoriSegnaposti);
+    // Issue #299: usa bodyPerCompilazione (body espanso se disponibile,
+    // raw come fallback) invece del body raw diretto — allineato a CompilaModal.
+    const testo = compila(bodyPerCompilazione, valoriSegnaposti);
     await navigator.clipboard.writeText(testo);
     toastVisibile = true;
     setTimeout(() => {
@@ -170,6 +219,8 @@
       modalita = "ricerca";
       promptSelezionato = null;
       valoriSegnaposti = {};
+      bodyEspanso = null;
+      erroreEspansione = null;
       finestra.hide();
     }, 600);
   }
@@ -343,6 +394,11 @@
       <div class="palette-header-sezione">
         <span class="eyebrow">Anteprima</span>
       </div>
+      {#if erroreEspansione}
+        <p class="palette-errore-import" title={erroreEspansione}>
+          Import non risolvibile: <code>{erroreEspansione}</code>
+        </p>
+      {/if}
       <pre class="palette-anteprima">{testoCompilato}</pre>
     </div>
 
@@ -588,6 +644,22 @@
   }
 
   /* ── Anteprima ── */
+
+  /* Issue #299: avviso espansione import fallita (specchio di CompilaModal) */
+  .palette-errore-import {
+    margin: 0 var(--sp-4) var(--sp-1);
+    padding: 4px 8px;
+    background: rgba(220, 80, 80, 0.08);
+    color: var(--danger);
+    font-size: var(--fs-xs);
+    border-radius: var(--radius-sm);
+  }
+
+  .palette-errore-import code {
+    font-family: var(--font-mono);
+    background: transparent;
+    padding: 0;
+  }
 
   .palette-anteprima {
     margin: 0 var(--sp-4);
