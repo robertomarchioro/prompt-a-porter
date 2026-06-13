@@ -13,7 +13,12 @@ pub enum PapErrore {
     Io(std::io::Error),
     Json(serde_json::Error),
     Migrazione(String),
-    Argon2(String),
+    /// I metadati del vault (es. salt hex) sono corrotti o illeggibili.
+    /// Causa: decodifica salt fallita in hex_a_bytes. Non dipende dalla password.
+    MetadatiDanneggiati(String),
+    /// La derivazione della chiave crittografica (Argon2) è fallita
+    /// per un problema interno ai parametri. Non dipende dalla password scelta.
+    DerivazioneFallita(String),
     /// Errore di validazione/dominio business (es. nome cartella vuoto,
     /// destinazione non valida, etc.).
     Generico(String),
@@ -31,7 +36,16 @@ impl fmt::Display for PapErrore {
             Self::Io(_) => write!(f, "Errore interno: impossibile leggere i dati del vault."),
             Self::Json(_) => write!(f, "Errore interno: dati non leggibili."),
             Self::Migrazione(msg) => write!(f, "Errore migrazione: {msg}"),
-            Self::Argon2(_) => write!(f, "Errore interno: derivazione chiave fallita."),
+            Self::MetadatiDanneggiati(_) => write!(
+                f,
+                "I metadati del vault sono danneggiati. Ripristina da un backup."
+            ),
+            Self::DerivazioneFallita(_) => write!(
+                f,
+                "Errore interno: impossibile derivare la chiave crittografica. \
+                Questo non dipende dalla password scelta; se il problema persiste, \
+                contatta il supporto."
+            ),
             Self::Generico(msg) => write!(f, "{msg}"),
         }
     }
@@ -138,14 +152,44 @@ mod test {
         assert!(err.to_string().contains("V002 fallita"));
     }
 
-    /// Verifica che Argon2, Db e Io producano stringhe opache in italiano
+    /// Verifica che MetadatiDanneggiati produca il messaggio corretto
+    /// senza esporre il dettaglio interno della decodifica hex.
+    #[test]
+    fn display_metadati_danneggiati() {
+        let err = PapErrore::MetadatiDanneggiati("hex di lunghezza dispari".to_string());
+        assert_eq!(
+            err.to_string(),
+            "I metadati del vault sono danneggiati. Ripristina da un backup."
+        );
+        assert!(!err.to_string().contains("hex di lunghezza dispari"));
+        assert!(!err.to_string().contains("dispari"));
+    }
+
+    /// Verifica che DerivazioneFallita produca un messaggio chiaro e
+    /// non esponga dettagli interni della libreria Argon2.
+    #[test]
+    fn display_derivazione_fallita() {
+        let err = PapErrore::DerivazioneFallita("invalid param".to_string());
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Errore interno"),
+            "Il messaggio deve iniziare con 'Errore interno': {msg}"
+        );
+        assert!(
+            msg.contains("non dipende dalla password"),
+            "Il messaggio deve indicare che non dipende dalla password: {msg}"
+        );
+        assert!(
+            msg.contains("contatta il supporto"),
+            "Il messaggio deve suggerire di contattare il supporto: {msg}"
+        );
+        assert!(!msg.contains("invalid param"), "Non deve esporre dettagli interni");
+    }
+
+    /// Verifica che Db e Io producano stringhe opache in italiano
     /// senza esporre il testo interno della libreria.
     #[test]
-    fn display_opaco_argon2_db_io() {
-        let argon2 = PapErrore::Argon2("invalid param".to_string());
-        assert_eq!(argon2.to_string(), "Errore interno: derivazione chiave fallita.");
-        assert!(!argon2.to_string().contains("invalid param"));
-
+    fn display_opaco_db_io() {
         let db = PapErrore::Db(rusqlite::Error::QueryReturnedNoRows);
         assert_eq!(db.to_string(), "Errore interno: database non accessibile.");
         assert!(!db.to_string().contains("QueryReturnedNoRows"));

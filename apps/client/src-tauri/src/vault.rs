@@ -118,13 +118,13 @@ fn hex_a_bytes(hex: &str) -> Result<Vec<u8>, PapErrore> {
     if hex.len() % 2 != 0 {
         // Senza questa guardia lo slicing `&hex[i..i+2]` sull'ultimo step
         // panica (out-of-bounds) su input di lunghezza dispari.
-        return Err(PapErrore::Argon2("hex di lunghezza dispari".into()));
+        return Err(PapErrore::MetadatiDanneggiati("hex di lunghezza dispari".into()));
     }
     (0..hex.len())
         .step_by(2)
         .map(|i| {
             u8::from_str_radix(&hex[i..i + 2], 16)
-                .map_err(|e| PapErrore::Argon2(format!("hex non valido: {e}")))
+                .map_err(|e| PapErrore::MetadatiDanneggiati(format!("hex non valido: {e}")))
         })
         .collect()
 }
@@ -137,13 +137,13 @@ fn deriva_chiave(
     parallelism: u32,
 ) -> Result<[u8; KEY_LEN], PapErrore> {
     let params = Params::new(memory_kib, time_cost, parallelism, Some(KEY_LEN))
-        .map_err(|e| PapErrore::Argon2(e.to_string()))?;
+        .map_err(|e| PapErrore::DerivazioneFallita(e.to_string()))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
     let mut chiave = [0u8; KEY_LEN];
     argon2
         .hash_password_into(password.as_bytes(), salt, &mut chiave)
-        .map_err(|e| PapErrore::Argon2(e.to_string()))?;
+        .map_err(|e| PapErrore::DerivazioneFallita(e.to_string()))?;
 
     Ok(chiave)
 }
@@ -970,5 +970,61 @@ mod test {
         let (_dir, state) = vault_temp();
         let r = vault_cifrato_impl(&state);
         assert!(matches!(r, Err(PapErrore::VaultNonEsiste)));
+    }
+
+    // ─── #290: split error variants per salt-decode vs key-derivation ────────
+
+    /// hex_a_bytes con input dispari → MetadatiDanneggiati, non DerivazioneFallita.
+    #[test]
+    fn hex_a_bytes_dispari_produce_metadati_danneggiati() {
+        let r = hex_a_bytes("abc");
+        assert!(
+            matches!(r, Err(PapErrore::MetadatiDanneggiati(_))),
+            "hex di lunghezza dispari deve produrre MetadatiDanneggiati"
+        );
+    }
+
+    /// hex_a_bytes con char non-hex → MetadatiDanneggiati.
+    #[test]
+    fn hex_a_bytes_char_invalido_produce_metadati_danneggiati() {
+        let r = hex_a_bytes("zz");
+        assert!(
+            matches!(r, Err(PapErrore::MetadatiDanneggiati(_))),
+            "carattere non-hex deve produrre MetadatiDanneggiati"
+        );
+        // Il messaggio non deve esporre il char invalido
+        if let Err(e) = hex_a_bytes("zz") {
+            assert!(!e.to_string().contains("zz"), "Non deve esporre il char invalido");
+        }
+    }
+
+    /// deriva_chiave con parametri Argon2 non validi → DerivazioneFallita.
+    /// Parallelism=0 è rifiutato da Argon2 (≥1 richiesto).
+    #[test]
+    fn deriva_chiave_params_invalidi_produce_derivazione_fallita() {
+        let salt = [0u8; SALT_LEN];
+        // parallelism=0 è fuori range → Params::new ritorna Err
+        let r = deriva_chiave("qualsiasi_password", &salt, 4096, 1, 0);
+        assert!(
+            matches!(r, Err(PapErrore::DerivazioneFallita(_))),
+            "parametri Argon2 invalidi devono produrre DerivazioneFallita"
+        );
+        // Il messaggio user-facing non deve esporre dettagli interni Argon2
+        if let Err(e) = r {
+            let msg = e.to_string();
+            assert!(msg.contains("non dipende dalla password"), "Messaggio non chiaro: {msg}");
+            assert!(!msg.contains("parallelism"), "Non deve esporre param interni: {msg}");
+        }
+    }
+
+    /// MetadatiDanneggiati ha un messaggio orientato al ripristino da backup.
+    #[test]
+    fn metadati_danneggiati_messaggio_orientato_backup() {
+        let err = PapErrore::MetadatiDanneggiati("salt non decodificabile".to_string());
+        let msg = err.to_string();
+        assert!(msg.contains("danneggiati"), "Deve menzionare dati danneggiati: {msg}");
+        assert!(msg.contains("backup"), "Deve suggerire backup: {msg}");
+        assert!(!msg.contains("salt"), "Non deve esporre 'salt': {msg}");
+        assert!(!msg.contains("non decodificabile"), "Non deve esporre dettagli interni: {msg}");
     }
 }
