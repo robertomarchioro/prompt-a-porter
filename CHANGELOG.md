@@ -1,5 +1,16 @@
 # Changelog — Prompt a Porter
 
+## v0.8.16 — Triage compila/import + demo globali + errori vault + updater (2026-06-13)
+
+> Triage di 4 issue aperte su v0.8.15 (Windows 11): 4 fix, tutti su file disgiunti → quattro isole indipendenti risolte in parallelo (PR #294/#295/#296/#297). Nessuna feature.
+
+### Fix
+
+- **`{{import}}` non espanso nell'output del modale Compila** (#293): compilando un prompt con `{{import}}` il risultato finale non eseguiva l'import, anche se l'anteprima in hover mostrava correttamente il frammento. Il modale derivava segnaposti e output dal `body` **grezzo**; ora invoca il backend `prompt_compila_inline` (stesso percorso di `AnteprimaTab`) per espandere gli import prima di estrarre i segnaposti, ri-espande allo switch di variante con reset eager dello stato (niente frame con segnaposti stantii) e mostra un errore leggibile se l'espansione fallisce.
+- **Segnaposti globali assenti dal vault demo** (#292): gli esempi importati con "importa prompt di esempio" non mostravano alcun caso di segnaposto globale valorizzato. Aggiunto un campo `global_placeholders` (retro-compatibile via `#[serde(default)]`) a `ExportV1`: l'import lo semina con UPSERT-on-skip (`ON CONFLICT DO NOTHING`) e il vault demo ora popola `autore/ruolo/azienda/email`, così l'utente li trova già valorizzati in Impostazioni → Segnaposti globali senza setup manuale. Completato anche il lato **export** (`export_pure_filter` interroga `GlobalPlaceholders` nel full-export; gli export per-cartella restano vuoti perché i globali sono workspace-wide), chiudendo il round-trip.
+- **Messaggi di errore poco chiari nel cambio password vault** (#290): completa il fix #280. L'arm `Argon2` di `PapErrore` mostrava ancora "derivazione chiave fallita", opaco e non azionabile. Spezzato in due varianti semantiche — `MetadatiDanneggiati` (salt corrotto nei metadati → "ripristina da un backup") e `DerivazioneFallita` (parametri Argon2 invalidi → "errore interno, non dipende dalla password") — con i call site di `vault.rs` (`hex_a_bytes` vs `deriva_chiave`) ricablati alla variante corretta. Display opaco preservato (nessuna fuga di salt/chiavi).
+- **`latest.json`: campo `notes` "signing pending" dopo la firma** (#291): dopo `sign-release.ps1` il campo `notes` di `latest.json` — mostrato dal dialog del Tauri Updater — manteneva il testo CI pre-firma ("release draft / binari NON firmati"), fuorviante su una release in realtà firmata e pubblicata. Lo script rigenerava `latest.json` patchando solo `signature`/`url`/`pub_date`; ora sovrascrive anche `notes` con il testo "published" già usato per il body della release, preservando l'output UTF-8 senza BOM e senza toccare la firma updater.
+
 ## v0.8.15 — Triage onboarding + tray + errori vault (2026-06-06)
 
 > Triage di 6 issue aperte dal gate test (Windows 11, v0.8.14): 5 fix + 1 feature P0. Raggruppate per file condiviso — un cluster coordinato sull'onboarding (#283/#284/#281, stesso `OnboardingWizard.svelte`) e due isole indipendenti (#285 tray, #280 errori vault) in parallelo (PR #286/#287/#288); la feature P0 #282 in coda al cluster (PR #289).
