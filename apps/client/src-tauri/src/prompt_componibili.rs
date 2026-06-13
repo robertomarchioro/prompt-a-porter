@@ -1263,4 +1263,52 @@ mod test {
         .unwrap();
         assert_eq!(out, "Risultato: Ciao Mario");
     }
+
+    // ─── Issue #293: compila_inline espande import nel body del modal ──
+    //
+    // Regressione: CompilaModal usava `dettaglio.body` grezzo (con
+    // `{{import …}}` non espansi) sia per estrarre segnaposti sia per
+    // produrre l'output finale. Il fix chiama `prompt_compila_inline`
+    // sul body raw prima di derivare segnaposti e output, così gli import
+    // vengono risolti esattamente come in AnteprimaTab.
+    #[test]
+    fn compila_inline_espande_import_per_modal_compila() {
+        let conn = db_test();
+        // Fragment importabile: contiene un segnaposto che l'utente
+        // compilerà nella modale.
+        inserisci_prompt(
+            &conn,
+            "prm-fragment",
+            "IntroFragmento",
+            "Sei un esperto di {{dominio}}.",
+            None,
+        );
+        // Prompt principale con import + segnaposto locale.
+        let body_raw = r#"{{import "IntroFragmento"}} Rispondi a: {{domanda}}"#;
+        inserisci_prompt(&conn, "prm-main", "Principale", body_raw, None);
+
+        // Simula la chiamata che CompilaModal.svelte ora esegue via
+        // `prompt_compila_inline` prima di derivare segnaposti e output.
+        let mut visitati = HashSet::new();
+        let espanso =
+            compila_ricorsivo(&conn, "prm-main", body_raw, &mut visitati, 0)
+                .unwrap();
+
+        // Il body espanso deve contenere il testo del fragment, non
+        // la direttiva `{{import …}}` grezza.
+        assert!(
+            espanso.contains("Sei un esperto di {{dominio}}."),
+            "body espanso deve contenere il testo del fragment: {espanso}"
+        );
+        assert!(
+            !espanso.contains("{{import"),
+            "body espanso non deve contenere direttive import non risolte: {espanso}"
+        );
+        // Il segnaposto {{domanda}} del prompt padre deve essere preservato
+        // (verrà compilato dal frontend con i valori dell'utente).
+        assert!(
+            espanso.contains("{{domanda}}"),
+            "segnaposto locale deve essere preservato: {espanso}"
+        );
+    }
 }
