@@ -21,6 +21,17 @@ pub struct ExportV1 {
     pub tags: Vec<TagExport>,
     #[serde(default)]
     pub folders: Vec<FolderExport>,
+    /// Segnaposti globali (name → value). Campo opzionale con `#[serde(default)]`
+    /// per mantenere retrocompatibilità con export v1 precedenti privi del campo.
+    #[serde(default, rename = "global_placeholders")]
+    pub global_placeholders: Vec<GlobalPlaceholderExport>,
+}
+
+/// Una coppia nome/valore di segnaposto globale per l'import/export.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GlobalPlaceholderExport {
+    pub name: String,
+    pub value: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -350,6 +361,28 @@ pub(crate) fn export_pure_filter(
         out
     };
 
+    // Segnaposti globali: inclusi solo nell'export completo del vault
+    // (folder_id == None). Un export di sotto-albero NON deve includere i
+    // segnaposti globali perché questi sono workspace-wide e non appartengono
+    // a nessuna cartella specifica. ORDER BY Name ASC per output deterministico.
+    let global_placeholders: Vec<GlobalPlaceholderExport> = if folder_id.is_none() {
+        let mut stmt_gp = conn.prepare(
+            "SELECT Name, Value FROM GlobalPlaceholders ORDER BY Name ASC",
+        )?;
+        let gp: Vec<GlobalPlaceholderExport> = stmt_gp
+            .query_map([], |r| {
+                Ok(GlobalPlaceholderExport {
+                    name: r.get(0)?,
+                    value: r.get(1)?,
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+        gp
+    } else {
+        vec![]
+    };
+
     Ok(ExportV1 {
         schema_version: SCHEMA_VERSION,
         exported_at: ora_iso(),
@@ -358,6 +391,7 @@ pub(crate) fn export_pure_filter(
         versions,
         tags,
         folders,
+        global_placeholders,
     })
 }
 
@@ -1496,6 +1530,27 @@ pub(crate) fn import_pure(
         }
     }
 
+    // Segnaposti globali: UPSERT-on-skip. La strategia è sempre skip (non
+    // sovrascrivere valori già personalizzati dall'utente): INSERT OR IGNORE
+    // garantisce che un placeholder preesistente non venga mai sovrascritto,
+    // indipendentemente dalla modalità import dei prompt. Errori riportati.
+    for ph in &export.global_placeholders {
+        let nome = ph.name.trim();
+        if nome.is_empty() {
+            continue;
+        }
+        if let Err(e) = conn.execute(
+            "INSERT INTO GlobalPlaceholders (Name, Value, UpdatedAt) \
+             VALUES (?1, ?2, datetime('now')) \
+             ON CONFLICT(Name) DO NOTHING",
+            rusqlite::params![nome, ph.value],
+        ) {
+            report
+                .errori
+                .push(format!("GlobalPlaceholder {nome}: {e}"));
+        }
+    }
+
     crate::editor::ricostruisci_fts(conn)?;
 
     Ok(report)
@@ -1585,6 +1640,7 @@ mod test {
             versions: vec![],
             tags: vec![],
             folders: vec![],
+            global_placeholders: vec![],
         };
         let json = serde_json::to_string(&e).unwrap();
         assert!(json.contains("\"schemaVersion\":1"));
@@ -1625,6 +1681,7 @@ mod test {
             versions: vec![],
             tags: vec![],
             folders: vec![],
+            global_placeholders: vec![],
         };
         let json = serde_json::to_string(&originale).unwrap();
         let parsed: ExportV1 = serde_json::from_str(&json).unwrap();
@@ -1755,6 +1812,7 @@ mod test {
             versions: vec![],
             tags: vec![],
             folders: vec![],
+            global_placeholders: vec![],
         }
     }
 
@@ -1813,6 +1871,131 @@ mod test {
             .query_row("SELECT COUNT(*) FROM PromptTags", [], |r| r.get(0))
             .unwrap();
         assert!(n_pt > 0, "nessuna associazione prompt-tag importata");
+    }
+
+    // ─────────── #292: global_placeholders nel payload ───────────
+
+    /// ExportV1 CON global_placeholders deserializza correttamente.
+    #[test]
+    fn export_v1_con_global_placeholders_deserializza() {
+        let json = r#"{
+            "schemaVersion": 1,
+            "exportedAt": "2026-06-01T00:00:00Z",
+            "workspace": {"id": "ws", "name": "T", "type": "personal"},
+            "prompts": [], "versions": [], "tags": [],
+            "global_placeholders": [
+                {"name": "autore", "value": "Mario Rossi"},
+                {"name": "email",  "value": "mario@acme.it"}
+            ]
+        }"#;
+        let exp: ExportV1 = serde_json::from_str(json).unwrap();
+        assert_eq!(exp.global_placeholders.len(), 2);
+        assert_eq!(exp.global_placeholders[0].name, "autore");
+        assert_eq!(exp.global_placeholders[0].value, "Mario Rossi");
+    }
+
+    /// ExportV1 SENZA global_placeholders (formato vecchio) deserializza
+    /// senza errori grazie a `#[serde(default)]`.
+    #[test]
+    fn export_v1_senza_global_placeholders_compatibile() {
+        let json = r#"{"schemaVersion":1,"exportedAt":"2026-01-01T00:00:00Z","workspace":{"id":"x","name":"x","type":"personal"},"prompts":[],"versions":[],"tags":[]}"#;
+        let exp: ExportV1 = serde_json::from_str(json).unwrap();
+        assert!(
+            exp.global_placeholders.is_empty(),
+            "campo assente => vec vuoto per default"
+        );
+    }
+
+    /// import_pure con global_placeholders semina i valori nel DB.
+    #[test]
+    fn import_pure_semina_global_placeholders() {
+        let conn = db_test();
+        let mut payload = payload_minimo("prm-x", "X");
+        payload.global_placeholders = vec![
+            GlobalPlaceholderExport {
+                name: "autore".into(),
+                value: "Mario Rossi".into(),
+            },
+            GlobalPlaceholderExport {
+                name: "azienda".into(),
+                value: "Acme S.r.l.".into(),
+            },
+        ];
+        let report = import_pure(&conn, &payload, "skip").unwrap();
+        assert!(report.errori.is_empty(), "errori: {:?}", report.errori);
+
+        let autore: String = conn
+            .query_row(
+                "SELECT Value FROM GlobalPlaceholders WHERE Name = 'autore'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(autore, "Mario Rossi");
+
+        let n: i64 = conn
+            .query_row("SELECT COUNT(*) FROM GlobalPlaceholders", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 2);
+    }
+
+    /// import_pure non sovrascrive un placeholder già impostato dall'utente
+    /// (comportamento "skip" fisso indipendente dalla modalità import prompt).
+    #[test]
+    fn import_pure_non_sovrascrive_placeholder_preesistente() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO GlobalPlaceholders (Name, Value, UpdatedAt) \
+             VALUES ('autore', 'Valore Utente', datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let mut payload = payload_minimo("prm-y", "Y");
+        payload.global_placeholders = vec![GlobalPlaceholderExport {
+            name: "autore".into(),
+            value: "Valore Ignorato".into(),
+        }];
+        let report = import_pure(&conn, &payload, "overwrite").unwrap();
+        assert!(report.errori.is_empty(), "errori: {:?}", report.errori);
+
+        let v: String = conn
+            .query_row(
+                "SELECT Value FROM GlobalPlaceholders WHERE Name = 'autore'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(v, "Valore Utente", "il valore utente non deve essere sovrascritto");
+    }
+
+    /// Il vault demo deve seminare i 4 segnaposti globali nel DB.
+    #[test]
+    fn demo_vault_semina_global_placeholders() {
+        let json = include_str!("../../../../docs/demo/demo-vault.json");
+        let export: ExportV1 = serde_json::from_str(json).unwrap();
+        assert!(
+            !export.global_placeholders.is_empty(),
+            "demo-vault.json deve contenere global_placeholders"
+        );
+
+        let conn = db_test();
+        let report = import_pure(&conn, &export, "skip").unwrap();
+        assert!(report.errori.is_empty(), "errori: {:?}", report.errori);
+
+        let nomi: Vec<String> = {
+            let mut stmt = conn
+                .prepare("SELECT Name FROM GlobalPlaceholders ORDER BY Name")
+                .unwrap();
+            stmt.query_map([], |r| r.get(0))
+                .unwrap()
+                .filter_map(|r| r.ok())
+                .collect()
+        };
+        assert!(nomi.contains(&"autore".to_string()), "autore mancante: {nomi:?}");
+        assert!(nomi.contains(&"ruolo".to_string()), "ruolo mancante: {nomi:?}");
+        assert!(nomi.contains(&"azienda".to_string()), "azienda mancante: {nomi:?}");
+        assert!(nomi.contains(&"email".to_string()), "email mancante: {nomi:?}");
     }
 
     #[test]
@@ -1889,6 +2072,91 @@ mod test {
         assert_eq!(exp2.prompts.len(), 1);
         assert_eq!(exp2.prompts[0].id, "prm-1");
         assert_eq!(exp2.prompts[0].title, "Test");
+    }
+
+    // ─────────── #292 export side: global_placeholders ───────────
+
+    /// export_pure popola global_placeholders dal DB.
+    #[test]
+    fn export_pure_include_global_placeholders() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO GlobalPlaceholders (Name, Value, UpdatedAt) \
+             VALUES ('autore', 'Mario Rossi', datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO GlobalPlaceholders (Name, Value, UpdatedAt) \
+             VALUES ('email', 'mario@acme.it', datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let exp = export_pure(&conn).unwrap();
+        assert_eq!(exp.global_placeholders.len(), 2);
+        // ORDER BY Name ASC: autore < email
+        assert_eq!(exp.global_placeholders[0].name, "autore");
+        assert_eq!(exp.global_placeholders[0].value, "Mario Rossi");
+        assert_eq!(exp.global_placeholders[1].name, "email");
+        assert_eq!(exp.global_placeholders[1].value, "mario@acme.it");
+    }
+
+    /// export_pure_filter con folder_id NON include global_placeholders
+    /// (workspace-wide, non appartengono alla cartella esportata).
+    #[test]
+    fn export_pure_filter_folder_non_include_global_placeholders() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-x", "x", "/x", None);
+        inserisci_prompt_in_folder(&conn, "prm-fx", "FolderPrompt", Some("fld-x"));
+        conn.execute(
+            "INSERT INTO GlobalPlaceholders (Name, Value, UpdatedAt) \
+             VALUES ('autore', 'Mario Rossi', datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let exp = export_pure_filter(&conn, Some("fld-x")).unwrap();
+        assert!(
+            exp.global_placeholders.is_empty(),
+            "export cartella non deve includere global_placeholders: {:?}",
+            exp.global_placeholders
+        );
+    }
+
+    /// Round-trip completo: export → import su DB pulito → re-export.
+    /// I global_placeholders sopravvivono al ciclo.
+    #[test]
+    fn round_trip_global_placeholders_export_import_export() {
+        let conn1 = db_test();
+        inserisci_prompt(&conn1, "prm-1", "Test", "body");
+        conn1.execute(
+            "INSERT INTO GlobalPlaceholders (Name, Value, UpdatedAt) \
+             VALUES ('azienda', 'Acme S.r.l.', datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn1.execute(
+            "INSERT INTO GlobalPlaceholders (Name, Value, UpdatedAt) \
+             VALUES ('ruolo', 'CEO', datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let exp1 = export_pure(&conn1).unwrap();
+        assert_eq!(exp1.global_placeholders.len(), 2, "export deve includere i 2 segnaposti");
+
+        let conn2 = db_test();
+        let report = import_pure(&conn2, &exp1, "skip").unwrap();
+        assert!(report.errori.is_empty(), "errori: {:?}", report.errori);
+
+        let exp2 = export_pure(&conn2).unwrap();
+        assert_eq!(exp2.global_placeholders.len(), 2, "re-export deve includere i 2 segnaposti");
+        let nomi: Vec<&str> = exp2.global_placeholders.iter().map(|p| p.name.as_str()).collect();
+        assert!(nomi.contains(&"azienda"), "azienda mancante: {nomi:?}");
+        assert!(nomi.contains(&"ruolo"), "ruolo mancante: {nomi:?}");
+        let azienda = exp2.global_placeholders.iter().find(|p| p.name == "azienda").unwrap();
+        assert_eq!(azienda.value, "Acme S.r.l.");
     }
 
     #[test]
