@@ -1,5 +1,13 @@
 # Changelog — Prompt a Porter
 
+## v0.8.17 — Espansione import nella command palette (2026-06-13)
+
+> 1 issue (#299): completa su superficie palette il fix #293/#297 atterrato in v0.8.16.
+
+### Fix
+
+- **`{{import}}` non espanso dalla command palette** (#299): copiando un prompt con `{{import}}` dalla palette (Ctrl+Shift+P), i token restavano grezzi — `compilaECopia` usava la sola sostituzione regex `compila()` senza passare per il backend. Ora la palette invoca `prompt_compila_inline` per espandere gli import prima di copiare (stesso pattern di `CompilaModal`), con anteprima coerente. Logica estratta in un helper puro (`palette-espansione.ts`) con guard di sequenza monotòna che scarta risposte fuori-ordine al cambio rapido di prompt, attesa dell'espansione in corso prima della copia (Ctrl+Enter non copia mai il body grezzo), guard import preciso (`{{import "`) e gestione errore della clipboard senza swallow.
+
 ## v0.8.16 — Triage compila/import + demo globali + errori vault + updater (2026-06-13)
 
 > Triage di 4 issue aperte su v0.8.15 (Windows 11): 4 fix, tutti su file disgiunti → quattro isole indipendenti risolte in parallelo (PR #294/#295/#296/#297). Nessuna feature.
