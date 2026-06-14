@@ -54,7 +54,7 @@ jobs:
       # (deduplicazione per titolo fisso).
       - name: Apri o aggiorna issue di tracciamento su fallimento
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const LABEL = 'dep-canary';
@@ -148,7 +148,7 @@ jobs:
 
       - name: Apri/aggiorna issue se i pin sono rimovibili
         if: steps.build.outcome == 'success'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const LABEL = 'dep-canary';
