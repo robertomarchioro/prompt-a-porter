@@ -11,6 +11,7 @@
    */
   import { invoke } from "@tauri-apps/api/core";
   import Modale from "$lib/components/Modale.svelte";
+  import { nomeValido, eseguiCreaCartella } from "./nuova-cartella-logic";
 
   interface Props {
     onChiudi: () => void;
@@ -22,34 +23,28 @@
   let errore = $state<string | null>(null);
   let invio = $state(false);
 
-  function nomeValido(): boolean {
-    return nome.trim().length > 0;
-  }
-
   async function onSubmit(e: SubmitEvent): Promise<void> {
     e.preventDefault();
-    if (!nomeValido() || invio) return;
+    if (!nomeValido(nome) || invio) return;
 
     errore = null;
     invio = true;
 
-    try {
-      await invoke("folder_crea", {
-        dati: { nome: nome.trim(), parent_folder_id: null },
-      });
-      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
-      onChiudi();
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : typeof err === "string"
-            ? err.replace(/^Error:\s*/i, "")
-            : "Impossibile creare la cartella.";
-      errore = msg;
-    } finally {
-      invio = false;
+    const risultato = await eseguiCreaCartella(
+      nome,
+      invoke as (
+        cmd: string,
+        args: { dati: { nome: string; parent_folder_id: null } },
+      ) => Promise<string>,
+      () => window.dispatchEvent(new CustomEvent("pap:lista-mutata")),
+      onChiudi,
+    );
+
+    if (!risultato.ok) {
+      errore = risultato.errore ?? "Impossibile creare la cartella.";
     }
+
+    invio = false;
   }
 </script>
 
@@ -69,7 +64,7 @@
         placeholder="es. Marketing"
         bind:value={nome}
         autocomplete="off"
-        maxlength="128"
+        maxlength="100"
         required
       />
     </label>
@@ -89,7 +84,7 @@
       <button
         class="btn-primario"
         type="submit"
-        disabled={!nomeValido() || invio}
+        disabled={!nomeValido(nome) || invio}
       >
         {invio ? "Creazione…" : "Crea cartella"}
       </button>
