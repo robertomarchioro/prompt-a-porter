@@ -65,8 +65,8 @@ importers:
         specifier: ^3
         version: 3.4.56
       lucide-svelte:
-        specifier: ^0.460.0
-        version: 0.460.1(svelte@5.56.3)
+        specifier: ^1.0.1
+        version: 1.0.1(svelte@5.56.3)
       paneforge:
         specifier: ^1.0.2
         version: 1.0.2(svelte@5.56.3)
@@ -1990,8 +1990,8 @@ packages:
     resolution: {integrity: sha512-Gf/KoL3C/MlI7Bt0PGI9I+TeTC/I6r/csU58N4BSNc4lppLBeKsOdFYkK+dX0ABDUMJNfCHTyPpzwwO21Awd3A==}
     engines: {node: 20 || >=22}
 
-  lucide-svelte@0.460.1:
-    resolution: {integrity: sha512-guJjJSeWlKivsEG51Xg41egunBMJcobhDmkLv/NYTXmXyCEwxMf1A+HX7RvDEKiXbXYgtLImih67tI08MSUOkA==}
+  lucide-svelte@1.0.1:
+    resolution: {integrity: sha512-WvzZgk0pqzgda+AErLvgWxHkfg/+GgUwqKMRHvzt0IqyMdmyEDzDCk3Z+Wo/3y753oIgx8u9Q4eUbWkghFa8Jg==}
     deprecated: Package deprecated. Please use @lucide/svelte instead.
     peerDependencies:
       svelte: ^3 || ^4 || ^5.0.0-next.42
@@ -4503,7 +4503,7 @@ snapshots:
 
   lru-cache@11.3.6: {}
 
-  lucide-svelte@0.460.1(svelte@5.56.3):
+  lucide-svelte@1.0.1(svelte@5.56.3):
     dependencies:
       svelte: 5.56.3
 
