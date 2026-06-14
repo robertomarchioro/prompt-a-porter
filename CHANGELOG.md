@@ -1,5 +1,13 @@
 # Changelog — Prompt a Porter
 
+## v0.8.19 — Migrazione rand 0.9 (2026-06-14)
+
+> 1 issue (#333) dal triage delle migrazioni dipendenze; #334 (CLI Go 1.25) rinviata (ecosistema golangci-lint non ancora pronto per go1.25).
+
+### Fix
+
+- **Migrazione a `rand` 0.9** (#333): in rand 0.9 `OsRng` diventa fallibile (`TryRngCore`), quindi `OsRng.fill_bytes()` non compilava più. Introdotto un helper centralizzato `riempi_random` (`util_random.rs`) e una nuova variante d'errore opaca `PapErrore::RngNonDisponibile`; tutti i 9 call site crittografici (salt del vault, generatori di ID) ora propagano l'errore con semantica **fail-closed** (un OS RNG non disponibile aborta in modo sicuro, mai un buffer non inizializzato). Il bulk import markdown isola il fallimento per-file nel report invece di abortire l'intero batch. Security review superata (nessun leak, salt invariato 16B piena entropia). Sblocca il Dependabot #331.
+
 ## v0.8.18 — Creazione cartelle + hardening build/CI + dipendenze (2026-06-14)
 
 > 2 fix UI (#301, #307) + un grosso lavoro infrastrutturale di build/CI emerso durante il triage, più 19 aggiornamenti di dipendenze (2 di sicurezza).
