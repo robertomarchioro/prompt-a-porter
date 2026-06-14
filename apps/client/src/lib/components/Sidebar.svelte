@@ -49,6 +49,7 @@
     onApriCollapse?: () => void;
     onApriInsight?: () => void;
     onApriRegressioni?: () => void;
+    onAggiungiCartella?: () => void;
   }
 
   let {
@@ -64,6 +65,7 @@
     onApriCollapse,
     onApriInsight,
     onApriRegressioni,
+    onAggiungiCartella,
   }: Props = $props();
 
   let conteggi = $state<ConteggiViste>({
@@ -165,6 +167,7 @@
       titolo="CARTELLE"
       conteggio={cartelle.length}
       bottonAggiungi
+      onAggiungi={onAggiungiCartella}
       bind:collapsed={gruppi.cartelle}
     >
       {#each cartelle as cart (cart.id)}
