@@ -18,6 +18,9 @@ jobs:
       - name: Installa cargo-audit
         run: cargo install cargo-audit --locked
 
+      # Cargo.lock è ora committato nel repo (strategia CI stabilità+sicurezza).
+      # cargo audit può quindi auditare il lockfile effettivo usato in CI
+      # anziché dover generare un lock temporaneo ad ogni run.
       - name: Audit Cargo.lock
         working-directory: apps/client/src-tauri
         run: cargo audit

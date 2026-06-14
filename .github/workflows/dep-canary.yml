@@ -1,0 +1,108 @@
+name: Dep Canary (freshness, non-blocking)
+
+# Questo workflow è un canary: usa il toolchain Rust LATEST (no pin) e
+# le dipendenze LATEST compatibili (cargo update) per rilevare rotture
+# upstream prima che arrivino alla stable lane. NON è un gate di PR.
+# Su fallimento apre/aggiorna una issue di tracciamento con label dep-canary.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Martedì e venerdì alle 05:17 UTC (off-peak, evita esatte :00)
+    - cron: "17 5 * * 2,5"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  rust-latest:
+    name: Rust latest deps (canary)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Toolchain LATEST stabile — nessun pin, contrario della stable lane.
+      # Vuole scoprire rotture prima che vengano fissate nel lockfile committato.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Installa dipendenze sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
+
+      - name: Installa cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      # cargo update: risolve le versioni più recenti compatibili con Cargo.toml
+      # (ignorando il Cargo.lock committato). Simula cosa succederebbe
+      # se un maintainer bumpassero i dep senza il lock.
+      - name: Aggiorna dipendenze alla versione più recente compatibile
+        working-directory: apps/client/src-tauri
+        run: cargo update
+
+      # Stessa soglia della stable lane ma SENZA --locked.
+      # Un fallimento qui indica rottura upstream → issue di tracciamento aperta.
+      - name: Cargo test + coverage (latest deps, no --locked)
+        working-directory: apps/client/src-tauri
+        run: cargo llvm-cov --lib --summary-only --fail-under-lines 80
+
+      # Se il job precedente fallisce, apre o aggiorna una issue di tracciamento
+      # con label dep-canary. Non viene creata una nuova issue per ogni run
+      # (deduplicazione per titolo fisso).
+      - name: Apri o aggiorna issue di tracciamento su fallimento
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const LABEL = 'dep-canary';
+            const TITLE = '[dep-canary] un aggiornamento di dipendenze rompe la build';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            // Cerca issue aperta con questo titolo esatto e label dep-canary
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: LABEL,
+            });
+
+            const existing = issues.find(i => i.title === TITLE);
+
+            if (existing) {
+              // Aggiunge un commento alla issue esistente invece di aprirne una nuova
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: `## Nuova esecuzione fallita\n\nIl canary \`dep-canary\` ha rilevato un'ulteriore rottura.\n\n**Run:** ${runUrl}\n**Data:** ${new Date().toISOString()}\n\nVerificare le ultime versioni pubblicate delle dipendenze Rust e aggiornare i pin in \`Cargo.toml\` o aprire un issue upstream se necessario.`,
+              });
+            } else {
+              // Crea la issue di tracciamento (prima occorrenza)
+              // Assicura che la label esista prima di assegnarla
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: LABEL,
+                });
+              } catch {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: LABEL,
+                  color: 'e4e669',
+                  description: 'Rottura rilevata dal freshness canary delle dipendenze',
+                });
+              }
+
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: TITLE,
+                labels: [LABEL],
+                body: `## Dep canary: build rotta con dipendenze più recenti\n\nIl workflow \`dep-canary\` ha rilevato che le ultime versioni compatibili delle dipendenze Rust rompono la build o i test.\n\n**Run fallita:** ${runUrl}\n**Data:** ${new Date().toISOString()}\n\n### Cosa significa\n\nLa *stable lane* (Cargo.lock committato + \`--locked\`) continua a funzionare normalmente. Questo avviso anticipa una potenziale rottura che si manifesterà quando i pin saranno aggiornati.\n\n### Azioni suggerite\n1. Aprire la run fallita e leggere l'output del cargo test.\n2. Identificare il crate che ha introdotto la rottura (\`cargo update -v\` nel log mostra quali crate sono stati aggiornati).\n3. Valutare se aggiornare il codice sorgente o aggiungere un pin temporaneo in \`Cargo.toml\`.\n4. Chiudere questa issue quando la rottura è risolta o deliberatamente accettata.\n\n> Questa issue viene aggiornata con un commento ad ogni nuova esecuzione fallita anziché aprirne una nuova.`,
+              });
+            }

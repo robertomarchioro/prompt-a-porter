@@ -1,0 +1,73 @@
+version: 2
+
+updates:
+  # === Rust / Cargo (client Tauri) ===
+  # Le PR Dependabot saranno validate dalla stable lane (--locked) prima
+  # del merge: il Cargo.lock committato garantisce che CI sia riproducibile.
+  # I pin brotli/alloc-no-stdlib in Cargo.toml restano come guardia secondaria
+  # finché l'ecosistema upstream non si allinea a alloc-no-stdlib 3.x.
+  - package-ecosystem: cargo
+    directory: /apps/client/src-tauri
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    groups:
+      patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # === Node / pnpm (workspace root) ===
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    groups:
+      patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # === GitHub Actions ===
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+    groups:
+      patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # === Go (server) ===
+  - package-ecosystem: gomod
+    directory: /apps/server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+
+  # === Go (CLI) ===
+  - package-ecosystem: gomod
+    directory: /apps/cli
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies

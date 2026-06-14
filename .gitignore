@@ -14,8 +14,7 @@ out/
 # === Tauri / Rust ===
 apps/client/src-tauri/target/
 apps/client/src-tauri/gen/
-# Cargo.lock dell'app Tauri non è committato (decisione del maintainer)
-apps/client/src-tauri/Cargo.lock
+# Cargo.lock dell'app Tauri è committato per riproducibilità e sicurezza (vedi strategia CI: lock+--locked+toolchain pin+dependabot+canary).
 *.rs.bk
 
 # === Go ===

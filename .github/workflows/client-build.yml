@@ -57,7 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.96.0
         with:
           components: llvm-tools-preview
 
@@ -79,7 +79,7 @@ jobs:
       # Vedi docs/operativo/coverage.md.
       - name: Cargo test + coverage gate
         working-directory: apps/client/src-tauri
-        run: cargo llvm-cov --lib --summary-only --fail-under-lines 80
+        run: cargo llvm-cov --lib --summary-only --fail-under-lines 80 --locked
 
   # La build multi-OS dei bundle è in .github/workflows/release.yml,
   # triggerata da tag `v*` per evitare di consumare minuti su ogni PR.
