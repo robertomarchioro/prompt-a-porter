@@ -47,18 +47,17 @@ pub struct NuovoRating {
     pub used_with_model: Option<String>,
 }
 
-fn genera_id() -> String {
-    use rand::RngCore;
+fn genera_id() -> Result<String, PapErrore> {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
     let mut rnd = [0u8; 4];
-    rand::rngs::OsRng.fill_bytes(&mut rnd);
-    format!(
+    crate::util_random::riempi_random(&mut rnd)?;
+    Ok(format!(
         "rtg-{:012x}{:02x}{:02x}{:02x}{:02x}",
         ts, rnd[0], rnd[1], rnd[2], rnd[3]
-    )
+    ))
 }
 
 fn valida_rating(rating: i64) -> Result<(), PapErrore> {
@@ -110,7 +109,7 @@ pub(crate) fn aggiungi_pure(
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
 
-    let id = genera_id();
+    let id = genera_id()?;
     conn.execute(
         "INSERT INTO PromptRatings
             (Id, PromptId, UserId, Rating, Note, UsedWithModel, CreatedAt)
@@ -214,7 +213,7 @@ mod test {
 
     #[test]
     fn id_inizia_con_rtg() {
-        assert!(genera_id().starts_with("rtg-"));
+        assert!(genera_id().unwrap().starts_with("rtg-"));
     }
 
     #[test]

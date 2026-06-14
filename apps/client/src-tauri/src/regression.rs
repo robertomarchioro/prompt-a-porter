@@ -72,22 +72,21 @@ fn default_soglia() -> f64 {
     0.85
 }
 
-fn genera_id() -> String {
+fn genera_id() -> Result<String, crate::errore::PapErrore> {
     genera_id_con_prefix("gld")
 }
 
-fn genera_id_con_prefix(prefix: &str) -> String {
-    use rand::RngCore;
+fn genera_id_con_prefix(prefix: &str) -> Result<String, crate::errore::PapErrore> {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
     let mut rnd = [0u8; 4];
-    rand::rngs::OsRng.fill_bytes(&mut rnd);
-    format!(
+    crate::util_random::riempi_random(&mut rnd)?;
+    Ok(format!(
         "{prefix}-{:012x}{:02x}{:02x}{:02x}{:02x}",
         ts, rnd[0], rnd[1], rnd[2], rnd[3]
-    )
+    ))
 }
 
 fn re_segnaposto() -> &'static Regex {
@@ -168,7 +167,7 @@ pub(crate) fn crea_pure(conn: &Connection, dati: &NuovoGolden) -> Result<String,
         dati.soglia_tolleranza,
     )?;
     verifica_prompt_esiste(conn, &dati.prompt_id)?;
-    let id = genera_id();
+    let id = genera_id()?;
     conn.execute(
         "INSERT INTO PromptGoldens (
             Id, PromptId, Etichetta, InputVars, ExpectedOutput,
@@ -422,7 +421,7 @@ pub(crate) fn esegui_pure_con_ctx(
     let prompt_version_id = current_version_id(conn, &golden.prompt_id)?;
 
     let ran_at: String = conn.query_row("SELECT datetime('now')", [], |r| r.get(0))?;
-    let id = genera_id_con_prefix("obs");
+    let id = genera_id_con_prefix("obs")?;
 
     let observation = match provider.generate(&prompt_compilato, model) {
         Ok(out) => {
@@ -825,7 +824,7 @@ mod test {
 
     #[test]
     fn id_generato_ha_prefix_gld() {
-        let id = genera_id();
+        let id = genera_id().unwrap();
         assert!(id.starts_with("gld-"));
     }
 

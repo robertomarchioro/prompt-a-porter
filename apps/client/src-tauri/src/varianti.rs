@@ -42,18 +42,17 @@ pub struct VariantInfo {
     pub aggiornato_a: String,
 }
 
-fn genera_id() -> String {
-    use rand::RngCore;
+fn genera_id() -> Result<String, PapErrore> {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
     let mut rnd = [0u8; 4];
-    rand::rngs::OsRng.fill_bytes(&mut rnd);
-    format!(
+    crate::util_random::riempi_random(&mut rnd)?;
+    Ok(format!(
         "prm-{:012x}{:02x}{:02x}{:02x}{:02x}",
         ts, rnd[0], rnd[1], rnd[2], rnd[3]
-    )
+    ))
 }
 
 fn etichette_usate(conn: &Connection, parent_id: &str) -> Result<Vec<String>, PapErrore> {
@@ -153,7 +152,7 @@ pub(crate) fn crea_variante_pure(
         None => prossima_etichetta(&usate),
     };
 
-    let id = genera_id();
+    let id = genera_id()?;
     let titolo_variante = format!("{titolo} ({label})");
 
     conn.execute(

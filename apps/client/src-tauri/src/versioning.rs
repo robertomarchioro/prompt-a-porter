@@ -1,9 +1,9 @@
-use rand::RngCore;
 use rusqlite::Connection;
 use serde::Serialize;
 use tauri::State;
 
 use crate::errore::PapErrore;
+use crate::util_random::riempi_random;
 use crate::vault::VaultState;
 
 /// Limite di versioni storiche mantenute per ciascun prompt.
@@ -29,17 +29,17 @@ pub struct VersioneStorica {
     pub autore_email: Option<String>,
 }
 
-fn genera_version_id() -> String {
+fn genera_version_id() -> Result<String, PapErrore> {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
     let mut rnd = [0u8; 4];
-    rand::rngs::OsRng.fill_bytes(&mut rnd);
-    format!(
+    riempi_random(&mut rnd)?;
+    Ok(format!(
         "pv-{:012x}{:02x}{:02x}{:02x}{:02x}",
         ts, rnd[0], rnd[1], rnd[2], rnd[3]
-    )
+    ))
 }
 
 /// Inserisce uno snapshot completo della versione corrente del prompt in PromptVersions.
@@ -79,7 +79,7 @@ pub(crate) fn snapshot_versione(
 
     // Insert OR IGNORE per idempotenza: se la (PromptId, Version) esiste già
     // (es. backfill v1 della migration V002), non duplica.
-    let id = genera_version_id();
+    let id = genera_version_id()?;
     conn.execute(
         "INSERT OR IGNORE INTO PromptVersions
             (Id, PromptId, Version, Title, Description, Body, Visibility, TargetModel,

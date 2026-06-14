@@ -71,18 +71,17 @@ pub struct RiordinaPrompt {
     pub new_sort: i64,
 }
 
-fn genera_id() -> String {
-    use rand::RngCore;
+fn genera_id() -> Result<String, PapErrore> {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
     let mut rnd = [0u8; 4];
-    rand::rngs::OsRng.fill_bytes(&mut rnd);
-    format!(
+    crate::util_random::riempi_random(&mut rnd)?;
+    Ok(format!(
         "fld-{:012x}{:02x}{:02x}{:02x}{:02x}",
         ts, rnd[0], rnd[1], rnd[2], rnd[3]
-    )
+    ))
 }
 
 fn nome_valido(nome: &str) -> Result<String, PapErrore> {
@@ -165,7 +164,7 @@ pub(crate) fn crea_pure(
 ) -> Result<String, PapErrore> {
     let nome = nome_valido(&dati.nome)?;
     let path = calcola_path(conn, dati.parent_folder_id.as_deref(), &nome)?;
-    let id = genera_id();
+    let id = genera_id()?;
 
     conn.execute(
         "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path)
@@ -597,7 +596,7 @@ mod test {
     }
 
     fn crea(conn: &Connection, nome: &str, parent: Option<&str>) -> String {
-        let id = genera_id();
+        let id = genera_id().unwrap();
         let path = calcola_path(conn, parent, nome).unwrap();
         conn.execute(
             "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path)
@@ -934,7 +933,7 @@ mod test {
 
     /// Crea una folder con SortOrder esplicito (per test riordino).
     fn crea_con_sort(conn: &Connection, nome: &str, parent: Option<&str>, sort: i64) -> String {
-        let id = genera_id();
+        let id = genera_id().unwrap();
         let path = calcola_path(conn, parent, nome).unwrap();
         conn.execute(
             "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path, SortOrder)

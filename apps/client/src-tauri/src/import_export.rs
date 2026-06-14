@@ -721,7 +721,7 @@ pub fn prompt_import_markdown(
         _ => "private",
     };
 
-    let nuovo_id = format!("prm-{}", crate::editor::genera_id());
+    let nuovo_id = format!("prm-{}", crate::editor::genera_id()?);
     state.with_conn(|conn| {
         conn.execute(
             "INSERT INTO Prompts
@@ -918,7 +918,7 @@ pub fn vault_import_markdown_bulk(
                 Some(parsed.target_model.trim())
             };
 
-            let nuovo_id = format!("prm-{}", crate::editor::genera_id());
+            let nuovo_id = format!("prm-{}", crate::editor::genera_id()?);
             let exec: Result<(), PapErrore> = (|| {
                 conn.execute(
                     "INSERT INTO Prompts
