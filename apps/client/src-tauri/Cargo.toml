@@ -22,8 +22,8 @@ tauri-build = { version = "2", features = [] }
 # grafo converge su una sola alloc-no-stdlib. Rimuovere quando brotli/upstream
 # si allinea a alloc-no-stdlib 3.x.
 brotli = "=8.0.3"
-brotli-decompressor = "=5.0.2"
-alloc-stdlib = "=0.2.3"
+brotli-decompressor = "=5.0.3"
+alloc-stdlib = "=0.2.4"
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
