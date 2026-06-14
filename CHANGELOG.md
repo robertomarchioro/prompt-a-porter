@@ -1,12 +1,16 @@
 # Changelog — Prompt a Porter
 
-## v0.8.19 — Migrazione rand 0.9 (2026-06-14)
+## v0.8.19 — Migrazione rand 0.9 + pulizia pin brotli (2026-06-14)
 
-> 1 issue (#333) dal triage delle migrazioni dipendenze; #334 (CLI Go 1.25) rinviata (ecosistema golangci-lint non ancora pronto per go1.25).
+> 1 issue (#333) dal triage delle migrazioni dipendenze + pulizia dei pin brotli temporanei segnalata dal canary; #334 (CLI Go 1.25) rinviata (ecosistema golangci-lint non ancora pronto per go1.25).
 
 ### Fix
 
 - **Migrazione a `rand` 0.9** (#333): in rand 0.9 `OsRng` diventa fallibile (`TryRngCore`), quindi `OsRng.fill_bytes()` non compilava più. Introdotto un helper centralizzato `riempi_random` (`util_random.rs`) e una nuova variante d'errore opaca `PapErrore::RngNonDisponibile`; tutti i 9 call site crittografici (salt del vault, generatori di ID) ora propagano l'errore con semantica **fail-closed** (un OS RNG non disponibile aborta in modo sicuro, mai un buffer non inizializzato). Il bulk import markdown isola il fallimento per-file nel report invece di abortire l'intero batch. Security review superata (nessun leak, salt invariato 16B piena entropia). Sblocca il Dependabot #331.
+
+### Manutenzione
+
+- **Rimossi i pin brotli temporanei** (#352): i pin di #306 (`brotli`/`brotli-decompressor`/`alloc-stdlib`) non servono più — l'upstream si è allineato (`brotli 8.0.4` risolve di nuovo su una sola `alloc-no-stdlib 2.0.4`). Il canary `dep-canary` li ha rilevati come rimovibili (e ormai dannosi, bloccavano la risoluzione delle altre dipendenze); `[build-dependencies]` ora pulito. Chiude le issue auto-generate dal canary #350/#351.
 
 ## v0.8.18 — Creazione cartelle + hardening build/CI + dipendenze (2026-06-14)
 
