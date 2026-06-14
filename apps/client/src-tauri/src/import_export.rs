@@ -721,7 +721,7 @@ pub fn prompt_import_markdown(
         _ => "private",
     };
 
-    let nuovo_id = format!("prm-{}", crate::editor::genera_id());
+    let nuovo_id = format!("prm-{}", crate::editor::genera_id()?);
     state.with_conn(|conn| {
         conn.execute(
             "INSERT INTO Prompts
@@ -918,7 +918,18 @@ pub fn vault_import_markdown_bulk(
                 Some(parsed.target_model.trim())
             };
 
-            let nuovo_id = format!("prm-{}", crate::editor::genera_id());
+            // genera_id è fallibile in rand 0.9: se l'OS RNG non è disponibile
+            // accumuliamo l'errore nel report senza interrompere il batch.
+            let nuovo_id = match crate::editor::genera_id() {
+                Ok(id) => format!("prm-{id}"),
+                Err(e) => {
+                    ko.push(BulkImportFileError {
+                        nome_file,
+                        errore: format!("{e}"),
+                    });
+                    continue;
+                }
+            };
             let exec: Result<(), PapErrore> = (|| {
                 conn.execute(
                     "INSERT INTO Prompts

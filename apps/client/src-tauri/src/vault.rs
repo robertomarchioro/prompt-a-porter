@@ -3,13 +3,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use argon2::{Algorithm, Argon2, Params, Version};
-use rand::RngCore;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::errore::PapErrore;
 use crate::migrazione;
+use crate::util_random::riempi_random;
 
 // ─────────────────── Costanti ───────────────────
 
@@ -104,10 +104,10 @@ impl VaultState {
 
 // ─────────── Derivazione chiave (Argon2id) ──────────
 
-fn genera_salt() -> [u8; SALT_LEN] {
+fn genera_salt() -> Result<[u8; SALT_LEN], PapErrore> {
     let mut salt = [0u8; SALT_LEN];
-    rand::rngs::OsRng.fill_bytes(&mut salt);
-    salt
+    riempi_random(&mut salt)?;
+    Ok(salt)
 }
 
 fn bytes_a_hex(bytes: &[u8]) -> String {
@@ -251,7 +251,7 @@ pub(crate) fn vault_crea_impl(password: &str, state: &VaultState) -> Result<(), 
     // Assicura che la directory dati esista
     fs::create_dir_all(&state.data_dir)?;
 
-    let salt = genera_salt();
+    let salt = genera_salt()?;
     let chiave = deriva_chiave(
         password,
         &salt,
@@ -493,7 +493,7 @@ pub(crate) fn vault_cambia_password_impl(
     drop(conn_verifica);
 
     // Genera nuovo salt e nuova chiave
-    let salt_nuovo = genera_salt();
+    let salt_nuovo = genera_salt()?;
     let chiave_nuova = deriva_chiave(
         password_nuova,
         &salt_nuovo,
@@ -576,7 +576,7 @@ mod test {
         assert!(!state.esiste());
 
         // Crea
-        let salt = genera_salt();
+        let salt = genera_salt().unwrap();
         let chiave = deriva_chiave("password_sicura_123", &salt, 4096, 1, 1).unwrap();
         let conn = Connection::open(state.db_path()).unwrap();
         applica_chiave(&conn, &chiave).unwrap();
@@ -609,7 +609,7 @@ mod test {
     fn password_errata_fallisce() {
         let (_dir, state) = vault_temp();
 
-        let salt = genera_salt();
+        let salt = genera_salt().unwrap();
         let chiave = deriva_chiave("password_corretta", &salt, 4096, 1, 1).unwrap();
         let conn = Connection::open(state.db_path()).unwrap();
         applica_chiave(&conn, &chiave).unwrap();
@@ -654,7 +654,7 @@ mod test {
 
     #[test]
     fn password_corta_rifiutata() {
-        let salt = genera_salt();
+        let salt = genera_salt().unwrap();
         let chiave = deriva_chiave("corta", &salt, 4096, 1, 1).unwrap();
         // La derivazione funziona, ma il comando vault_crea dovrebbe rifiutare
         assert_eq!(chiave.len(), KEY_LEN);
@@ -743,14 +743,14 @@ mod test {
         let (_dir, state) = vault_temp();
 
         // Crea con password1
-        let salt1 = genera_salt();
+        let salt1 = genera_salt().unwrap();
         let chiave1 = deriva_chiave("password_uno_ok", &salt1, 4096, 1, 1).unwrap();
         let conn = Connection::open(state.db_path()).unwrap();
         applica_chiave(&conn, &chiave1).unwrap();
         migrazione::esegui_migrazioni(&conn).unwrap();
 
         // Re-key con password2
-        let salt2 = genera_salt();
+        let salt2 = genera_salt().unwrap();
         let chiave2 = deriva_chiave("password_due_ok", &salt2, 4096, 1, 1).unwrap();
         let hex2 = bytes_a_hex(&chiave2);
         conn.execute_batch(&format!("PRAGMA rekey = \"x'{hex2}'\";"))

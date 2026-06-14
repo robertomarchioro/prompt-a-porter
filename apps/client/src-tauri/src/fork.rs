@@ -34,18 +34,17 @@ pub struct ForkOfInfo {
     pub original_eliminato: bool,
 }
 
-fn genera_id() -> String {
-    use rand::RngCore;
+fn genera_id() -> Result<String, PapErrore> {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
     let mut rnd = [0u8; 4];
-    rand::rngs::OsRng.fill_bytes(&mut rnd);
-    format!(
+    crate::util_random::riempi_random(&mut rnd)?;
+    Ok(format!(
         "prm-{:012x}{:02x}{:02x}{:02x}{:02x}",
         ts, rnd[0], rnd[1], rnd[2], rnd[3]
-    )
+    ))
 }
 
 #[allow(clippy::type_complexity)]
@@ -93,7 +92,7 @@ pub(crate) fn fork_pure(conn: &Connection, prompt_id: &str) -> Result<String, Pa
     let (titolo, descrizione, body, target_model, folder_id) =
         carica_originale(conn, prompt_id)?;
 
-    let id = genera_id();
+    let id = genera_id()?;
     let titolo_fork = format!("{titolo} (fork)");
 
     // Visibility forzata a 'private': il fork è sempre per
@@ -250,7 +249,7 @@ mod test {
 
     #[test]
     fn id_fork_inizia_con_prm() {
-        assert!(genera_id().starts_with("prm-"));
+        assert!(genera_id().unwrap().starts_with("prm-"));
     }
 
     #[test]

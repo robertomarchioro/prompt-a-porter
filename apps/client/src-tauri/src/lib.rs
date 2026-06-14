@@ -25,6 +25,7 @@ pub mod similarity;
 pub mod statistiche;
 pub mod sync;
 pub mod tags_suggest;
+pub mod util_random;
 pub mod varianti;
 pub mod vault;
 pub mod segnaposti_globali;

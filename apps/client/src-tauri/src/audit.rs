@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::errore::PapErrore;
+use crate::util_random::riempi_random;
 use crate::vault::VaultState;
 
 #[derive(Debug, Serialize)]
@@ -58,10 +59,16 @@ pub fn registra(
     id_entita: &str,
     metadati: Option<&str>,
 ) {
-    let id = formato_id_audit();
     // Fire-and-forget by design (la firma resta `-> ()` per non appesantire
-    // le decine di call site), ma un fallimento dell'audit non deve sparire
-    // del tutto: lo logghiamo per renderlo osservabile.
+    // le decine di call site), ma un fallimento — incluso OS RNG non disponibile —
+    // non deve sparire del tutto: lo logghiamo per renderlo osservabile.
+    let id = match formato_id_audit() {
+        Ok(id) => id,
+        Err(e) => {
+            log::warn!("audit registra: generazione id fallita (azione={azione}): {e}");
+            return;
+        }
+    };
     if let Err(e) = conn.execute(
         "INSERT INTO AuditLog (Id, WorkspaceId, UserId, Action, EntityType, EntityId, Metadata, OccurredAt)
          VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, ?4, ?5, datetime('now'))",
@@ -71,17 +78,17 @@ pub fn registra(
     }
 }
 
-fn formato_id_audit() -> String {
+fn formato_id_audit() -> Result<String, PapErrore> {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
     let mut rnd = [0u8; 4];
-    rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut rnd);
-    format!(
+    riempi_random(&mut rnd)?;
+    Ok(format!(
         "aud-{:012x}{:02x}{:02x}{:02x}{:02x}",
         ts, rnd[0], rnd[1], rnd[2], rnd[3]
-    )
+    ))
 }
 
 #[tauri::command]
@@ -372,15 +379,15 @@ mod test {
 
     #[test]
     fn formato_id_prefisso_e_lunghezza() {
-        let id = formato_id_audit();
+        let id = formato_id_audit().unwrap();
         assert!(id.starts_with("aud-"));
         assert_eq!(id.len(), 24);
     }
 
     #[test]
     fn formato_id_univoco() {
-        let id1 = formato_id_audit();
-        let id2 = formato_id_audit();
+        let id1 = formato_id_audit().unwrap();
+        let id2 = formato_id_audit().unwrap();
         assert_ne!(id1, id2);
     }
 

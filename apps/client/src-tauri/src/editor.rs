@@ -1,4 +1,3 @@
-use rand::RngCore;
 use rusqlite::Connection;
 use serde::Deserialize;
 use tauri::State;
@@ -7,6 +6,7 @@ use crate::embeddings::{compute_embedding_opt, EmbeddingsState};
 use crate::embeddings_store;
 use crate::errore::PapErrore;
 use crate::prompt_componibili;
+use crate::util_random::riempi_random;
 use crate::vault::VaultState;
 
 /// Hook embedding: dopo una INSERT/UPDATE su `Prompts`, se la Session ort è
@@ -75,17 +75,17 @@ fn normalizza_target_model(v: &Option<String>) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-pub(crate) fn genera_id() -> String {
+pub(crate) fn genera_id() -> Result<String, PapErrore> {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
     let mut rnd = [0u8; 4];
-    rand::rngs::OsRng.fill_bytes(&mut rnd);
-    format!(
+    riempi_random(&mut rnd)?;
+    Ok(format!(
         "{:012x}{:02x}{:02x}{:02x}{:02x}",
         ts, rnd[0], rnd[1], rnd[2], rnd[3]
-    )
+    ))
 }
 
 fn sincronizza_tags(
@@ -110,7 +110,7 @@ fn sincronizza_tags(
         ) {
             Ok(id) => id,
             Err(_) => {
-                let id = format!("tag-{}", genera_id());
+                let id = format!("tag-{}", genera_id()?);
                 conn.execute(
                     "INSERT INTO Tags (Id, WorkspaceId, Name, CreatedAt, UpdatedAt)
                      VALUES (?1, 'ws-personale', ?2, datetime('now'), datetime('now'))",
@@ -159,7 +159,7 @@ pub fn prompt_crea(
     rt_state: State<'_, EmbeddingsState>,
 ) -> Result<String, PapErrore> {
     state.with_conn(|conn| {
-        let id = format!("prm-{}", genera_id());
+        let id = format!("prm-{}", genera_id()?);
         let target = normalizza_target_model(&dati.target_model);
         let folder = normalizza_target_model(&dati.folder_id);
         let body_clean = dati.body.trim();
@@ -294,22 +294,22 @@ mod test {
 
     #[test]
     fn genera_id_formato() {
-        let id = genera_id();
+        let id = genera_id().unwrap();
         assert_eq!(id.len(), 20);
         assert!(id.chars().all(|c| c.is_ascii_hexdigit()));
     }
 
     #[test]
     fn genera_id_univoco() {
-        let id1 = genera_id();
-        let id2 = genera_id();
+        let id1 = genera_id().unwrap();
+        let id2 = genera_id().unwrap();
         assert_ne!(id1, id2);
     }
 
     #[test]
     fn crea_prompt_e_ricostruisci_fts() {
         let conn = db_test();
-        let id = format!("prm-{}", genera_id());
+        let id = format!("prm-{}", genera_id().unwrap());
         conn.execute(
             "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
              Visibility, Version, CreatedAt, UpdatedAt)

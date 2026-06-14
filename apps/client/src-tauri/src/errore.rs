@@ -19,6 +19,11 @@ pub enum PapErrore {
     /// La derivazione della chiave crittografica (Argon2) è fallita
     /// per un problema interno ai parametri. Non dipende dalla password scelta.
     DerivazioneFallita(String),
+    /// Il generatore di numeri casuali del sistema operativo non è disponibile.
+    /// Motivo opaco: nessun dettaglio interno esposto per evitare leakage.
+    /// Semantica fail-closed: l'operazione viene interrotta senza procedere
+    /// con un buffer non inizializzato o debole.
+    RngNonDisponibile,
     /// Errore di validazione/dominio business (es. nome cartella vuoto,
     /// destinazione non valida, etc.).
     Generico(String),
@@ -45,6 +50,11 @@ impl fmt::Display for PapErrore {
                 "Errore interno: impossibile derivare la chiave crittografica. \
                 Questo non dipende dalla password scelta; se il problema persiste, \
                 contatta il supporto."
+            ),
+            Self::RngNonDisponibile => write!(
+                f,
+                "Errore interno: il generatore di entropia del sistema operativo \
+                non è disponibile. Se il problema persiste, riavvia l'applicazione."
             ),
             Self::Generico(msg) => write!(f, "{msg}"),
         }
@@ -144,6 +154,27 @@ mod test {
         // Il messaggio non deve contenere riferimenti a byte/offset
         assert!(!pap_err.to_string().contains("line"));
         assert!(!pap_err.to_string().contains("column"));
+    }
+
+    #[test]
+    fn display_rng_non_disponibile() {
+        let err = PapErrore::RngNonDisponibile;
+        let msg = err.to_string();
+        // Messaggio opaco: non espone dettagli interni del sistema.
+        assert!(
+            msg.contains("Errore interno"),
+            "Deve iniziare con 'Errore interno': {msg}"
+        );
+        assert!(
+            msg.contains("entropia") || msg.contains("generatore"),
+            "Deve descrivere il problema: {msg}"
+        );
+        // Nessun byte offset, chiave, salt o valore segreto nel messaggio.
+        assert!(!msg.contains("salt"), "Non deve menzionare 'salt': {msg}");
+        assert!(!msg.contains("key"), "Non deve menzionare 'key': {msg}");
+        // Serializza correttamente come stringa JSON opaca.
+        let json = serde_json::to_string(&err).unwrap();
+        assert!(json.starts_with('"'), "JSON deve essere una stringa: {json}");
     }
 
     #[test]
