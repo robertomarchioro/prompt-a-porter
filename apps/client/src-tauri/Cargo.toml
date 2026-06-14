@@ -59,7 +59,7 @@ rusqlite = { version = "0.32", features = ["bundled-sqlcipher-vendored-openssl"]
 # auto-extension statica via sqlite3_auto_extension prima di Connection::open.
 sqlite-vec = "0.1"
 argon2 = "0.5"
-rand = "0.8"
+rand = "0.9"
 # Regex per modulo linting (Fase 3 Step 5): rilevamento segnaposti
 # malformati, PII (email, CC, API key), n-gram repetition.
 regex = "1"
