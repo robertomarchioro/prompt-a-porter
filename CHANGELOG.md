@@ -1,13 +1,19 @@
 # Changelog — Prompt a Porter
 
-## v0.8.18 — Creazione cartelle + ripristino build CI (2026-06-14)
+## v0.8.18 — Creazione cartelle + hardening build/CI + dipendenze (2026-06-14)
 
-> 1 issue (#301) + un fix infrastrutturale di build emerso durante il triage.
+> 2 fix UI (#301, #307) + un grosso lavoro infrastrutturale di build/CI emerso durante il triage, più 19 aggiornamenti di dipendenze (2 di sicurezza).
 
 ### Fix
 
-- **Impossibile creare nuove cartelle** (#301): il pulsante "+" accanto a CARTELLE nella sidebar era inerte — `Sidebar.svelte` passava `bottonAggiungi` a `NavGroup` ma non il callback `onAggiungi`, quindi il click chiamava `undefined()` (no-op in Svelte 5). Aggiunto un nuovo `NuovaCartellaModal` (invoca il comando backend esistente `folder_crea`), con `onAggiungiCartella` cablato in `Sidebar`/`Shell`, validazione nome allineata al backend (non vuoto, no "/", max 100) e logica estratta in `nuova-cartella-logic.ts` con test. Il "+" della sezione TAG ha la stessa causa ma manca un comando backend `tag_crea`: tracciato come follow-up.
-- **Build CI Rust ripristinata (pin ecosistema brotli)** (#306): `dropbox/rust-alloc-no-stdlib` ha pubblicato `alloc-no-stdlib 3.0.0` e bumpato `alloc-stdlib`/`brotli-decompressor` a usarla, mentre `brotli 8.0.x` usa ancora la 2.0.4 → due trait `Allocator` in conflitto, `brotli` non compilava più (E0277). Poiché `Cargo.lock` non è committato, la CI pescava sempre la combinazione rotta e tutti i job `rust-test` erano rossi. Pinnato l'intero set ai pre-bump (`brotli=8.0.2`, `brotli-decompressor=5.0.1`, `alloc-stdlib=0.2.2`) come build-dependencies; da rimuovere quando l'upstream si allinea.
+- **Impossibile creare nuove cartelle** (#301): il pulsante "+" accanto a CARTELLE nella sidebar era inerte — `Sidebar.svelte` passava `bottonAggiungi` a `NavGroup` ma non il callback `onAggiungi`, quindi il click chiamava `undefined()` (no-op in Svelte 5). Aggiunto un nuovo `NuovaCartellaModal` (invoca il comando backend esistente `folder_crea`), con `onAggiungiCartella` cablato in `Sidebar`/`Shell`, validazione nome allineata al backend (non vuoto, no "/", max 100) e logica estratta in `nuova-cartella-logic.ts` con test.
+- **"+" inerte nella sezione TAG rimosso** (#307): i tag non si creano stand-alone (nascono assegnandoli durante la creazione/modifica di un prompt), quindi il "+" accanto a TAG era un'affordance morta → rimosso.
+
+### Manutenzione / Sicurezza
+
+- **Architettura CI stabilità+sicurezza** (#309): `Cargo.lock` ora **committato** + `cargo llvm-cov --locked` + toolchain pinnato (`rust-toolchain.toml`, 1.96.0) → build riproducibili, immuni alle pubblicazioni upstream (l'incidente brotli non può più rendere rosse le PR). Aggiunti **Dependabot** (5 ecosistemi, PR validate dalla corsia `--locked`) e un **canary** non-bloccante (`dep-canary.yml`) che testa le dipendenze più recenti e avvisa via issue sia quando qualcosa si rompe sia quando i pin brotli temporanei (#306) si possono rimuovere (#332). `cargo audit` ora audita il lock committato reale.
+- **Aggiornamenti dipendenze** (19): tra cui **sicurezza** `golang.org/x/crypto` 0.51→0.53 e `golang-jwt/jwt` 5.2→5.3; major validati dalla corsia `--locked`: `rusqlite` 0.32→0.40, `zip` 2→4, `vite` 6→8 + `@sveltejs/vite-plugin-svelte` 5→7, `typescript` 5→6, `lucide-svelte` 0.460→1.0, `criterion` 0.5→0.8. Migrazioni `rand` 0.9 e `modernc.org/sqlite` 1.52 rinviate a issue dedicate (#333, #334) perché richiedono lavoro di codice.
+- **Pin ecosistema brotli** (#306): `alloc-no-stdlib 3.0.0` rendeva incompatibile `brotli 8.0.x` (E0277 nel macro `implement_allocator!`). Pinnato il set ai pre-bump (`brotli=8.0.2`, `brotli-decompressor=5.0.1`, `alloc-stdlib=0.2.2`); ora retto dal lock committato, da rimuovere quando l'upstream si allinea.
 
 ## v0.8.17 — Espansione import nella command palette (2026-06-13)
 
