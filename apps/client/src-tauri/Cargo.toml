@@ -88,7 +88,7 @@ zip = { version = "2.2", default-features = false, features = ["deflate"] }
 tempfile = "3"
 # Benchmark harness per quality gate Step 10 (P95 ricerca ibrida < 100ms su
 # 10k prompt). Standard de-facto Rust per micro-benchmarks su stabile.
-criterion = { version = "0.5", default-features = false, features = ["plotters", "cargo_bench_support"] }
+criterion = { version = "0.8", default-features = false, features = ["plotters", "cargo_bench_support"] }
 
 [[bench]]
 name = "ricerca_ibrida"
