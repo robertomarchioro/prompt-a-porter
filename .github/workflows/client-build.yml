@@ -52,6 +52,13 @@ jobs:
       - name: Test TypeScript con coverage (gate 70%)
         run: pnpm --filter @pap/client test:coverage
 
+      # Build di produzione: svelte-check/vitest NON eseguono il bundle vite,
+      # quindi una rottura del bundler (es. vite 8/rolldown che rifiuta la
+      # forma a oggetto di manualChunks) passava la CI e rompeva solo la
+      # release. Questo step la coglie prima del tag.
+      - name: Build frontend (produzione)
+        run: pnpm --filter @pap/client build:frontend
+
   rust-test:
     runs-on: ubuntu-latest
     steps:

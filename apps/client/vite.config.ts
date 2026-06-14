@@ -34,19 +34,15 @@ export default defineConfig({
     // updates non invalidano la cache del browser per codemirror/etc.
     rollupOptions: {
       output: {
-        manualChunks: {
-          codemirror: [
-            "codemirror",
-            "@codemirror/state",
-            "@codemirror/view",
-            "@codemirror/language",
-            "@codemirror/lang-markdown",
-            "@codemirror/autocomplete",
-            "@codemirror/commands",
-            "@codemirror/search",
-          ],
-          diff: ["diff2html"],
-          icons: ["lucide-svelte"],
+        // Forma a funzione (vite 8 / rollup 4 non accetta più la forma a
+        // oggetto qui → "manualChunks is not a function"). Stesso esito:
+        // i vendor grossi finiscono in chunk separati per la cache cross-deploy.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("codemirror")) return "codemirror";
+          if (id.includes("diff2html")) return "diff";
+          if (id.includes("lucide-svelte")) return "icons";
+          return undefined;
         },
       },
     },
