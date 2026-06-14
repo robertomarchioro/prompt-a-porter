@@ -181,10 +181,11 @@
       {/each}
     </NavGroup>
 
+    <!-- Nessun "+" qui: i tag non si creano stand-alone, nascono
+         assegnandoli durante la creazione/modifica di un prompt (#307). -->
     <NavGroup
       titolo="TAG"
       conteggio={tags.length}
-      bottonAggiungi
       bind:collapsed={gruppi.tag}
     >
       {#each tags as tag (tag.id)}
