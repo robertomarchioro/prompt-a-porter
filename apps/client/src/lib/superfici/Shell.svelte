@@ -35,6 +35,7 @@
   import RegressioniModal from "$lib/superfici/RegressioniModal.svelte";
   import ImpostazioniModal from "$lib/superfici/ImpostazioniModal.svelte";
   import PaletteModal from "$lib/superfici/PaletteModal.svelte";
+  import NuovaCartellaModal from "$lib/superfici/NuovaCartellaModal.svelte";
   import {
     statoModale,
     chiudiModale,
@@ -262,6 +263,7 @@
           onApriCollapse={() => (stato.sidebarCollapsed = true)}
           onApriInsight={() => apriModale({ tipo: "insight" })}
           onApriRegressioni={() => apriModale({ tipo: "regressioni" })}
+          onAggiungiCartella={() => apriModale({ tipo: "nuova-cartella" })}
         />
       </div>
     {/if}
@@ -383,6 +385,10 @@
 
 {#if statoModale.attiva?.tipo === "palette"}
   <PaletteModal onChiudi={chiudiModale} />
+{/if}
+
+{#if statoModale.attiva?.tipo === "nuova-cartella"}
+  <NuovaCartellaModal onChiudi={chiudiModale} />
 {/if}
 
 <style>

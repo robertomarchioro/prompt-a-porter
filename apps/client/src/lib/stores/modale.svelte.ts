@@ -15,6 +15,7 @@ export type ModaleAttiva =
   | { tipo: "regressioni" }
   | { tipo: "impostazioni"; sezione?: string }
   | { tipo: "palette" }
+  | { tipo: "nuova-cartella" }
   | null;
 
 class StatoModale {
