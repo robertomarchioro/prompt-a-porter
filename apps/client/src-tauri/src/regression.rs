@@ -72,11 +72,11 @@ fn default_soglia() -> f64 {
     0.85
 }
 
-fn genera_id() -> Result<String, crate::errore::PapErrore> {
+fn genera_id() -> Result<String, PapErrore> {
     genera_id_con_prefix("gld")
 }
 
-fn genera_id_con_prefix(prefix: &str) -> Result<String, crate::errore::PapErrore> {
+fn genera_id_con_prefix(prefix: &str) -> Result<String, PapErrore> {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
