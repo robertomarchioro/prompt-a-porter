@@ -1,5 +1,14 @@
 # Changelog — Prompt a Porter
 
+## v0.8.18 — Creazione cartelle + ripristino build CI (2026-06-14)
+
+> 1 issue (#301) + un fix infrastrutturale di build emerso durante il triage.
+
+### Fix
+
+- **Impossibile creare nuove cartelle** (#301): il pulsante "+" accanto a CARTELLE nella sidebar era inerte — `Sidebar.svelte` passava `bottonAggiungi` a `NavGroup` ma non il callback `onAggiungi`, quindi il click chiamava `undefined()` (no-op in Svelte 5). Aggiunto un nuovo `NuovaCartellaModal` (invoca il comando backend esistente `folder_crea`), con `onAggiungiCartella` cablato in `Sidebar`/`Shell`, validazione nome allineata al backend (non vuoto, no "/", max 100) e logica estratta in `nuova-cartella-logic.ts` con test. Il "+" della sezione TAG ha la stessa causa ma manca un comando backend `tag_crea`: tracciato come follow-up.
+- **Build CI Rust ripristinata (pin ecosistema brotli)** (#306): `dropbox/rust-alloc-no-stdlib` ha pubblicato `alloc-no-stdlib 3.0.0` e bumpato `alloc-stdlib`/`brotli-decompressor` a usarla, mentre `brotli 8.0.x` usa ancora la 2.0.4 → due trait `Allocator` in conflitto, `brotli` non compilava più (E0277). Poiché `Cargo.lock` non è committato, la CI pescava sempre la combinazione rotta e tutti i job `rust-test` erano rossi. Pinnato l'intero set ai pre-bump (`brotli=8.0.2`, `brotli-decompressor=5.0.1`, `alloc-stdlib=0.2.2`) come build-dependencies; da rimuovere quando l'upstream si allinea.
+
 ## v0.8.17 — Espansione import nella command palette (2026-06-13)
 
 > 1 issue (#299): completa su superficie palette il fix #293/#297 atterrato in v0.8.16.
