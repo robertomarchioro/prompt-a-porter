@@ -43,7 +43,7 @@ jobs:
         run: go tool cover -func=coverage.out
 
       - name: Lint (golangci-lint)
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           working-directory: apps/cli
           version: latest
