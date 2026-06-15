@@ -1,6 +1,13 @@
 # Changelog — Prompt a Porter
 
-## v0.8.19 — Migrazione rand 0.9 + pulizia pin brotli (2026-06-14)
+## v0.8.20 — Colorazione segnaposti globali e import parametrizzati (2026-06-15)
+
+> 2 issue (#353, #304): due lacune di syntax highlighting CodeMirror nell'editor, su file disgiunti, risolte in parallelo. #334 (CLI Go 1.25) resta rinviata (golangci-lint non ancora pronto per go1.25).
+
+### Fix
+
+- **Colorazione dei segnaposti globali** (#353): in editor i segnaposti globali `{{globale nome}}` non venivano evidenziati perché la regex riconosceva solo la forma a parola singola `{{nome}}`. Estesa la regex (`placeholder-highlight.ts`) per riconoscere anche `{{globale <nome>}}` con un capture group come unica sorgente di verità, e aggiunta una decoration distinta (`cm-segnaposto-globale`, accento viola) per distinguerli visivamente dai segnaposti normali. Un `{{globale}}` senza nome resta trattato come segnaposto normale (comportamento documentato e testato).
+- **Colorazione degli import parametrizzati** (#304): gli import con modificatori M4 `{{import "X" with k=v}}` / `{{import "X" version=N}}` non venivano colorati per intero perché la regex frontend (`import-tokens.ts`) si fermava al path tra virgolette, non allineata al backend. Allargata la regex per includere i modificatori nello span evidenziato e nel target hover/click; corretta la stessa regex nella utility `estrai-imports.ts` (gli import parametrizzati erano invisibili anche ai pannelli laterali). Test di adiacenza inclusi (due token su una riga non vengono fusi).
 
 > 1 issue (#333) dal triage delle migrazioni dipendenze + pulizia dei pin brotli temporanei segnalata dal canary; #334 (CLI Go 1.25) rinviata (ecosistema golangci-lint non ancora pronto per go1.25).
 
