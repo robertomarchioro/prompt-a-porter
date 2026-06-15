@@ -62,4 +62,29 @@ describe("import-tokens / _findImportAt", () => {
     expect(found.to).toBe(18);
     expect(doc.slice(found.from, found.to)).toBe('{{import "x"}}');
   });
+
+  // Parametrized imports (M4 syntax — issue #304)
+  it("trova token con modificatore `with k=v` e ritorna path corretto", () => {
+    const doc = '{{import "marketing/email" with tone=formal}}';
+    const found = _findImportAt(doc, 10);
+    expect(found).not.toBeNull();
+    expect(found!.path).toBe("marketing/email");
+    expect(found!.from).toBe(0);
+    expect(found!.to).toBe(doc.length);
+  });
+
+  it("trova token con modificatore `version=N` e ritorna path corretto", () => {
+    const doc = 'pre {{import "intro" version=2}} post';
+    const found = _findImportAt(doc, 10);
+    expect(found).not.toBeNull();
+    expect(found!.path).toBe("intro");
+    expect(doc.slice(found!.from, found!.to)).toBe(
+      '{{import "intro" version=2}}',
+    );
+  });
+
+  it("nessuna regressione: plain `{{import \"x\"}}` ancora riconosciuto", () => {
+    const doc = '{{import "plain"}}';
+    expect(_findImportAt(doc, 5)?.path).toBe("plain");
+  });
 });

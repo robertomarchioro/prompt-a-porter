@@ -33,4 +33,27 @@ describe("estraiImports", () => {
     expect(() => estraiImports("{{ }} { } {{import }}")).not.toThrow();
     expect(estraiImports("{{ }} { } {{import }}")).toEqual([]);
   });
+
+  // Parametrized imports (M4 syntax — issue #304)
+  it("trova import con modificatore `with k=v`", () => {
+    expect(
+      estraiImports('{{import "marketing/email" with tone=formal}}'),
+    ).toEqual(["marketing/email"]);
+  });
+
+  it("trova import con modificatore `version=N`", () => {
+    expect(estraiImports('pre {{import "intro" version=2}} post')).toEqual([
+      "intro",
+    ]);
+  });
+
+  it("deduplica import parametrizzati e semplici dello stesso path", () => {
+    const body =
+      '{{import "a"}} {{import "a" with k=v}} {{import "b" version=1}}';
+    expect(estraiImports(body)).toEqual(["a", "b"]);
+  });
+
+  it("nessuna regressione: plain `{{import \"x\"}}` ancora riconosciuto", () => {
+    expect(estraiImports('{{import "plain"}}')).toEqual(["plain"]);
+  });
 });

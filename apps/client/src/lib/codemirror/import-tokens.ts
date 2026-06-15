@@ -19,7 +19,9 @@ import { type Extension, RangeSetBuilder } from "@codemirror/state";
 import { invoke } from "@tauri-apps/api/core";
 
 /// Stesso pattern del backend (`prompt_componibili::re_import`).
-const RE_IMPORT = /\{\{\s*import\s+"([^"]+)"\s*\}\}/g;
+/// Gruppo 1: path del prompt importato.
+/// Gruppo 2 (opzionale): modificatori `with k=v` / `version=N` aggiunti in M4.
+const RE_IMPORT = /\{\{\s*import\s+"([^"]+)"([^}]*?)\s*\}\}/g;
 
 const importMark = Decoration.mark({ class: "cm-import" });
 

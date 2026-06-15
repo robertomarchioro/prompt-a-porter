@@ -9,7 +9,8 @@
  * - Blueprint F6 §3
  */
 
-const RE = /\{\{\s*import\s+"([^"]+)"\s*\}\}/g;
+/// Gruppo 1: path. Gruppo 2 (opzionale): modificatori M4 (`with k=v` / `version=N`).
+const RE = /\{\{\s*import\s+"([^"]+)"([^}]*?)\s*\}\}/g;
 
 export function estraiImports(body: string): string[] {
   const visti = new Set<string>();
