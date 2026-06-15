@@ -67,4 +67,19 @@ describe("placeholder-highlight / _matchSegnaposti", () => {
   it("caso negativo: testo senza doppie graffe", () => {
     expect(_matchSegnaposti("{nome} e [altro]")).toEqual([]);
   });
+
+  // HIGH-1/3: pinning del comportamento di {{globale}} (parola chiave sola,
+  // senza nome): il primo ramo della regex non può fare match (manca \s+\w+),
+  // quindi ricade nel ramo \w+ e viene trattato come segnaposto normale.
+  it("{{globale}} senza nome è trattato come segnaposto normale (globale=false)", () => {
+    const matches = _matchSegnaposti("{{globale}}");
+    expect(matches).toHaveLength(1);
+    expect(matches[0].globale).toBe(false);
+  });
+
+  it("segnaposto semplice ha sempre globale=false (verifica booleano esplicito)", () => {
+    const matches = _matchSegnaposti("{{titolo}}");
+    expect(matches).toHaveLength(1);
+    expect(matches[0].globale).toBe(false);
+  });
 });
