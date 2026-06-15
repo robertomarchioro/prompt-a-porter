@@ -14,6 +14,8 @@
   import GoldenTab from "$lib/components/GoldenTab.svelte";
   import CronologiaTab from "$lib/components/CronologiaTab.svelte";
   import ImportVarTab from "$lib/components/ImportVarTab.svelte";
+  import Modale from "$lib/components/Modale.svelte";
+  import Button from "$lib/components/Button.svelte";
   import { apriModale } from "$lib/stores/modale.svelte";
   import { statoEditor } from "$lib/stores/preferenze.svelte";
 
@@ -338,27 +340,68 @@
    * Issue #156: elimina prompt corrente con confirm dialog.
    * Backend prompt_elimina è soft-delete (DeletedAt timestamp).
    */
+  // #303: stato del warning per cancellazione di prompt importati da altri.
+  interface Dipendente {
+    id: string;
+    titolo: string;
+  }
+  let warnImport = $state<{
+    aperto: boolean;
+    deps: Dipendente[];
+    lavorando: boolean;
+  }>({ aperto: false, deps: [], lavorando: false });
+
+  /** Soft-delete effettivo + cleanup + chiusura. Condiviso dai due percorsi. */
+  async function eseguiSoftDelete(): Promise<void> {
+    await invoke("prompt_elimina", { id: promptId });
+    // Cancel autosave pending: eviterebbe di riscrivere il prompt
+    // appena cancellato.
+    if (timerAutosave) {
+      clearTimeout(timerAutosave);
+      timerAutosave = undefined;
+    }
+    dirty = false;
+    window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+    _onChiudi?.();
+  }
+
   async function eliminaPrompt(): Promise<void> {
     if (!dettaglio) return;
     const titoloVis = dettaglio.titolo || "(senza titolo)";
+    // #303: se altri prompt importano questo, mostra il warning dedicato.
+    let deps: Dipendente[] = [];
+    try {
+      deps = await invoke<Dipendente[]>("prompt_dipendenti", { id: promptId });
+    } catch (e) {
+      console.error("[detail] prompt_dipendenti", e);
+    }
+    if (deps.length > 0) {
+      warnImport = { aperto: true, deps, lavorando: false };
+      return;
+    }
     const ok = window.confirm(
       `Eliminare il prompt "${titoloVis}"?\n\nIl prompt verrà spostato nel Cestino, da cui potrai ripristinarlo o eliminarlo definitivamente.`,
     );
     if (!ok) return;
     try {
-      await invoke("prompt_elimina", { id: promptId });
-      // Cancel autosave pending: eviterebbe di riscrivere il prompt
-      // appena cancellato.
-      if (timerAutosave) {
-        clearTimeout(timerAutosave);
-        timerAutosave = undefined;
-      }
-      dirty = false;
-      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
-      _onChiudi?.();
+      await eseguiSoftDelete();
     } catch (e) {
       console.error("[detail] elimina", e);
       window.alert("Errore nell'eliminazione del prompt: " + String(e));
+    }
+  }
+
+  /** #303: rimuove gli import dai dipendenti, poi cancella il prompt. */
+  async function rimuoviImportECancella(): Promise<void> {
+    warnImport.lavorando = true;
+    try {
+      await invoke("import_rimuovi_da_dipendenti", { targetId: promptId });
+      await eseguiSoftDelete();
+      warnImport = { aperto: false, deps: [], lavorando: false };
+    } catch (e) {
+      console.error("[detail] rimuovi import e cancella", e);
+      window.alert("Errore durante la rimozione degli import: " + String(e));
+      warnImport.lavorando = false;
     }
   }
 
@@ -685,6 +728,48 @@
   </div>
 {/if}
 
+{#if warnImport.aperto}
+  <Modale
+    titolo="Questo prompt è importato da altri"
+    sottotitolo={dettaglio?.titolo || "(senza titolo)"}
+    larghezza="sm"
+    onChiudi={() => (warnImport = { aperto: false, deps: [], lavorando: false })}
+  >
+    <div class="warn-import">
+      <p class="warn-testo">
+        {warnImport.deps.length === 1
+          ? "1 prompt importa questo prompt via {{import}}. Cancellandolo, quell'import si romperà:"
+          : `${warnImport.deps.length} prompt importano questo prompt via {{import}}. Cancellandolo, quegli import si romperanno:`}
+      </p>
+      <ul class="warn-lista">
+        {#each warnImport.deps as d (d.id)}
+          <li>{d.titolo || "(senza titolo)"}</li>
+        {/each}
+      </ul>
+    </div>
+    {#snippet footer()}
+      <Button
+        variante="ghost"
+        onclick={() => (warnImport = { aperto: false, deps: [], lavorando: false })}
+        disabled={warnImport.lavorando}
+      >
+        Annulla
+      </Button>
+      <Button
+        variante="danger"
+        onclick={rimuoviImportECancella}
+        disabled={warnImport.lavorando}
+      >
+        {warnImport.lavorando
+          ? "Rimozione…"
+          : warnImport.deps.length === 1
+            ? "Rimuovi l'import e cancella"
+            : `Rimuovi gli import dai ${warnImport.deps.length} prompt e cancella`}
+      </Button>
+    {/snippet}
+  </Modale>
+{/if}
+
 <style>
   .detail-pane {
     display: flex;
@@ -888,5 +973,30 @@
     height: 100%;
     color: var(--text-muted);
     font-size: var(--fs-sm);
+  }
+
+  .warn-import {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+
+  .warn-testo {
+    margin: 0;
+    color: var(--text-default);
+    font-size: var(--fs-sm);
+    line-height: 1.5;
+  }
+
+  .warn-lista {
+    margin: 0;
+    padding-left: var(--sp-4);
+    max-height: 180px;
+    overflow-y: auto;
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
 </style>
