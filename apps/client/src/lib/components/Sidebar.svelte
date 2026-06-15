@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, onDestroy } from "svelte";
-  import { ChevronsLeft, BarChart3, AlertTriangle } from "lucide-svelte";
+  import { ChevronsLeft, BarChart3, AlertTriangle, Trash2 } from "lucide-svelte";
   import NavGroup from "./NavGroup.svelte";
   import NavItem from "./NavItem.svelte";
   import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
@@ -12,6 +12,7 @@
     preferiti: number;
     privati: number;
     team: number;
+    cestino: number;
   }
 
   interface TagInfo {
@@ -73,6 +74,7 @@
     preferiti: 0,
     privati: 0,
     team: 0,
+    cestino: 0,
   });
   let tags = $state<TagInfo[]>([]);
   let cartelle = $state<Cartella[]>([]);
@@ -137,6 +139,16 @@
         onclick={() => onSelezionaVista("tutti")}
       >
         Tutti i prompt
+      </NavItem>
+      <NavItem
+        attivo={vistaCorrente === "cestino"}
+        conteggio={conteggi.cestino}
+        onclick={() => onSelezionaVista("cestino")}
+      >
+        {#snippet icona()}
+          <Trash2 size={13} aria-hidden="true" />
+        {/snippet}
+        Cestino
       </NavItem>
     </NavGroup>
 

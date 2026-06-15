@@ -342,7 +342,7 @@
     if (!dettaglio) return;
     const titoloVis = dettaglio.titolo || "(senza titolo)";
     const ok = window.confirm(
-      `Eliminare il prompt "${titoloVis}"?\n\nIl prompt verrà spostato nel cestino (eliminazione soft, recuperabile dal database fino al cleanup).`,
+      `Eliminare il prompt "${titoloVis}"?\n\nIl prompt verrà spostato nel Cestino, da cui potrai ripristinarlo o eliminarlo definitivamente.`,
     );
     if (!ok) return;
     try {

@@ -28,6 +28,7 @@
   import Sidebar from "$lib/components/Sidebar.svelte";
   import SidebarMini from "$lib/components/SidebarMini.svelte";
   import ListPane from "$lib/components/ListPane.svelte";
+  import CestinoVista from "$lib/components/CestinoVista.svelte";
   import DetailPane from "$lib/superfici/DetailPane.svelte";
   import DiffLibero from "$lib/superfici/DiffLibero.svelte";
   import CompilaModal from "$lib/superfici/CompilaModal.svelte";
@@ -286,8 +287,10 @@
       onpointerdown={(e) => onPointerDownResizer("sidebar", e)}
     ></div>
 
-    <div class="pane list-pane" class:collapsed={listCollapsed}>
-      {#if listCollapsed}
+    <div class="pane list-pane" class:collapsed={listCollapsed && vistaCorrente !== "cestino"}>
+      {#if vistaCorrente === "cestino"}
+        <CestinoVista />
+      {:else if listCollapsed}
         <button
           class="list-restore"
           type="button"
@@ -332,7 +335,11 @@
     ></div>
 
     <div class="pane detail-pane">
-      {#if promptSelezionato}
+      {#if vistaCorrente === "cestino"}
+        <div class="placeholder-pane detail-placeholder">
+          <p>Ripristina o elimina i prompt dal cestino.</p>
+        </div>
+      {:else if promptSelezionato}
         <DetailPane
           promptId={promptSelezionato}
           onChiudi={() => (promptSelezionato = null)}
