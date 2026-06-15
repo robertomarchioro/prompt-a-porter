@@ -466,6 +466,135 @@ pub fn pulisci_imports(conn: &Connection, prompt_id: &str) -> Result<(), PapErro
     Ok(())
 }
 
+// ─── #303: dipendenze inverse (chi importa un dato prompt) ───────────
+
+/// Un prompt vivo che importa un altro prompt via `{{import}}`.
+#[derive(Debug, Clone, Serialize)]
+pub struct Dipendente {
+    pub id: String,
+    pub titolo: String,
+}
+
+/// Lista dei prompt VIVI che importano `imported_id`. Fonda il warning di
+/// cancellazione (#303: "questo prompt è importato da N altri") e l'avviso
+/// di ripristino del cestino (#302). Esclude i genitori cancellati e
+/// deduplica (un genitore che importa più volte conta una volta sola).
+pub fn dipendenti_pure(
+    conn: &Connection,
+    imported_id: &str,
+) -> Result<Vec<Dipendente>, PapErrore> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT pr.Id, pr.Title
+           FROM PromptImports pi
+           JOIN Prompts pr ON pr.Id = pi.ParentPromptId
+          WHERE pi.ImportedPromptId = ?1 AND pr.DeletedAt IS NULL
+          ORDER BY pr.Title COLLATE NOCASE ASC",
+    )?;
+    let righe = stmt
+        .query_map([imported_id], |r| {
+            Ok(Dipendente {
+                id: r.get(0)?,
+                titolo: r.get(1)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(righe)
+}
+
+#[tauri::command]
+pub fn prompt_dipendenti(
+    id: String,
+    state: State<'_, VaultState>,
+) -> Result<Vec<Dipendente>, PapErrore> {
+    state.with_conn(|conn| dipendenti_pure(conn, &id))
+}
+
+/// Rimuove ogni `{{import}}` che punta a `target_id` dal body di tutti i
+/// prompt vivi che lo importano, in un'unica transazione. Prima di toccare
+/// ciascun prompt crea uno snapshot di versione (la modifica è quindi
+/// reversibile dalla cronologia). Ritorna il numero di prompt modificati.
+///
+/// Pensato per il flusso di cancellazione (#303): si chiama PRIMA di
+/// `prompt_elimina(target_id)`, così non resta mai un istante con import
+/// rotti. I token vengono rimossi per intero (incluso `with`/`version`) via
+/// range byte, dal fondo verso l'inizio per non invalidare gli offset.
+///
+/// Nota: gli embedding dei prompt toccati restano "stale" finché il prossimo
+/// salvataggio/backfill non li ricalcola (questo comando non ha accesso a
+/// `EmbeddingsState`). La semantica testuale è comunque già aggiornata.
+pub fn import_rimuovi_da_dipendenti_pure(
+    conn: &Connection,
+    target_id: &str,
+) -> Result<usize, PapErrore> {
+    let dipendenti = dipendenti_pure(conn, target_id)?;
+    if dipendenti.is_empty() {
+        return Ok(0);
+    }
+
+    let tx = conn.unchecked_transaction()?;
+    let mut modificati = 0usize;
+    for dip in &dipendenti {
+        let body: String = tx.query_row(
+            "SELECT Body FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
+            [&dip.id],
+            |r| r.get(0),
+        )?;
+
+        // Raccoglie i range dei soli token che risolvono a target_id.
+        let mut ranges: Vec<(usize, usize)> = Vec::new();
+        for imp in parse_imports(&body) {
+            if resolve_path(&tx, &imp.path)?.as_deref() == Some(target_id) {
+                ranges.push((imp.byte_start, imp.byte_end));
+            }
+        }
+        if ranges.is_empty() {
+            continue; // riga PromptImports stale: niente da togliere qui
+        }
+
+        // Snapshot dello stato corrente (pre-rimozione) → reversibile.
+        crate::versioning::snapshot_versione(&tx, &dip.id, "usr-locale")?;
+
+        // Rimuove dal fondo per mantenere validi gli offset precedenti.
+        ranges.sort_by(|a, b| b.0.cmp(&a.0));
+        let mut nuovo = body.clone();
+        for (start, end) in ranges {
+            nuovo.replace_range(start..end, "");
+        }
+        let nuovo = nuovo.trim().to_string();
+
+        tx.execute(
+            "UPDATE Prompts
+             SET Body = ?1, Version = Version + 1, UpdatedAt = datetime('now'),
+                 UpdatedByUserId = 'usr-locale'
+             WHERE Id = ?2 AND DeletedAt IS NULL",
+            params![nuovo, dip.id],
+        )?;
+        aggiorna_imports(&tx, &dip.id, &nuovo)?;
+        crate::audit::registra(
+            &tx,
+            "prompt.import_rimosso",
+            "Prompt",
+            &dip.id,
+            Some(target_id),
+        );
+        modificati += 1;
+    }
+
+    // FTS ricostruito una volta a fine batch (i body sono cambiati).
+    crate::editor::ricostruisci_fts(&tx)?;
+    tx.commit()?;
+    Ok(modificati)
+}
+
+#[tauri::command]
+pub fn import_rimuovi_da_dipendenti(
+    target_id: String,
+    state: State<'_, VaultState>,
+) -> Result<usize, PapErrore> {
+    state.with_conn(|conn| import_rimuovi_da_dipendenti_pure(conn, &target_id))
+}
+
 // ─── M4 PR-3: Intellisense autocomplete ────────────────────────────
 
 #[derive(Debug, Clone, Serialize)]
@@ -804,6 +933,156 @@ mod test {
             )
             .unwrap();
         assert_eq!(n, 0);
+    }
+
+    // ─── #303: dipendenti_pure ─────────────────────────────────────
+
+    #[test]
+    fn dipendenti_vuoto_se_nessuno_importa() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-base", "Base", "corpo", None);
+        assert!(dipendenti_pure(&conn, "prm-base").unwrap().is_empty());
+    }
+
+    #[test]
+    fn dipendenti_elenca_genitori_vivi_ordinati() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-base", "Base", "corpo", None);
+        inserisci_prompt(&conn, "prm-b", "Bravo", r#"{{import "Base"}}"#, None);
+        inserisci_prompt(&conn, "prm-a", "Alfa", r#"{{import "Base"}}"#, None);
+        aggiorna_imports(&conn, "prm-b", r#"{{import "Base"}}"#).unwrap();
+        aggiorna_imports(&conn, "prm-a", r#"{{import "Base"}}"#).unwrap();
+        let deps = dipendenti_pure(&conn, "prm-base").unwrap();
+        assert_eq!(deps.len(), 2);
+        // ORDER BY Title COLLATE NOCASE → Alfa prima di Bravo
+        assert_eq!(deps[0].titolo, "Alfa");
+        assert_eq!(deps[1].titolo, "Bravo");
+    }
+
+    #[test]
+    fn dipendenti_esclude_genitori_cancellati() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-base", "Base", "corpo", None);
+        inserisci_prompt(&conn, "prm-a", "Alfa", r#"{{import "Base"}}"#, None);
+        aggiorna_imports(&conn, "prm-a", r#"{{import "Base"}}"#).unwrap();
+        conn.execute(
+            "UPDATE Prompts SET DeletedAt = datetime('now') WHERE Id = 'prm-a'",
+            [],
+        )
+        .unwrap();
+        assert!(
+            dipendenti_pure(&conn, "prm-base").unwrap().is_empty(),
+            "un genitore cancellato non è una dipendenza viva"
+        );
+    }
+
+    #[test]
+    fn dipendenti_dedup_genitore_con_doppio_import() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-base", "Base", "corpo", None);
+        let body = r#"{{import "Base"}} e ancora {{import "Base"}}"#;
+        inserisci_prompt(&conn, "prm-a", "Alfa", body, None);
+        aggiorna_imports(&conn, "prm-a", body).unwrap();
+        let deps = dipendenti_pure(&conn, "prm-base").unwrap();
+        assert_eq!(deps.len(), 1, "stesso genitore con 2 import → una riga");
+        assert_eq!(deps[0].id, "prm-a");
+    }
+
+    // ─── #303: import_rimuovi_da_dipendenti_pure ───────────────────
+
+    fn versioni_di(conn: &Connection, id: &str) -> i64 {
+        conn.query_row(
+            "SELECT COUNT(*) FROM PromptVersions WHERE PromptId = ?1",
+            [id],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn rimuovi_import_zero_se_nessun_dipendente() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-base", "Base", "corpo", None);
+        assert_eq!(
+            import_rimuovi_da_dipendenti_pure(&conn, "prm-base").unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn rimuovi_import_semplice_aggiorna_body_e_tabella() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-base", "Base", "corpo", None);
+        let body = r#"prima {{import "Base"}} dopo"#;
+        inserisci_prompt(&conn, "prm-a", "Alfa", body, None);
+        aggiorna_imports(&conn, "prm-a", body).unwrap();
+
+        let n = import_rimuovi_da_dipendenti_pure(&conn, "prm-base").unwrap();
+        assert_eq!(n, 1);
+
+        let nuovo: String = conn
+            .query_row("SELECT Body FROM Prompts WHERE Id = 'prm-a'", [], |r| r.get(0))
+            .unwrap();
+        assert!(!nuovo.contains("import"), "il token deve sparire: {nuovo:?}");
+
+        // PromptImports del genitore ripulita.
+        let imp: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM PromptImports WHERE ParentPromptId = 'prm-a'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(imp, 0);
+        // Snapshot pre-rimozione creato (reversibile).
+        assert!(versioni_di(&conn, "prm-a") >= 1);
+    }
+
+    #[test]
+    fn rimuovi_import_con_modifiers_toglie_intero_token() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-base", "Base", "corpo", None);
+        let body = r#"x {{import "Base" with tono=formale}} y"#;
+        inserisci_prompt(&conn, "prm-a", "Alfa", body, None);
+        aggiorna_imports(&conn, "prm-a", body).unwrap();
+
+        import_rimuovi_da_dipendenti_pure(&conn, "prm-base").unwrap();
+        let nuovo: String = conn
+            .query_row("SELECT Body FROM Prompts WHERE Id = 'prm-a'", [], |r| r.get(0))
+            .unwrap();
+        assert!(!nuovo.contains("import"));
+        assert!(!nuovo.contains("with"), "i modifiers spariscono col token");
+    }
+
+    #[test]
+    fn rimuovi_import_multiplo_nello_stesso_body() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-base", "Base", "corpo", None);
+        let body = r#"{{import "Base"}} mezzo {{import "Base"}}"#;
+        inserisci_prompt(&conn, "prm-a", "Alfa", body, None);
+        aggiorna_imports(&conn, "prm-a", body).unwrap();
+
+        import_rimuovi_da_dipendenti_pure(&conn, "prm-base").unwrap();
+        let nuovo: String = conn
+            .query_row("SELECT Body FROM Prompts WHERE Id = 'prm-a'", [], |r| r.get(0))
+            .unwrap();
+        assert!(!nuovo.contains("import"), "tutte le occorrenze rimosse: {nuovo:?}");
+    }
+
+    #[test]
+    fn rimuovi_import_due_genitori_conta_due() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-base", "Base", "corpo", None);
+        inserisci_prompt(&conn, "prm-a", "Alfa", r#"{{import "Base"}}"#, None);
+        inserisci_prompt(&conn, "prm-b", "Bravo", r#"{{import "Base"}}"#, None);
+        aggiorna_imports(&conn, "prm-a", r#"{{import "Base"}}"#).unwrap();
+        aggiorna_imports(&conn, "prm-b", r#"{{import "Base"}}"#).unwrap();
+
+        assert_eq!(
+            import_rimuovi_da_dipendenti_pure(&conn, "prm-base").unwrap(),
+            2
+        );
+        assert!(dipendenti_pure(&conn, "prm-base").unwrap().is_empty());
     }
 
     // ─── M4 PR-1: sintassi `with k=v` ──────────────────────────────
