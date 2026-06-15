@@ -58,6 +58,9 @@ pub struct ConteggiViste {
     pub preferiti: i64,
     pub privati: i64,
     pub team: i64,
+    /// Prompt nel cestino (soft-deleted). Filtra `DeletedAt IS NOT NULL`,
+    /// l'opposto di tutte le altre viste. (#302)
+    pub cestino: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -132,11 +135,17 @@ pub fn conteggi_pure(conn: &Connection) -> Result<ConteggiViste, PapErrore> {
         let sql = format!("SELECT COUNT(*) FROM Prompts WHERE DeletedAt IS NULL{cond}");
         Ok(conn.query_row(&sql, [], |r| r.get(0))?)
     };
+    let cestino: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM Prompts WHERE DeletedAt IS NOT NULL",
+        [],
+        |r| r.get(0),
+    )?;
     Ok(ConteggiViste {
         tutti: q("")?,
         preferiti: q(" AND IsFavorite = 1")?,
         privati: q(" AND Visibility = 'private'")?,
         team: q(" AND Visibility = 'workspace'")?,
+        cestino,
     })
 }
 
@@ -762,6 +771,23 @@ mod test {
         assert_eq!(c.preferiti, 0);
         assert_eq!(c.privati, 0);
         assert_eq!(c.team, 0);
+        assert_eq!(c.cestino, 0);
+    }
+
+    #[test]
+    fn conteggi_pure_cestino_conta_solo_cancellati() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        inserisci_prompt(&conn, "vivo", "Vivo", "private", 0, None);
+        inserisci_prompt(&conn, "morto", "Morto", "private", 0, None);
+        conn.execute(
+            "UPDATE Prompts SET DeletedAt = datetime('now') WHERE Id = 'morto'",
+            [],
+        )
+        .unwrap();
+        let c = conteggi_pure(&conn).unwrap();
+        assert_eq!(c.tutti, 1, "le viste vive escludono i cancellati");
+        assert_eq!(c.cestino, 1, "il cestino conta solo i cancellati");
     }
 
     #[test]
