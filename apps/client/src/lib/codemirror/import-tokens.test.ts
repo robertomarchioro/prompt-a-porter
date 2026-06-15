@@ -87,4 +87,12 @@ describe("import-tokens / _findImportAt", () => {
     const doc = '{{import "plain"}}';
     expect(_findImportAt(doc, 5)?.path).toBe("plain");
   });
+
+  it("due token parametrizzati adiacenti: [^}]*? non li fonde", () => {
+    const doc = '{{import "a" with k=v}}{{import "b" version=2}}';
+    const f1 = _findImportAt(doc, 5);
+    const f2 = _findImportAt(doc, 26);
+    expect(f1?.path).toBe("a");
+    expect(f2?.path).toBe("b");
+  });
 });

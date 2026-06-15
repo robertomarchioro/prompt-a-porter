@@ -56,4 +56,10 @@ describe("estraiImports", () => {
   it("nessuna regressione: plain `{{import \"x\"}}` ancora riconosciuto", () => {
     expect(estraiImports('{{import "plain"}}')).toEqual(["plain"]);
   });
+
+  it("due token parametrizzati adiacenti: [^}]*? non li fonde", () => {
+    expect(
+      estraiImports('{{import "a" with k=v}}{{import "b" version=2}}'),
+    ).toEqual(["a", "b"]);
+  });
 });
