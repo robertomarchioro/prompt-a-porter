@@ -3,6 +3,7 @@
 // visibilità Rust ordinaria.
 pub mod audit;
 pub mod cartelle;
+pub mod cestino;
 pub mod debug_log;
 pub mod editor;
 pub mod embeddings;
@@ -521,6 +522,10 @@ pub fn run() {
             cartelle::folder_elimina,
             cartelle::prompt_sposta,
             cartelle::prompt_riordina,
+            cestino::cestino_lista,
+            cestino::prompt_ripristina,
+            cestino::prompt_elimina_definitivo,
+            cestino::cestino_svuota,
             regression::golden_crea,
             regression::golden_aggiorna,
             regression::golden_elimina,
