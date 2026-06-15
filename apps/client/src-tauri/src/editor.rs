@@ -267,7 +267,11 @@ pub fn prompt_elimina(id: String, state: State<'_, VaultState>) -> Result<(), Pa
             "UPDATE Prompts SET DeletedAt = datetime('now') WHERE Id = ?1 AND DeletedAt IS NULL",
             [&id],
         )?;
-        conn.execute("DELETE FROM PromptTags WHERE PromptId = ?1", [&id])?;
+        // I PromptTags NON vengono cancellati: il soft-delete è recuperabile
+        // dal cestino (#302) e il ripristino deve riportare anche i tag. Sono
+        // già esclusi da libreria_lista/FTS via il filtro DeletedAt, quindi
+        // tenerli non ha effetti collaterali. Al purge fisico si svuotano via
+        // ON DELETE CASCADE (vedi cestino::elimina_definitivo_pure).
         ricostruisci_fts(conn)?;
         // Pulizia vec0: la riga embedding non serve più. Sicuro chiamarlo
         // anche se non c'era mai stato un embedding (delete è no-op).
