@@ -53,6 +53,11 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # Toolchain Rust gestito A MANO in lockstep: il ref `@x.y.z` nei
+      # workflow e `rust-toolchain.toml` (channel) devono muoversi insieme.
+      # Dependabot bumpa solo il ref → desync e CI rossa (vedi #317/#336).
+      - dependency-name: "dtolnay/rust-toolchain"
 
   # === Go (server) ===
   - package-ecosystem: gomod
