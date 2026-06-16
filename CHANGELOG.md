@@ -1,13 +1,22 @@
 # Changelog — Prompt a Porter
 
-## v0.8.20 — Colorazione segnaposti globali e import parametrizzati (2026-06-15)
+## v0.8.20 — Cestino prompt + warning cancellazione import (2026-06-15)
 
-> 2 issue (#353, #304): due lacune di syntax highlighting CodeMirror nell'editor, su file disgiunti, risolte in parallelo. #334 (CLI Go 1.25) resta rinviata (golangci-lint non ancora pronto per go1.25).
+> 2 feature di sicurezza sulla cancellazione (#302 cestino, #303 warning import) + 2 fix di syntax highlighting (#353, #304) + manutenzione dipendenze. #334 (CLI Go 1.25) resta rinviata (golangci-lint non ancora pronto per go1.25).
+
+### Feature
+
+- **Cestino prompt** (#302): i prompt cancellati non spariscono più definitivamente ma finiscono in un **Cestino** (nuova vista nella sidebar, gruppo VISTE) da cui si possono **ripristinare** o **eliminare in modo definitivo**, oltre a uno **svuota** complessivo. Backend `cestino.rs` (`cestino_lista`/`prompt_ripristina`/`prompt_elimina_definitivo`/`cestino_svuota`); la cancellazione era già soft-delete (`DeletedAt`), quindi i dati erano già conservati. Fix correlato: la cancellazione non distrugge più i tag associati, così il ripristino li riporta intatti. L'eliminazione definitiva è una purge fisica in transazione (versioni, import, rating, golden; varianti/fork promossi a indipendenti).
+- **Warning cancellazione prompt importati** (#303): cancellando un prompt **referenziato da altri** via `{{import}}`, ora compare un avviso con la **lista dei prompt impattati** e l'opzione di **rimuovere in massa** quegli import prima di cancellare (invece di lasciare riferimenti rotti). Backend `prompt_dipendenti` + `import_rimuovi_da_dipendenti` (rimozione dei token import dal body dei dipendenti, in transazione, con snapshot di versione). Primo taglio: *annulla* oppure *rimuovi gli import e cancella*; la sostituzione con un altro prompt da dropdown è rinviata.
 
 ### Fix
 
 - **Colorazione dei segnaposti globali** (#353): in editor i segnaposti globali `{{globale nome}}` non venivano evidenziati perché la regex riconosceva solo la forma a parola singola `{{nome}}`. Estesa la regex (`placeholder-highlight.ts`) per riconoscere anche `{{globale <nome>}}` con un capture group come unica sorgente di verità, e aggiunta una decoration distinta (`cm-segnaposto-globale`, accento viola) per distinguerli visivamente dai segnaposti normali. Un `{{globale}}` senza nome resta trattato come segnaposto normale (comportamento documentato e testato).
 - **Colorazione degli import parametrizzati** (#304): gli import con modificatori M4 `{{import "X" with k=v}}` / `{{import "X" version=N}}` non venivano colorati per intero perché la regex frontend (`import-tokens.ts`) si fermava al path tra virgolette, non allineata al backend. Allargata la regex per includere i modificatori nello span evidenziato e nel target hover/click; corretta la stessa regex nella utility `estrai-imports.ts` (gli import parametrizzati erano invisibili anche ai pannelli laterali). Test di adiacenza inclusi (due token su una riga non vengono fusi).
+
+### Manutenzione
+
+- **Aggiornamenti dipendenze e CI**: bump `@types/node` 22→25 e `better-sqlite3` 11→12 (dev), e delle GitHub Actions `pnpm/action-setup` 4→6 e `actions/setup-node` 4→6. Aggiunto un `ignore` per `dtolnay/rust-toolchain` in Dependabot (il toolchain Rust è gestito a mano in lockstep tra workflow e `rust-toolchain.toml`).
 
 > 1 issue (#333) dal triage delle migrazioni dipendenze + pulizia dei pin brotli temporanei segnalata dal canary; #334 (CLI Go 1.25) rinviata (ecosistema golangci-lint non ancora pronto per go1.25).
 
