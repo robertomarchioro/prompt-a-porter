@@ -15,6 +15,9 @@
 
   let { chiave, etichetta, dimensione = 18 }: Props = $props();
 
+  // Minimo 18px: sotto la soglia il target diventa troppo piccolo per la
+  // navigazione da tastiera/tocco (WCAG 2.5.5).
+  const dim = $derived(Math.max(18, dimensione));
   const titolo = $derived(etichetta ?? titoloDoc(chiave));
   const aria = $derived(`Apri la guida: ${titolo} (si apre nel browser)`);
 </script>
@@ -26,8 +29,8 @@
   rel="noopener noreferrer"
   aria-label={aria}
   title={`${titolo} — apri la guida`}
-  style:width={`${dimensione}px`}
-  style:height={`${dimensione}px`}
+  style:width={`${dim}px`}
+  style:height={`${dim}px`}
 >
   <span aria-hidden="true">?</span>
 </a>
@@ -45,7 +48,7 @@
     font-weight: 700;
     line-height: 1;
     text-decoration: none;
-    cursor: help;
+    cursor: pointer;
     flex: none;
     transition:
       color 0.12s ease,

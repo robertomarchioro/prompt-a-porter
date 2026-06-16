@@ -763,6 +763,12 @@
     text-decoration: underline;
   }
 
+  .empty-link:focus-visible {
+    outline: 2px solid var(--accent-private);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
   .card-wrap {
     position: relative;
     transition: opacity var(--motion-fast);

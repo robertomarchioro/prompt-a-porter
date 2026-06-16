@@ -51,6 +51,7 @@
             href={urlDoc(chiave)}
             target="_blank"
             rel="noopener noreferrer"
+            aria-label={`${titoloDoc(chiave)} (si apre nel browser)`}
           >
             <span class="aiuto-voce-testo">{titoloDoc(chiave)}</span>
             <span class="aiuto-voce-ext" aria-hidden="true">↗</span>
