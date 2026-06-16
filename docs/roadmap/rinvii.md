@@ -69,6 +69,7 @@ Design completato, **nessun codice**. Candidati per i prossimi cicli, ognuno con
 
 | Blueprint | Scope | Dimensione |
 |---|---|---|
+| [`guida-interattiva.md`](./guida-interattiva.md) | Guida/tutorial interattivo in-app (help system a strati: tour spotlight + "?" contestuali + checklist), profondità sul sito | Media / a fasi |
 | [`menu-contestuale.md`](./menu-contestuale.md) | Menu tasto-destro context-aware nell'app | Piccola / self-contained |
 | [`linter-personalizzabile.md`](./linter-personalizzabile.md) | Visibilità + tuning regole linter, in 2 fasi rilasciabili indipendenti | Media |
 | [`vault-a-cartella.md`](./vault-a-cartella.md) | Storage plain-text `.md` no-lock-in + sidecar `.pap/` (#258) | Grande / strategica |

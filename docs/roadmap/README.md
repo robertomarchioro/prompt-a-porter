@@ -44,6 +44,9 @@ La **fonte autorevole della pianificazione** è [`release-plan.md`](./release-pl
 | [`v2.0-enterprise.md`](./v2.0-enterprise.md) | **Scope SKU PaP Enterprise v2.0.0** — gating domanda-driven, prerequisiti apertura branch, stream design parallelo a v1.0, strategia multi-SKU post-v2.0 |
 | [`vault-a-cartella.md`](./vault-a-cartella.md) | 🧭 *Esplorazione post-1.0 (Deluxe)* — blueprint storage a file plain-text no-lock-in, modalità per-vault SQLite-cifrato vs cartella-chiaro, sidecar `.pap/`, fasi F1-F4 |
 | [`prompts-as-code.md`](./prompts-as-code.md) | 🧭 *Esplorazione post-1.0 (Deluxe)* — idea strategica "Prompts as Code" (git=versioni, branch=varianti, golden=CI gate, pin a SHA per agent); gap competitivo, MVP, bet alternativi |
+| [`guida-interattiva.md`](./guida-interattiva.md) | ✏️ *Blueprint feature (design, no codice)* — guida/tutorial interattivo in-app: help system a strati (tour spotlight + "?" contestuali + checklist + empty-state), 7 alternative valutate, driver.js vs engine custom, 5 fasi; profondità sul sito |
+| [`menu-contestuale.md`](./menu-contestuale.md) | ✏️ *Blueprint feature (design, no codice)* — menu tasto-destro context-aware nell'app |
+| [`linter-personalizzabile.md`](./linter-personalizzabile.md) | ✏️ *Blueprint feature (design, no codice)* — visibilità + tuning regole linter, in 2 fasi rilasciabili indipendenti |
 | [`fase-1-mvp.md`](./fase-1-mvp.md) | Step 0-15 della Fase 1 (chiusa) — MVP client desktop standalone |
 | [`fase-2-foundations.md`](./fase-2-foundations.md) | Step 1-10 della Fase 2 — Foundations & Distribuzione (chiusa parziale: Step 5 → patch line `v0.2.x`/M1 v1.0, Step 6 → Fase 5/v2.0) |
 | [`fase-3-intelligence.md`](./fase-3-intelligence.md) | Step 1-11 della Fase 3 — Intelligenza & Authoring (✅ chiusa, tag `v0.3.0` rilasciato 2026-05-06) |
