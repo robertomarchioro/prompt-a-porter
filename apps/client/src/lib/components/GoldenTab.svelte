@@ -8,6 +8,7 @@
    * Riferimento blueprint: docs/roadmap/redesign-v08/blueprint-F5.md §3
    */
   import { invoke } from "@tauri-apps/api/core";
+  import AiutoLink from "$lib/aiuto/AiutoLink.svelte";
   import { onDestroy, onMount } from "svelte";
   import { Play, PlayCircle, Pencil, Trash2, Plus } from "lucide-svelte";
   import Modale from "$lib/components/Modale.svelte";
@@ -218,7 +219,10 @@
 
 <div class="golden-tab">
   <header class="header">
-    <span class="titolo">Test golden</span>
+    <span style="display: inline-flex; align-items: center; gap: 6px;">
+      <span class="titolo">Test golden</span>
+      <AiutoLink chiave="regression-testing" dimensione={16} />
+    </span>
     <span class="conteggio">{goldens.length}</span>
     <button
       class="secondary"

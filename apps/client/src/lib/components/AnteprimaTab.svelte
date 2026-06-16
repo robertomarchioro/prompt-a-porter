@@ -17,6 +17,7 @@
    */
 
   import { onMount, onDestroy } from "svelte";
+  import AiutoLink from "$lib/aiuto/AiutoLink.svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { estraiSegnaposti, compila } from "$lib/template";
 
@@ -184,7 +185,10 @@
     <!-- Sinistra: form valori -->
     <aside class="form">
       <header class="sez-h">
-        <span>SEGNAPOSTI</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px;">
+          <span>SEGNAPOSTI</span>
+          <AiutoLink chiave="glossario-sintassi" dimensione={16} />
+        </span>
         <span class="count">{compilatiNonGlobali}/{totaleNonGlobali}</span>
       </header>
 
@@ -208,14 +212,17 @@
 
       {#if totaleGlobali > 0}
         <header class="sez-h sez-h-globali">
-          <button
-            type="button"
-            class="toggle-globali"
-            onclick={() => (mostraGlobali = !mostraGlobali)}
-            aria-expanded={mostraGlobali}
-          >
-            {mostraGlobali ? "▾" : "▸"} GLOBALI
-          </button>
+          <span style="display: inline-flex; align-items: center; gap: 6px;">
+            <button
+              type="button"
+              class="toggle-globali"
+              onclick={() => (mostraGlobali = !mostraGlobali)}
+              aria-expanded={mostraGlobali}
+            >
+              {mostraGlobali ? "▾" : "▸"} GLOBALI
+            </button>
+            <AiutoLink chiave="segnaposti-globali" dimensione={16} />
+          </span>
           <span class="count">{totaleGlobali}</span>
         </header>
         {#if mostraGlobali}

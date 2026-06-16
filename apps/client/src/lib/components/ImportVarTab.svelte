@@ -15,6 +15,7 @@
    * - Blueprint F5 PR-E §5
    */
   import { invoke } from "@tauri-apps/api/core";
+  import AiutoLink from "$lib/aiuto/AiutoLink.svelte";
   import { onDestroy, onMount } from "svelte";
   import { GitFork, FileText, Eye } from "lucide-svelte";
   import { estraiImports } from "$lib/util/estrai-imports";
@@ -122,8 +123,11 @@
   <!-- Sezione Import composti -->
   <section class="sez">
     <header class="sez-h">
-      <FileText size={12} />
-      <span>IMPORT COMPOSTI</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px;">
+        <FileText size={12} />
+        <span>IMPORT COMPOSTI</span>
+        <AiutoLink chiave="prompt-componibili" dimensione={16} />
+      </span>
       <span class="count">{importsPath.length}</span>
     </header>
     {#if importsPath.length === 0}
@@ -165,7 +169,10 @@
   <!-- Sezione Varianti A/B/C -->
   <section class="sez">
     <header class="sez-h">
-      <span>VARIANTI A/B/C</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px;">
+        <span>VARIANTI A/B/C</span>
+        <AiutoLink chiave="varianti" dimensione={16} />
+      </span>
       <span class="count">{varianti.length}</span>
       {#if varianti.length > 1}
         <label class="confronta-toggle">
