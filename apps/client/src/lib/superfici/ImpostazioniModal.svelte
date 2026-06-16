@@ -45,6 +45,7 @@
     Database,
   } from "lucide-svelte";
   import Modale from "$lib/components/Modale.svelte";
+  import AiutoSezione from "$lib/aiuto/AiutoSezione.svelte";
   import PannelloProviderConfig from "$lib/components/PannelloProviderConfig.svelte";
   import HotkeyInput from "$lib/components/HotkeyInput.svelte";
   import LogViewer from "$lib/components/LogViewer.svelte";
@@ -81,7 +82,8 @@
     | "sicurezza"
     | "dati"
     | "avanzate"
-    | "sviluppo";
+    | "sviluppo"
+    | "guida";
   type SubSezioneId =
     | "provider"
     | "embeddings"
@@ -507,6 +509,22 @@
         "zip",
         "tracing",
         "beta",
+      ],
+    },
+    {
+      id: "guida",
+      label: "Guida e aiuto",
+      keywords: [
+        "guida",
+        "aiuto",
+        "help",
+        "tutorial",
+        "tour",
+        "documentazione",
+        "docs",
+        "manuale",
+        "scorciatoie",
+        "faq",
       ],
     },
   ];
@@ -2474,6 +2492,8 @@
             {/if}
           </div>
         </div>
+      {:else if sezione === "guida"}
+        <AiutoSezione />
       {/if}
     </section>
   </div>

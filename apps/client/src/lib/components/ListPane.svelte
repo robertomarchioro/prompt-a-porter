@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { urlDoc } from "$lib/aiuto/docs-links";
   import { onMount, onDestroy } from "svelte";
   import {
     ChevronsLeft,
@@ -433,6 +434,14 @@
         <p class="empty-hint">
           Prova a rimuovere alcuni filtri o cerca con parole diverse.
         </p>
+        <p class="empty-hint">
+          Sei all'inizio? <a
+            class="empty-link"
+            href={urlDoc("getting-started")}
+            target="_blank"
+            rel="noopener noreferrer">Leggi la guida ai primi passi ↗</a
+          >
+        </p>
       </div>
     {:else}
       {#each prompts as p, idx (p.id)}
@@ -742,6 +751,22 @@
     font-size: var(--fs-xs);
     color: var(--text-subtle);
     margin: 0;
+  }
+
+  .empty-link {
+    color: var(--accent-private);
+    text-decoration: none;
+  }
+
+  .empty-link:hover,
+  .empty-link:focus-visible {
+    text-decoration: underline;
+  }
+
+  .empty-link:focus-visible {
+    outline: 2px solid var(--accent-private);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 
   .card-wrap {
