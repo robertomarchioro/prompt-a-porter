@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { urlDoc } from "$lib/aiuto/docs-links";
+  import AiutoLink from "$lib/aiuto/AiutoLink.svelte";
   import { onMount, onDestroy } from "svelte";
   import {
     ChevronsLeft,
@@ -341,6 +342,7 @@
           bind:value={cerca}
         />
       </div>
+      <AiutoLink chiave="ricerca-semantica" dimensione={18} />
       <button
         class="btn-nuovo"
         type="button"

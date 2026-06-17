@@ -2,7 +2,7 @@
   import { statoTema, salvaTemaTono } from "$lib/stores/preferenze.svelte";
   import { apriModale } from "$lib/stores/modale.svelte";
   import { fmtShortcut } from "$lib/util/shortcut";
-  import { Sun, Moon, Settings } from "lucide-svelte";
+  import { Sun, Moon, Settings, HelpCircle } from "lucide-svelte";
 
   function toggleTema(): void {
     const successivo = statoTema.tema === "dark" ? "light" : "dark";
@@ -12,6 +12,10 @@
 
   function apriImpostazioni(): void {
     apriModale({ tipo: "impostazioni" });
+  }
+
+  function apriGuida(): void {
+    apriModale({ tipo: "impostazioni", sezione: "guida" });
   }
 </script>
 
@@ -33,6 +37,15 @@
       {:else}
         <Moon size={16} />
       {/if}
+    </button>
+    <button
+      type="button"
+      class="icon-button"
+      aria-label="Guida e aiuto"
+      title="Guida e aiuto"
+      onclick={apriGuida}
+    >
+      <HelpCircle size={16} />
     </button>
     <button
       type="button"
