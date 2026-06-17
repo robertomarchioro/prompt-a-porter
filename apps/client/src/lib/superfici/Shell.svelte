@@ -55,6 +55,24 @@
     COL_LIST_MIN,
     COL_LIST_MAX,
   } from "$lib/stores/shell-layout";
+  import {
+    tourRichiesta,
+    consumaRichiesta,
+    eseguiTourBenvenuto,
+  } from "$lib/aiuto/tour.svelte";
+
+  // Fase 1 guida: l'hub Guida vive dentro la modale Impostazioni, che coprirebbe
+  // gli elementi da evidenziare. Quando il tour viene richiesto, chiudiamo la
+  // modale e — dopo che è smontata — avviamo il tour spotlight sugli elementi
+  // dello Shell (i target sono ancorati via `data-tour`).
+  $effect(() => {
+    if (!tourRichiesta.attiva) return;
+    consumaRichiesta();
+    chiudiModale();
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => eseguiTourBenvenuto()),
+    );
+  });
 
   // F2: stato collapsed sidebar + gruppi NavGroup, persistito in localStorage.
   let stato = $state<StatoSidebar>(caricaStatoSidebar());
