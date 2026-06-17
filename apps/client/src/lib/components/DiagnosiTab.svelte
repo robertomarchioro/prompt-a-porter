@@ -11,6 +11,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onDestroy } from "svelte";
   import { AlertCircle, AlertTriangle, Info } from "lucide-svelte";
+  import AiutoLink from "$lib/aiuto/AiutoLink.svelte";
   import { leggiCategorieDisabilitate } from "$lib/preferenze-linter";
 
   type Severita = "Error" | "Warning" | "Info";
@@ -107,6 +108,10 @@
 </script>
 
 <div class="diagnosi-tab">
+  <header class="diagnosi-h">
+    <span>Linter</span>
+    <AiutoLink chiave="linting" dimensione={16} />
+  </header>
   {#if caricamento && issues.length === 0}
     <div class="vuoto">
       <p>Analisi in corso…</p>
@@ -160,6 +165,17 @@
     overflow-y: auto;
     padding: var(--sp-2);
     background: var(--bg-canvas);
+  }
+
+  .diagnosi-h {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: var(--sp-2);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-medium);
+    text-transform: uppercase;
+    color: var(--text-subtle);
   }
 
   .vuoto {
