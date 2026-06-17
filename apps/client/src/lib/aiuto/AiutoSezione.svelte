@@ -5,6 +5,7 @@
   // solo le porte d'ingresso. Il tour guidato (Fase 1) si aggancerà qui.
   import { urlDoc, titoloDoc, type ChiaveDoc } from "./docs-links";
   import { richiediTourBenvenuto } from "./tour.svelte";
+  import { Play } from "lucide-svelte";
 
   interface Gruppo {
     titolo: string;
@@ -42,7 +43,7 @@
 </p>
 
 <button type="button" class="tour-btn" onclick={richiediTourBenvenuto}>
-  <span aria-hidden="true">▶</span> Avvia il tour guidato dell'interfaccia
+  <Play size={14} aria-hidden="true" /> Avvia il tour guidato dell'interfaccia
 </button>
 
 {#each gruppi as gruppo (gruppo.titolo)}

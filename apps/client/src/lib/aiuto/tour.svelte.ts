@@ -51,7 +51,7 @@ export function consumaRichiesta(): void {
   _richiesta = false;
 }
 
-const PASSI: DriveStep[] = [
+const PASSI: readonly DriveStep[] = [
   {
     element: '[data-tour="sidebar"]',
     popover: {
@@ -103,26 +103,39 @@ const PASSI: DriveStep[] = [
   },
 ];
 
+// Driver attivo: evita due overlay sovrapposti se il tour viene avviato due
+// volte di fila (es. doppio click su "Avvia").
+let driverAttivo: ReturnType<typeof driver> | null = null;
+
 /**
  * Esegue il tour di benvenuto. Va chiamato quando gli elementi target sono
  * visibili (nessuna modale aperta sopra lo Shell).
  */
 export function eseguiTourBenvenuto(): void {
-  const d = driver({
+  if (typeof document === "undefined") return;
+  // Annulla un eventuale tour già in corso prima di avviarne un altro.
+  driverAttivo?.destroy();
+
+  // Tiene solo i passi il cui elemento è effettivamente in pagina (robustezza
+  // se un pannello non è montato, es. editor senza prompt selezionato).
+  const passi = PASSI.filter(
+    (p) =>
+      typeof p.element === "string" &&
+      document.querySelector(p.element) !== null,
+  );
+
+  driverAttivo = driver({
     showProgress: true,
     progressText: "{{current}} di {{total}}",
     nextBtnText: "Avanti",
     prevBtnText: "Indietro",
     doneBtnText: "Fine",
     popoverClass: "pap-tour",
-    // Salta in automatico i passi il cui elemento non è in pagina, invece di
-    // bloccarsi (robustezza se un pannello non è montato).
-    steps: PASSI.filter((p) =>
-      typeof document === "undefined"
-        ? true
-        : document.querySelector(p.element as string) !== null,
-    ),
-    onDestroyed: () => segnaVisto(),
+    steps: passi,
+    onDestroyed: () => {
+      segnaVisto();
+      driverAttivo = null;
+    },
   });
-  d.drive();
+  driverAttivo.drive();
 }
