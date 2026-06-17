@@ -37,6 +37,7 @@
   import ImpostazioniModal from "$lib/superfici/ImpostazioniModal.svelte";
   import PaletteModal from "$lib/superfici/PaletteModal.svelte";
   import NuovaCartellaModal from "$lib/superfici/NuovaCartellaModal.svelte";
+  import TourPrompt from "$lib/aiuto/TourPrompt.svelte";
   import {
     statoModale,
     chiudiModale,
@@ -427,6 +428,9 @@
 {#if statoModale.attiva?.tipo === "nuova-cartella"}
   <NuovaCartellaModal onChiudi={chiudiModale} />
 {/if}
+
+<!-- Guida (Fase 1 PR-2): invito al tour di benvenuto per chi non l'ha visto. -->
+<TourPrompt />
 
 <style>
   .shell-root {
