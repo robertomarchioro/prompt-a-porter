@@ -16,6 +16,7 @@
    */
   import { invoke } from "@tauri-apps/api/core";
   import AiutoLink from "$lib/aiuto/AiutoLink.svelte";
+  import { offriMicroTour } from "$lib/aiuto/tour.svelte";
   import { onDestroy, onMount } from "svelte";
   import { GitFork, FileText, Eye } from "lucide-svelte";
   import { estraiImports } from "$lib/util/estrai-imports";
@@ -97,12 +98,18 @@
     void risolviImports(importsPath);
   }
 
+  // Micro-tour offerto alla prima apertura della tab Import/Varianti.
+  // `offriMicroTour` restituisce sempre un cleanup (no-op se già visto).
+  let stopMicroTour: () => void = () => {};
+
   onMount(() => {
     window.addEventListener("pap:lista-mutata", gestListaMutata);
+    stopMicroTour = offriMicroTour("import");
   });
 
   onDestroy(() => {
     window.removeEventListener("pap:lista-mutata", gestListaMutata);
+    stopMicroTour();
   });
 
   function apriPrompt(id: string): void {
@@ -122,7 +129,7 @@
 <div class="iv-tab">
   <!-- Sezione Import composti -->
   <section class="sez">
-    <header class="sez-h">
+    <header class="sez-h" data-tour="iv-import">
       <span style="display: inline-flex; align-items: center; gap: 6px;">
         <FileText size={12} />
         <span>IMPORT COMPOSTI</span>
@@ -168,7 +175,7 @@
 
   <!-- Sezione Varianti A/B/C -->
   <section class="sez">
-    <header class="sez-h">
+    <header class="sez-h" data-tour="iv-varianti">
       <span style="display: inline-flex; align-items: center; gap: 6px;">
         <span>VARIANTI A/B/C</span>
         <AiutoLink chiave="varianti" dimensione={16} />
