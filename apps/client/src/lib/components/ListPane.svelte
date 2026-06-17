@@ -333,7 +333,7 @@
     </div>
 
     <div class="search-row">
-      <div class="search-wrap">
+      <div class="search-wrap" data-tour="ricerca">
         <Search size={14} class="search-ico" />
         <input
           class="search-input"
@@ -346,6 +346,7 @@
       <button
         class="btn-nuovo"
         type="button"
+        data-tour="nuovo-prompt"
         onclick={creaNuovoPrompt}
         title="Crea nuovo prompt"
       >

@@ -517,7 +517,7 @@
     <p>{erroreCaricamento}</p>
   </div>
 {:else if dettaglio}
-  <article class="detail-pane">
+  <article class="detail-pane" data-tour="editor">
     <header class="detail-header">
       <div class="title-row">
         <input

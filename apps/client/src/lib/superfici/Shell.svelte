@@ -20,7 +20,7 @@
    * (248/320px) ed era confuso da `collapsedSize=0` (vedi issue #137:
    * drag invertito + lista che spariva del tutto).
    */
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, untrack } from "svelte";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { ChevronsRight } from "lucide-svelte";
   import TitleBar from "$lib/components/TitleBar.svelte";
@@ -55,6 +55,35 @@
     COL_LIST_MIN,
     COL_LIST_MAX,
   } from "$lib/stores/shell-layout";
+  import {
+    tourRichiesta,
+    consumaRichiesta,
+    eseguiTourBenvenuto,
+  } from "$lib/aiuto/tour.svelte";
+
+  // Fase 1 guida: l'hub Guida vive dentro la modale Impostazioni, che coprirebbe
+  // gli elementi da evidenziare. Quando il tour viene richiesto, chiudiamo la
+  // modale e — dopo che è smontata — avviamo il tour spotlight sugli elementi
+  // dello Shell (i target sono ancorati via `data-tour`).
+  $effect(() => {
+    if (!tourRichiesta.attiva) return;
+    let rafOuter = 0;
+    let rafInner = 0;
+    // untrack: leggiamo `tourRichiesta.attiva` per la dipendenza reattiva, ma le
+    // mutazioni (consuma/chiudiModale) NON devono ri-sottoscrivere l'effetto
+    // (footgun documentato in feedback_svelte5_untrack_effect).
+    untrack(() => {
+      consumaRichiesta();
+      chiudiModale();
+      rafOuter = requestAnimationFrame(() => {
+        rafInner = requestAnimationFrame(() => eseguiTourBenvenuto());
+      });
+    });
+    return () => {
+      cancelAnimationFrame(rafOuter);
+      cancelAnimationFrame(rafInner);
+    };
+  });
 
   // F2: stato collapsed sidebar + gruppi NavGroup, persistito in localStorage.
   let stato = $state<StatoSidebar>(caricaStatoSidebar());

@@ -1,0 +1,58 @@
+/* Guida interattiva — Fase 1: tema del popover driver.js allineato ai token
+ * dell'app. driver.js inietta il suo DOM fuori dall'albero dei componenti
+ * Svelte, quindi questi override sono globali (classe `pap-tour`). */
+
+.driver-popover.pap-tour {
+  background: var(--bg-raised);
+  color: var(--text-default);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-lg, 0 8px 30px rgba(0, 0, 0, 0.18));
+  max-width: 320px;
+}
+
+.driver-popover.pap-tour .driver-popover-title {
+  color: var(--text-strong);
+  font-weight: var(--fw-semibold, 600);
+  font-size: var(--fs-sm, 0.9rem);
+}
+
+.driver-popover.pap-tour .driver-popover-description {
+  color: var(--text-muted);
+  font-size: var(--fs-xs, 0.82rem);
+  line-height: 1.45;
+}
+
+.driver-popover.pap-tour .driver-popover-progress-text {
+  color: var(--text-subtle);
+  font-size: var(--fs-xs, 0.78rem);
+}
+
+.driver-popover.pap-tour .driver-popover-navigation-btns button {
+  background: var(--bg-input);
+  color: var(--text-default);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm, 6px);
+  text-shadow: none;
+  font-size: var(--fs-xs, 0.82rem);
+  padding: 4px 10px;
+}
+
+.driver-popover.pap-tour .driver-popover-navigation-btns button:hover {
+  background: var(--accent-private-soft);
+  border-color: var(--accent-private);
+  color: var(--accent-private);
+}
+
+.driver-popover.pap-tour .driver-popover-close-btn {
+  color: var(--text-subtle);
+}
+
+.driver-popover.pap-tour .driver-popover-close-btn:hover {
+  color: var(--text-default);
+}
+
+/* Arrow del popover allineata allo sfondo del tema */
+.driver-popover.pap-tour .driver-popover-arrow {
+  border-color: var(--bg-raised);
+}

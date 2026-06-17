@@ -41,6 +41,7 @@
     <button
       type="button"
       class="icon-button"
+      data-tour="aiuto"
       aria-label="Guida e aiuto"
       title="Guida e aiuto"
       onclick={apriGuida}

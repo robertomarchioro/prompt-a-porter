@@ -104,7 +104,7 @@
   });
 </script>
 
-<aside class="sidebar">
+<aside class="sidebar" data-tour="sidebar">
   <div class="sidebar-top">
     <WorkspaceSwitcher nome="Personale" />
     <button

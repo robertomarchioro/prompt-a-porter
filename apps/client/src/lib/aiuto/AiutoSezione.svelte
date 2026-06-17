@@ -4,6 +4,8 @@
   // documentazione utente, raggruppati per tema. La profondità sta online; qui
   // solo le porte d'ingresso. Il tour guidato (Fase 1) si aggancerà qui.
   import { urlDoc, titoloDoc, type ChiaveDoc } from "./docs-links";
+  import { richiediTourBenvenuto } from "./tour.svelte";
+  import { Play } from "lucide-svelte";
 
   interface Gruppo {
     titolo: string;
@@ -37,8 +39,12 @@
 <h3>Guida e aiuto</h3>
 <p class="hint">
   Spiegazioni brevi qui dentro, approfondimenti nella documentazione online (si
-  apre nel browser). Presto arriverà anche un tour guidato dell'interfaccia.
+  apre nel browser).
 </p>
+
+<button type="button" class="tour-btn" onclick={richiediTourBenvenuto}>
+  <Play size={14} aria-hidden="true" /> Avvia il tour guidato dell'interfaccia
+</button>
 
 {#each gruppi as gruppo (gruppo.titolo)}
   <div class="campo">
@@ -63,6 +69,34 @@
 {/each}
 
 <style>
+  .tour-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0.25rem 0 0.75rem;
+    padding: 0.45rem 0.8rem;
+    border: 1px solid var(--accent-private);
+    border-radius: var(--radius-sm, 6px);
+    background: var(--accent-private-soft);
+    color: var(--accent-private);
+    font-size: var(--fs-sm, 0.9rem);
+    font-weight: var(--fw-medium, 500);
+    cursor: pointer;
+    transition:
+      background 0.12s ease,
+      color 0.12s ease;
+  }
+
+  .tour-btn:hover {
+    background: var(--accent-private);
+    color: var(--accent-private-on);
+  }
+
+  .tour-btn:focus-visible {
+    outline: 2px solid var(--accent-private);
+    outline-offset: 2px;
+  }
+
   .aiuto-elenco {
     list-style: none;
     margin: 0.25rem 0 0;
