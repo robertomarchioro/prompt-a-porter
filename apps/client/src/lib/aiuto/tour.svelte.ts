@@ -17,7 +17,8 @@ export function tourBenvenutoVisto(): boolean {
   return localStorage.getItem(KEY_VISTO) === String(VERSIONE);
 }
 
-function segnaVisto(): void {
+/** Segna il tour come visto (su completamento/chiusura o su "Non ora"). */
+export function segnaTourBenvenutoVisto(): void {
   try {
     localStorage.setItem(KEY_VISTO, String(VERSIONE));
   } catch {
@@ -133,7 +134,7 @@ export function eseguiTourBenvenuto(): void {
     popoverClass: "pap-tour",
     steps: passi,
     onDestroyed: () => {
-      segnaVisto();
+      segnaTourBenvenutoVisto();
       driverAttivo = null;
     },
   });
