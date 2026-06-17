@@ -1,13 +1,14 @@
 # Changelog — Prompt a Porter
 
-## v0.8.20 — Cestino prompt + warning cancellazione import (2026-06-15)
+## v0.8.20 — Cestino, warning import e guida interattiva (2026-06-17)
 
-> 2 feature di sicurezza sulla cancellazione (#302 cestino, #303 warning import) + 2 fix di syntax highlighting (#353, #304) + manutenzione dipendenze. #334 (CLI Go 1.25) resta rinviata (golangci-lint non ancora pronto per go1.25).
+> 3 feature (#302 cestino, #303 warning import, guida/tutorial interattivo) + 2 fix di syntax highlighting (#353, #304) + manutenzione dipendenze/CI. #334 (CLI Go 1.25) resta rinviata (golangci-lint non ancora pronto per go1.25).
 
 ### Feature
 
 - **Cestino prompt** (#302): i prompt cancellati non spariscono più definitivamente ma finiscono in un **Cestino** (nuova vista nella sidebar, gruppo VISTE) da cui si possono **ripristinare** o **eliminare in modo definitivo**, oltre a uno **svuota** complessivo. Backend `cestino.rs` (`cestino_lista`/`prompt_ripristina`/`prompt_elimina_definitivo`/`cestino_svuota`); la cancellazione era già soft-delete (`DeletedAt`), quindi i dati erano già conservati. Fix correlato: la cancellazione non distrugge più i tag associati, così il ripristino li riporta intatti. L'eliminazione definitiva è una purge fisica in transazione (versioni, import, rating, golden; varianti/fork promossi a indipendenti).
 - **Warning cancellazione prompt importati** (#303): cancellando un prompt **referenziato da altri** via `{{import}}`, ora compare un avviso con la **lista dei prompt impattati** e l'opzione di **rimuovere in massa** quegli import prima di cancellare (invece di lasciare riferimenti rotti). Backend `prompt_dipendenti` + `import_rimuovi_da_dipendenti` (rimozione dei token import dal body dei dipendenti, in transazione, con snapshot di versione). Primo taglio: *annulla* oppure *rimuovi gli import e cancella*; la sostituzione con un altro prompt da dropdown è rinviata.
+- **Guida interattiva in-app** (#364-#367): nuovo sistema di aiuto a strati. Un pulsante **"?"** sempre visibile nel titlebar apre l'hub **"Guida e aiuto"** (in Impostazioni) con i link alla documentazione raggruppati per tema; badge **"?"** contestuali accanto ai pannelli più ostici (segnaposti, globali, golden/test, import componibili, varianti, ricerca, linter) aprono la pagina giusta nel browser; e un **tour guidato di benvenuto** (driver.js) evidenzia passo-passo le aree chiave dell'interfaccia (lanciabile dall'hub). I link puntano per ora alla documentazione su GitHub, switchabili al sito dedicato in un solo punto (`docs-links.ts`).
 
 ### Fix
 
@@ -17,6 +18,7 @@
 ### Manutenzione
 
 - **Aggiornamenti dipendenze e CI**: bump `@types/node` 22→25 e `better-sqlite3` 11→12 (dev), e delle GitHub Actions `pnpm/action-setup` 4→6 e `actions/setup-node` 4→6. Aggiunto un `ignore` per `dtolnay/rust-toolchain` in Dependabot (il toolchain Rust è gestito a mano in lockstep tra workflow e `rust-toolchain.toml`).
+- **Pulizia canary**: rimosso il job obsoleto `rust-pinfree` dal `dep-canary` (i pin brotli erano già stati rimossi), che faceva fallire il canary a ogni run schedulato.
 
 > 1 issue (#333) dal triage delle migrazioni dipendenze + pulizia dei pin brotli temporanei segnalata dal canary; #334 (CLI Go 1.25) rinviata (ecosistema golangci-lint non ancora pronto per go1.25).
 
