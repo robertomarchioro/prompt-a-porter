@@ -1,5 +1,13 @@
 # Changelog — Prompt a Porter
 
+## v0.8.22 — Fix: il tour di benvenuto non partiva (2026-06-18)
+
+> Hotfix della guida: il pulsante "Avvia il tour" non faceva nulla (regressione runtime non coperta dalla CI, che valida solo build/type). Il tour di benvenuto ora parte regolarmente.
+
+### Fix
+
+- **Il tour di benvenuto non partiva dal pulsante** (#370): premendo "Avvia il tour" (dall'hub **Guida e aiuto** o dall'invito post-onboarding) non succedeva nulla. L'`$effect` di `Shell` che avvia il tour annullava i `requestAnimationFrame` nel proprio *cleanup*: `consumaRichiesta()` rimette il flag della richiesta a `false` dentro `untrack`, ma `untrack` sopprime solo la raccolta delle dipendenze in lettura, **non** la notifica di scrittura — quindi l'effect si ri-eseguiva e Svelte lanciava il cleanup del run precedente, annullando i rAF *prima* che il tour partisse. Spostata la cancellazione dei rAF in `onDestroy` (solo smontaggio reale di `Shell`), con dedup dei click ravvicinati. Il micro-tour per-feature (#369) non era affetto (schedula i rAF fuori da un `$effect`).
+
 ## v0.8.21 — Tour guidato: offerta automatica e micro-tour (2026-06-18)
 
 > Completa la guida interattiva (Fase 1): il tour di benvenuto ora viene **offerto** automaticamente al primo utilizzo e nascono i primi **micro-tour** contestuali per-feature.
