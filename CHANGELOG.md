@@ -1,5 +1,14 @@
 # Changelog — Prompt a Porter
 
+## v0.8.21 — Tour guidato: offerta automatica e micro-tour (2026-06-18)
+
+> Completa la guida interattiva (Fase 1): il tour di benvenuto ora viene **offerto** automaticamente al primo utilizzo e nascono i primi **micro-tour** contestuali per-feature.
+
+### Feature
+
+- **Invito automatico al tour di benvenuto** (#368): la prima volta che si raggiunge la libreria senza aver mai visto il tour (tipicamente subito dopo l'onboarding) compare un **invito non invadente** in basso a destra — *offerto, mai forzato*. "Avvia il tour" lancia il tour spotlight di benvenuto; "Non ora" lo nasconde e non si ripropone più (il tour resta sempre rilanciabile da **Impostazioni → Guida e aiuto**). Realizzato come toast cortese (`role=status`/`aria-live=polite`) che **non cattura il focus**, per non risultare invadente subito dopo la configurazione.
+- **Micro-tour contestuali per-feature** (#369): tour brevi (2 passi) offerti alla **prima apertura** di un'area avanzata, per imparare "appena prima del bisogno" invece di tutto all'inizio. Il primo micro-tour è sulla tab **Import componibili / Varianti A/B/C**: alla prima apertura evidenzia le due sezioni e cosa farci. L'infrastruttura è generalizzata (registro dei tour + flag "già visto" versionato per ciascuno), pronta per aggiungerne altri quando le rispettive aree maturano.
+
 ## v0.8.20 — Cestino, warning import e guida interattiva (2026-06-17)
 
 > 3 feature (#302 cestino, #303 warning import, guida/tutorial interattivo) + 2 fix di syntax highlighting (#353, #304) + manutenzione dipendenze/CI. #334 (CLI Go 1.25) resta rinviata (golangci-lint non ancora pronto per go1.25).
