@@ -66,24 +66,23 @@
   // gli elementi da evidenziare. Quando il tour viene richiesto, chiudiamo la
   // modale e — dopo che è smontata — avviamo il tour spotlight sugli elementi
   // dello Shell (i target sono ancorati via `data-tour`).
+  // rAF per ritardare il tour finché la modale è smontata. Cancellato SOLO in
+  // onDestroy (smontaggio reale di Shell), MAI nel cleanup dell'$effect: sotto,
+  // `consumaRichiesta()` rimette `tourRichiesta.attiva` a false e ciò ri-esegue
+  // l'$effect; se la cancellazione vivesse nel cleanup, il re-run annullerebbe
+  // i rAF PRIMA che il tour parta → "non succede nulla" (untrack non sopprime la
+  // notifica di scrittura). Vedi feedback_svelte5_untrack_effect.
+  let tourRaf = 0;
   $effect(() => {
     if (!tourRichiesta.attiva) return;
-    let rafOuter = 0;
-    let rafInner = 0;
-    // untrack: leggiamo `tourRichiesta.attiva` per la dipendenza reattiva, ma le
-    // mutazioni (consuma/chiudiModale) NON devono ri-sottoscrivere l'effetto
-    // (footgun documentato in feedback_svelte5_untrack_effect).
     untrack(() => {
       consumaRichiesta();
       chiudiModale();
-      rafOuter = requestAnimationFrame(() => {
-        rafInner = requestAnimationFrame(() => eseguiTourBenvenuto());
+      cancelAnimationFrame(tourRaf);
+      tourRaf = requestAnimationFrame(() => {
+        tourRaf = requestAnimationFrame(() => eseguiTourBenvenuto());
       });
     });
-    return () => {
-      cancelAnimationFrame(rafOuter);
-      cancelAnimationFrame(rafInner);
-    };
   });
 
   // F2: stato collapsed sidebar + gruppi NavGroup, persistito in localStorage.
@@ -258,6 +257,7 @@
     window.removeEventListener("pap:apri-prompt", onApriPrompt);
     window.removeEventListener("keydown", onShortcutGlobale);
     window.removeEventListener("pointermove", onPointerMoveResizer);
+    cancelAnimationFrame(tourRaf);
     unlistenTray.forEach((u) => u());
     unlistenTray = [];
   });
