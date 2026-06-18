@@ -14,6 +14,7 @@
   import { onMount, untrack } from "svelte";
   import { Frown, Meh, Smile, Copy, Check, Globe } from "lucide-svelte";
   import { estraiSegnaposti, compila, contaCompilati } from "$lib/template";
+  import { segnaPasso } from "$lib/aiuto/primi-passi.svelte";
   import Modale from "$lib/components/Modale.svelte";
   import { fmtShortcut } from "$lib/util/shortcut";
 
@@ -256,6 +257,7 @@
     try {
       await persistiGlobaliSeModificati();
       await navigator.clipboard.writeText(output);
+      segnaPasso("compila"); // Guida — checklist: ha compilato e usato l'output
       copiato = true;
       setTimeout(() => (copiato = false), 1500);
     } catch (e) {

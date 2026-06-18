@@ -2,6 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { urlDoc } from "$lib/aiuto/docs-links";
   import AiutoLink from "$lib/aiuto/AiutoLink.svelte";
+  import { segnaPasso } from "$lib/aiuto/primi-passi.svelte";
   import { onMount, onDestroy } from "svelte";
   import {
     ChevronsLeft,
@@ -253,6 +254,7 @@
       // prompt nel DetailPane.
       window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
       onSelezionaPrompt(id);
+      segnaPasso("crea"); // Guida — checklist primi passi
     } catch (e) {
       console.error("[list-pane] crea prompt fallito", e);
     }

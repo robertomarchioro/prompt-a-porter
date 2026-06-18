@@ -61,10 +61,7 @@
 
 <style>
   .tour-invito {
-    position: fixed;
-    right: 20px;
-    bottom: 20px;
-    z-index: 2000;
+    position: relative;
     width: 320px;
     max-width: calc(100vw - 40px);
     padding: 16px;

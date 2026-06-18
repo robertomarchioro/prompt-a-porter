@@ -18,6 +18,7 @@
   import Button from "$lib/components/Button.svelte";
   import { apriModale } from "$lib/stores/modale.svelte";
   import { statoEditor } from "$lib/stores/preferenze.svelte";
+  import { segnaPasso } from "$lib/aiuto/primi-passi.svelte";
 
   const META_KEY = "pap.detail.meta-collapsed";
   function caricaMetaCollapsed(): boolean {
@@ -291,6 +292,14 @@
         dirty = false;
       }
       window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+      // Guida — checklist primi passi: salvataggio su edit reale (non al load),
+      // quindi nessun falso positivo dal vault demo importato. Le due regex sono
+      // disgiunte per import BEN FORMATO ({{import "path"}}): il segnaposto
+      // richiede \w+ subito seguito da }}, che l'import con path tra virgolette
+      // non soddisfa (il caso degenere {{import}} senza path è trascurabile).
+      if (/\{\{\s*import\b/.test(bodyTarget)) segnaPasso("import");
+      if (/\{\{\s*(?:global\s+)?\w+\s*\}\}/.test(bodyTarget))
+        segnaPasso("segnaposto");
       return true;
     } catch (e) {
       console.error("[detail] save", e);
@@ -477,6 +486,7 @@
       ...dettaglio.tags,
       { id: `tmp-${nome}`, nome, colore: "" },
     ];
+    segnaPasso("tag"); // Guida — checklist primi passi
     pianificaAutosave();
   }
 
