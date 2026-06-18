@@ -38,6 +38,7 @@
   import PaletteModal from "$lib/superfici/PaletteModal.svelte";
   import NuovaCartellaModal from "$lib/superfici/NuovaCartellaModal.svelte";
   import TourPrompt from "$lib/aiuto/TourPrompt.svelte";
+  import PrimiPassi from "$lib/aiuto/PrimiPassi.svelte";
   import {
     statoModale,
     chiudiModale,
@@ -429,8 +430,12 @@
   <NuovaCartellaModal onChiudi={chiudiModale} />
 {/if}
 
-<!-- Guida (Fase 1 PR-2): invito al tour di benvenuto per chi non l'ha visto. -->
-<TourPrompt />
+<!-- Guida: stack in basso a destra — invito al tour (Fase 1 PR-2) + checklist
+     primi passi (Fase 3). Impilati per non sovrapporsi. -->
+<div class="aiuto-stack">
+  <TourPrompt />
+  <PrimiPassi />
+</div>
 
 <style>
   .shell-root {
@@ -552,5 +557,18 @@
   .resizer.hidden {
     pointer-events: none;
     background: transparent;
+  }
+
+  /* Stack dei widget di guida in basso a destra (invito tour + primi passi):
+     column-reverse così il più recente sta in basso, gap fra le card. */
+  .aiuto-stack {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 12px;
+    align-items: flex-end;
   }
 </style>
