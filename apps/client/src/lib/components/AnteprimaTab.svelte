@@ -233,7 +233,7 @@
                 <input
                   class="campo-input"
                   type="text"
-                  placeholder={`globale ${s.nome}`}
+                  placeholder={`global ${s.nome}`}
                   bind:value={valoriGlobali[s.nome]}
                 />
               </label>
@@ -266,7 +266,7 @@
                 ? `Segnaposto globale non compilato: ${seg.nome}`
                 : `Segnaposto non compilato: ${seg.nome}`}
               >{seg.globale
-                ? `{{globale ${seg.nome}}}`
+                ? `{{global ${seg.nome}}}`
                 : `{{${seg.nome}}}`}</span>{:else}<span
               class="imp"
               title="Import composto: risolto in fase di Compila & copia"

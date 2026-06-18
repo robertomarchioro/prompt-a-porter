@@ -2124,7 +2124,7 @@
                     <div class="campo">
                       <p class="hint">
                         Definisci valori di default per segnaposti
-                        <code>{`{{globale nome}}`}</code>. Quando un prompt
+                        <code>{`{{global nome}}`}</code>. Quando un prompt
                         usa un segnaposto globale, il suo valore viene
                         pre-riempito automaticamente in Compila e
                         l'eventuale modifica viene salvata come nuovo
@@ -2179,7 +2179,7 @@
                           {#each globaliLista as g (g.name)}
                             <div class="globali-riga" role="row">
                               <code class="globali-nome" title={g.name}>
-                                {`{{globale ${g.name}}}`}
+                                {`{{global ${g.name}}}`}
                               </code>
                               <input
                                 type="text"

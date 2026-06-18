@@ -4,7 +4,7 @@
 
 ## 1. Obiettivo
 
-Un utente nuovo apre Prompt a Porter e si trova davanti un'interfaccia a tre pannelli (sidebar viste/cartelle/tag · lista prompt · editor con CodeMirror) ricca di funzioni non ovvie: segnaposti `{{nome}}`, segnaposti globali `{{globale ...}}`, import componibili `{{import "x" with k=v}}`, varianti A/B, rating, golden/test, cestino, linter, ricerca ibrida. La curva di apprendimento è alta.
+Un utente nuovo apre Prompt a Porter e si trova davanti un'interfaccia a tre pannelli (sidebar viste/cartelle/tag · lista prompt · editor con CodeMirror) ricca di funzioni non ovvie: segnaposti `{{nome}}`, segnaposti globali `{{global ...}}`, import componibili `{{import "x" with k=v}}`, varianti A/B, rating, golden/test, cestino, linter, ricerca ibrida. La curva di apprendimento è alta.
 
 Vogliamo:
 

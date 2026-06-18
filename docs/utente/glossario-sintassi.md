@@ -45,26 +45,26 @@ Riscrivi il seguente testo in tono formale:
 Lingua di output: italiano.
 ```
 
-## Segnaposti globali — `{{globale nome}}`
+## Segnaposti globali — `{{global nome}}`
 
 Valori riusati in molti prompt senza dover ricompilarli ogni volta. Tipici: nome utente, ruolo, azienda, tono editoriale di default.
 
 ```
-Sono {{globale autore}}, responsabile {{globale ruolo}} a {{globale azienda}}.
+Sono {{global autore}}, responsabile {{global ruolo}} a {{global azienda}}.
 ```
 
 I valori dei globali sono gestiti da **Impostazioni → Segnaposti globali**: chiave-valore semplice, condivisi fra tutti i prompt del vault.
 
 **Differenza chiave con i segnaposti normali:**
 
-| Caratteristica | `{{nome}}` (normale) | `{{globale nome}}` |
+| Caratteristica | `{{nome}}` (normale) | `{{global nome}}` |
 |---|---|---|
 | Form di compilazione | Chiede ogni volta | Mai (valore preso dal DB) |
 | Storage | Solo nel testo del prompt | Tabella dedicata `GlobalPlaceholders` |
 | Override per uso | Sì (puoi modificare nel form) | No (per cambiarlo: Impostazioni) |
 | Tipico per | Valori variabili (input, contesto) | Valori stabili (firma, ruolo, azienda) |
 
-Se un globale non esiste nel DB, il testo `{{globale nome}}` resta nel risultato finale (così te ne accorgi e lo aggiungi).
+Se un globale non esiste nel DB, il testo `{{global nome}}` resta nel risultato finale (così te ne accorgi e lo aggiungi).
 
 ## Import — `{{import "path"}}`
 
@@ -146,7 +146,7 @@ Disabilita singole categorie da **Impostazioni → Linter** (la scelta è persis
 ### Email parametrica con globali
 
 ```
-Da: {{globale autore}} <{{globale email}}>
+Da: {{global autore}} <{{global email}}>
 A: {{destinatario}}
 Oggetto: {{oggetto}}
 
@@ -155,7 +155,7 @@ Ciao {{destinatario}},
 {{corpo}}
 
 Cordiali saluti,
-{{globale autore}}
+{{global autore}}
 ```
 
 ### Code review con import del "ruolo"

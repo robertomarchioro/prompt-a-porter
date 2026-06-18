@@ -30,7 +30,7 @@ imports:
 Ciao {{nome_utente}},
 
 benvenuto in {{prodotto}}. Il tuo account è stato attivato il
-{{globale data_attivazione}}.
+{{global data_attivazione}}.
 
 {{import "intestazione/firma-corporate"}}
 ```
@@ -55,7 +55,7 @@ Le chiavi `version`, `created_at`, `updated_at`, `imports` presenti nel front-ma
 Tutto il testo dopo il secondo `---` è il **body del prompt**. Supporta tutte le funzionalità native:
 
 - **Segnaposti** `{{nome}}` (compilati al momento dell'uso)
-- **Segnaposti globali** `{{globale autore}}` (compilati dal DB globale)
+- **Segnaposti globali** `{{global autore}}` (compilati dal DB globale)
 - **Import composti** `{{import "Path/titolo"}}` per riusare altri prompt
 - **Variabili scopate** `{{import "x" with k=v, k2=v2}}` (M4)
 - **Pinning versione** `{{import "x" version=N}}` (M4)

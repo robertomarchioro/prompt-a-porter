@@ -28,5 +28,5 @@ Ricette concrete che mostrano Prompt a Porter all'opera su task reali. Ogni rice
 ## Convenzioni
 
 - I segnaposti sono in `italiano_lowercase_con_underscore`. Sostituisci se preferisci inglese.
-- Quando una ricetta cita `{{globale autore}}` o simili, intende un segnaposto globale da impostare una sola volta in **Impostazioni → Segnaposti globali** (vedi [`glossario-sintassi.md`](../glossario-sintassi.md)).
+- Quando una ricetta cita `{{global autore}}` o simili, intende un segnaposto globale da impostare una sola volta in **Impostazioni → Segnaposti globali** (vedi [`glossario-sintassi.md`](../glossario-sintassi.md)).
 - I modelli target citati (`claude-sonnet`, `gpt-4`, etc.) sono suggerimenti basati su test empirici. Adatta al modello che usi tu.

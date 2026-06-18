@@ -498,12 +498,12 @@ Vedi `TC-COMPILE-001`.
 
 ---
 
-### `TC-PLACEHOLDER-002` 🔴 🎯 Segnaposto globale `{{globale autore}}`
+### `TC-PLACEHOLDER-002` 🔴 🎯 Segnaposto globale `{{global autore}}`
 
 **Setup**: in Impostazioni → Segnaposti globali aggiungi `autore=Mario`.
 
 **Steps**:
-1. Crea prompt con body `"Firmato: {{globale autore}}"`.
+1. Crea prompt con body `"Firmato: {{global autore}}"`.
 2. Apri Compila.
 
 **Atteso**: il form NON chiede `autore` (è globale). Output: `"Firmato: Mario"`.
@@ -524,12 +524,12 @@ Vedi `TC-COMPILE-001`.
 
 ### `TC-PLACEHOLDER-004` 🟡 🧪 Globale assente
 
-**Setup**: prompt usa `{{globale inesistente}}` non definito.
+**Setup**: prompt usa `{{global inesistente}}` non definito.
 
 **Steps**:
 1. Compila.
 
-**Atteso**: il testo `{{globale inesistente}}` resta intatto nel risultato (così l'utente se ne accorge).
+**Atteso**: il testo `{{global inesistente}}` resta intatto nel risultato (così l'utente se ne accorge).
 
 ---
 
@@ -1478,7 +1478,7 @@ Le 6 opzioni configurabili in **Impostazioni → Editor**. Vedi anche `docs/uten
 
 **Steps**: rimuovi entry.
 
-**Atteso**: rimossa. `{{globale ...}}` che la referenziava non viene più risolto.
+**Atteso**: rimossa. `{{global ...}}` che la referenziava non viene più risolto.
 
 ---
 
