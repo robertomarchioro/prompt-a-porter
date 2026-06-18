@@ -34,7 +34,7 @@ Vincoli:
 - Se è una richiesta: chiara, con scadenza esplicita se ha senso.
 - Se è un reclamo: fermo, basato sui fatti, costruttivo.
 
-Firma con: {{globale autore}}.
+Firma con: {{global autore}}.
 ```
 
 ## Esempi di valori

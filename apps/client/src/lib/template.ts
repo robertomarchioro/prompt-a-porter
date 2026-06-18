@@ -1,23 +1,23 @@
 export interface Segnaposto {
   nome: string;
   indice: number;
-  /** Issue #159: true se sintassi `{{globale nome}}`, false se `{{nome}}`. */
+  /** Issue #159: true se sintassi `{{global nome}}`, false se `{{nome}}`. */
   globale: boolean;
 }
 
 /**
- * Issue #159: il prefisso `globale ` (case-sensitive, con spazio
+ * Issue #159: il prefisso `global ` (case-sensitive, con spazio
  * obbligatorio) marca il segnaposto come globale. Il nome stesso resta
  * `\w+` (no underscore-prefix né altri trattamenti speciali).
  *
  * Esempi:
- *   {{nome}}             → normale, nome="nome"
- *   {{ nome }}           → normale, nome="nome" (whitespace permesso)
- *   {{globale autore}}   → globale, nome="autore"
- *   {{globale  autore }} → globale, nome="autore" (whitespace permesso)
- *   {{globaleautore}}    → normale (no spazio dopo "globale")
+ *   {{nome}}            → normale, nome="nome"
+ *   {{ nome }}          → normale, nome="nome" (whitespace permesso)
+ *   {{global autore}}   → globale, nome="autore"
+ *   {{global  autore }} → globale, nome="autore" (whitespace permesso)
+ *   {{globalautore}}    → normale (no spazio dopo "global")
  */
-const RE_SEGNAPOSTO = /\{\{\s*(globale\s+)?(\w+)\s*\}\}/g;
+const RE_SEGNAPOSTO = /\{\{\s*(global\s+)?(\w+)\s*\}\}/g;
 
 export function estraiSegnaposti(body: string): Segnaposto[] {
   const risultati: Segnaposto[] = [];
@@ -28,7 +28,7 @@ export function estraiSegnaposti(body: string): Segnaposto[] {
     const globale = match[1] !== undefined;
     const nome = match[2];
     // Chiave dedup: distingue globale-vs-normale con stesso nome
-    // (in teoria possibile avere {{nome}} e {{globale nome}} nello
+    // (in teoria possibile avere {{nome}} e {{global nome}} nello
     // stesso prompt — sono 2 segnaposti distinti).
     const chiave = globale ? `globale:${nome}` : nome;
     if (!visti.has(chiave)) {
@@ -51,7 +51,7 @@ export function compila(
 ): string {
   return body.replace(RE_SEGNAPOSTO, (_, glob, nome) => {
     if (glob) {
-      return valoriGlobali[nome]?.trim() || `{{globale ${nome}}}`;
+      return valoriGlobali[nome]?.trim() || `{{global ${nome}}}`;
     }
     return valori[nome]?.trim() || `{{${nome}}}`;
   });

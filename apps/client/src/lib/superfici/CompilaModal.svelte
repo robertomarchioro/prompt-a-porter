@@ -47,7 +47,7 @@
   let bodyEspanso = $state<string | null>(null);
   let erroreEspansione = $state<string | null>(null);
   let valori = $state<Record<string, string>>({});
-  // Issue #159: resolver separato per `{{globale nome}}` — pre-fill dal DB.
+  // Issue #159: resolver separato per `{{global nome}}` — pre-fill dal DB.
   let valoriGlobali = $state<Record<string, string>>({});
   // Snapshot dei valori globali al caricamento, per detect dirty su salvataggio.
   let globaliPersistiti = $state<Record<string, string>>({});
@@ -386,7 +386,7 @@
                   </span>
                 {/if}
                 <code>{s.globale
-                    ? `{{globale ${s.nome}}}`
+                    ? `{{global ${s.nome}}}`
                     : `{{${s.nome}}}`}</code>
               </label>
               {#if s.globale}

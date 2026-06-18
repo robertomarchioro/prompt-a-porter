@@ -62,7 +62,7 @@ Indipendente dai due stream prodotto. Asset di marketing/onboarding utenti:
 | `v0.7.0` | 2026-05-08 | rilascio speciale | Refactor coverage + import/cartelle quick wins (6 PR) + 416 test, coverage 74% | ✅ rilasciato | memoria `sprint_v07_chiuso.md` |
 | `v0.8.0` | 2026-05-09 | redesign | Redesign UI completo F0-F11 (17 PR) — sezione Modale, Onboarding, Shell, a11y WCAG 2.1 AA | ✅ rilasciato | memoria `release_v080.md` |
 | `v0.8.1`–`v0.8.4` | 2026-05-09/10 | patch line | Bugfix Win11 multi-issue + retry release CI | ✅ rilasciati | CHANGELOG |
-| `v0.8.5` | 2026-05-10 | patch + feature | Editor UX + tray fix + segnaposti globali `{{globale nome}}` | ✅ rilasciato (Draft GitHub) | memoria `sprint_v085_chiuso.md` |
+| `v0.8.5` | 2026-05-10 | patch + feature | Editor UX + tray fix + segnaposti globali `{{global nome}}` | ✅ rilasciato (Draft GitHub) | memoria `sprint_v085_chiuso.md` |
 | `v0.8.6` | 2026-05-10 | ⚠️ DIFETTOSA | Fix data-loss switch prompt + hardening Go 1.25.10 + chi v5.2.5 — **regressione editor input** | ⚠️ Draft, banner di warning | release notes |
 | `v0.8.7` | 2026-05-10 | ⚠️ DIFETTOSA | Sezione Sviluppo + Debug log Telescope-like — **regressione editor input ereditata** | ⚠️ Draft, banner di warning | memoria `sprint_v087_chiuso.md` |
 | `v0.8.8` | 2026-05-11 | hotfix | Fix #170 editor input bloccato (`untrack()` su `$effect`) | ✅ rilasciato + Latest published | CHANGELOG v0.8.8 |

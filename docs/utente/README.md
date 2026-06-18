@@ -17,7 +17,7 @@ Se sei un nuovo utente, parti da qui:
 | Doc | Descrizione |
 |---|---|
 | [`getting-started.md`](./getting-started.md) | Guida al primo utilizzo: installazione, onboarding, primo prompt e prima compilazione |
-| [`glossario-sintassi.md`](./glossario-sintassi.md) | Reference sintassi body: segnaposti `{{nome}}`, globali `{{globale ...}}`, import `{{import ...}}`, codici linter |
+| [`glossario-sintassi.md`](./glossario-sintassi.md) | Reference sintassi body: segnaposti `{{nome}}`, globali `{{global ...}}`, import `{{import ...}}`, codici linter |
 | [`scorciatoie-tastiera.md`](./scorciatoie-tastiera.md) | Tabelle complete delle scorciatoie attive (shell, palette, modali, editor CodeMirror) |
 | [`casi-uso/`](./casi-uso/README.md) | Ricette pratiche con prompt completi pronti all'uso |
 | [`troubleshooting.md`](./troubleshooting.md) | FAQ + soluzioni a problemi noti (installazione, hotkey, editor, sync, backup) |

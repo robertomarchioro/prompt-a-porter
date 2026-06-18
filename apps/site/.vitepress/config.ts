@@ -5,7 +5,7 @@ import { defineConfig } from "vitepress";
 //
 // `vue.template.compilerOptions.delimiters` ridefinisce i delimitatori
 // Vue da `{{ }}` a `<% %>` cosi' che la sintassi PaP `{{nome}}`,
-// `{{globale ...}}`, `{{import "..."}}` resti testo letterale nei
+// `{{global ...}}`, `{{import "..."}}` resti testo letterale nei
 // documenti (e non venga interpretata come Vue interpolation).
 export default defineConfig({
   vue: {

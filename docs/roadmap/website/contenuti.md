@@ -103,7 +103,7 @@ Premi l'hotkey globale da qualsiasi app: si apre la palette, cerchi il prompt, l
 Ogni save crea una versione. Diff stile git. Torna indietro quando l'ultima modifica ha rovinato tutto.
 
 **Card 2 — Capi su misura**
-`{{nome}}` per variabili ad-hoc, `{{globale autore}}` per valori che vivono nel vault. Il prompt diventa template, il template diventa abito su misura.
+`{{nome}}` per variabili ad-hoc, `{{global autore}}` per valori che vivono nel vault. Il prompt diventa template, il template diventa abito su misura.
 
 **Card 3 — Trova quello giusto. Anche al buio dell'armadio.**
 Cerca per significato, non solo per parola. Modello ONNX MiniLM embedded — niente API, niente cloud, niente quote.

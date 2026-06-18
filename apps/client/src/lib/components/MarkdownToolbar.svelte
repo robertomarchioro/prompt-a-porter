@@ -100,7 +100,7 @@
   }
 
   /**
-   * Issue #159: inserisce `{{globale <nome>}}` alla posizione del cursor.
+   * Issue #159: inserisce `{{global <nome>}}` alla posizione del cursor.
    * Se c'è una selezione, la usa come nome del segnaposto; altrimenti usa
    * "nome" come placeholder e lo seleziona per editing immediato.
    */
@@ -108,11 +108,11 @@
     if (!view) return;
     const { from, to } = view.state.selection.main;
     const sel = view.state.doc.sliceString(from, to) || "nome";
-    const inserito = `{{globale ${sel}}}`;
+    const inserito = `{{global ${sel}}}`;
     view.dispatch({
       changes: { from, to, insert: inserito },
-      // "{{globale " = 10 caratteri → seleziona <sel> per editing
-      selection: { anchor: from + 10, head: from + 10 + sel.length },
+      // "{{global " = 9 caratteri → seleziona <sel> per editing
+      selection: { anchor: from + 9, head: from + 9 + sel.length },
     });
     view.focus();
   }
@@ -242,7 +242,7 @@
   <button
     class="md-btn"
     type="button"
-    title={"Inserisci segnaposto globale ({{globale nome}})"}
+    title={"Inserisci segnaposto globale ({{global nome}})"}
     aria-label="Inserisci segnaposto globale"
     onclick={inserisciVariabileGlobale}
   >

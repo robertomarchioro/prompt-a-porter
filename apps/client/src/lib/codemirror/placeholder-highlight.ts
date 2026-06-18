@@ -8,20 +8,20 @@ import {
 import { RangeSetBuilder } from "@codemirror/state";
 
 /// Regex che riconosce sia `{{nome}}` (segnaposto semplice) sia
-/// `{{globale nome}}` (segnaposto globale, Issue #353).
+/// `{{global nome}}` (segnaposto globale, Issue #353).
 /// Non interferisce con `{{import "..."}}` gestito da import-tokens.ts.
 ///
-/// Il gruppo di cattura 1 è presente solo quando il ramo `globale <nome>` viene
-/// selezionato dall'alternazione; `m[1] === 'globale'` è l'unica sorgente di
+/// Il gruppo di cattura 1 è presente solo quando il ramo `global <nome>` viene
+/// selezionato dall'alternazione; `m[1] === 'global'` è l'unica sorgente di
 /// verità per distinguere segnaposti globali da quelli normali.
 ///
-/// Nota: `{{globale}}` senza nome — la parola chiave sola — non soddisfa il
+/// Nota: `{{global}}` senza nome — la parola chiave sola — non soddisfa il
 /// primo ramo (manca `\s+\w+`) e ricade nel secondo (`\w+`), quindi viene
 /// trattato come segnaposto normale (globale = false). Comportamento intenzionale.
 ///
 /// La costante è usata solo come `.source` per costruire RegExp istanza-locali;
 /// il flag /g qui è assente perché non serve a livello di modulo.
-const RE = /\{\{\s*(?:(globale)\s+\w+|\w+)\s*\}\}/;
+const RE = /\{\{\s*(?:(global)\s+\w+|\w+)\s*\}\}/;
 
 export interface SegnapostoMatch {
   from: number;
@@ -38,8 +38,8 @@ export function _matchSegnaposti(text: string): SegnapostoMatch[] {
   const results: SegnapostoMatch[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
-    // m[1] è definito ('globale') solo quando il ramo globale ha fatto match.
-    const isGlobale = m[1] === "globale";
+    // m[1] è definito ('global') solo quando il ramo globale ha fatto match.
+    const isGlobale = m[1] === "global";
     results.push({ from: m.index, to: m.index + m[0].length, globale: isGlobale });
   }
   return results;

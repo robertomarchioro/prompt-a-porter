@@ -176,7 +176,7 @@ Item con razionale costo/beneficio sfavorevole, conservati come traccia decision
 
 ### Sprint v0.5.0 - v0.8.0
 - ✅ v0.5.0 quick wins UX + 5° provider Gemini; v0.6.0 hardening + linter per-categoria + inline marker; v0.7.0 refactor coverage + import/cartelle quick wins; Redesign UI completo F0-F11 (17 PR) → v0.8.0 (2026-05-09)
-- ✅ Patch v0.8.1-v0.8.4 bugfix Win11; v0.8.5 (editor UX, tray/modelli, `{{globale nome}}`); v0.8.6 hardening sicurezza Go; v0.8.7 sezione Sviluppo + Debug log; v0.8.8 hotfix #170 (`untrack()`)
+- ✅ Patch v0.8.1-v0.8.4 bugfix Win11; v0.8.5 (editor UX, tray/modelli, `{{global nome}}`); v0.8.6 hardening sicurezza Go; v0.8.7 sezione Sviluppo + Debug log; v0.8.8 hotfix #170 (`untrack()`)
 
 ### v1.0 Personale — M1-M8 (v0.8.10 → v0.8.11, 2026-05-16/19)
 - ✅ **M1** signing+updater (Authenticode Certum + Tauri Updater Ed25519); **M2** a11y 18→0 warning; **M3** recupero UI Fase 4; **M4** import evoluta + intellisense; **M5** editor doppia vista; **M6** markdown import/export; **M7** coverage gap (Rust 80%, TS 81%, MCP 100%); **M8** documentazione utente

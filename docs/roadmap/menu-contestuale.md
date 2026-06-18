@@ -196,7 +196,7 @@ Elimina tag                      ❌ backend mancante (disabilitato)
 ```
 Inserisci segnaposto    ▸        ✅ submenu: segnaposti rilevati + globali → inserisciVariabile()
 Inserisci import        ▸        ✅ inserisciImport()
-Inserisci {{globale …}} ▸        ✅ globale_placeholder_lista
+Inserisci {{global …}} ▸        ✅ globale_placeholder_lista
 ──────────
 Taglia / Copia / Incolla         ✅ comandi edit standard (document.execCommand o API CM6)
 Seleziona tutto

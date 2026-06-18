@@ -172,7 +172,7 @@ pub fn parse_imports(body: &str) -> Vec<ImportRef> {
 /// `{{nome}}` (segnaposti non-globali) con il rispettivo value.
 /// Segnaposti senza match nella mappa restano intatti per essere
 /// risolti dal compilatore frontend con i valori utente.
-/// I segnaposti globali (`{{globale nome}}`) NON sono toccati: la
+/// I segnaposti globali (`{{global nome}}`) NON sono toccati: la
 /// loro semantica e' "valore dal DB globale", non override per import.
 fn applica_variabili_scoped(body: &str, vars: &[(String, String)]) -> String {
     if vars.is_empty() {
@@ -186,9 +186,9 @@ fn applica_variabili_scoped(body: &str, vars: &[(String, String)]) -> String {
     });
     re.replace_all(body, |caps: &regex::Captures| {
         let nome = &caps[1];
-        // Skip parola riservata "globale" (e.g. malformed `{{globale}}`
+        // Skip parola riservata "global" (e.g. malformed `{{global}}`
         // senza spazio dopo non lo lasciamo passare come variabile).
-        if nome == "globale" {
+        if nome == "global" {
             return caps[0].to_string();
         }
         // Last-wins per chiavi duplicate
@@ -1175,11 +1175,11 @@ mod test {
     #[test]
     fn applica_variabili_non_tocca_segnaposti_globali() {
         let out = applica_variabili_scoped(
-            "Autore {{globale autore}}, nome {{nome}}.",
+            "Autore {{global autore}}, nome {{nome}}.",
             &[("nome".to_string(), "X".to_string())],
         );
         // globale resta intatto
-        assert_eq!(out, "Autore {{globale autore}}, nome X.");
+        assert_eq!(out, "Autore {{global autore}}, nome X.");
     }
 
     #[test]
