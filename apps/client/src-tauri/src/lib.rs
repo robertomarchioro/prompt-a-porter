@@ -224,11 +224,13 @@ fn is_portable() -> bool {
 fn app_is_portable() -> bool {
     is_portable()
 }
+
 /// Calcola le directory legacy (com.pap.app) e nuova (com.pap.client) per la
 /// migrazione one-shot dei dati utente dopo il rename identifier (#389).
 ///
 /// Restituisce Some((legacy, nuova)) se la migrazione e necessaria:
-/// legacy esiste e nuova NON esiste ancora. Funzione pura (no I/O).
+/// legacy esiste e nuova NON esiste ancora. Nessun side-effect: verifica
+/// solo l'esistenza delle directory, senza creare o modificare nulla.
 pub fn percorso_migrazione_legacy(
     nuova_dir: &std::path::Path,
 ) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
@@ -268,13 +270,20 @@ fn esegui_migrazione_legacy(legacy: &std::path::Path, nuova: &std::path::Path) {
 }
 
 /// Copia ricorsiva di una directory (fallback cross-device).
+/// I symlink vengono ignorati: una vault-dir non deve contenerli e seguirli
+/// potrebbe copiare file fuori dall'albero sorgente o causare cicli infiniti.
 fn copia_dir_ricorsiva(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dst)?;
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
+        let ft = entry.file_type()?;
+        if ft.is_symlink() {
+            // Salta symlink: non seguire out-of-tree; evita loop su symlink ciclici.
+            continue;
+        }
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
-        if src_path.is_dir() {
+        if ft.is_dir() {
             copia_dir_ricorsiva(&src_path, &dst_path)?;
         } else {
             std::fs::copy(&src_path, &dst_path)?;
@@ -681,5 +690,37 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let nuova = tmp.path().join("com.pap.client");
         assert!(percorso_migrazione_legacy(&nuova).is_none());
+    }
+
+    /// Verifica che copia_dir_ricorsiva ignori i symlink invece di seguirli.
+    /// Gated su Unix perché std::os::unix::fs::symlink non esiste su Windows.
+    #[cfg(unix)]
+    #[test]
+    fn copia_dir_ricorsiva_salta_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let src = tmp.path().join("src");
+        let dst = tmp.path().join("dst");
+        std::fs::create_dir_all(&src).unwrap();
+
+        // File normale: deve essere copiato.
+        std::fs::write(src.join("file.txt"), b"ciao").unwrap();
+
+        // Symlink che punta fuori dall'albero: non deve essere copiato.
+        let fuori = tmp.path().join("segreto.txt");
+        std::fs::write(&fuori, b"segreto").unwrap();
+        symlink(&fuori, src.join("link_fuori")).unwrap();
+
+        copia_dir_ricorsiva(&src, &dst).expect("copia ok");
+
+        // Il file normale è stato copiato.
+        assert!(dst.join("file.txt").exists(), "file normale mancante");
+
+        // Il symlink NON è stato copiato (né seguito).
+        assert!(
+            !dst.join("link_fuori").exists(),
+            "il symlink non deve essere copiato nella destinazione"
+        );
     }
 }
