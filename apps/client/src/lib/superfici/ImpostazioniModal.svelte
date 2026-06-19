@@ -33,6 +33,7 @@
     ScrollText,
     RefreshCw,
     Keyboard,
+    ListChecks,
     Download,
     Globe,
     Plus,
@@ -47,6 +48,7 @@
   import Modale from "$lib/components/Modale.svelte";
   import AiutoSezione from "$lib/aiuto/AiutoSezione.svelte";
   import PannelloProviderConfig from "$lib/components/PannelloProviderConfig.svelte";
+  import PannelloLinter from "$lib/components/PannelloLinter.svelte";
   import HotkeyInput from "$lib/components/HotkeyInput.svelte";
   import LogViewer from "$lib/components/LogViewer.svelte";
   import { nomeFileExport, scaricaBlob } from "$lib/util/dati-export";
@@ -90,7 +92,8 @@
     | "audit"
     | "sync"
     | "hotkey"
-    | "globali";
+    | "globali"
+    | "linter";
 
   interface VoceSezione {
     id: SezioneId;
@@ -375,6 +378,20 @@
         "variabili",
         "globale",
         "autore",
+      ],
+    },
+    {
+      id: "linter",
+      label: "Linter",
+      keywords: [
+        "linter",
+        "lint",
+        "regole",
+        "diagnosi",
+        "avvisi",
+        "warning",
+        "pii",
+        "segnaposti",
       ],
     },
   ];
@@ -1886,6 +1903,7 @@
                   {:else if sub.id === "audit"}<ScrollText size={14} />
                   {:else if sub.id === "sync"}<RefreshCw size={14} />
                   {:else if sub.id === "hotkey"}<Keyboard size={14} />
+                  {:else if sub.id === "linter"}<ListChecks size={14} />
                   {:else}<Globe size={14} />{/if}
                 </span>
                 <span class="acc-label">{sub.label}</span>
@@ -2108,6 +2126,8 @@
                         effettiva al prossimo riavvio dell'app.
                       </p>
                     </div>
+                  {:else if sub.id === "linter"}
+                    <PannelloLinter />
                   {:else if sub.id === "globali"}
                     <div class="campo">
                       <p class="hint">

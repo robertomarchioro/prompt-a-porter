@@ -9,10 +9,10 @@
    * Riferimento blueprint: docs/roadmap/redesign-v08/blueprint-F5.md §2
    */
   import { invoke } from "@tauri-apps/api/core";
-  import { onDestroy } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { AlertCircle, AlertTriangle, Info } from "lucide-svelte";
   import AiutoLink from "$lib/aiuto/AiutoLink.svelte";
-  import { leggiCategorieDisabilitate } from "$lib/preferenze-linter";
+  import { leggiRegoleDisabilitate } from "$lib/preferenze-linter";
 
   type Severita = "Error" | "Warning" | "Info";
 
@@ -41,7 +41,7 @@
   async function carica(): Promise<void> {
     caricamento = true;
     try {
-      const disable = leggiCategorieDisabilitate();
+      const disable = leggiRegoleDisabilitate();
       const res = await invoke<Issue[]>("prompt_lint", {
         body,
         promptId,
@@ -66,8 +66,19 @@
     timer = setTimeout(carica, 400);
   });
 
+  // Ri-lintaa quando l'utente cambia le regole attive in Impostazioni → Linter
+  // (altrimenti i risultati resterebbero stale finché non si riedita il body).
+  function onLinterCambiato(): void {
+    void carica();
+  }
+
+  onMount(() => {
+    window.addEventListener("pap:linter-config-cambiata", onLinterCambiato);
+  });
+
   onDestroy(() => {
     if (timer) clearTimeout(timer);
+    window.removeEventListener("pap:linter-config-cambiata", onLinterCambiato);
   });
 
   function categoria(code: string): string {

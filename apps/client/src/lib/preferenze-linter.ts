@@ -80,3 +80,54 @@ export function toggleCategoria(
   }
   return [...disabilitate, categoria];
 }
+
+// ─────────── Granularità per-regola (linter personalizzabile Fase 1) ───────────
+//
+// La lista può contenere sia prefissi di categoria ("PII") sia code completi
+// di singola regola ("PII001"). Il backend (`filtra_disabilitate`) nasconde un
+// issue se il suo code O il suo prefisso è nella lista.
+
+const STORAGE_KEY_REGOLE = "pap.linter.regole_disabilitate";
+
+/// Legge la lista (code o prefissi) delle regole disabilitate. Difensivo.
+/// Migrazione one-shot: se la nuova key è assente ma esiste la vecchia
+/// `pap.linter.categorie_disabilitate`, la copia (le categorie sono prefissi
+/// validi) e la mantiene.
+export function leggiRegoleDisabilitate(): string[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_REGOLE);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(
+        (x): x is string => typeof x === "string" && x.length > 0,
+      );
+    }
+    // Migrazione dalla vecchia key (solo categorie/prefissi).
+    const vecchie = leggiCategorieDisabilitate();
+    if (vecchie.length > 0) {
+      salvaRegoleDisabilitate(vecchie);
+      return [...vecchie];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/// Salva la lista nel localStorage. Filtra stringhe vuote.
+export function salvaRegoleDisabilitate(regole: readonly string[]): void {
+  const validi = regole.filter((r) => typeof r === "string" && r.length > 0);
+  localStorage.setItem(STORAGE_KEY_REGOLE, JSON.stringify(validi));
+}
+
+/// Toggle di un token (code completo o prefisso) nella lista. Immutabile.
+export function toggleRegola(
+  token: string,
+  lista: readonly string[],
+): string[] {
+  if (lista.includes(token)) {
+    return lista.filter((t) => t !== token);
+  }
+  return [...lista, token];
+}
