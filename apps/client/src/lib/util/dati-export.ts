@@ -20,3 +20,31 @@ export function nomeFileExport(estensione: string, dataIso: string): string {
   const ext = estensione.startsWith(".") ? estensione.slice(1) : estensione;
   return `prompt-a-porter-export-${giorno}.${ext}`;
 }
+
+/**
+ * Slug filesystem-safe da un titolo (per i nomi file di export per-prompt).
+ * Minuscolo, spazi→trattini, rimuove i caratteri non `[a-z0-9-]`, niente
+ * trattini doppi/iniziali/finali. Fallback "prompt" se resta vuoto.
+ */
+export function slugFile(titolo: string): string {
+  const slug = titolo
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "prompt";
+}
+
+/**
+ * Scarica un Blob come file nel browser (pattern `<a download>`). Effetto DOM
+ * puro, isolato qui per riuso fra le sezioni che esportano (vault + per-prompt).
+ */
+export function scaricaBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}

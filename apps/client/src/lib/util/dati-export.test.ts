@@ -1,5 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { nomeFileExport } from "./dati-export";
+import { nomeFileExport, slugFile } from "./dati-export";
+
+describe("slugFile", () => {
+  it("minuscolo + spazi in trattini", () => {
+    expect(slugFile("Email Professionale")).toBe("email-professionale");
+  });
+
+  it("rimuove caratteri speciali e trattini doppi/bordo", () => {
+    expect(slugFile("  Ciao, {{nome}}!  ")).toBe("ciao-nome");
+  });
+
+  it("fallback 'prompt' se resta vuoto", () => {
+    expect(slugFile("***")).toBe("prompt");
+    expect(slugFile("")).toBe("prompt");
+  });
+});
 
 describe("nomeFileExport", () => {
   it("usa solo la parte data (YYYY-MM-DD) della ISO string", () => {

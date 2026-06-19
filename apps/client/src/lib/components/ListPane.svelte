@@ -17,6 +17,8 @@
     Star,
     GitFork,
     Trash2,
+    FolderInput,
+    FileDown,
   } from "lucide-svelte";
   import PromptCard from "./PromptCard.svelte";
   import {
@@ -24,6 +26,7 @@
     type VoceMenu,
   } from "$lib/stores/menu-contestuale.svelte";
   import { apriModale } from "$lib/stores/modale.svelte";
+  import { scaricaBlob, slugFile } from "$lib/util/dati-export";
   import {
     caricaStato,
     salvaStato,
@@ -310,6 +313,51 @@
     }
   }
 
+  async function spostaInCartella(
+    id: string,
+    folderId: string | null,
+  ): Promise<void> {
+    try {
+      await invoke<void>("prompt_sposta", { dati: { promptId: id, folderId } });
+      refreshLista();
+    } catch (e) {
+      console.error("[list-pane] sposta in cartella", e);
+    }
+  }
+
+  async function esportaMarkdown(id: string, titolo: string): Promise<void> {
+    try {
+      const md = await invoke<string>("prompt_export_markdown", {
+        promptId: id,
+      });
+      const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+      scaricaBlob(blob, `${slugFile(titolo)}.md`);
+    } catch (e) {
+      console.error("[list-pane] export markdown", e);
+    }
+  }
+
+  function vociSposta(promptId: string): VoceMenu[] {
+    const voci: VoceMenu[] = [
+      {
+        id: "mv-root",
+        label: "Nessuna cartella",
+        azione: () => spostaInCartella(promptId, null),
+      },
+    ];
+    if (cartelle.length > 0) {
+      voci.push({ separatore: true });
+      for (const c of cartelle) {
+        voci.push({
+          id: `mv-${c.id}`,
+          label: c.nome,
+          azione: () => spostaInCartella(promptId, c.id),
+        });
+      }
+    }
+    return voci;
+  }
+
   function vociPrompt(p: PromptCardData): VoceMenu[] {
     return [
       {
@@ -336,6 +384,19 @@
         label: p.preferito ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti",
         icona: Star,
         azione: () => togglePreferito(p.id),
+      },
+      { separatore: true },
+      {
+        id: "sposta",
+        label: "Sposta in cartella",
+        icona: FolderInput,
+        figli: vociSposta(p.id),
+      },
+      {
+        id: "export",
+        label: "Esporta come Markdown",
+        icona: FileDown,
+        azione: () => esportaMarkdown(p.id, p.titolo),
       },
       { separatore: true },
       {
