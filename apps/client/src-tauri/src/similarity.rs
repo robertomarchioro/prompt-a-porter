@@ -259,10 +259,7 @@ mod test {
     #[test]
     fn cosine_simil_intermedia() {
         // Angolo 60° → cos = 0.5.
-        let a = norm(vec![1.0, 0.0]);
-        let b = norm(vec![0.5, 0.5_f32.sqrt() * (3.0_f32.sqrt() / 2.0) * 2.0]);
-        // Il modo più semplice: hand-build vettori che danno dot = 0.5 dopo
-        // normalizzazione. Uso una scorciatoia sicura.
+        // Hand-build vettori che danno dot = 0.5 dopo normalizzazione.
         let a = norm(vec![1.0, 0.0]);
         let b = norm(vec![1.0, 1.0_f32.sqrt() * 1.7320508]); // sqrt(3)
         let s = cosine_similarity(&a, &b);

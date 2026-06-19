@@ -704,8 +704,8 @@ mod test {
         // 0 giorni -> tutto e' "piu vecchio di 0 giorni fa" (esclusivo)
         // In pratica: cancella voci con OccurredAt < datetime('now', '-0 days')
         // = OccurredAt < now -> tutto cio' inserito qualche ms fa
-        let n = cleanup_oltre_giorni_pure(&conn, 0).unwrap();
-        assert!(n >= 0); // best-effort: timing-dependent ma non fail
+        let _n = cleanup_oltre_giorni_pure(&conn, 0).unwrap();
+        // best-effort: timing-dependent ma non fail — .unwrap() sopra già asserta successo
     }
 
     #[test]
