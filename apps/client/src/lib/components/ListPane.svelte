@@ -12,8 +12,18 @@
     Rows3,
     Rows2,
     LayoutList,
+    FileText,
+    Play,
+    Star,
+    GitFork,
+    Trash2,
   } from "lucide-svelte";
   import PromptCard from "./PromptCard.svelte";
+  import {
+    apriMenu,
+    type VoceMenu,
+  } from "$lib/stores/menu-contestuale.svelte";
+  import { apriModale } from "$lib/stores/modale.svelte";
   import {
     caricaStato,
     salvaStato,
@@ -260,6 +270,84 @@
     }
   }
 
+  // ─── Menu contestuale card prompt (blueprint menu-contestuale §6.1) ───
+  function refreshLista(): void {
+    window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+  }
+
+  async function togglePreferito(id: string): Promise<void> {
+    try {
+      await invoke("libreria_toggle_preferito", { id });
+      refreshLista();
+    } catch (e) {
+      console.error("[list-pane] toggle preferito", e);
+    }
+  }
+
+  async function forkPrompt(id: string): Promise<void> {
+    try {
+      const nuovoId = await invoke<string>("prompt_fork", { promptId: id });
+      refreshLista();
+      onSelezionaPrompt(nuovoId);
+    } catch (e) {
+      console.error("[list-pane] fork", e);
+    }
+  }
+
+  async function eliminaPrompt(id: string, titolo: string): Promise<void> {
+    if (!confirm(`Spostare "${titolo || "(senza titolo)"}" nel cestino?`)) {
+      return;
+    }
+    try {
+      await invoke("prompt_elimina", { id });
+      refreshLista();
+      // Se il prompt eliminato è aperto nel DetailPane, Shell lo deseleziona.
+      window.dispatchEvent(
+        new CustomEvent("pap:prompt-eliminato", { detail: id }),
+      );
+    } catch (e) {
+      console.error("[list-pane] elimina", e);
+    }
+  }
+
+  function vociPrompt(p: PromptCardData): VoceMenu[] {
+    return [
+      {
+        id: "apri",
+        label: "Apri",
+        icona: FileText,
+        azione: () => onSelezionaPrompt(p.id),
+      },
+      {
+        id: "compila",
+        label: "Apri in Compila",
+        icona: Play,
+        azione: () => apriModale({ tipo: "compila", promptId: p.id }),
+      },
+      { separatore: true },
+      {
+        id: "fork",
+        label: "Duplica (fork)",
+        icona: GitFork,
+        azione: () => forkPrompt(p.id),
+      },
+      {
+        id: "preferito",
+        label: p.preferito ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti",
+        icona: Star,
+        azione: () => togglePreferito(p.id),
+      },
+      { separatore: true },
+      {
+        id: "elimina",
+        label: "Elimina",
+        icona: Trash2,
+        pericolo: true,
+        azione: () => eliminaPrompt(p.id, p.titolo),
+      },
+    ];
+  }
+
   // ─── Drag & drop riordino ─────────────────
 
   function gestDragStart(e: DragEvent, id: string): void {
@@ -463,6 +551,10 @@
           ondragover={(e) => gestDragOverCard(e, idx)}
           ondrop={(e) => gestDropCard(e, idx)}
           ondragend={gestDragEnd}
+          oncontextmenu={(e) => {
+            e.preventDefault();
+            apriMenu(e.clientX, e.clientY, vociPrompt(p));
+          }}
           onclickcapture={(e) => {
             if ((e.metaKey || e.ctrlKey) && onToggleSelezione) {
               e.preventDefault();
