@@ -263,7 +263,8 @@
     aria-disabled={voce.disabilitato}
     aria-haspopup={voce.figli ? "menu" : undefined}
     aria-expanded={voce.figli ? subApertoId === voce.id : undefined}
-    title={voce.disabilitato ? "Disponibile prossimamente" : undefined}
+    title={voce.tooltip ??
+      (voce.disabilitato ? "Disponibile prossimamente" : undefined)}
     onmouseenter={inSub ? undefined : () => onHoverVoce(voce)}
     onclick={() => attiva(voce)}
   >

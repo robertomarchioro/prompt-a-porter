@@ -19,6 +19,8 @@
     Trash2,
     FolderInput,
     FileDown,
+    Tag,
+    Check,
   } from "lucide-svelte";
   import PromptCard from "./PromptCard.svelte";
   import {
@@ -104,6 +106,21 @@
   let cerca = $state("");
   let cercaDebounced = $state("");
   let cartelle = $state<Cartella[]>([]);
+  // Tutti i tag del vault, per i submenu "Gestisci tag" / "Aggiungi tag a N".
+  let tagsTutti = $state<TagInfo[]>([]);
+
+  async function caricaAux(): Promise<void> {
+    try {
+      const [c, t] = await Promise.all([
+        invoke<Cartella[]>("folder_lista"),
+        invoke<TagInfo[]>("libreria_tag_lista"),
+      ]);
+      cartelle = c;
+      tagsTutti = t;
+    } catch {
+      /* ignore */
+    }
+  }
 
   // Drag state — module-level fallback per dataTransfer null su browser strict.
   // $state perche' letto reattivamente nel template (class:dragging).
@@ -176,18 +193,16 @@
   }
 
   onMount(async () => {
-    try {
-      cartelle = await invoke<Cartella[]>("folder_lista");
-    } catch {
-      /* ignore */
-    }
+    await caricaAux();
     window.addEventListener("pap:lista-mutata", caricaLista);
+    window.addEventListener("pap:lista-mutata", caricaAux);
     window.addEventListener("pap:lista-densita-cambiata", onDensitaCambiata);
     window.addEventListener("pap:nuovo-prompt", onNuovoPromptDaTray);
   });
 
   onDestroy(() => {
     window.removeEventListener("pap:lista-mutata", caricaLista);
+    window.removeEventListener("pap:lista-mutata", caricaAux);
     window.removeEventListener("pap:lista-densita-cambiata", onDensitaCambiata);
     window.removeEventListener("pap:nuovo-prompt", onNuovoPromptDaTray);
   });
@@ -360,6 +375,55 @@
     return voci;
   }
 
+  async function aggiungiTagAPrompt(
+    promptId: string,
+    tagNome: string,
+  ): Promise<void> {
+    try {
+      await invoke<void>("prompt_tag_aggiungi", { promptId, tagNome });
+      refreshLista();
+    } catch (e) {
+      console.error("[list-pane] aggiungi tag", e);
+    }
+  }
+
+  async function rimuoviTagDaPrompt(
+    promptId: string,
+    tagNome: string,
+  ): Promise<void> {
+    try {
+      await invoke<void>("prompt_tag_rimuovi", { promptId, tagNome });
+      refreshLista();
+    } catch (e) {
+      console.error("[list-pane] rimuovi tag", e);
+    }
+  }
+
+  // Submenu toggle: i tag già presenti sul prompt hanno la spunta e rimuovono;
+  // gli altri aggiungono.
+  function vociGestisciTag(p: PromptCardData): VoceMenu[] {
+    if (tagsTutti.length === 0) {
+      return [
+        {
+          id: "gt-vuoto",
+          label: "Nessun tag nel vault",
+          disabilitato: true,
+          tooltip: "I tag si creano assegnandoli a un prompt",
+        },
+      ];
+    }
+    const presenti = new Set(p.tags.map((t) => t.nome));
+    return tagsTutti.map((t) => ({
+      id: `gt-${t.id}`,
+      label: t.nome,
+      icona: presenti.has(t.nome) ? Check : undefined,
+      azione: () =>
+        presenti.has(t.nome)
+          ? rimuoviTagDaPrompt(p.id, t.nome)
+          : aggiungiTagAPrompt(p.id, t.nome),
+    }));
+  }
+
   function vociPrompt(p: PromptCardData): VoceMenu[] {
     return [
       {
@@ -393,6 +457,12 @@
         label: "Sposta in cartella",
         icona: FolderInput,
         figli: vociSposta(p.id),
+      },
+      {
+        id: "gestisci-tag",
+        label: "Gestisci tag",
+        icona: Tag,
+        figli: vociGestisciTag(p),
       },
       {
         id: "export",
@@ -490,6 +560,42 @@
     return voci;
   }
 
+  async function aggiungiTagBulk(ids: string[], tagNome: string): Promise<void> {
+    // Continue-on-error: un fallimento su un prompt non blocca gli altri.
+    let falliti = 0;
+    for (const id of ids) {
+      try {
+        await invoke<void>("prompt_tag_aggiungi", { promptId: id, tagNome });
+      } catch (e) {
+        falliti++;
+        console.error("[list-pane] aggiungi tag bulk", e);
+      }
+    }
+    // La selezione resta: così si possono aggiungere più tag di fila.
+    refreshLista();
+    if (falliti > 0) {
+      alert(`Impossibile aggiungere il tag a ${falliti} prompt su ${ids.length}.`);
+    }
+  }
+
+  function vociAggiungiTagBulk(ids: string[]): VoceMenu[] {
+    if (tagsTutti.length === 0) {
+      return [
+        {
+          id: "bt-vuoto",
+          label: "Nessun tag nel vault",
+          disabilitato: true,
+          tooltip: "I tag si creano assegnandoli a un prompt",
+        },
+      ];
+    }
+    return tagsTutti.map((t) => ({
+      id: `bt-${t.id}`,
+      label: t.nome,
+      azione: () => aggiungiTagBulk(ids, t.nome),
+    }));
+  }
+
   function vociBulk(ids: string[]): VoceMenu[] {
     const voci: VoceMenu[] = [];
     // Confronta (Diff) supporta solo 2-4 prompt: mostriamo la voce solo quando
@@ -510,6 +616,12 @@
         label: `Sposta ${ids.length} in cartella`,
         icona: FolderInput,
         figli: vociSpostaBulk(ids),
+      },
+      {
+        id: "aggiungi-tag",
+        label: `Aggiungi tag a ${ids.length}`,
+        icona: Tag,
+        figli: vociAggiungiTagBulk(ids),
       },
       {
         id: "export",

@@ -101,33 +101,7 @@ fn sincronizza_tags(
         if nome.is_empty() {
             continue;
         }
-
-        let tag_id: String = match conn.query_row(
-            "SELECT Id FROM Tags
-             WHERE Name = ?1 AND WorkspaceId = 'ws-personale' AND DeletedAt IS NULL",
-            [nome],
-            |r| r.get(0),
-        ) {
-            Ok(id) => id,
-            Err(_) => {
-                let id = format!("tag-{}", genera_id()?);
-                conn.execute(
-                    "INSERT INTO Tags (Id, WorkspaceId, Name, CreatedAt, UpdatedAt)
-                     VALUES (?1, 'ws-personale', ?2, datetime('now'), datetime('now'))",
-                    rusqlite::params![id, nome],
-                )?;
-                // Hook embedding tag (Fase 3 Step 4): se Session loaded,
-                // calcola embedding del nome e upsert in TagsEmbeddings.
-                // No-op se non disponibile (backfill futuro popolerà).
-                if let Ok(Some(emb)) = compute_embedding_opt(rt_state, nome) {
-                    if let Err(e) = embeddings_store::upsert_tag_embedding(conn, &id, &emb) {
-                        log::warn!("upsert tag embedding fallito per {id}: {e}");
-                    }
-                }
-                id
-            }
-        };
-
+        let tag_id = upsert_tag_id(conn, rt_state, nome)?;
         conn.execute(
             "INSERT OR IGNORE INTO PromptTags (PromptId, TagId) VALUES (?1, ?2)",
             rusqlite::params![prompt_id, tag_id],
@@ -135,6 +109,100 @@ fn sincronizza_tags(
     }
 
     Ok(())
+}
+
+/// Trova (o crea) il Tag per `nome` nel workspace personale e ritorna il TagId.
+/// Estratto da `sincronizza_tags` per riuso nei comandi di associazione singola.
+fn upsert_tag_id(
+    conn: &Connection,
+    rt_state: &EmbeddingsState,
+    nome: &str,
+) -> Result<String, PapErrore> {
+    match conn.query_row(
+        "SELECT Id FROM Tags
+         WHERE Name = ?1 AND WorkspaceId = 'ws-personale' AND DeletedAt IS NULL",
+        [nome],
+        |r| r.get(0),
+    ) {
+        Ok(id) => Ok(id),
+        // Solo "nessuna riga" è la condizione di creazione; gli altri errori DB
+        // (BUSY/LOCKED/corrotto) vanno propagati, non interpretati come "assente".
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            let id = format!("tag-{}", genera_id()?);
+            conn.execute(
+                "INSERT INTO Tags (Id, WorkspaceId, Name, CreatedAt, UpdatedAt)
+                 VALUES (?1, 'ws-personale', ?2, datetime('now'), datetime('now'))",
+                rusqlite::params![id, nome],
+            )?;
+            // Hook embedding tag (Fase 3 Step 4): no-op se Session non loaded.
+            if let Ok(Some(emb)) = compute_embedding_opt(rt_state, nome) {
+                if let Err(e) = embeddings_store::upsert_tag_embedding(conn, &id, &emb) {
+                    log::warn!("upsert tag embedding fallito per {id}: {e}");
+                }
+            }
+            Ok(id)
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Associa un tag (per nome) a un prompt — idempotente, crea il tag se assente.
+/// Usato dal menu contestuale ("Gestisci tag" / "Aggiungi tag a N") senza dover
+/// rifare l'intero `prompt_aggiorna` (niente snapshot di versione).
+pub(crate) fn tag_aggiungi_pure(
+    conn: &Connection,
+    rt_state: &EmbeddingsState,
+    prompt_id: &str,
+    tag_nome: &str,
+) -> Result<(), PapErrore> {
+    let nome = tag_nome.trim();
+    if nome.is_empty() {
+        return Ok(());
+    }
+    let tag_id = upsert_tag_id(conn, rt_state, nome)?;
+    conn.execute(
+        "INSERT OR IGNORE INTO PromptTags (PromptId, TagId) VALUES (?1, ?2)",
+        rusqlite::params![prompt_id, tag_id],
+    )?;
+    ricostruisci_fts(conn)?;
+    Ok(())
+}
+
+/// Dissocia un tag (per nome) da un prompt. No-op se non associato.
+pub(crate) fn tag_rimuovi_pure(
+    conn: &Connection,
+    prompt_id: &str,
+    tag_nome: &str,
+) -> Result<(), PapErrore> {
+    conn.execute(
+        "DELETE FROM PromptTags
+         WHERE PromptId = ?1 AND TagId IN (
+             SELECT Id FROM Tags
+             WHERE Name = ?2 AND WorkspaceId = 'ws-personale' AND DeletedAt IS NULL
+         )",
+        rusqlite::params![prompt_id, tag_nome.trim()],
+    )?;
+    ricostruisci_fts(conn)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn prompt_tag_aggiungi(
+    prompt_id: String,
+    tag_nome: String,
+    state: State<'_, VaultState>,
+    rt_state: State<'_, EmbeddingsState>,
+) -> Result<(), PapErrore> {
+    state.with_conn(|conn| tag_aggiungi_pure(conn, &rt_state, &prompt_id, &tag_nome))
+}
+
+#[tauri::command]
+pub fn prompt_tag_rimuovi(
+    prompt_id: String,
+    tag_nome: String,
+    state: State<'_, VaultState>,
+) -> Result<(), PapErrore> {
+    state.with_conn(|conn| tag_rimuovi_pure(conn, &prompt_id, &tag_nome))
 }
 
 pub(crate) fn ricostruisci_fts(conn: &Connection) -> Result<(), PapErrore> {
@@ -357,6 +425,62 @@ mod test {
             )
             .unwrap();
         assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn tag_aggiungi_crea_e_associa_idempotente() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version,
+             CreatedAt, UpdatedAt)
+             VALUES ('prm-ta', 'ws-personale', 'usr-locale', 'T', 'b', 'private', 1,
+             datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let rt = EmbeddingsState::new();
+        tag_aggiungi_pure(&conn, &rt, "prm-ta", "marketing").unwrap();
+        // Ri-aggiungere lo stesso tag NON duplica l'associazione.
+        tag_aggiungi_pure(&conn, &rt, "prm-ta", "marketing").unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM PromptTags WHERE PromptId = 'prm-ta'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn tag_rimuovi_dissocia_e_noop_se_assente() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility, Version,
+             CreatedAt, UpdatedAt)
+             VALUES ('prm-tr', 'ws-personale', 'usr-locale', 'T', 'b', 'private', 1,
+             datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let rt = EmbeddingsState::new();
+        tag_aggiungi_pure(&conn, &rt, "prm-tr", "vendite").unwrap();
+        tag_rimuovi_pure(&conn, "prm-tr", "vendite").unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM PromptTags WHERE PromptId = 'prm-tr'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 0);
+
+        // Rimuovere un tag non associato è un no-op, non un errore.
+        tag_rimuovi_pure(&conn, "prm-tr", "inesistente").unwrap();
     }
 
     #[test]
