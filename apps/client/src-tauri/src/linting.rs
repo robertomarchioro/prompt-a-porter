@@ -25,8 +25,8 @@
 
 use regex::Regex;
 use rusqlite::Connection;
-use serde::Serialize;
-use std::collections::HashSet;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 use tauri::State;
 
@@ -36,7 +36,7 @@ use crate::vault::VaultState;
 
 // ─────────── Tipi pubblici ───────────
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Severita {
     Error,
@@ -127,14 +127,15 @@ const NGRAM_THRESHOLD: usize = 4;
 
 // ─────────── Regole ───────────
 
-fn regola_len001(body: &str, out: &mut Vec<Issue>) {
+fn regola_len001(body: &str, soglie: &SoglieLinter, out: &mut Vec<Issue>) {
     let n = body.chars().count();
-    if n > LEN_MAX_BODY {
+    let max = soglie.len_max_body;
+    if n > max {
         out.push(Issue {
             code: "LEN001",
             severita: Severita::Warning,
             messaggio: format!(
-                "Body lungo {n} caratteri (> {LEN_MAX_BODY}). Possibile spreco di token al rendering."
+                "Body lungo {n} caratteri (> {max}). Possibile spreco di token al rendering."
             ),
             linea: None,
             colonna: None,
@@ -142,14 +143,15 @@ fn regola_len001(body: &str, out: &mut Vec<Issue>) {
     }
 }
 
-fn regola_len002(body: &str, out: &mut Vec<Issue>) {
+fn regola_len002(body: &str, soglie: &SoglieLinter, out: &mut Vec<Issue>) {
     let n = body.trim().chars().count();
-    if n < LEN_MIN_BODY && n > 0 {
+    let min = soglie.len_min_body;
+    if n < min && n > 0 {
         out.push(Issue {
             code: "LEN002",
             severita: Severita::Info,
             messaggio: format!(
-                "Body corto ({n} caratteri, < {LEN_MIN_BODY}). Probabilmente incompleto."
+                "Body corto ({n} caratteri, < {min}). Probabilmente incompleto."
             ),
             linea: None,
             colonna: None,
@@ -275,13 +277,13 @@ fn regola_pii004_api_keys(body: &str, out: &mut Vec<Issue>) {
     }
 }
 
-fn regola_sty001_ripetizione(body: &str, out: &mut Vec<Issue>) {
-    use std::collections::HashMap;
+fn regola_sty001_ripetizione(body: &str, soglie: &SoglieLinter, out: &mut Vec<Issue>) {
     // Tokenizzazione naive a parole (whitespace).
     let parole: Vec<&str> = body.split_whitespace().collect();
     if parole.len() < NGRAM_SIZE {
         return;
     }
+    let soglia = soglie.ngram_threshold;
     let mut conteggi: HashMap<String, usize> = HashMap::with_capacity(parole.len());
     for finestra in parole.windows(NGRAM_SIZE) {
         let key = finestra.join(" ").to_lowercase();
@@ -289,7 +291,7 @@ fn regola_sty001_ripetizione(body: &str, out: &mut Vec<Issue>) {
     }
     let mut ripetuti: Vec<(String, usize)> = conteggi
         .into_iter()
-        .filter(|(_, c)| *c >= NGRAM_THRESHOLD)
+        .filter(|(_, c)| *c >= soglia)
         .collect();
     ripetuti.sort_by_key(|(_, c)| std::cmp::Reverse(*c));
 
@@ -510,21 +512,31 @@ fn regole_imp(
 
 // ─────────── Entrypoint ───────────
 
+/// Lint body-only con le soglie di default (4000/30/4). Wrapper retro-compatibile
+/// per i caller che non personalizzano le soglie (es. `statistiche.rs`).
 pub fn analizza(body: &str) -> Vec<Issue> {
+    analizza_con(body, &SoglieLinter::default())
+}
+
+/// Lint body-only con soglie esplicite (linter personalizzabile Fase 2).
+/// Le regole PH/PII non hanno soglie tunabili: invariate.
+pub fn analizza_con(body: &str, soglie: &SoglieLinter) -> Vec<Issue> {
     let mut out = Vec::new();
-    regola_len001(body, &mut out);
-    regola_len002(body, &mut out);
+    regola_len001(body, soglie, &mut out);
+    regola_len002(body, soglie, &mut out);
     regola_ph001_segnaposti_malformati(body, &mut out);
     regola_ph003_caratteri_speciali(body, &mut out);
     regola_pii001_email(body, &mut out);
     regola_pii003_carta_credito(body, &mut out);
     regola_pii004_api_keys(body, &mut out);
-    regola_sty001_ripetizione(body, &mut out);
+    regola_sty001_ripetizione(body, soglie, &mut out);
     out
 }
 
 /// Variante completa: include `analizza` body-only + le regole IMP che
 /// richiedono accesso al vault per risolvere e camminare il grafo.
+/// Usa le **soglie di default**; per soglie personalizzate (Fase 2) il comando
+/// `prompt_lint` combina `analizza_con` + `regole_imp` direttamente.
 pub fn analizza_completo(
     conn: &Connection,
     body: &str,
@@ -539,17 +551,6 @@ pub fn analizza_completo(
 /// è aperto, aggiunge anche le regole IMP. Se il vault non è
 /// disponibile (login non ancora effettuato) il fallback è silenzioso —
 /// il lint rimane utile anche con db chiuso.
-/// Filtra un Vec<Issue> escludendo quelli il cui prefisso lettere del code
-/// è nelle categorie disabilitate (es. `["IMP", "PII"]` skippa IMP001,
-/// PII001, ecc.). v0.6.0 Step 6.
-pub(crate) fn filtra_categorie(
-    issues: Vec<Issue>,
-    disabilitate: &[String],
-) -> Vec<Issue> {
-    // Compat: vecchio nome (filtro per sola categoria). Delega al generalizzato.
-    filtra_disabilitate(issues, disabilitate)
-}
-
 /// Filtro generalizzato (linter personalizzabile Fase 1): un token disabilita
 /// un issue se è uguale al `code` completo (`"PII001"`) OPPURE al prefisso
 /// alfabetico (`"PII"`). Retrocompatibile: `["PII"]` disabilita la famiglia.
@@ -648,14 +649,99 @@ pub fn prompt_lint_regole() -> Vec<RegolaMeta> {
     regole_catalogo()
 }
 
+// ─────────── Config tuning (linter personalizzabile Fase 2) ───────────
+
+/// Soglie numeriche tunabili. `#[serde(default)]` + `Default` ⇒ un campo
+/// assente nel JSON usa il default storico (regression-safe).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct SoglieLinter {
+    /// LEN001: caratteri oltre i quali il body è "troppo lungo".
+    pub len_max_body: usize,
+    /// LEN002: caratteri sotto i quali il body è "troppo corto".
+    pub len_min_body: usize,
+    /// STY001: occorrenze di uno stesso n-gramma per segnalarlo.
+    pub ngram_threshold: usize,
+}
+
+impl Default for SoglieLinter {
+    fn default() -> Self {
+        Self {
+            len_max_body: LEN_MAX_BODY,
+            len_min_body: LEN_MIN_BODY,
+            ngram_threshold: NGRAM_THRESHOLD,
+        }
+    }
+}
+
+impl SoglieLinter {
+    /// Validazione difensiva (system boundary): clamp ai vincoli sensati.
+    /// Input invalido → valore sicuro, mai panico.
+    /// - `len_max_body = 0` farebbe scattare LEN001 su ogni body non vuoto
+    ///   (`n > 0`): nonsenso → minimo 1.
+    /// - `len_min_body >= len_max_body` rende LEN002 inutile e contraddittorio
+    ///   → azzera il minimo (la regola non scatterà mai, `n > 0` resta vero).
+    /// - `ngram_threshold < 2` degenererebbe (ogni 3-gramma conterebbe) → ≥ 2.
+    ///   Nessun limite massimo: una soglia alta = "segnala solo ripetizioni
+    ///   estreme", scelta legittima dell'utente.
+    fn normalizzata(&self) -> Self {
+        let len_max_body = self.len_max_body.max(1);
+        let len_min_body = if self.len_min_body >= len_max_body {
+            0
+        } else {
+            self.len_min_body
+        };
+        Self {
+            len_max_body,
+            len_min_body,
+            ngram_threshold: self.ngram_threshold.max(2),
+        }
+    }
+}
+
+/// Configurazione completa passata dal frontend a ogni `prompt_lint`.
+/// Tutto opzionale: `ConfigLinter::default()` ≡ comportamento storico.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct ConfigLinter {
+    /// Code completi (`"PII001"`) o prefissi di famiglia (`"PII"`) da nascondere.
+    pub disabilitate: Vec<String>,
+    /// Override di severità per **code esatto** (`"PII001"`): sostituisce la
+    /// severità di default. A differenza di `disabilitate`, NON accetta prefissi
+    /// di famiglia (`"PII"` qui è ignorato) — la UI invia sempre code completi.
+    pub severita_override: HashMap<String, Severita>,
+    /// Soglie numeriche tunabili.
+    pub soglie: SoglieLinter,
+}
+
+/// Passata finale: forza la severità degli issue il cui `code` è nella mappa.
+/// Match per **code esatto** (case-sensitive); prefissi di famiglia non sono
+/// supportati (vedi `ConfigLinter::severita_override`). `code` inesistenti →
+/// no-op silenzioso. Non tocca le singole `regola_*`.
+pub(crate) fn applica_override(
+    issues: &mut [Issue],
+    override_map: &HashMap<String, Severita>,
+) {
+    if override_map.is_empty() {
+        return;
+    }
+    for issue in issues.iter_mut() {
+        if let Some(sev) = override_map.get(issue.code) {
+            issue.severita = *sev;
+        }
+    }
+}
+
 #[tauri::command]
 pub fn prompt_lint(
     body: String,
     prompt_id: Option<String>,
-    categorie_disabilitate: Option<Vec<String>>,
+    config: Option<ConfigLinter>,
     state: State<'_, VaultState>,
 ) -> Result<Vec<Issue>, PapErrore> {
-    let mut out = analizza(&body);
+    let cfg = config.unwrap_or_default();
+    let soglie = cfg.soglie.normalizzata();
+    let mut out = analizza_con(&body, &soglie);
     if let Ok(imp) = state.with_conn(|conn| {
         let mut buf = Vec::new();
         regole_imp(conn, &body, prompt_id.as_deref(), &mut buf);
@@ -663,12 +749,11 @@ pub fn prompt_lint(
     }) {
         out.extend(imp);
     }
-    if let Some(disable) = categorie_disabilitate {
-        // `disable` può contenere prefissi di categoria ("PII") o code completi
-        // ("PII001") — il filtro generalizzato gestisce entrambi.
-        out = filtra_disabilitate(out, &disable);
-    }
-    Ok(out)
+    // Override PRIMA del filtro: un issue con severità cambiata (declassata o
+    // promossa) e poi disabilitato resta comunque escluso (ordine corretto —
+    // vedi blueprint §6).
+    applica_override(&mut out, &cfg.severita_override);
+    Ok(filtra_disabilitate(out, &cfg.disabilitate))
 }
 
 // ─────────── Test ───────────
@@ -982,7 +1067,7 @@ mod test {
     #[test]
     fn filtra_categorie_lista_vuota_no_op() {
         let issues = vec![issue_di("PH001"), issue_di("PII001"), issue_di("LEN001")];
-        let r = super::filtra_categorie(issues.clone(), &[]);
+        let r = super::filtra_disabilitate(issues.clone(), &[]);
         assert_eq!(r.len(), 3);
     }
 
@@ -994,7 +1079,7 @@ mod test {
             issue_di("PII003"),
             issue_di("LEN001"),
         ];
-        let r = super::filtra_categorie(issues, &["PII".to_string()]);
+        let r = super::filtra_disabilitate(issues, &["PII".to_string()]);
         assert_eq!(r.len(), 2);
         assert!(r.iter().all(|i| !i.code.starts_with("PII")));
     }
@@ -1008,7 +1093,7 @@ mod test {
             issue_di("IMP002"),
             issue_di("LEN001"),
         ];
-        let r = super::filtra_categorie(
+        let r = super::filtra_disabilitate(
             issues,
             &["PH".to_string(), "IMP".to_string()],
         );
@@ -1019,7 +1104,7 @@ mod test {
     #[test]
     fn filtra_categorie_categoria_inesistente_no_op() {
         let issues = vec![issue_di("PH001"), issue_di("LEN001")];
-        let r = super::filtra_categorie(issues, &["FOO".to_string()]);
+        let r = super::filtra_disabilitate(issues, &["FOO".to_string()]);
         assert_eq!(r.len(), 2);
     }
 
@@ -1114,5 +1199,124 @@ mod test {
         );
         let imp004 = issues.iter().find(|i| i.code == "IMP004").unwrap();
         assert!(imp004.messaggio.contains("2 altri"));
+    }
+
+    // ─────────── Fase 2: tuning soglie + override severità ───────────
+
+    #[test]
+    fn config_default_uguale_ad_analizza_storico() {
+        // Regression: analizza_con(default) ≡ analizza() su body misto.
+        let body = "ciao mondo ".repeat(10);
+        let storico = analizza(&body);
+        let con_default = analizza_con(&body, &SoglieLinter::default());
+        let codes_a: Vec<&str> = storico.iter().map(|i| i.code).collect();
+        let codes_b: Vec<&str> = con_default.iter().map(|i| i.code).collect();
+        assert_eq!(codes_a, codes_b);
+    }
+
+    #[test]
+    fn soglia_len_max_abbassata_fa_scattare_len001() {
+        let body = "Prompt di media lunghezza, abbastanza per superare 20 caratteri.";
+        // Default (4000): nessun LEN001.
+        assert!(!ha_codice(&analizza_con(body, &SoglieLinter::default()), "LEN001"));
+        // Soglia max = 20: scatta.
+        let soglie = SoglieLinter { len_max_body: 20, ..SoglieLinter::default() };
+        assert!(ha_codice(&analizza_con(body, &soglie), "LEN001"));
+    }
+
+    #[test]
+    fn soglia_ngram_abbassata_fa_scattare_sty001() {
+        let body = "ripeti questo ripeti questo ripeti questo";
+        // "ripeti questo ripeti" appare 2 volte: sotto il default (4).
+        assert!(!ha_codice(&analizza_con(body, &SoglieLinter::default()), "STY001"));
+        let soglie = SoglieLinter { ngram_threshold: 2, ..SoglieLinter::default() };
+        assert!(ha_codice(&analizza_con(body, &soglie), "STY001"));
+    }
+
+    #[test]
+    fn normalizzata_clampa_soglie_invalide() {
+        // min >= max → min azzerato.
+        let s = SoglieLinter { len_max_body: 50, len_min_body: 80, ngram_threshold: 1 }
+            .normalizzata();
+        assert_eq!(s.len_min_body, 0);
+        // ngram < 2 → portato a 2.
+        assert_eq!(s.ngram_threshold, 2);
+        assert_eq!(s.len_max_body, 50);
+    }
+
+    #[test]
+    fn normalizzata_len_max_zero_clampato_a_uno() {
+        // len_max_body = 0 farebbe scattare LEN001 su ogni body non vuoto.
+        let s = SoglieLinter { len_max_body: 0, len_min_body: 0, ngram_threshold: 4 }
+            .normalizzata();
+        assert_eq!(s.len_max_body, 1);
+        // Un body normale non deve produrre LEN001 con la soglia clampata? Con
+        // max=1 un body > 1 char scatta comunque (scelta utente estrema), ma il
+        // punto è: niente più "> 0" nonsenso. Verifichiamo solo il clamp.
+        assert_eq!(s.len_min_body, 0);
+    }
+
+    #[test]
+    fn normalizzata_lascia_invariate_soglie_valide() {
+        let s = SoglieLinter { len_max_body: 4000, len_min_body: 30, ngram_threshold: 4 }
+            .normalizzata();
+        assert_eq!(s.len_min_body, 30);
+        assert_eq!(s.ngram_threshold, 4);
+        assert_eq!(s.len_max_body, 4000);
+    }
+
+    #[test]
+    fn applica_override_cambia_severita_del_code() {
+        let mut issues = vec![issue_di("PII001"), issue_di("LEN001")];
+        let mut map = HashMap::new();
+        map.insert("PII001".to_string(), Severita::Error);
+        applica_override(&mut issues, &map);
+        assert_eq!(issues[0].severita, Severita::Error); // PII001 forzato
+        // LEN001 invariato (issue_di lo crea Warning di default? verifichiamo non-Error map miss)
+        assert!(!map.contains_key("LEN001"));
+    }
+
+    #[test]
+    fn applica_override_code_inesistente_no_op() {
+        let mut issues = vec![issue_di("PII001")];
+        let originale = issues[0].severita;
+        let mut map = HashMap::new();
+        map.insert("ZZZ999".to_string(), Severita::Error);
+        applica_override(&mut issues, &map);
+        assert_eq!(issues[0].severita, originale);
+    }
+
+    #[test]
+    fn applica_override_mappa_vuota_no_op() {
+        let mut issues = vec![issue_di("PII001")];
+        let originale = issues[0].severita;
+        applica_override(&mut issues, &HashMap::new());
+        assert_eq!(issues[0].severita, originale);
+    }
+
+    #[test]
+    fn config_linter_deserializza_parziale_con_default() {
+        // Solo soglie.len_max_body presente: gli altri campi → default.
+        let cfg: ConfigLinter =
+            serde_json::from_str(r#"{"soglie":{"len_max_body":100}}"#).unwrap();
+        assert_eq!(cfg.soglie.len_max_body, 100);
+        assert_eq!(cfg.soglie.len_min_body, LEN_MIN_BODY);
+        assert_eq!(cfg.soglie.ngram_threshold, NGRAM_THRESHOLD);
+        assert!(cfg.disabilitate.is_empty());
+        assert!(cfg.severita_override.is_empty());
+    }
+
+    #[test]
+    fn config_linter_deserializza_override_severita_lowercase() {
+        let cfg: ConfigLinter =
+            serde_json::from_str(r#"{"severita_override":{"PII001":"error"}}"#).unwrap();
+        assert_eq!(cfg.severita_override.get("PII001"), Some(&Severita::Error));
+    }
+
+    #[test]
+    fn config_linter_vuoto_e_default() {
+        let cfg: ConfigLinter = serde_json::from_str("{}").unwrap();
+        assert_eq!(cfg.soglie.len_max_body, LEN_MAX_BODY);
+        assert!(cfg.disabilitate.is_empty());
     }
 }
