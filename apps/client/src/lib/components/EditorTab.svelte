@@ -26,6 +26,18 @@
   } from "$lib/codemirror/placeholder-highlight";
   import { importAutocompletion } from "$lib/codemirror/import-autocomplete";
   import { statoEditor } from "$lib/stores/preferenze.svelte";
+  import {
+    Scissors,
+    Copy,
+    Clipboard,
+    Braces,
+    FileInput,
+    Globe,
+  } from "lucide-svelte";
+  import {
+    apriMenu,
+    type VoceMenu,
+  } from "$lib/stores/menu-contestuale.svelte";
 
   interface Props {
     body: string;
@@ -51,6 +63,90 @@
 
   let container: HTMLDivElement;
   let view: EditorView | null = null;
+
+  // ─── Menu contestuale editor (blueprint menu-contestuale §6.4) ───
+  async function copia(): Promise<void> {
+    if (!view) return;
+    const { from, to } = view.state.selection.main;
+    if (from === to) return;
+    try {
+      await navigator.clipboard.writeText(view.state.sliceDoc(from, to));
+    } catch (e) {
+      console.error("[editor] copia", e);
+    }
+  }
+
+  async function taglia(): Promise<void> {
+    if (!view) return;
+    const { from, to } = view.state.selection.main;
+    if (from === to) return;
+    try {
+      await navigator.clipboard.writeText(view.state.sliceDoc(from, to));
+    } catch (e) {
+      // Copia fallita: NON cancellare, altrimenti il testo andrebbe perso
+      // (né su clipboard né nel documento).
+      console.error("[editor] taglia", e);
+      return;
+    }
+    view.dispatch({
+      changes: { from, to, insert: "" },
+      selection: { anchor: from },
+    });
+    view.focus();
+  }
+
+  async function incolla(): Promise<void> {
+    if (!view) return;
+    try {
+      const testo = await navigator.clipboard.readText();
+      if (!testo) return;
+      const { from, to } = view.state.selection.main;
+      view.dispatch({
+        changes: { from, to, insert: testo },
+        selection: { anchor: from + testo.length },
+      });
+      view.focus();
+    } catch (e) {
+      console.error("[editor] incolla", e);
+    }
+  }
+
+  function selezionaTutto(): void {
+    if (!view) return;
+    view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
+    view.focus();
+  }
+
+  // Inserisce `template` alla selezione e seleziona il segmento [selDa, selDa+selLen).
+  function inserisci(template: string, selDa: number, selLen: number): void {
+    if (!view) return;
+    const { from, to } = view.state.selection.main;
+    view.dispatch({
+      changes: { from, to, insert: template },
+      selection: { anchor: from + selDa, head: from + selDa + selLen },
+    });
+    view.focus();
+  }
+
+  function vociEditor(): VoceMenu[] {
+    const sel = view?.state.selection.main;
+    const haSelezione = sel ? sel.from !== sel.to : false;
+    return [
+      { id: "taglia", label: "Taglia", icona: Scissors, disabilitato: !haSelezione, azione: taglia },
+      { id: "copia", label: "Copia", icona: Copy, disabilitato: !haSelezione, azione: copia },
+      { id: "incolla", label: "Incolla", icona: Clipboard, azione: incolla },
+      { id: "seleziona-tutto", label: "Seleziona tutto", azione: selezionaTutto },
+      { separatore: true },
+      { id: "ins-segnaposto", label: "Inserisci segnaposto", icona: Braces, azione: () => inserisci("{{nome}}", 2, 4) },
+      { id: "ins-global", label: "Inserisci segnaposto globale", icona: Globe, azione: () => inserisci("{{global nome}}", 9, 4) },
+      { id: "ins-import", label: "Inserisci import", icona: FileInput, azione: () => inserisci('{{import "percorso"}}', 10, 8) },
+    ];
+  }
+
+  function onContextEditor(e: MouseEvent): void {
+    e.preventDefault();
+    apriMenu(e.clientX, e.clientY, vociEditor());
+  }
   // Snapshot iniziale di `body` (prop reattiva). untrack() evita di
   // catturare body come dipendenza reattiva del top-level script:
   // bodyInterno traccia lo stato interno CodeMirror, sync con prop
@@ -214,7 +310,12 @@
   });
 </script>
 
-<div class="editor-tab" bind:this={container}></div>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="editor-tab"
+  bind:this={container}
+  oncontextmenu={onContextEditor}
+></div>
 
 <style>
   .editor-tab {
