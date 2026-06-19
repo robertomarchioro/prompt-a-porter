@@ -8,9 +8,13 @@ import {
   salvaCategorieDisabilitate,
   categoriaAttiva,
   toggleCategoria,
+  leggiRegoleDisabilitate,
+  salvaRegoleDisabilitate,
+  toggleRegola,
 } from "./preferenze-linter";
 
 const KEY = "pap.linter.categorie_disabilitate";
+const KEY_REGOLE = "pap.linter.regole_disabilitate";
 
 describe("preferenze-linter", () => {
   beforeEach(() => {
@@ -74,5 +78,54 @@ describe("preferenze-linter", () => {
   it("round trip salva->leggi", () => {
     salvaCategorieDisabilitate(["STY", "IMP"]);
     expect(leggiCategorieDisabilitate()).toEqual(["STY", "IMP"]);
+  });
+});
+
+describe("preferenze-linter — per-regola (Fase 1)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("leggiRegoleDisabilitate ritorna [] se tutto vuoto", () => {
+    expect(leggiRegoleDisabilitate()).toEqual([]);
+  });
+
+  it("migra one-shot dalla vecchia key categorie se la nuova è assente", () => {
+    localStorage.setItem(KEY, JSON.stringify(["PII", "IMP"]));
+    expect(leggiRegoleDisabilitate()).toEqual(["PII", "IMP"]);
+    // La migrazione scrive anche la nuova key.
+    expect(JSON.parse(localStorage.getItem(KEY_REGOLE)!)).toEqual(["PII", "IMP"]);
+  });
+
+  it("la nuova key ha precedenza sulla vecchia (niente migrazione)", () => {
+    localStorage.setItem(KEY, JSON.stringify(["PII"]));
+    localStorage.setItem(KEY_REGOLE, JSON.stringify(["LEN001"]));
+    expect(leggiRegoleDisabilitate()).toEqual(["LEN001"]);
+  });
+
+  it("accetta code completi e prefissi, filtra non-stringhe", () => {
+    localStorage.setItem(KEY_REGOLE, JSON.stringify(["PII001", "LEN", 7, ""]));
+    expect(leggiRegoleDisabilitate()).toEqual(["PII001", "LEN"]);
+  });
+
+  it("leggiRegoleDisabilitate ritorna [] su JSON malformato", () => {
+    localStorage.setItem(KEY_REGOLE, "{{ not json");
+    expect(leggiRegoleDisabilitate()).toEqual([]);
+  });
+
+  it("salvaRegoleDisabilitate scrive solo stringhe non vuote", () => {
+    salvaRegoleDisabilitate(["PII001", "", "STY"]);
+    expect(JSON.parse(localStorage.getItem(KEY_REGOLE)!)).toEqual([
+      "PII001",
+      "STY",
+    ]);
+  });
+
+  it("toggleRegola aggiunge/rimuove un code e non muta l'input", () => {
+    expect(toggleRegola("PII001", [])).toEqual(["PII001"]);
+    const input = ["PII001", "LEN"] as const;
+    const out = toggleRegola("PII001", input);
+    expect(out).toEqual(["LEN"]);
+    expect(input).toEqual(["PII001", "LEN"]);
   });
 });
