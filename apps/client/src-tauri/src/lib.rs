@@ -488,6 +488,8 @@ pub fn run() {
             editor::prompt_aggiorna,
             editor::prompt_registra_uso,
             editor::prompt_elimina,
+            editor::prompt_tag_aggiungi,
+            editor::prompt_tag_rimuovi,
             versioning::prompt_get_history,
             versioning::prompt_rollback,
             sync::sync_applica_delta,
