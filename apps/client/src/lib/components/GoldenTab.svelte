@@ -197,6 +197,81 @@
     modaleBatch.stato = { fase: "completato", risultati };
   }
 
+  // --- Modale crea golden (#382) ---
+
+  const SIMILARITY_FN_VALIDE = [
+    "cosine",
+    "llm-judge",
+    "exact-match",
+    "regex",
+  ] as const;
+
+  type SimilarityFn = (typeof SIMILARITY_FN_VALIDE)[number];
+
+  let modaleEditor = $state<{
+    aperto: boolean;
+    etichetta: string;
+    input_vars: string;
+    expected_output: string;
+    similarity_fn: SimilarityFn;
+    soglia_tolleranza: number;
+    invio: boolean;
+    errore: string;
+  }>({
+    aperto: false,
+    etichetta: "",
+    input_vars: "{}",
+    expected_output: "",
+    similarity_fn: "cosine",
+    soglia_tolleranza: 0.85,
+    invio: false,
+    errore: "",
+  });
+
+  function apriEditor(): void {
+    modaleEditor = {
+      aperto: true,
+      etichetta: "",
+      input_vars: "{}",
+      expected_output: "",
+      similarity_fn: "cosine",
+      soglia_tolleranza: 0.85,
+      invio: false,
+      errore: "",
+    };
+  }
+
+  function chiudiEditor(): void {
+    if (modaleEditor.invio) return;
+    modaleEditor = { ...modaleEditor, aperto: false };
+  }
+
+  async function salvaGolden(): Promise<void> {
+    modaleEditor = { ...modaleEditor, invio: true, errore: "" };
+    try {
+      await invoke("golden_crea", {
+        dati: {
+          prompt_id: promptId,
+          etichetta: modaleEditor.etichetta.trim(),
+          input_vars: modaleEditor.input_vars,
+          expected_output: modaleEditor.expected_output,
+          similarity_fn: modaleEditor.similarity_fn,
+          soglia_tolleranza: modaleEditor.soglia_tolleranza,
+        },
+      });
+      modaleEditor = { ...modaleEditor, aperto: false, invio: false };
+      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+    } catch (e) {
+      modaleEditor = {
+        ...modaleEditor,
+        invio: false,
+        errore: String(e).replace(/^Error: /, ""),
+      };
+    }
+  }
+
+  // -------------------------------------------------
+
   function tempoRelativo(iso: string): string {
     if (!iso) return "";
     try {
@@ -239,8 +314,8 @@
     <button
       class="primary"
       type="button"
-      onclick={() => console.log("F8 modale crea golden")}
-      title="Crea golden test (F8 modale)"
+      onclick={apriEditor}
+      title="Crea un nuovo golden test"
     >
       <Plus size={14} />
       <span>Golden</span>
@@ -407,6 +482,98 @@
           Chiudi
         </button>
       {/if}
+    {/snippet}
+  </Modale>
+{/if}
+
+{#if modaleEditor.aperto}
+  <Modale
+    titolo="Nuovo golden test"
+    sottotitolo="Definisci un caso di test atteso per questo prompt"
+    larghezza="md"
+    onChiudi={chiudiEditor}
+  >
+    <div class="editor-form">
+      <label class="editor-field" for="editor-etichetta">
+        <span class="editor-label">Etichetta</span>
+        <input
+          id="editor-etichetta"
+          class="editor-input"
+          type="text"
+          bind:value={modaleEditor.etichetta}
+          placeholder="Es. risposta breve, caso limite vuoto..."
+          autocomplete="off"
+        />
+      </label>
+      <label class="editor-field" for="editor-input-vars">
+        <span class="editor-label">Variabili di input (JSON)</span>
+        <textarea
+          id="editor-input-vars"
+          class="editor-input editor-textarea"
+          bind:value={modaleEditor.input_vars}
+          placeholder={"{}"}
+          rows={4}
+          spellcheck={false}
+        ></textarea>
+      </label>
+      <label class="editor-field" for="editor-expected-output">
+        <span class="editor-label">Output atteso</span>
+        <textarea
+          id="editor-expected-output"
+          class="editor-input editor-textarea"
+          bind:value={modaleEditor.expected_output}
+          placeholder="Testo atteso, regex o prompt giudice..."
+          rows={4}
+          spellcheck={false}
+        ></textarea>
+      </label>
+      <label class="editor-field" for="editor-similarity-fn">
+        <span class="editor-label">Funzione di similarita</span>
+        <select
+          id="editor-similarity-fn"
+          class="editor-input"
+          bind:value={modaleEditor.similarity_fn}
+        >
+          {#each SIMILARITY_FN_VALIDE as fn (fn)}
+            <option value={fn}>{fn}</option>
+          {/each}
+        </select>
+      </label>
+      <label class="editor-field" for="editor-soglia">
+        <span class="editor-label">Soglia tolleranza (0-1, default 0.85)</span>
+        <input
+          id="editor-soglia"
+          class="editor-input"
+          type="number"
+          min={0}
+          max={1}
+          step={0.01}
+          bind:value={modaleEditor.soglia_tolleranza}
+        />
+      </label>
+      {#if modaleEditor.errore}
+        <p class="editor-errore" role="alert">{modaleEditor.errore}</p>
+      {/if}
+    </div>
+    {#snippet footer()}
+      <button
+        class="secondary"
+        type="button"
+        onclick={chiudiEditor}
+        disabled={modaleEditor.invio}
+      >
+        Annulla
+      </button>
+      <button
+        class="primary"
+        type="button"
+        onclick={salvaGolden}
+        disabled={modaleEditor.invio ||
+          !modaleEditor.etichetta.trim() ||
+          !modaleEditor.expected_output.trim()}
+      >
+        {modaleEditor.invio ? "Salvataggio..." : "Salva golden"}
+      </button>
     {/snippet}
   </Modale>
 {/if}
@@ -715,5 +882,42 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* #382: modale editor golden */
+  .editor-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .editor-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .editor-label {
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+  .editor-input {
+    padding: 8px 12px;
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    color: var(--text-default);
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+  }
+  .editor-textarea {
+    font-family: var(--font-mono);
+    resize: vertical;
+    min-height: 80px;
+  }
+  .editor-errore {
+    margin: 0;
+    font-size: var(--fs-sm);
+    color: var(--danger);
   }
 </style>
