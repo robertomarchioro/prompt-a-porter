@@ -1,5 +1,21 @@
 # Changelog — Prompt a Porter
 
+## v0.8.24 — Linter personalizzabile (2026-06-19)
+
+> Il linter dei prompt diventa personalizzabile da **Impostazioni → Linter**: silenzia le regole che non ti servono, cambiane la severità e regola le soglie numeriche. Più un fix all'icona della tab Diagnosi.
+
+### Feature
+
+- **Linter personalizzabile** (#381, #383, #384, #385): nuovo pannello in **Impostazioni → Linter** con il catalogo completo delle regole (titolo, codice, severità, descrizione) come unica fonte di verità dal backend.
+  - **Attiva/disattiva** per singola regola o per intera famiglia (Lunghezza, Segnaposti, Privacy, Stile, Import).
+  - **Severità regolabile**: declassa o promuovi ogni avviso fra Errore / Avviso / Info (es. portare le email da Avviso a Info).
+  - **Soglie numeriche editabili**: caratteri massimi (LEN001), caratteri minimi (LEN002) e ripetizioni minime (STY001).
+  - **Ripristina** per singola regola o globale; valori fuori scala riportati entro limiti sensati. Le modifiche si applicano subito alla tab Diagnosi e sono salvate localmente sul dispositivo.
+
+### Fix
+
+- **Icona severità nella tab Diagnosi** (#386): le icone mostravano sempre il simbolo "Info" perché il confronto usava valori capitalizzati mentre il backend li invia in minuscolo. Ora Errore mostra il cerchio, Avviso il triangolo, Info la "i". (Il colore del bordo era già corretto.)
+
 ## v0.8.23 — Menu contestuale, checklist "Primi passi" e sintassi `{{global}}` (2026-06-19)
 
 > Tre filoni: un **menu contestuale (tasto destro)** context-aware su tutta l'app, il completamento della **guida** con la checklist "Primi passi", e l'allineamento della **sintassi dei segnaposti globali** all'inglese.
