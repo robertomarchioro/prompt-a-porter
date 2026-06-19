@@ -1,5 +1,20 @@
 # Changelog — Prompt a Porter
 
+## v0.8.25 — Triage: identifier `com.pap.client`, tab Valutazioni, golden e pulizia CI (2026-06-19)
+
+> Ciclo di triage: 5 issue risolte in 4 gruppi (3 isole indipendenti + 1 cluster coordinato per il file `release.yml` condiviso). #334 (Go 1.25) resta rinviata per il deadlock golangci-lint/go1.25.
+
+### Feature
+
+- **Tab "Valutazioni" + selettore formato in anteprima** (#390): la nuova tab **Valutazioni** mostra l'aggregato dei rating finora orfano (media, conteggio positivi/neutri/negativi, stato vuoto) leggendolo dal comando già esistente `rating_aggregato`. Il selettore del **formato output** nella maschera Compila è stato spostato dalla colonna del form all'header dell'anteprima, come chip compatti (con `role=group` + `aria-pressed` per gli screen reader).
+
+### Fix
+
+- **Creazione golden funzionante** (#382): il bottone **"+ Golden"** nella tab Test golden era uno stub (`console.log`) e non apriva nulla. Ora apre una modale di creazione collegata al comando backend `golden_crea` (etichetta, variabili di input, output atteso, funzione di similarità, soglia di tolleranza), con ricarica della lista e gestione errori inline.
+- **Bundle identifier rinominato in `com.pap.client`** (#389): l'identifier Tauri non termina più con `.app` (sconsigliato, bloccava i build macOS). Allineato in modo coerente nei tre client (desktop, MCP server, CLI) così che risolvano lo stesso vault, con **migrazione one-shot non distruttiva** dei dati dalla vecchia cartella `com.pap.app` alla nuova all'avvio (idempotente, non-fatale, e che non segue i symlink).
+- **CI: bump `actions/checkout@v5`** (#388): allineate tutte e 9 le workflow per eliminare il warning di deprecazione di Node 20 (`actions/checkout@v4` veniva forzato su Node 24). DEP0040/DEP0190 annotati come deprecazioni transitive non azionabili.
+- **Pulizia 5 warning Rust nei test** (#387): rimossi import e variabili inutilizzati, un nome di test non in snake_case e un `assert` sempre vero, tutto in codice di test (nessun impatto di produzione).
+
 ## v0.8.24 — Linter personalizzabile (2026-06-19)
 
 > Il linter dei prompt diventa personalizzabile da **Impostazioni → Linter**: silenzia le regole che non ti servono, cambiane la severità e regola le soglie numeriche. Più un fix all'icona della tab Diagnosi.
