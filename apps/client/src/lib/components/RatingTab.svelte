@@ -7,7 +7,6 @@
    * quando nessun rating è ancora stato registrato.
    */
   import { invoke } from "@tauri-apps/api/core";
-  import { onMount } from "svelte";
   import { Smile, Meh, Frown, Star } from "lucide-svelte";
   import EmptyState from "./EmptyState.svelte";
 
@@ -44,10 +43,6 @@
       caricamento = false;
     }
   }
-
-  onMount(() => {
-    void carica();
-  });
 
   $effect(() => {
     // Ricarica quando cambia il promptId (navigazione tra prompt).

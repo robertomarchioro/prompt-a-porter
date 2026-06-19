@@ -427,6 +427,7 @@
                 type="button"
                 class="chip-fmt"
                 data-attivo={formato === f || undefined}
+                aria-pressed={formato === f}
                 onclick={() => (formato = f as FormatoOutput)}
               >
                 {f}
