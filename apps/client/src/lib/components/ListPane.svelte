@@ -411,6 +411,134 @@
     ];
   }
 
+  // ─── Menu contestuale selezione multipla (blueprint menu-contestuale §6.8) ───
+  // I loop bulk usano `finally` per ripristinare SEMPRE lo stato UI (selezione
+  // svuotata + lista ricaricata) anche su fallimento parziale, così l'utente
+  // vede cosa è effettivamente cambiato invece di una selezione stale.
+  async function spostaBulk(
+    ids: string[],
+    folderId: string | null,
+  ): Promise<void> {
+    try {
+      for (const id of ids) {
+        await invoke<void>("prompt_sposta", {
+          dati: { prompt_id: id, folder_id: folderId },
+        });
+      }
+    } catch (e) {
+      alert(`Errore durante lo spostamento: ${String(e).replace(/^Error: /, "")}`);
+    } finally {
+      onPulisciSelezione?.();
+      refreshLista();
+    }
+  }
+
+  async function esportaBulkMarkdown(ids: string[]): Promise<void> {
+    try {
+      // Ordine = ordine di selezione (Set preserva l'inserimento), unite in un
+      // unico file con separatore `---` (evita N download bloccati dal browser).
+      const parti: string[] = [];
+      for (const id of ids) {
+        parti.push(
+          await invoke<string>("prompt_export_markdown", { promptId: id }),
+        );
+      }
+      const blob = new Blob([parti.join("\n\n---\n\n")], {
+        type: "text/markdown;charset=utf-8",
+      });
+      scaricaBlob(blob, `prompt-a-porter-export-${ids.length}.md`);
+    } catch (e) {
+      console.error("[list-pane] export bulk markdown", e);
+    }
+  }
+
+  async function eliminaBulk(ids: string[]): Promise<void> {
+    if (!confirm(`Spostare ${ids.length} prompt nel cestino?`)) return;
+    try {
+      for (const id of ids) {
+        await invoke<void>("prompt_elimina", { id });
+        window.dispatchEvent(
+          new CustomEvent("pap:prompt-eliminato", { detail: id }),
+        );
+      }
+    } catch (e) {
+      alert(`Errore durante l'eliminazione: ${String(e).replace(/^Error: /, "")}`);
+    } finally {
+      onPulisciSelezione?.();
+      refreshLista();
+    }
+  }
+
+  function vociSpostaBulk(ids: string[]): VoceMenu[] {
+    const voci: VoceMenu[] = [
+      {
+        id: "mvb-root",
+        label: "Nessuna cartella",
+        azione: () => spostaBulk(ids, null),
+      },
+    ];
+    if (cartelle.length > 0) {
+      voci.push({ separatore: true });
+      for (const c of cartelle) {
+        voci.push({
+          id: `mvb-${c.id}`,
+          label: c.nome,
+          azione: () => spostaBulk(ids, c.id),
+        });
+      }
+    }
+    return voci;
+  }
+
+  function vociBulk(ids: string[]): VoceMenu[] {
+    const voci: VoceMenu[] = [];
+    // Confronta (Diff) supporta solo 2-4 prompt: mostriamo la voce solo quando
+    // è azionabile (≥2 è già garantito dal branch in onContextCard).
+    if (ids.length <= 4) {
+      voci.push(
+        {
+          id: "confronta",
+          label: `Confronta (${ids.length})`,
+          azione: () => onConfronta?.(),
+        },
+        { separatore: true },
+      );
+    }
+    voci.push(
+      {
+        id: "sposta",
+        label: `Sposta ${ids.length} in cartella`,
+        icona: FolderInput,
+        figli: vociSpostaBulk(ids),
+      },
+      {
+        id: "export",
+        label: `Esporta ${ids.length} come Markdown`,
+        icona: FileDown,
+        azione: () => esportaBulkMarkdown(ids),
+      },
+      { separatore: true },
+      {
+        id: "elimina",
+        label: `Elimina ${ids.length}`,
+        icona: Trash2,
+        pericolo: true,
+        azione: () => eliminaBulk(ids),
+      },
+    );
+    return voci;
+  }
+
+  function onContextCard(e: MouseEvent, p: PromptCardData): void {
+    e.preventDefault();
+    const sel = selezioneMultipla;
+    if (sel && sel.size >= 2 && sel.has(p.id)) {
+      apriMenu(e.clientX, e.clientY, vociBulk([...sel]));
+    } else {
+      apriMenu(e.clientX, e.clientY, vociPrompt(p));
+    }
+  }
+
   // ─── Drag & drop riordino ─────────────────
 
   function gestDragStart(e: DragEvent, id: string): void {
@@ -614,10 +742,7 @@
           ondragover={(e) => gestDragOverCard(e, idx)}
           ondrop={(e) => gestDropCard(e, idx)}
           ondragend={gestDragEnd}
-          oncontextmenu={(e) => {
-            e.preventDefault();
-            apriMenu(e.clientX, e.clientY, vociPrompt(p));
-          }}
+          oncontextmenu={(e) => onContextCard(e, p)}
           onclickcapture={(e) => {
             if ((e.metaKey || e.ctrlKey) && onToggleSelezione) {
               e.preventDefault();
