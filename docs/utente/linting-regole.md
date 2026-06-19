@@ -97,15 +97,44 @@ ciao
 LEN002 — body corto (<30 caratteri)
 ```
 
-## Disabilitare il linting
+## Personalizzare il linter
 
-Il pannello Diagnosi è collassabile (chevron in alto a destra).
-Quando chiuso non ricarica le diagnosi al cambio body, ma riapre
-con i risultati dell'ultimo run.
+Le regole che ti danno fastidio si possono **silenziare**, per
+famiglia o per singola regola.
 
-Non c'è (ancora) un toggle globale per disattivare il linter — è
-sempre attivo lato backend. Le regole che ti danno fastidio si
-possono ignorare guardando la severità.
+### Dove
+
+**Impostazioni → Linter.** Trovi il catalogo completo raggruppato
+per categoria (Lunghezza, Segnaposti, Privacy, Stile, Import). Ogni
+voce mostra il codice (`PII001`), la severità e una breve
+descrizione.
+
+### Come
+
+- **Interruttore di famiglia** (es. *Privacy / PII*): spento,
+  nasconde tutte le regole di quella categoria. Quando una famiglia
+  è spenta, gli interruttori delle sue singole regole sono
+  disattivati (è già tutto silenziato).
+- **Interruttore di regola** (es. *PII001*): silenzia solo quella
+  regola, lasciando attive le altre della stessa famiglia. Utile
+  per zittire un singolo falso positivo ricorrente.
+- **Riattiva tutto** ripristina il catalogo completo.
+
+Le modifiche hanno effetto **subito**: la tab Diagnosi si
+ri-analizza appena cambi un interruttore, senza bisogno di
+rieditare il prompt.
+
+### Note
+
+- Le regole silenziate sono **escluse dal conteggio** e dalla lista
+  della tab Diagnosi, ma il lint gira comunque lato backend: il
+  costo è invariato (vedi [Performance](#performance)).
+- Le preferenze sono **locali a questo dispositivo** (non
+  sincronizzate). Reinstallando o cambiando macchina riparti dal
+  catalogo completo.
+- Il pannello Diagnosi è inoltre **collassabile** (chevron in alto a
+  destra): quando è chiuso non ricarica le diagnosi al cambio body,
+  ma riapre con i risultati dell'ultimo run.
 
 ## Performance
 
