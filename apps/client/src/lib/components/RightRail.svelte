@@ -1,7 +1,19 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, onDestroy } from "svelte";
-  import { GitFork, X, Sparkles } from "lucide-svelte";
+  import {
+    GitFork,
+    X,
+    Sparkles,
+    Trash2,
+    Filter,
+    Crown,
+    Pencil,
+  } from "lucide-svelte";
+  import {
+    apriMenu,
+    type VoceMenu,
+  } from "$lib/stores/menu-contestuale.svelte";
   import { estraiSegnaposti } from "$lib/template";
   import { estraiImports } from "$lib/util/estrai-imports";
   import { MODELLI_TARGET } from "$lib/modelli-target";
@@ -128,6 +140,110 @@
     } catch (e) {
       alert(`Errore durante la promozione: ${String(e).replace(/^Error: /, "")}`);
     }
+  }
+
+  // ─── Menu contestuale tag + varianti (blueprint menu-contestuale §6.5/6.6) ───
+  function filtraTag(id: string): void {
+    window.dispatchEvent(new CustomEvent("pap:filtra-tag", { detail: id }));
+  }
+
+  function vociChipTag(t: TagInfo): VoceMenu[] {
+    return [
+      {
+        id: "filtra",
+        label: "Filtra per questo tag",
+        icona: Filter,
+        azione: () => filtraTag(t.id),
+      },
+      {
+        id: "rimuovi",
+        label: "Rimuovi dal prompt",
+        icona: X,
+        azione: () => onRimuoviTag(t.id),
+      },
+    ];
+  }
+
+  async function promuoviVariante(id: string): Promise<void> {
+    if (
+      !confirm(
+        "Promuovere questa variante a principale? Lo stato attuale del prompt principale diventerà variante.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await invoke<void>("prompt_promuovi_variante", { variantId: id });
+      await caricaVarianti();
+      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+      window.dispatchEvent(new CustomEvent("pap:apri-prompt", { detail: id }));
+    } catch (e) {
+      alert(`Errore durante la promozione: ${String(e).replace(/^Error: /, "")}`);
+    }
+  }
+
+  async function eliminaVariante(v: VariantInfo): Promise<void> {
+    if (
+      !confirm(`Eliminare la variante "${v.variant_label}"? Andrà nel cestino.`)
+    ) {
+      return;
+    }
+    try {
+      await invoke<void>("prompt_elimina", { id: v.id });
+      if (v.id === promptId) {
+        // La variante eliminata è quella aperta: Shell deseleziona e il pane si
+        // smonta — NON ricaricare le varianti (promptId ormai stale).
+        window.dispatchEvent(
+          new CustomEvent("pap:prompt-eliminato", { detail: v.id }),
+        );
+      } else {
+        await caricaVarianti();
+      }
+      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+    } catch (e) {
+      alert(`Errore durante l'eliminazione: ${String(e).replace(/^Error: /, "")}`);
+    }
+  }
+
+  function vociVariante(v: VariantInfo): VoceMenu[] {
+    return [
+      {
+        id: "passa",
+        label: "Passa a questa variante",
+        disabilitato: v.id === promptId,
+        azione: () => apriVariante(v.id),
+      },
+      {
+        id: "promuovi",
+        label: "Promuovi a principale",
+        icona: Crown,
+        azione: () => promuoviVariante(v.id),
+      },
+      { separatore: true },
+      {
+        id: "rinomina",
+        label: "Rinomina etichetta",
+        icona: Pencil,
+        disabilitato: true,
+      },
+      {
+        id: "elimina",
+        label: "Elimina variante",
+        icona: Trash2,
+        pericolo: true,
+        azione: () => eliminaVariante(v),
+      },
+    ];
+  }
+
+  function onContextTag(e: MouseEvent, t: TagInfo): void {
+    e.preventDefault();
+    apriMenu(e.clientX, e.clientY, vociChipTag(t));
+  }
+
+  function onContextVariante(e: MouseEvent, v: VariantInfo): void {
+    e.preventDefault();
+    apriMenu(e.clientX, e.clientY, vociVariante(v));
   }
 
   // M3 PR-1: modale "Crea variante" — sostituisce il placeholder F8.
@@ -322,9 +438,11 @@
       {#if tags.length > 0}
         <div class="tags-list">
           {#each tags as t (t.id)}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
             <span
               class="tag-chip"
               style:--tag-c={t.colore || "var(--text-subtle)"}
+              oncontextmenu={(e) => onContextTag(e, t)}
             >
               <span>{t.nome}</span>
               <button
@@ -432,6 +550,7 @@
           class="pill"
           class:active={v.id === promptId}
           onclick={() => apriVariante(v.id)}
+          oncontextmenu={(e) => onContextVariante(e, v)}
           title={v.titolo}
         >
           {v.variant_label}
