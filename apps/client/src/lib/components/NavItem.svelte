@@ -7,16 +7,24 @@
     icona?: Snippet;
     children: Snippet;
     onclick?: () => void;
+    oncontextmenu?: (e: MouseEvent) => void;
   }
 
-  let { attivo = false, conteggio, icona, children, onclick }: Props =
-    $props();
+  let {
+    attivo = false,
+    conteggio,
+    icona,
+    children,
+    onclick,
+    oncontextmenu,
+  }: Props = $props();
 </script>
 
 <button
   class="nav-item"
   aria-current={attivo || undefined}
   onclick={onclick}
+  oncontextmenu={oncontextmenu}
   type="button"
 >
   {#if icona}

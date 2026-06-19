@@ -1,11 +1,23 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, onDestroy } from "svelte";
-  import { ChevronsLeft, BarChart3, AlertTriangle, Trash2 } from "lucide-svelte";
+  import {
+    ChevronsLeft,
+    BarChart3,
+    AlertTriangle,
+    Trash2,
+    FilePlus,
+    FolderPlus,
+    Pencil,
+  } from "lucide-svelte";
   import NavGroup from "./NavGroup.svelte";
   import NavItem from "./NavItem.svelte";
   import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
   import { MODELLI_TARGET } from "$lib/modelli-target";
+  import {
+    apriMenu,
+    type VoceMenu,
+  } from "$lib/stores/menu-contestuale.svelte";
 
   interface ConteggiViste {
     tutti: number;
@@ -92,6 +104,125 @@
     } catch (e) {
       console.error("[sidebar] caricamento dati fallito", e);
     }
+  }
+
+  // ─── Menu contestuale cartelle (blueprint menu-contestuale §6.2) ───
+  let rinominandoId = $state<string | null>(null);
+  let nomeModifica = $state("");
+
+  function focusSelect(node: HTMLInputElement): void {
+    node.focus();
+    node.select();
+  }
+
+  async function nuovoPromptInCartella(folderId: string): Promise<void> {
+    try {
+      const id = await invoke<string>("prompt_crea", {
+        dati: {
+          titolo: "Nuovo prompt",
+          descrizione: "",
+          body: "",
+          visibilita: "private",
+          tag_nomi: [],
+          target_model: null,
+          folder_id: folderId,
+        },
+      });
+      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+      window.dispatchEvent(new CustomEvent("pap:apri-prompt", { detail: id }));
+    } catch (e) {
+      console.error("[sidebar] nuovo prompt in cartella", e);
+    }
+  }
+
+  async function nuovaSottocartella(parentId: string): Promise<void> {
+    try {
+      const id = await invoke<string>("folder_crea", {
+        dati: { nome: "Nuova cartella", parent_folder_id: parentId },
+      });
+      await caricaDati();
+      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+      avviaRinomina(id, "Nuova cartella");
+    } catch (e) {
+      console.error("[sidebar] nuova sottocartella", e);
+    }
+  }
+
+  function avviaRinomina(id: string, nome: string): void {
+    rinominandoId = id;
+    nomeModifica = nome;
+  }
+
+  function annullaRinomina(): void {
+    rinominandoId = null;
+  }
+
+  async function salvaRinomina(): Promise<void> {
+    const id = rinominandoId;
+    const nome = nomeModifica.trim();
+    rinominandoId = null;
+    if (!id || !nome) return;
+    try {
+      await invoke<void>("folder_rinomina", {
+        dati: { id, nuovo_nome: nome },
+      });
+      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+    } catch (e) {
+      console.error("[sidebar] rinomina cartella", e);
+    }
+  }
+
+  async function eliminaCartella(cart: Cartella): Promise<void> {
+    if (
+      !confirm(
+        `Eliminare la cartella "${cart.nome}"? I prompt al suo interno torneranno alla libreria principale.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await invoke<void>("folder_elimina", { id: cart.id });
+      if (folderSelezionato === cart.id) onSelezionaFolder(null);
+      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+    } catch (e) {
+      console.error("[sidebar] elimina cartella", e);
+    }
+  }
+
+  function vociCartella(cart: Cartella): VoceMenu[] {
+    return [
+      {
+        id: "nuovo-prompt",
+        label: "Nuovo prompt qui",
+        icona: FilePlus,
+        azione: () => nuovoPromptInCartella(cart.id),
+      },
+      {
+        id: "nuova-sub",
+        label: "Nuova sottocartella",
+        icona: FolderPlus,
+        azione: () => nuovaSottocartella(cart.id),
+      },
+      {
+        id: "rinomina",
+        label: "Rinomina",
+        icona: Pencil,
+        azione: () => avviaRinomina(cart.id, cart.nome),
+      },
+      { separatore: true },
+      {
+        id: "elimina",
+        label: "Elimina cartella",
+        icona: Trash2,
+        pericolo: true,
+        azione: () => eliminaCartella(cart),
+      },
+    ];
+  }
+
+  function onContextCartella(e: MouseEvent, cart: Cartella): void {
+    e.preventDefault();
+    apriMenu(e.clientX, e.clientY, vociCartella(cart));
   }
 
   onMount(() => {
@@ -183,13 +314,33 @@
       bind:collapsed={gruppi.cartelle}
     >
       {#each cartelle as cart (cart.id)}
-        <NavItem
-          attivo={folderSelezionato === cart.id}
-          conteggio={cart.conteggio_prompt}
-          onclick={() => onSelezionaFolder(cart.id)}
-        >
-          {cart.nome}
-        </NavItem>
+        {#if rinominandoId === cart.id}
+          <input
+            class="rinomina-cartella"
+            aria-label="Nuovo nome cartella"
+            bind:value={nomeModifica}
+            use:focusSelect
+            onkeydown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void salvaRinomina();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                annullaRinomina();
+              }
+            }}
+            onblur={salvaRinomina}
+          />
+        {:else}
+          <NavItem
+            attivo={folderSelezionato === cart.id}
+            conteggio={cart.conteggio_prompt}
+            onclick={() => onSelezionaFolder(cart.id)}
+            oncontextmenu={(e) => onContextCartella(e, cart)}
+          >
+            {cart.nome}
+          </NavItem>
+        {/if}
       {/each}
     </NavGroup>
 
@@ -331,5 +482,18 @@
 
   .dot-team {
     background: var(--accent-team);
+  }
+
+  .rinomina-cartella {
+    width: 100%;
+    height: 32px;
+    padding: 0 var(--sp-3);
+    border: 1px solid var(--accent-private);
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    color: var(--text-default);
+    font-family: var(--font-ui);
+    font-size: var(--fs-sm);
+    outline: none;
   }
 </style>
