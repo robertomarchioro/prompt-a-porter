@@ -593,7 +593,7 @@ mod test {
     }
 
     #[test]
-    fn stress_oltre_25_varianti_fallback_vN() {
+    fn stress_oltre_25_varianti_fallback_vn() {
         let conn = db_test();
         for _ in 0..25 {
             crea_variante_pure(&conn, "prm-parent", None).unwrap();

@@ -179,8 +179,6 @@ pub fn sync_applica_delta(delta: SyncDelta, state: State<'_, VaultState>) -> Res
 
 #[cfg(test)]
 mod test {
-    use super::*;
-
     fn db_test() -> rusqlite::Connection {
         crate::embeddings_store::registra_auto_extension();
         let conn = rusqlite::Connection::open_in_memory().unwrap();
