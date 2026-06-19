@@ -14,6 +14,7 @@
   import GoldenTab from "$lib/components/GoldenTab.svelte";
   import CronologiaTab from "$lib/components/CronologiaTab.svelte";
   import ImportVarTab from "$lib/components/ImportVarTab.svelte";
+  import RatingTab from "$lib/components/RatingTab.svelte";
   import Modale from "$lib/components/Modale.svelte";
   import Button from "$lib/components/Button.svelte";
   import { apriModale } from "$lib/stores/modale.svelte";
@@ -693,6 +694,8 @@
               {body}
               onConteggio={(n) => (importVarCount = n)}
             />
+          {:else if tabAttivo === "rating"}
+            <RatingTab {promptId} />
           {:else}
             <div class="tab-placeholder">
               <p>Tab "{tabAttivo}" — implementazione in F5</p>

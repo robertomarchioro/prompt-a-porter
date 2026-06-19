@@ -5,7 +5,8 @@
     | "diagnosi"
     | "golden"
     | "cronologia"
-    | "import-var";
+    | "import-var"
+    | "rating";
 </script>
 
 <script lang="ts">
@@ -33,6 +34,7 @@
     { id: "golden", label: "Test golden", badge: badge.golden },
     { id: "cronologia", label: "Cronologia", badge: badge.cronologia },
     { id: "import-var", label: "Import & Var.", badge: badge.importVar },
+    { id: "rating", label: "Valutazioni" },
   ]);
 </script>
 
