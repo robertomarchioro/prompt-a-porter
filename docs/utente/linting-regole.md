@@ -118,11 +118,22 @@ descrizione.
 - **Interruttore di regola** (es. *PII001*): silenzia solo quella
   regola, lasciando attive le altre della stessa famiglia. Utile
   per zittire un singolo falso positivo ricorrente.
-- **Riattiva tutto** ripristina il catalogo completo.
+- **Severità** (menu a tendina per ogni regola): cambia il livello
+  con cui l'avviso viene mostrato — *Errore*, *Avviso* o *Info*.
+  Es. declassare *PII001* da Avviso a Info se le email nei tuoi
+  prompt sono legittime.
+- **Soglie numeriche**: alcune regole hanno un valore regolabile —
+  *Caratteri massimi* (LEN001), *Caratteri minimi* (LEN002) e
+  *Ripetizioni minime* (STY001). Alzale o abbassale per adattare la
+  sensibilità al tuo stile.
+- **Ripristina** (per regola) riporta severità e soglia di quella
+  regola ai valori predefiniti; **Ripristina tutto** azzera ogni
+  personalizzazione (disattivazioni, severità, soglie).
 
 Le modifiche hanno effetto **subito**: la tab Diagnosi si
-ri-analizza appena cambi un interruttore, senza bisogno di
-rieditare il prompt.
+ri-analizza appena cambi qualcosa, senza bisogno di rieditare il
+prompt. Valori fuori scala vengono riportati entro limiti sensati
+(es. la soglia ripetizioni non scende sotto 2).
 
 ### Note
 
