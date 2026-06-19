@@ -102,7 +102,7 @@ L'updater non supporta il downgrade automatico (per sicurezza). Per tornare a un
 2. Scarica la versione che vuoi da [github.com/robertomarchioro/prompt-a-porter/releases](https://github.com/robertomarchioro/prompt-a-porter/releases) (tutte le release sono permanenti).
 3. Installa.
 
-I tuoi dati restano: il vault è in `%APPDATA%\com.pap.app\`, indipendente dalla versione dell'eseguibile.
+I tuoi dati restano: il vault è in `%APPDATA%\com.pap.client\`, indipendente dalla versione dell'eseguibile.
 
 ### "SmartScreen mi dice che l'eseguibile non è riconosciuto"
 
@@ -125,7 +125,7 @@ R: L'updater rifiuta gli aggiornamenti firmati con chiave diversa da quella che 
 R: Sì. Disabilita il check dalle impostazioni. Riattiva quando vuoi controllare.
 
 **D: Gli aggiornamenti rompono i miei dati?**
-R: No: il vault è in una cartella separata (`%APPDATA%\com.pap.app\`). Gli update aggiornano solo l'eseguibile. I dati restano. Eventuali migrazioni di schema database sono retro-compatibili e documentate nel CHANGELOG.
+R: No: il vault è in una cartella separata (`%APPDATA%\com.pap.client\`). Gli update aggiornano solo l'eseguibile. I dati restano. Eventuali migrazioni di schema database sono retro-compatibili e documentate nel CHANGELOG.
 
 **D: Posso aggiornare PaP installato in modalità portable?**
 R: Per la versione portable serve sostituzione manuale: scarica la nuova `.zip`, sovrascrivi i file della cartella. Il check aggiornamenti dell'updater è disponibile anche in portable, ma il "Applica" richiede privilegi di scrittura nella cartella dove hai estratto il portable.

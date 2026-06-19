@@ -22,7 +22,7 @@ import (
 
 const (
 	cliVersion    = "0.1.0"
-	identifier    = "com.pap.app"
+	identifier    = "com.pap.client"
 	vaultFilename = "pap-vault.db"
 )
 

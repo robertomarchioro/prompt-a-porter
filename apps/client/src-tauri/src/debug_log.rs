@@ -2,9 +2,9 @@
 //! di log scritto da `tauri-plugin-log`.
 //!
 //! Path su `app_log_dir()`:
-//! - Linux: `~/.local/share/com.pap.app/logs/pap.log`
-//! - Windows: `%APPDATA%\com.pap.app\logs\pap.log`
-//! - macOS: `~/Library/Logs/com.pap.app/pap.log`
+//! - Linux: `~/.local/share/com.pap.client/logs/pap.log`
+//! - Windows: `%APPDATA%\com.pap.client\logs\pap.log`
+//! - macOS: `~/Library/Logs/com.pap.client/pap.log`
 //!
 //! Cmd esposti:
 //! - `debug_log_info` — path + lista file rotati con size/mtime

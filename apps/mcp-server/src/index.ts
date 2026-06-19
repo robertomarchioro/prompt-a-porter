@@ -8,7 +8,7 @@
  *
  * Vault discovery:
  * - env PAP_VAULT_PATH (override esplicito)
- * - default per piattaforma: <app_data_dir>/com.pap.app/pap-vault.db
+ * - default per piattaforma: <app_data_dir>/com.pap.client/pap-vault.db
  *
  * Limitazioni MVP:
  * - solo vault NON cifrati (better-sqlite3 standard, no SQLCipher)
@@ -32,7 +32,7 @@ import { compila, estraiSegnaposti } from "./lib/template.js";
 
 // ─── Vault path discovery ───
 
-const IDENTIFIER = "com.pap.app";
+const IDENTIFIER = "com.pap.client";
 const VAULT_FILENAME = "pap-vault.db";
 
 function defaultVaultPath(): string {

@@ -1,4 +1,6 @@
 name: Client Build
+# Note: DEP0040 (punycode) e DEP0190 sono deprecazioni transitive di Node
+# provenienti da dipendenze di build -- non richiedono azione in questo workflow.
 
 on:
   push:
@@ -31,7 +33,7 @@ jobs:
   lint-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: pnpm/action-setup@v6
 
@@ -62,7 +64,7 @@ jobs:
   rust-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@1.96.0
         with:

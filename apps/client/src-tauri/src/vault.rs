@@ -65,8 +65,8 @@ impl VaultState {
         self.data_dir.join("pap-vault.db")
     }
 
-    /// Path della directory dati dell'app (es. `%APPDATA%\com.pap.app` su
-    /// Windows, `~/.local/share/com.pap.app` su Linux). Usato da altri moduli
+    /// Path della directory dati dell'app (es. `%APPDATA%\com.pap.client` su
+    /// Windows, `~/.local/share/com.pap.client` su Linux). Usato da altri moduli
     /// (es. `embeddings`) per cache di file ausiliari.
     pub fn data_dir(&self) -> &PathBuf {
         &self.data_dir
