@@ -49,7 +49,7 @@
   import PannelloProviderConfig from "$lib/components/PannelloProviderConfig.svelte";
   import HotkeyInput from "$lib/components/HotkeyInput.svelte";
   import LogViewer from "$lib/components/LogViewer.svelte";
-  import { nomeFileExport } from "$lib/util/dati-export";
+  import { nomeFileExport, scaricaBlob } from "$lib/util/dati-export";
   import {
     statoTema,
     salvaTemaTono,
@@ -250,18 +250,6 @@
     // Reset input per permettere ri-selezione stessi file (browser
     // ignora change su stesso valore).
     target.value = "";
-  }
-
-  // Innesca il download di un Blob nel browser (pattern <a download>).
-  function scaricaBlob(blob: Blob, filename: string): void {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   }
 
   async function esportaVaultZip(): Promise<void> {

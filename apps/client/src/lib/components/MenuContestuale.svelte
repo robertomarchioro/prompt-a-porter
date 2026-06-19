@@ -4,12 +4,15 @@
    * e le renderizza. Nessuna logica di dominio qui. Montato una volta in Shell.
    *
    * - Posizionamento manuale clampato al viewport (`posizionaMenu`, flip se sborda).
+   * - Submenu a un livello: una voce con `figli` apre un menu figlio a destra
+   *   (flip a sinistra se sborda). Hover o → per aprire, ← per chiudere.
    * - Tastiera: ↑/↓ navigano le voci abilitate (wrap), Home/End, Enter/Space
-   *   attivano (nativo del <button>), Esc chiude e restituisce il focus.
-   * - Click fuori / resize / scroll → chiude.
-   * - a11y: role=menu / menuitem, aria-disabled, focus-trap leggero.
+   *   attivano (nativo del <button>), Esc chiude tutto e restituisce il focus.
+   * - Click fuori (backdrop) / resize / scroll → chiude.
+   * - a11y: role=menu / menuitem, aria-haspopup/expanded sui parent, aria-disabled.
    */
   import { untrack } from "svelte";
+  import { ChevronRight } from "lucide-svelte";
   import {
     menuContestuale,
     chiudiMenu,
@@ -19,26 +22,47 @@
   import { posizionaMenu, type PuntoMenu } from "$lib/util/menu-posizione";
   import { fmtShortcut } from "$lib/util/shortcut";
 
+  type Voce = Extract<VoceMenu, { id: string }>;
+
   let menuEl = $state<HTMLDivElement>();
+  let subEl = $state<HTMLDivElement>();
   let pos = $state<PuntoMenu>({ left: 0, top: 0 });
+  let subPos = $state<PuntoMenu>({ left: 0, top: 0 });
+  let subApertoId = $state<string | null>(null);
   let origineFocus: HTMLElement | null = null;
+  let eraAperto = false;
+  // Generazione del submenu: invalida i rAF di un'apertura superata quando si
+  // passa rapidamente da un genitore all'altro (evita posizioni "stale").
+  let subGen = 0;
+
+  function bottoneVoce(id: string): HTMLButtonElement | null | undefined {
+    return menuEl?.querySelector<HTMLButtonElement>(
+      `[data-id="${CSS.escape(id)}"]`,
+    );
+  }
 
   const stato = $derived(menuContestuale.stato);
+  const vociSub = $derived.by<VoceMenu[]>(() => {
+    if (!subApertoId) return [];
+    const parent = stato.voci.find(
+      (v): v is Voce => !isSeparatore(v) && v.id === subApertoId,
+    );
+    return parent?.figli ?? [];
+  });
 
-  function vociAbilitate(): HTMLButtonElement[] {
-    if (!menuEl) return [];
+  function abilitate(container?: HTMLElement): HTMLButtonElement[] {
+    if (!container) return [];
     return Array.from(
-      menuEl.querySelectorAll<HTMLButtonElement>(
+      container.querySelectorAll<HTMLButtonElement>(
         '[role="menuitem"]:not([aria-disabled="true"])',
       ),
     );
   }
 
-  function muovi(delta: number): void {
-    const items = vociAbilitate();
+  function muovi(container: HTMLElement | undefined, delta: number): void {
+    const items = abilitate(container);
     if (items.length === 0) return;
     const idx = items.indexOf(document.activeElement as HTMLButtonElement);
-    // Da "nessun focus" (idx -1): ↓ va al primo, ↑ all'ultimo (WAI-ARIA menu).
     const next =
       idx === -1
         ? delta > 0
@@ -53,24 +77,87 @@
     origineFocus?.focus?.();
   }
 
-  function onKeydown(e: KeyboardEvent): void {
+  function chiudiSub(refocusParent = false): void {
+    const id = subApertoId;
+    subApertoId = null;
+    if (refocusParent && id) {
+      bottoneVoce(id)?.focus();
+    }
+  }
+
+  function apriSub(voce: Voce, anchor: HTMLElement, focusFirst: boolean): void {
+    const gen = ++subGen;
+    const r = anchor.getBoundingClientRect();
+    subApertoId = voce.id;
+    // posizione provvisoria; raffinata dopo la misura del submenu.
+    subPos = { left: r.right - 2, top: r.top };
+    requestAnimationFrame(() => {
+      if (!subEl || gen !== subGen) return;
+      const sr = subEl.getBoundingClientRect();
+      let left = r.right - 2;
+      if (left + sr.width + 8 > window.innerWidth) {
+        left = r.left - sr.width + 2; // apre a sinistra del genitore
+      }
+      let top = r.top;
+      if (top + sr.height + 8 > window.innerHeight) {
+        top = Math.max(8, window.innerHeight - sr.height - 8);
+      }
+      subPos = { left: Math.max(8, left), top: Math.max(8, top) };
+      if (focusFirst) abilitate(subEl)[0]?.focus();
+    });
+  }
+
+  async function attiva(voce: Voce): Promise<void> {
+    if (voce.disabilitato) return;
+    if (voce.figli) {
+      // Voce-genitore: apre/chiude il submenu invece di agire.
+      const anchor = bottoneVoce(voce.id);
+      if (subApertoId === voce.id) chiudiSub(true);
+      else if (anchor) apriSub(voce, anchor, true);
+      return;
+    }
+    chiudiMenu();
+    try {
+      await voce.azione?.();
+    } catch (e) {
+      console.error("[menu-contestuale] azione fallita", e);
+    }
+  }
+
+  function vocePerId(id: string | undefined): Voce | undefined {
+    if (!id) return undefined;
+    const v = stato.voci.find((x) => !isSeparatore(x) && x.id === id);
+    return v && !isSeparatore(v) ? v : undefined;
+  }
+
+  function onKeydownRoot(e: KeyboardEvent): void {
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        muovi(1);
+        muovi(menuEl, 1);
         break;
       case "ArrowUp":
         e.preventDefault();
-        muovi(-1);
+        muovi(menuEl, -1);
         break;
       case "Home":
         e.preventDefault();
-        vociAbilitate()[0]?.focus();
+        abilitate(menuEl)[0]?.focus();
         break;
       case "End": {
         e.preventDefault();
-        const v = vociAbilitate();
+        const v = abilitate(menuEl);
         v[v.length - 1]?.focus();
+        break;
+      }
+      case "ArrowRight": {
+        const voce = vocePerId(
+          (document.activeElement as HTMLElement)?.dataset?.id,
+        );
+        if (voce?.figli) {
+          e.preventDefault();
+          apriSub(voce, document.activeElement as HTMLElement, true);
+        }
         break;
       }
       case "Escape":
@@ -80,28 +167,53 @@
     }
   }
 
-  async function attiva(voce: Extract<VoceMenu, { id: string }>): Promise<void> {
-    if (voce.disabilitato) return;
-    // Chiude e smonta il menu; il focus lo gestisce l'azione (apre una modale,
-    // naviga, ecc.). NON ripristiniamo il focus qui per non interferire col
-    // focus-trap di un'eventuale modale aperta dall'azione.
-    chiudiMenu();
-    try {
-      await voce.azione?.();
-    } catch (e) {
-      console.error("[menu-contestuale] azione fallita", e);
+  function onKeydownSub(e: KeyboardEvent): void {
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        muovi(subEl, 1);
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        muovi(subEl, -1);
+        break;
+      case "Home":
+        e.preventDefault();
+        abilitate(subEl)[0]?.focus();
+        break;
+      case "End": {
+        e.preventDefault();
+        const v = abilitate(subEl);
+        v[v.length - 1]?.focus();
+        break;
+      }
+      case "ArrowLeft":
+        e.preventDefault();
+        chiudiSub(true);
+        break;
+      case "Escape":
+        e.preventDefault();
+        chiudiERitorna();
+        break;
     }
   }
 
-  // True tra l'apertura e la chiusura: evita di ri-catturare `origineFocus`
-  // quando `apriMenu` viene richiamato a menu già aperto (es. tasto destro su
-  // un'altra card) — altrimenti l'origine diventerebbe una voce del menu stesso.
-  let eraAperto = false;
+  // Hover sui top-level: un genitore apre il suo submenu (sostituendo quello
+  // eventualmente aperto). Passare su una voce semplice NON chiude il submenu
+  // (così si può raggiungere senza che un fratello lo chiuda per strada: niente
+  // hover-intent delay); il submenu si chiude su ←, Esc, selezione o click-fuori.
+  function onHoverVoce(voce: Voce): void {
+    if (voce.figli) {
+      const anchor = bottoneVoce(voce.id);
+      if (anchor && subApertoId !== voce.id) apriSub(voce, anchor, false);
+    }
+  }
 
-  // Posiziona dopo il render (misura reale) e focalizza la prima voce.
+  // Posiziona il menu radice dopo il render reale e focalizza la prima voce.
   $effect(() => {
     if (!stato.aperto) {
       eraAperto = false;
+      subApertoId = null;
       return;
     }
     let raf = 0;
@@ -110,8 +222,7 @@
         origineFocus = document.activeElement as HTMLElement | null;
         eraAperto = true;
       }
-      // Posiziona subito al punto di click (niente flash a 0,0); poi raffina
-      // dopo la misura reale.
+      subApertoId = null;
       pos = { left: stato.x, top: stato.y };
       raf = requestAnimationFrame(() => {
         if (!menuEl) return;
@@ -125,7 +236,7 @@
           window.innerWidth,
           window.innerHeight,
         );
-        vociAbilitate()[0]?.focus();
+        abilitate(menuEl)[0]?.focus();
       });
     });
     const chiudiSuEvento = (): void => chiudiMenu();
@@ -138,6 +249,38 @@
     };
   });
 </script>
+
+{#snippet voceBtn(voce: Voce, inSub: boolean)}
+  <button
+    type="button"
+    role="menuitem"
+    class="voce"
+    class:pericolo={voce.pericolo}
+    class:disabilitata={voce.disabilitato}
+    tabindex="-1"
+    id={`mc-${voce.id}`}
+    data-id={voce.id}
+    aria-disabled={voce.disabilitato}
+    aria-haspopup={voce.figli ? "menu" : undefined}
+    aria-expanded={voce.figli ? subApertoId === voce.id : undefined}
+    title={voce.disabilitato ? "Disponibile prossimamente" : undefined}
+    onmouseenter={inSub ? undefined : () => onHoverVoce(voce)}
+    onclick={() => attiva(voce)}
+  >
+    <span class="ico" aria-hidden="true">
+      {#if voce.icona}
+        {@const Ico = voce.icona}
+        <Ico size={15} />
+      {/if}
+    </span>
+    <span class="label">{voce.label}</span>
+    {#if voce.figli}
+      <ChevronRight class="chevron" size={14} aria-hidden="true" />
+    {:else if voce.scorciatoia}
+      <kbd class="scorciatoia">{fmtShortcut(voce.scorciatoia)}</kbd>
+    {/if}
+  </button>
+{/snippet}
 
 {#if stato.aperto}
   <!-- Backdrop trasparente che assorbe il click-fuori. È un <button> (non un
@@ -163,37 +306,36 @@
     aria-label="Azioni"
     tabindex="-1"
     style="left: {pos.left}px; top: {pos.top}px;"
-    onkeydown={onKeydown}
+    onkeydown={onKeydownRoot}
   >
     {#each stato.voci as voce, i (isSeparatore(voce) ? `sep-${i}` : voce.id)}
       {#if isSeparatore(voce)}
         <div class="separatore" role="separator"></div>
       {:else}
-        <button
-          type="button"
-          role="menuitem"
-          class="voce"
-          class:pericolo={voce.pericolo}
-          class:disabilitata={voce.disabilitato}
-          tabindex="-1"
-          aria-disabled={voce.disabilitato}
-          title={voce.disabilitato ? "Disponibile prossimamente" : undefined}
-          onclick={() => attiva(voce)}
-        >
-          <span class="ico" aria-hidden="true">
-            {#if voce.icona}
-              {@const Ico = voce.icona}
-              <Ico size={15} />
-            {/if}
-          </span>
-          <span class="label">{voce.label}</span>
-          {#if voce.scorciatoia}
-            <kbd class="scorciatoia">{fmtShortcut(voce.scorciatoia)}</kbd>
-          {/if}
-        </button>
+        {@render voceBtn(voce, false)}
       {/if}
     {/each}
   </div>
+
+  {#if subApertoId}
+    <div
+      bind:this={subEl}
+      class="menu submenu"
+      role="menu"
+      aria-labelledby={subApertoId ? `mc-${subApertoId}` : undefined}
+      tabindex="-1"
+      style="left: {subPos.left}px; top: {subPos.top}px;"
+      onkeydown={onKeydownSub}
+    >
+      {#each vociSub as voce, i (isSeparatore(voce) ? `s-${i}` : voce.id)}
+        {#if isSeparatore(voce)}
+          <div class="separatore" role="separator"></div>
+        {:else}
+          {@render voceBtn(voce, true)}
+        {/if}
+      {/each}
+    </div>
+  {/if}
 {/if}
 
 <style>
@@ -221,6 +363,10 @@
     box-shadow: var(--shadow-lg, 0 10px 30px rgba(0, 0, 0, 0.25));
     font-family: var(--font-ui);
     color: var(--text-default);
+  }
+
+  .submenu {
+    z-index: 3002;
   }
 
   .voce {
@@ -272,6 +418,11 @@
 
   .label {
     flex: 1;
+  }
+
+  .voce :global(.chevron) {
+    color: var(--text-muted);
+    flex-shrink: 0;
   }
 
   .scorciatoia {

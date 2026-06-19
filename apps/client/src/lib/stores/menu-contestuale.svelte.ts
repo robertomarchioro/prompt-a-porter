@@ -19,6 +19,8 @@ export type VoceMenu =
       pericolo?: boolean;
       /** Voce grigia non attivabile (es. backend mancante). */
       disabilitato?: boolean;
+      /** Submenu (un livello): la voce apre un menu figlio invece di agire. */
+      figli?: VoceMenu[];
       azione?: () => void | Promise<void>;
     }
   | { separatore: true };
