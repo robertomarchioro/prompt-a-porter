@@ -14,7 +14,8 @@
   import AiutoLink from "$lib/aiuto/AiutoLink.svelte";
   import { leggiConfig } from "$lib/preferenze-linter";
 
-  type Severita = "Error" | "Warning" | "Info";
+  // Il backend serializza la severità in lowercase (#[serde(rename_all)]).
+  type Severita = "error" | "warning" | "info";
 
   interface Issue {
     code: string;
@@ -108,7 +109,7 @@
   // Raggruppa per severità (Error → Warning → Info), poi linea asc
   const ordinato = $derived.by(() => {
     const sev = (s: Severita) =>
-      s === "Error" ? 0 : s === "Warning" ? 1 : 2;
+      s === "error" ? 0 : s === "warning" ? 1 : 2;
     return [...issues].sort((a, b) => {
       const d = sev(a.severita) - sev(b.severita);
       if (d !== 0) return d;
@@ -138,7 +139,7 @@
           <button
             class="issue"
             type="button"
-            data-sev={it.severita.toLowerCase()}
+            data-sev={it.severita}
             disabled={it.linea === undefined}
             onclick={() => vaiAllaRiga(it.linea)}
             title={it.linea !== undefined
@@ -146,9 +147,9 @@
               : "Issue globale"}
           >
             <span class="ico" aria-hidden="true">
-              {#if it.severita === "Error"}
+              {#if it.severita === "error"}
                 <AlertCircle size={14} />
-              {:else if it.severita === "Warning"}
+              {:else if it.severita === "warning"}
                 <AlertTriangle size={14} />
               {:else}
                 <Info size={14} />
