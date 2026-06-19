@@ -72,13 +72,13 @@ Design completato, **nessun codice**. Candidati per i prossimi cicli, ognuno con
 
 | Blueprint | Scope | Dimensione |
 |---|---|---|
-| [`linter-personalizzabile.md`](./linter-personalizzabile.md) | Visibilità + tuning regole linter, in 2 fasi rilasciabili indipendenti | Media |
 | [`vault-a-cartella.md`](./vault-a-cartella.md) | Storage plain-text `.md` no-lock-in + sidecar `.pap/` (#258) | Grande / strategica |
 | [`prompts-as-code.md`](./prompts-as-code.md) | Idea strategica storage/posizionamento — sola ideazione, da decidere | Da definire |
 
 **Blueprint atterrati** (spostati qui dalla tabella):
 
 - [`cestino-e-cancellazione-import.md`](./cestino-e-cancellazione-import.md) → v0.8.20 (#302 cestino + #303 warning import); resta solo l'opzione 3 (§2).
+- [`linter-personalizzabile.md`](./linter-personalizzabile.md) → **Fase 1** (#381 backend catalogo + filtro per-regola, #383 frontend `PannelloLinter` in Impostazioni → Linter). Resta la **Fase 2** (tuning: override severità + soglie editabili, `ConfigLinter`/`SoglieLinter`) — rinviabile senza debito, PR-3/4 del blueprint §5/§8.
 - [`guida-interattiva.md`](./guida-interattiva.md) → Fase 0/1/3 in v0.8.20-v0.8.23 (#364-#372: hub + "?" ovunque, tour benvenuto + auto-offerta + micro-tour, checklist "Primi passi"). Resta solo la **Fase 4** (deep-link al sito: quando il sito VitePress `apps/site` sarà pubblicato basta cambiare `SITO_BASE` in `docs-links.ts` — le pagine docs esistono già) + l'esplorazione guidata del vault demo.
 - [`menu-contestuale.md`](./menu-contestuale.md) → taglio principale in v0.8.23 (#374-#380 + tag): card/cartelle/editor/chip-tag/varianti/selezione-multipla + Gestisci tag / Aggiungi tag a N. Gap residui in §2.
 
