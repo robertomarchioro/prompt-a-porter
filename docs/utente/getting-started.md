@@ -32,9 +32,9 @@ Al primo avvio l'app mostra un wizard a 3 step:
 
 Il vault è il file SQLite cifrato (SQLCipher, AES-256) che contiene tutti i tuoi prompt. Viene salvato di default in:
 
-- Windows: `%APPDATA%\com.pap.app\pap-vault.db`
-- macOS: `~/Library/Application Support/com.pap.app/pap-vault.db`
-- Linux: `~/.local/share/com.pap.app/pap-vault.db`
+- Windows: `%APPDATA%\com.pap.client\pap-vault.db`
+- macOS: `~/Library/Application Support/com.pap.client/pap-vault.db`
+- Linux: `~/.local/share/com.pap.client/pap-vault.db`
 
 Scegli una password robusta (12+ caratteri, mix lettere/numeri/simboli). **La password non è recuperabile:** se la dimentichi devi ricreare il vault. Considera di salvarla in un password manager.
 

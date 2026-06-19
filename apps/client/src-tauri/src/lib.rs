@@ -224,6 +224,64 @@ fn is_portable() -> bool {
 fn app_is_portable() -> bool {
     is_portable()
 }
+/// Calcola le directory legacy (com.pap.app) e nuova (com.pap.client) per la
+/// migrazione one-shot dei dati utente dopo il rename identifier (#389).
+///
+/// Restituisce Some((legacy, nuova)) se la migrazione e necessaria:
+/// legacy esiste e nuova NON esiste ancora. Funzione pura (no I/O).
+pub fn percorso_migrazione_legacy(
+    nuova_dir: &std::path::Path,
+) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
+    let parent = nuova_dir.parent()?;
+    let legacy = parent.join("com.pap.app");
+    if legacy.exists() && !nuova_dir.exists() {
+        Some((legacy, nuova_dir.to_path_buf()))
+    } else {
+        None
+    }
+}
+
+/// Esegue la migrazione one-shot legacy -> nuova directory. Non-fatal.
+fn esegui_migrazione_legacy(legacy: &std::path::Path, nuova: &std::path::Path) {
+    log::info!(
+        "Migrazione dati legacy: {} -> {}",
+        legacy.display(),
+        nuova.display()
+    );
+    if let Some(parent) = nuova.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            log::warn!("Migrazione: impossibile creare parent {}: {e}", parent.display());
+            return;
+        }
+    }
+    if let Err(e) = std::fs::rename(legacy, nuova) {
+        log::warn!("Migrazione rename fallita ({e}), tentativo copia ricorsiva...");
+        if let Err(e2) = copia_dir_ricorsiva(legacy, nuova) {
+            log::warn!("Migrazione copia ricorsiva fallita: {e2}");
+            return;
+        }
+        if let Err(e3) = std::fs::remove_dir_all(legacy) {
+            log::warn!("Migrazione: impossibile rimuovere legacy dopo copia: {e3}");
+        }
+    }
+    log::info!("Migrazione dati legacy completata.");
+}
+
+/// Copia ricorsiva di una directory (fallback cross-device).
+fn copia_dir_ricorsiva(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if src_path.is_dir() {
+            copia_dir_ricorsiva(&src_path, &dst_path)?;
+        } else {
+            std::fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
+}
 
 pub fn run() {
     // Registra sqlite-vec come auto-extension PRIMA che venga aperta qualunque
@@ -290,6 +348,13 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .map_err(|e| format!("Impossibile ottenere la directory dati dell'app: {e}"))?;
+
+            // -- Migrazione one-shot dati legacy com.pap.app -> com.pap.client --
+            // Prima esecuzione dopo il rename identifier (#389): sposta la
+            // vecchia directory nella nuova posizione. Non-fatal, idempotente.
+            if let Some((legacy, nuova)) = percorso_migrazione_legacy(&data_dir) {
+                esegui_migrazione_legacy(&legacy, &nuova);
+            }
 
             // v0.8.7 Sezione Sviluppo → Debug log: applica livello dalla
             // preferenza dell'utente. Default WARN (file leggero), DEBUG
@@ -575,5 +640,46 @@ mod tests {
         // file `.portable` accanto, quindi deve risultare NON portable.
         // Copre il percorso current_exe()→parent()→join(".portable")→false.
         assert!(!is_portable());
+    }
+
+
+    #[test]
+    fn migrazione_legacy_rilevata_quando_legacy_esiste_e_nuova_no() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        let legacy = root.join("com.pap.app");
+        let nuova = root.join("com.pap.client");
+        std::fs::create_dir_all(&legacy).unwrap();
+        let risultato = percorso_migrazione_legacy(&nuova);
+        let (l, n) = risultato.expect("deve essere Some");
+        assert_eq!(l, legacy);
+        assert_eq!(n, nuova);
+    }
+
+    #[test]
+    fn migrazione_legacy_none_quando_nuova_gia_esiste() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        let legacy = root.join("com.pap.app");
+        let nuova = root.join("com.pap.client");
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::create_dir_all(&nuova).unwrap();
+        assert!(percorso_migrazione_legacy(&nuova).is_none());
+    }
+
+    #[test]
+    fn migrazione_legacy_none_quando_legacy_assente() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let nuova = tmp.path().join("com.pap.client");
+        std::fs::create_dir_all(&nuova).unwrap();
+        assert!(percorso_migrazione_legacy(&nuova).is_none());
+    }
+
+    #[test]
+    fn migrazione_legacy_none_fresh_install() {
+        // Fresh install: nessuna directory esiste.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let nuova = tmp.path().join("com.pap.client");
+        assert!(percorso_migrazione_legacy(&nuova).is_none());
     }
 }

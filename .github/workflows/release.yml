@@ -47,7 +47,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Installa dipendenze sistema (Linux)
         if: matrix.platform == 'ubuntu-22.04'
@@ -235,14 +235,14 @@ jobs:
           Dati utente
           -----------
           Il vault e le preferenze vengono salvati in
-          %APPDATA%\com.pap.app\ (NON nella cartella dell'eseguibile).
+          %APPDATA%\com.pap.client\ (NON nella cartella dell'eseguibile).
           Per una vera modalita "portable senza traccia" copia anche
-          la cartella %APPDATA%\com.pap.app\ sulla pen drive.
+          la cartella %APPDATA%\com.pap.client\ sulla pen drive.
 
           Disinstallare
           -------------
           Cancella la cartella estratta. Per rimuovere anche i dati,
-          cancella %APPDATA%\com.pap.app\.
+          cancella %APPDATA%\com.pap.client\.
 
           Source: https://github.com/${{ github.repository }}
           Licenza: AGPL-3.0-only

@@ -172,9 +172,9 @@ Per problemi con l'auto-update, vedi la sezione dedicata in [`auto-update.md`](.
 
 **Impostazioni → Sviluppo → Debug log**: toggle ON. I log vengono scritti in:
 
-- Windows: `%APPDATA%\com.pap.app\logs\pap-client.log`
-- macOS: `~/Library/Logs/com.pap.app/pap-client.log`
-- Linux: `~/.local/share/com.pap.app/logs/pap-client.log`
+- Windows: `%APPDATA%\com.pap.client\logs\pap-client.log`
+- macOS: `~/Library/Logs/com.pap.client/pap-client.log`
+- Linux: `~/.local/share/com.pap.client/logs/pap-client.log`
 
 Il toggle ON aumenta il livello da `WARN` a `DEBUG` ed espone un viewer in-app (Impostazioni → Sviluppo → Visualizza log). Disabilita quando non serve (i file possono crescere).
 

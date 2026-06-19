@@ -35,9 +35,9 @@ L'output finisce in `dist/index.js`. Si può anche eseguire in dev mode senza bu
 
 Il server cerca il vault in (per piattaforma):
 
-- **Linux**: `~/.local/share/com.pap.app/pap-vault.db`
-- **macOS**: `~/Library/Application Support/com.pap.app/pap-vault.db`
-- **Windows**: `%APPDATA%\com.pap.app\pap-vault.db`
+- **Linux**: `~/.local/share/com.pap.client/pap-vault.db`
+- **macOS**: `~/Library/Application Support/com.pap.client/pap-vault.db`
+- **Windows**: `%APPDATA%\com.pap.client\pap-vault.db`
 
 Override via env var:
 

@@ -20,7 +20,7 @@ jobs:
     name: Rust latest deps (canary)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Toolchain LATEST stabile — nessun pin, contrario della stable lane.
       # Vuole scoprire rotture prima che vengano fissate nel lockfile committato.
