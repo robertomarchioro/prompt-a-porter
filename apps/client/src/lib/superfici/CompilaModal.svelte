@@ -412,26 +412,28 @@
           {/each}
         {/if}
 
-        <header class="sez-h">
-          <span>FORMATO OUTPUT</span>
-        </header>
-        <div class="formati">
-          {#each ["testo", "markdown", "json"] as f (f)}
-            <button
-              type="button"
-              class="chip-fmt"
-              data-attivo={formato === f || undefined}
-              onclick={() => (formato = f as FormatoOutput)}
-            >
-              {f}
-            </button>
-          {/each}
-        </div>
       </div>
 
       <div class="preview">
         <header class="sez-h">
           <span>ANTEPRIMA</span>
+          <div
+            class="formati"
+            role="group"
+            aria-label="Formato output"
+          >
+            {#each ["testo", "markdown", "json"] as f (f)}
+              <button
+                type="button"
+                class="chip-fmt"
+                data-attivo={formato === f || undefined}
+                aria-pressed={formato === f}
+                onclick={() => (formato = f as FormatoOutput)}
+              >
+                {f}
+              </button>
+            {/each}
+          </div>
           <button
             class="copia"
             type="button"
@@ -637,7 +639,6 @@
   }
 
   .copia {
-    margin-left: auto;
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -723,7 +724,7 @@
     background: var(--bg-overlay);
     border-radius: var(--radius-sm);
     padding: 2px;
-    align-self: flex-start;
+    margin-left: auto;
   }
 
   .chip-fmt {
