@@ -546,6 +546,17 @@ pub(crate) fn filtra_categorie(
     issues: Vec<Issue>,
     disabilitate: &[String],
 ) -> Vec<Issue> {
+    // Compat: vecchio nome (filtro per sola categoria). Delega al generalizzato.
+    filtra_disabilitate(issues, disabilitate)
+}
+
+/// Filtro generalizzato (linter personalizzabile Fase 1): un token disabilita
+/// un issue se è uguale al `code` completo (`"PII001"`) OPPURE al prefisso
+/// alfabetico (`"PII"`). Retrocompatibile: `["PII"]` disabilita la famiglia.
+pub(crate) fn filtra_disabilitate(
+    issues: Vec<Issue>,
+    disabilitate: &[String],
+) -> Vec<Issue> {
     if disabilitate.is_empty() {
         return issues;
     }
@@ -559,9 +570,82 @@ pub(crate) fn filtra_categorie(
                 .chars()
                 .take_while(|c| c.is_ascii_alphabetic())
                 .collect();
-            !set.contains(prefisso.as_str())
+            !set.contains(i.code) && !set.contains(prefisso.as_str())
         })
         .collect()
+}
+
+// ─────────── Catalogo regole (fonte di verità per UI e doc) ───────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RegolaMeta {
+    pub code: &'static str,
+    pub categoria: &'static str,
+    pub severita_default: Severita,
+    pub titolo: &'static str,
+    pub descrizione: &'static str,
+    /// Ha soglie tunabili (Fase 2: severità/soglie editabili).
+    pub configurabile: bool,
+}
+
+/// Catalogo completo delle regole del linter. Unica fonte di verità: la UI e
+/// la doc leggono da qui invece di duplicare le descrizioni in TS.
+pub fn regole_catalogo() -> Vec<RegolaMeta> {
+    vec![
+        RegolaMeta { code: "LEN001", categoria: "LEN", severita_default: Severita::Warning,
+            titolo: "Body troppo lungo",
+            descrizione: "Avvisa quando il body supera la soglia massima di caratteri (spreco di token al rendering).",
+            configurabile: true },
+        RegolaMeta { code: "LEN002", categoria: "LEN", severita_default: Severita::Info,
+            titolo: "Body troppo corto",
+            descrizione: "Segnala un body sotto la soglia minima: probabilmente incompleto.",
+            configurabile: true },
+        RegolaMeta { code: "PH001", categoria: "PH", severita_default: Severita::Error,
+            titolo: "Segnaposto malformato",
+            descrizione: "Rileva segnaposti con graffe singole `{nome}`: vanno scritti `{{nome}}`.",
+            configurabile: false },
+        RegolaMeta { code: "PH003", categoria: "PH", severita_default: Severita::Warning,
+            titolo: "Nome segnaposto non valido",
+            descrizione: "Il nome di un segnaposto contiene caratteri non consentiti (usa solo lettere, cifre, underscore).",
+            configurabile: false },
+        RegolaMeta { code: "PII001", categoria: "PII", severita_default: Severita::Warning,
+            titolo: "Email nel testo",
+            descrizione: "Possibile indirizzo email: verifica che non sia un dato personale da rimuovere.",
+            configurabile: false },
+        RegolaMeta { code: "PII003", categoria: "PII", severita_default: Severita::Error,
+            titolo: "Numero di carta di credito",
+            descrizione: "Sequenza di cifre Luhn-valida: probabile numero di carta, da rimuovere.",
+            configurabile: false },
+        RegolaMeta { code: "PII004", categoria: "PII", severita_default: Severita::Error,
+            titolo: "Chiave API o segreto",
+            descrizione: "Pattern di chiave API/segreto (OpenAI, Anthropic, AWS…) in chiaro nel body.",
+            configurabile: false },
+        RegolaMeta { code: "STY001", categoria: "STY", severita_default: Severita::Info,
+            titolo: "Ripetizione eccessiva",
+            descrizione: "Uno stesso n-gramma di parole si ripete oltre la soglia: valuta di riformulare.",
+            configurabile: true },
+        RegolaMeta { code: "IMP001", categoria: "IMP", severita_default: Severita::Error,
+            titolo: "Import non risolto",
+            descrizione: "Un `{{import \"...\"}}` punta a un prompt inesistente nella libreria.",
+            configurabile: false },
+        RegolaMeta { code: "IMP002", categoria: "IMP", severita_default: Severita::Error,
+            titolo: "Ciclo di import",
+            descrizione: "I prompt si importano a vicenda (o un prompt importa sé stesso).",
+            configurabile: false },
+        RegolaMeta { code: "IMP003", categoria: "IMP", severita_default: Severita::Warning,
+            titolo: "Catena di import profonda",
+            descrizione: "La profondità della catena di import supera il massimo consentito.",
+            configurabile: false },
+        RegolaMeta { code: "IMP004", categoria: "IMP", severita_default: Severita::Info,
+            titolo: "Importato da altri prompt",
+            descrizione: "Questo prompt è importato altrove: modifiche al body si propagano a chi lo importa.",
+            configurabile: false },
+    ]
+}
+
+#[tauri::command]
+pub fn prompt_lint_regole() -> Vec<RegolaMeta> {
+    regole_catalogo()
 }
 
 #[tauri::command]
@@ -580,7 +664,9 @@ pub fn prompt_lint(
         out.extend(imp);
     }
     if let Some(disable) = categorie_disabilitate {
-        out = filtra_categorie(out, &disable);
+        // `disable` può contenere prefissi di categoria ("PII") o code completi
+        // ("PII001") — il filtro generalizzato gestisce entrambi.
+        out = filtra_disabilitate(out, &disable);
     }
     Ok(out)
 }
@@ -935,6 +1021,37 @@ mod test {
         let issues = vec![issue_di("PH001"), issue_di("LEN001")];
         let r = super::filtra_categorie(issues, &["FOO".to_string()]);
         assert_eq!(r.len(), 2);
+    }
+
+    #[test]
+    fn filtra_disabilitate_code_esatto_lascia_il_resto_della_famiglia() {
+        let issues = vec![
+            issue_di("PII001"),
+            issue_di("PII003"),
+            issue_di("LEN001"),
+        ];
+        // Disabilita SOLO PII001, non l'intera famiglia PII.
+        let r = super::filtra_disabilitate(issues, &["PII001".to_string()]);
+        assert_eq!(r.len(), 2);
+        assert!(r.iter().any(|i| i.code == "PII003"));
+        assert!(r.iter().all(|i| i.code != "PII001"));
+    }
+
+    #[test]
+    fn regole_catalogo_coerente() {
+        use std::collections::HashSet;
+        let cat = super::regole_catalogo();
+        // Conteggio == numero di regole effettive (guard-rail anti-drift).
+        assert_eq!(cat.len(), 12);
+        // Code unici.
+        let codici: HashSet<&str> = cat.iter().map(|r| r.code).collect();
+        assert_eq!(codici.len(), cat.len());
+        // Categoria valida e coerente col prefisso del code.
+        let valide = ["LEN", "PH", "PII", "STY", "IMP"];
+        for r in &cat {
+            assert!(valide.contains(&r.categoria), "categoria invalida: {}", r.categoria);
+            assert!(r.code.starts_with(r.categoria), "code {} ≠ categoria {}", r.code, r.categoria);
+        }
     }
 
     // ─────────── v0.7.0 Step 5: IMP004 cross-prompt linting ───────────

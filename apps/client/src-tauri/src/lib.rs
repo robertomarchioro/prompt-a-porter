@@ -512,6 +512,7 @@ pub fn run() {
             embeddings_backfill::embeddings_backfill,
             tags_suggest::tags_suggest,
             linting::prompt_lint,
+            linting::prompt_lint_regole,
             prompt_componibili::prompt_compila,
             prompt_componibili::prompt_compila_inline,
             prompt_componibili::prompt_resolve_import_preview,
