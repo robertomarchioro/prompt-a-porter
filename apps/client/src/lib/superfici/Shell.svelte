@@ -39,6 +39,7 @@
   import NuovaCartellaModal from "$lib/superfici/NuovaCartellaModal.svelte";
   import TourPrompt from "$lib/aiuto/TourPrompt.svelte";
   import PrimiPassi from "$lib/aiuto/PrimiPassi.svelte";
+  import MenuContestuale from "$lib/components/MenuContestuale.svelte";
   import {
     statoModale,
     chiudiModale,
@@ -164,6 +165,14 @@
     }
   }
 
+  // Menu contestuale: se il prompt eliminato è quello aperto, deselezionalo.
+  function onPromptEliminato(e: Event): void {
+    const id = (e as CustomEvent<string>).detail;
+    if (promptSelezionato === id) {
+      promptSelezionato = null;
+    }
+  }
+
   // F8 PR-D1/PR-E: shortcut globali per modali ricorrenti.
   function onShortcutGlobale(e: KeyboardEvent): void {
     if (!(e.metaKey || e.ctrlKey)) return;
@@ -237,6 +246,7 @@
 
   onMount(() => {
     window.addEventListener("pap:apri-prompt", onApriPrompt);
+    window.addEventListener("pap:prompt-eliminato", onPromptEliminato);
     window.addEventListener("keydown", onShortcutGlobale);
     void (async () => {
       unlistenTray.push(
@@ -256,6 +266,7 @@
 
   onDestroy(() => {
     window.removeEventListener("pap:apri-prompt", onApriPrompt);
+    window.removeEventListener("pap:prompt-eliminato", onPromptEliminato);
     window.removeEventListener("keydown", onShortcutGlobale);
     window.removeEventListener("pointermove", onPointerMoveResizer);
     cancelAnimationFrame(tourRaf);
@@ -429,6 +440,9 @@
 {#if statoModale.attiva?.tipo === "nuova-cartella"}
   <NuovaCartellaModal onChiudi={chiudiModale} />
 {/if}
+
+<!-- Menu contestuale globale (tasto destro): montato una volta, legge lo store. -->
+<MenuContestuale />
 
 <!-- Guida: stack in basso a destra — invito al tour (Fase 1 PR-2) + checklist
      primi passi (Fase 3). Impilati per non sovrapporsi. -->
