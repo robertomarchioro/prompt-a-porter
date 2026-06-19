@@ -173,6 +173,16 @@
     }
   }
 
+  // Menu contestuale chip tag: "Filtra per questo tag". Esce dal cestino e
+  // riapre la lista se collassata, altrimenti il filtro non sarebbe visibile.
+  function onFiltraTag(e: Event): void {
+    const id = (e as CustomEvent<string>).detail;
+    if (typeof id !== "string" || !id) return;
+    if (vistaCorrente === "cestino") vistaCorrente = "tutti";
+    listCollapsed = false;
+    tagSelezionato = id;
+  }
+
   // F8 PR-D1/PR-E: shortcut globali per modali ricorrenti.
   function onShortcutGlobale(e: KeyboardEvent): void {
     if (!(e.metaKey || e.ctrlKey)) return;
@@ -247,6 +257,7 @@
   onMount(() => {
     window.addEventListener("pap:apri-prompt", onApriPrompt);
     window.addEventListener("pap:prompt-eliminato", onPromptEliminato);
+    window.addEventListener("pap:filtra-tag", onFiltraTag);
     window.addEventListener("keydown", onShortcutGlobale);
     void (async () => {
       unlistenTray.push(
@@ -267,6 +278,7 @@
   onDestroy(() => {
     window.removeEventListener("pap:apri-prompt", onApriPrompt);
     window.removeEventListener("pap:prompt-eliminato", onPromptEliminato);
+    window.removeEventListener("pap:filtra-tag", onFiltraTag);
     window.removeEventListener("keydown", onShortcutGlobale);
     window.removeEventListener("pointermove", onPointerMoveResizer);
     cancelAnimationFrame(tourRaf);
