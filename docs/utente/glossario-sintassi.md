@@ -4,9 +4,9 @@ Reference rapido della sintassi del body di un prompt: segnaposti, globali, impo
 
 Per approfondimenti: [`prompt-componibili.md`](./prompt-componibili.md) (import) e [`linting-regole.md`](./linting-regole.md) (regole linter complete).
 
-## Segnaposti — `{{nome}}`
+## Segnaposti
 
-Parametri da compilare al momento dell'uso.
+Parametri `{{nome}}` da compilare al momento dell'uso.
 
 ```
 Ciao {{nome}}, oggi parliamo di {{argomento}}.
@@ -45,9 +45,9 @@ Riscrivi il seguente testo in tono formale:
 Lingua di output: italiano.
 ```
 
-## Segnaposti globali — `{{global nome}}`
+## Segnaposti globali
 
-Valori riusati in molti prompt senza dover ricompilarli ogni volta. Tipici: nome utente, ruolo, azienda, tono editoriale di default.
+Valori `{{global nome}}` riusati in molti prompt senza dover ricompilarli ogni volta. Tipici: nome utente, ruolo, azienda, tono editoriale di default.
 
 ```
 Sono {{global autore}}, responsabile {{global ruolo}} a {{global azienda}}.
@@ -66,9 +66,9 @@ I valori dei globali sono gestiti da **Impostazioni → Segnaposti globali**: ch
 
 Se un globale non esiste nel DB, il testo `{{global nome}}` resta nel risultato finale (così te ne accorgi e lo aggiungi).
 
-## Import — `{{import "path"}}`
+## Import
 
-Importa il body di un altro prompt nel corrente. Permette di costruire prompt modulari: un "ruolo esperto" riusato in molti casi d'uso, un "tono editoriale" condiviso, etc.
+`{{import "path"}}` importa il body di un altro prompt nel corrente. Permette di costruire prompt modulari: un "ruolo esperto" riusato in molti casi d'uso, un "tono editoriale" condiviso, etc.
 
 ```
 {{import "ruolo-esperto-marketing"}}
