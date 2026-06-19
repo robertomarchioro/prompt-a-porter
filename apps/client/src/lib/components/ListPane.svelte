@@ -318,7 +318,9 @@
     folderId: string | null,
   ): Promise<void> {
     try {
-      await invoke<void>("prompt_sposta", { dati: { promptId: id, folderId } });
+      await invoke<void>("prompt_sposta", {
+        dati: { prompt_id: id, folder_id: folderId },
+      });
       refreshLista();
     } catch (e) {
       console.error("[list-pane] sposta in cartella", e);
