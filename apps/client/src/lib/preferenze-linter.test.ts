@@ -11,10 +11,17 @@ import {
   leggiRegoleDisabilitate,
   salvaRegoleDisabilitate,
   toggleRegola,
+  DEFAULT_SOGLIE,
+  leggiConfig,
+  salvaConfig,
+  setSeverita,
+  setSoglia,
+  type ConfigLinter,
 } from "./preferenze-linter";
 
 const KEY = "pap.linter.categorie_disabilitate";
 const KEY_REGOLE = "pap.linter.regole_disabilitate";
+const KEY_CONFIG = "pap.linter.config";
 
 describe("preferenze-linter", () => {
   beforeEach(() => {
@@ -127,5 +134,113 @@ describe("preferenze-linter — per-regola (Fase 1)", () => {
     const out = toggleRegola("PII001", input);
     expect(out).toEqual(["LEN"]);
     expect(input).toEqual(["PII001", "LEN"]);
+  });
+});
+
+describe("preferenze-linter — config completa (Fase 2)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("leggiConfig ritorna default se tutto vuoto", () => {
+    const cfg = leggiConfig();
+    expect(cfg.disabilitate).toEqual([]);
+    expect(cfg.severita_override).toEqual({});
+    expect(cfg.soglie).toEqual(DEFAULT_SOGLIE);
+  });
+
+  it("migra disabilitate dalla key Fase 1 se config assente", () => {
+    localStorage.setItem(KEY_REGOLE, JSON.stringify(["PII001", "LEN"]));
+    const cfg = leggiConfig();
+    expect(cfg.disabilitate).toEqual(["PII001", "LEN"]);
+    // La migrazione persiste il nuovo blob.
+    expect(JSON.parse(localStorage.getItem(KEY_CONFIG)!).disabilitate).toEqual([
+      "PII001",
+      "LEN",
+    ]);
+  });
+
+  it("la key config ha precedenza sulla key Fase 1", () => {
+    localStorage.setItem(KEY_REGOLE, JSON.stringify(["PII"]));
+    localStorage.setItem(
+      KEY_CONFIG,
+      JSON.stringify({ disabilitate: ["STY001"] }),
+    );
+    expect(leggiConfig().disabilitate).toEqual(["STY001"]);
+  });
+
+  it("normalizza override invalidi e soglie non numeriche", () => {
+    localStorage.setItem(
+      KEY_CONFIG,
+      JSON.stringify({
+        disabilitate: ["", "PII001", 5],
+        severita_override: { PII001: "error", BAD: "boom", "": "info" },
+        soglie: { len_max_body: "x", len_min_body: 10, ngram_threshold: -3 },
+      }),
+    );
+    const cfg = leggiConfig();
+    expect(cfg.disabilitate).toEqual(["PII001"]);
+    expect(cfg.severita_override).toEqual({ PII001: "error" });
+    expect(cfg.soglie.len_max_body).toBe(DEFAULT_SOGLIE.len_max_body); // "x" → default
+    expect(cfg.soglie.len_min_body).toBe(10);
+    expect(cfg.soglie.ngram_threshold).toBe(DEFAULT_SOGLIE.ngram_threshold); // -3 → default
+  });
+
+  it("leggiConfig ritorna default su JSON malformato", () => {
+    localStorage.setItem(KEY_CONFIG, "{{ not json");
+    expect(leggiConfig().soglie).toEqual(DEFAULT_SOGLIE);
+  });
+
+  it("round trip salva->leggi", () => {
+    const cfg: ConfigLinter = {
+      disabilitate: ["IMP"],
+      severita_override: { LEN001: "info" },
+      soglie: { len_max_body: 2000, len_min_body: 10, ngram_threshold: 6 },
+    };
+    salvaConfig(cfg);
+    expect(leggiConfig()).toEqual(cfg);
+  });
+
+  it("setSeverita imposta un override e non muta l'input", () => {
+    const cfg = leggiConfig();
+    const out = setSeverita(cfg, "PII001", "error", "warning");
+    expect(out.severita_override).toEqual({ PII001: "error" });
+    expect(cfg.severita_override).toEqual({});
+  });
+
+  it("setSeverita rimuove l'override se uguale al default", () => {
+    const cfg: ConfigLinter = {
+      disabilitate: [],
+      severita_override: { PII001: "error" },
+      soglie: { ...DEFAULT_SOGLIE },
+    };
+    const out = setSeverita(cfg, "PII001", "warning", "warning");
+    expect(out.severita_override).toEqual({});
+  });
+
+  it("setSoglia aggiorna un campo e clampa input invalido al default", () => {
+    const cfg = leggiConfig();
+    const out = setSoglia(cfg, "len_max_body", 1234);
+    expect(out.soglie.len_max_body).toBe(1234);
+    const bad = setSoglia(cfg, "ngram_threshold", NaN);
+    expect(bad.soglie.ngram_threshold).toBe(DEFAULT_SOGLIE.ngram_threshold);
+    // immutabilità
+    expect(cfg.soglie.len_max_body).toBe(DEFAULT_SOGLIE.len_max_body);
+  });
+
+  it("setSoglia applica il minimo per-campo (no divergenza col backend)", () => {
+    const cfg = leggiConfig();
+    // ngram_threshold ha minimo 2: uno 0 dell'utente viene portato a 2.
+    expect(setSoglia(cfg, "ngram_threshold", 0, 2).soglie.ngram_threshold).toBe(
+      2,
+    );
+    // len_max_body minimo 1.
+    expect(setSoglia(cfg, "len_max_body", 0, 1).soglie.len_max_body).toBe(1);
+    // valore valido sopra il minimo resta invariato.
+    expect(setSoglia(cfg, "ngram_threshold", 5, 2).soglie.ngram_threshold).toBe(
+      5,
+    );
+    // valore frazionario viene troncato.
+    expect(setSoglia(cfg, "len_min_body", 12.9, 0).soglie.len_min_body).toBe(12);
   });
 });

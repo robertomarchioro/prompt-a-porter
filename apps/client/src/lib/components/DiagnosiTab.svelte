@@ -12,7 +12,7 @@
   import { onMount, onDestroy } from "svelte";
   import { AlertCircle, AlertTriangle, Info } from "lucide-svelte";
   import AiutoLink from "$lib/aiuto/AiutoLink.svelte";
-  import { leggiRegoleDisabilitate } from "$lib/preferenze-linter";
+  import { leggiConfig } from "$lib/preferenze-linter";
 
   type Severita = "Error" | "Warning" | "Info";
 
@@ -41,11 +41,10 @@
   async function carica(): Promise<void> {
     caricamento = true;
     try {
-      const disable = leggiRegoleDisabilitate();
       const res = await invoke<Issue[]>("prompt_lint", {
         body,
         promptId,
-        categorieDisabilitate: disable.length > 0 ? disable : null,
+        config: leggiConfig(),
       });
       issues = res;
       onConteggio?.(res.length);
