@@ -2,9 +2,9 @@
 
 > Censimento unificato di **tutto ciò che è stato deliberatamente rinviato** durante lo sviluppo. Singola fonte di verità: nuovi rinvii vengono aggiunti qui ad ogni PR che li introduce, e gli item vengono spostati nell'archivio storico quando atterrano.
 >
-> **Aggiornato al**: 2026-06-16.
+> **Aggiornato al**: 2026-06-19.
 >
-> **Stato macro**: PaP **Personale v1.0.0 è completa** (chiusa con la patch line v0.8.11, milestone M1-M8 tutte atterrate il 2026-05-19). Da allora la patch line **v0.8.x** prosegue con feature e manutenzione incrementale (fino a v0.8.20). Lo stream **Enterprise v2.0** non è ancora aperto (gate domanda-driven).
+> **Stato macro**: PaP **Personale v1.0.0 è completa** (chiusa con la patch line v0.8.11, milestone M1-M8 tutte atterrate il 2026-05-19). Da allora la patch line **v0.8.x** prosegue con feature e manutenzione incrementale (fino a **v0.8.23**: guida interattiva completa, menu contestuale completo, sintassi `{{global}}`). Lo stream **Enterprise v2.0** non è ancora aperto (gate domanda-driven).
 
 ## Convenzioni
 
@@ -60,6 +60,9 @@ Rinvii introdotti dopo il completamento v1.0, nella patch line attuale.
 | **#303 opzione 3 — sostituzione import via dropdown** | 📋 | Cancellando un prompt referenziato, oltre a "rimuovi gli import" offrire "sostituisci con un altro prompt da dropdown". Stessa macchina di `import_rimuovi_da_dipendenti` ma riscrive `ImportRef.path` invece di rimuovere → futuro `import_sostituisci_in_dipendenti(target, replacement)`. Primo taglio (annulla + rimozione massiva) atterrato in v0.8.20. |
 | **Embedding stale dopo rimozione import di massa** (#303) | 🎨 → v1.x | `import_rimuovi_da_dipendenti` non ricalcola gli embedding dei prompt modificati → restano stale fino al prossimo save/backfill. |
 | **Release matrix macOS / Linux** | 📋 / 🔒 | I target macOS/Linux sono ancora commentati nella build matrix di `release.yml` (solo Windows NSIS + portable in produzione). macOS notarization resta 🔒 (Apple Developer cert separato, non richiesto). |
+| **Menu contestuale — gap residui** (#374-#380) | 📋 → v1.x | Taglio principale completo (v0.8.23). Restano: apertura da tastiera **Shift+F10** (primitivo pronto, manca il wiring per-superficie; i chip-tag `<span>` non sono raggiungibili da tastiera); **Vai alla riga** dall'editor (serve un input numerico, no `prompt()` in webview); **Rinomina etichetta variante** e **Duplica variante** (semantica/backend); unificare l'**Elimina dal menu** col warning import-dipendenze #303 (oggi soft-delete diretto); menu su **pannelli segnaposti/import** (§6.7 del blueprint). |
+| **Backend `tags.rs` — gestione tag globali** | ✏️ → v1.x | Comandi rinomina/unisci/colore/elimina tag a livello vault (PR-7 del blueprint menu-contestuale). Abilita le voci tag-management oggi assenti. Diverso dall'associazione tag-su-prompt (`prompt_tag_aggiungi`/`rimuovi`, già fatta in v0.8.23). |
+| **Comando batch tag** (perf) | 🎨 → v1.x | `prompt_tag_aggiungi` ricostruisce l'INTERA FTS a ogni chiamata; nel bulk "Aggiungi tag a N" = N rebuild. Accettabile per vault personale; un `prompt_tags_aggiungi_bulk(coppie)` con un solo rebuild è il fix futuro. |
 
 ---
 
@@ -69,13 +72,15 @@ Design completato, **nessun codice**. Candidati per i prossimi cicli, ognuno con
 
 | Blueprint | Scope | Dimensione |
 |---|---|---|
-| [`guida-interattiva.md`](./guida-interattiva.md) | Guida/tutorial interattivo in-app (help system a strati: tour spotlight + "?" contestuali + checklist), profondità sul sito | Media / a fasi |
-| [`menu-contestuale.md`](./menu-contestuale.md) | Menu tasto-destro context-aware nell'app | Piccola / self-contained |
 | [`linter-personalizzabile.md`](./linter-personalizzabile.md) | Visibilità + tuning regole linter, in 2 fasi rilasciabili indipendenti | Media |
 | [`vault-a-cartella.md`](./vault-a-cartella.md) | Storage plain-text `.md` no-lock-in + sidecar `.pap/` (#258) | Grande / strategica |
 | [`prompts-as-code.md`](./prompts-as-code.md) | Idea strategica storage/posizionamento — sola ideazione, da decidere | Da definire |
 
-Il blueprint [`cestino-e-cancellazione-import.md`](./cestino-e-cancellazione-import.md) è **atterrato** in v0.8.20 (#302 cestino + #303 warning import); resta fuori solo l'opzione 3 (vedi §2).
+**Blueprint atterrati** (spostati qui dalla tabella):
+
+- [`cestino-e-cancellazione-import.md`](./cestino-e-cancellazione-import.md) → v0.8.20 (#302 cestino + #303 warning import); resta solo l'opzione 3 (§2).
+- [`guida-interattiva.md`](./guida-interattiva.md) → Fase 0/1/3 in v0.8.20-v0.8.23 (#364-#372: hub + "?" ovunque, tour benvenuto + auto-offerta + micro-tour, checklist "Primi passi"). Resta solo la **Fase 4** (deep-link al sito: quando il sito VitePress `apps/site` sarà pubblicato basta cambiare `SITO_BASE` in `docs-links.ts` — le pagine docs esistono già) + l'esplorazione guidata del vault demo.
+- [`menu-contestuale.md`](./menu-contestuale.md) → taglio principale in v0.8.23 (#374-#380 + tag): card/cartelle/editor/chip-tag/varianti/selezione-multipla + Gestisci tag / Aggiungi tag a N. Gap residui in §2.
 
 ---
 
@@ -187,7 +192,10 @@ Item con razionale costo/beneficio sfavorevole, conservati come traccia decision
 - ✅ **v0.8.15** triage gate test (onboarding/tray/errori vault); **v0.8.16** triage (compila/import, demo globali, errori vault, updater notes); **v0.8.17** import da palette (#299)
 - ✅ **v0.8.18** creazione cartelle (#301) + hardening CI (Cargo.lock committato + `--locked` + toolchain pin + Dependabot + canary, #309/#332) + pin brotli (#306) + 19 dipendenze (2 sicurezza)
 - ✅ **v0.8.19** migrazione rand 0.9 fail-closed (#333) + rimozione pin brotli (#352, upstream allineato)
-- ✅ **v0.8.20** cestino prompt (#302) + warning cancellazione import (#303) + colorazione globali/import parametrizzati (#353/#304) + manutenzione dipendenze
+- ✅ **v0.8.20** cestino prompt (#302) + warning cancellazione import (#303) + colorazione globali/import parametrizzati (#353/#304) + guida interattiva Fase 0+1-PR1 (#364-#367) + manutenzione dipendenze
+- ✅ **v0.8.21** guida: auto-offerta tour post-onboarding (#368) + micro-tour per-feature (#369)
+- ✅ **v0.8.22** hotfix: il tour di benvenuto non partiva (#370, cleanup `$effect` annullava i rAF)
+- ✅ **v0.8.23** menu contestuale completo (#374-#380, 7 PR: card/cartelle/editor/chip-tag/varianti/bulk + Gestisci tag) + checklist "Primi passi" (#372) + sintassi `{{globale}}`→`{{global}}` (#371) + fix ancora glossario (#373). Lungo la strada: scoperto e corretto bug serde `prompt_sposta` (campi struct camelCase) già presente in main.
 
 ---
 
