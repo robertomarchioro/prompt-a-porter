@@ -1,5 +1,28 @@
 # Changelog — Prompt a Porter
 
+## v0.8.23 — Menu contestuale, checklist "Primi passi" e sintassi `{{global}}` (2026-06-19)
+
+> Tre filoni: un **menu contestuale (tasto destro)** context-aware su tutta l'app, il completamento della **guida** con la checklist "Primi passi", e l'allineamento della **sintassi dei segnaposti globali** all'inglese.
+
+### Feature
+
+- **Menu contestuale (tasto destro)** (#374-#380): un menu che cambia in base a dove clicchi, costruito su un primitivo riusabile (posizionamento al cursore con flip ai bordi, submenu, navigazione da tastiera ↑/↓/←/→/Esc, `role=menu`). Superfici coperte:
+  - **Card prompt**: Apri · Apri in Compila · Duplica (fork) · Preferito · Sposta in cartella ▸ · **Gestisci tag ▸** (con spunta sui tag già presenti) · Esporta come Markdown · Elimina.
+  - **Cartelle** (sidebar): Nuovo prompt qui · Nuova sottocartella · Rinomina (modifica **inline**) · Elimina (i prompt tornano alla libreria).
+  - **Editor**: Taglia/Copia/Incolla/Seleziona tutto + Inserisci segnaposto / segnaposto globale / import.
+  - **Chip tag**: Filtra per questo tag · Rimuovi dal prompt. **Pillole varianti**: Passa · Promuovi a principale · Elimina.
+  - **Selezione multipla** (≥2 prompt): Confronta · Sposta N in cartella · **Aggiungi tag a N** · Esporta N come Markdown · Elimina N (conferma unica).
+  - Le azioni "crea tag su prompt" usano due comandi backend dedicati (`prompt_tag_aggiungi`/`prompt_tag_rimuovi`) che non rigenerano una versione del prompt.
+- **Guida — checklist "Primi passi"** (#372): widget dismissibile in basso a destra che traccia 5 prime azioni (crea un prompt, aggiungi un tag, usa un segnaposto, compila, usa un import). Rilevamento basato sulle azioni reali, così il vault demo importato non pre-spunta nulla.
+
+### Modifiche
+
+- **Sintassi segnaposto globale: `{{globale nome}}` → `{{global nome}}`** (#371): per coerenza con la keyword inglese `import`. Aggiornati parser (editor/anteprima/compila), inserimento da toolbar, tutta la documentazione utente e il vault demo. (Cambio netto: i prompt esistenti che usano `{{globale ...}}` vanno aggiornati alla nuova forma.)
+
+### Fix
+
+- **Ancora della guida ai segnaposti globali** (#373): l'heading del glossario conteneva la sintassi, generando uno slug che non combaciava col deep-link `#segnaposti-globali` (atterrava a inizio pagina, sia su GitHub sia sul sito). Heading puliti.
+
 ## v0.8.22 — Fix: il tour di benvenuto non partiva (2026-06-18)
 
 > Hotfix della guida: il pulsante "Avvia il tour" non faceva nulla (regressione runtime non coperta dalla CI, che valida solo build/type). Il tour di benvenuto ora parte regolarmente.
