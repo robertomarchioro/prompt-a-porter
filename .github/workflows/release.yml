@@ -47,7 +47,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Installa dipendenze sistema (Linux)
         if: matrix.platform == 'ubuntu-22.04'
