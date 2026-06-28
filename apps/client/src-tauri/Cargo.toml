@@ -71,7 +71,7 @@ tokenizers = { version = "0.23", default-features = false, features = ["fancy-re
 # Estrazione archivi onnxruntime release: tar.gz su Linux/macOS, zip su Windows.
 flate2 = "1.0"
 tar = "0.4"
-zip = { version = "4.6", default-features = false, features = ["deflate"] }
+zip = { version = "8.6", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 tempfile = "3"
