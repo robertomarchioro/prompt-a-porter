@@ -59,7 +59,7 @@ regex = "1"
 # costruire i tensor di input. tokenizer verrà aggiunto nella PR 3/3
 # di Step 1 (compute reale).
 ort = { version = "2.0.0-rc.12", default-features = false, features = ["load-dynamic", "api-23", "ndarray"] }
-ndarray = "0.16"
+ndarray = "0.17"
 # HTTP client per scaricare il modello ONNX da HuggingFace al primo uso.
 # Feature tls-rustls (no openssl, build più portabile in CI).
 ureq = { version = "2.10", default-features = false, features = ["tls"] }
