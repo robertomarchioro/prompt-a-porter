@@ -117,7 +117,7 @@ func tagsFor(db *sql.DB, promptID string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var tags []string
 	for rows.Next() {
 		var name string
@@ -191,7 +191,7 @@ func search(db *sql.DB, query string, limit int, targetModel, tagFilter string) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	prompts, err := scanPrompts(rows)
 	if err != nil {
@@ -236,7 +236,7 @@ func get(db *sql.DB, id string) (*Prompt, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	prompts, err := scanPrompts(rows)
 	if err != nil {
 		return nil, err
@@ -267,7 +267,7 @@ func recent(db *sql.DB, limit int) ([]Prompt, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	prompts, err := scanPrompts(rows)
 	if err != nil {
 		return nil, err
@@ -341,7 +341,7 @@ func formatPrompts(prompts []Prompt, format string) (string, error) {
 	case "table", "":
 		var sb strings.Builder
 		w := tabwriter.NewWriter(&sb, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tTITLE\tVISIBILITY\tTARGET\tUSE\tTAGS")
+		_, _ = fmt.Fprintln(w, "ID\tTITLE\tVISIBILITY\tTARGET\tUSE\tTAGS")
 		for _, p := range prompts {
 			tm := "-"
 			if p.TargetModel != nil {
@@ -351,7 +351,7 @@ func formatPrompts(prompts []Prompt, format string) (string, error) {
 			if len(p.Tags) > 0 {
 				tags = strings.Join(p.Tags, ",")
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\n",
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\n",
 				p.ID, truncate(p.Title, 40), p.Visibility, tm, p.UseCount, tags)
 		}
 		_ = w.Flush()
@@ -430,7 +430,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Mostra versione e path del vault risolto",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Fprintf(cmd.OutOrStdout(), "pap %s\nvault: %s\n", cliVersion, vaultPath())
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "pap %s\nvault: %s\n", cliVersion, vaultPath())
 		return nil
 	},
 }
@@ -453,7 +453,7 @@ var searchCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		prompts, err := search(db, query, limit, target, tag)
 		if err != nil {
@@ -463,7 +463,7 @@ var searchCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprint(cmd.OutOrStdout(), out)
+		_, _ = fmt.Fprint(cmd.OutOrStdout(), out)
 		return nil
 	},
 }
@@ -479,7 +479,7 @@ var getCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		p, err := get(db, args[0])
 		if err != nil {
@@ -489,7 +489,7 @@ var getCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprint(cmd.OutOrStdout(), out)
+		_, _ = fmt.Fprint(cmd.OutOrStdout(), out)
 		return nil
 	},
 }
@@ -505,7 +505,7 @@ var recentCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		prompts, err := recent(db, limit)
 		if err != nil {
@@ -515,7 +515,7 @@ var recentCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprint(cmd.OutOrStdout(), out)
+		_, _ = fmt.Fprint(cmd.OutOrStdout(), out)
 		return nil
 	},
 }
@@ -550,7 +550,7 @@ var renderCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		p, err := get(db, args[0])
 		if err != nil {
@@ -558,9 +558,9 @@ var renderCmd = &cobra.Command{
 		}
 
 		compilato := compila(p.Body, vars)
-		fmt.Fprint(cmd.OutOrStdout(), compilato)
+		_, _ = fmt.Fprint(cmd.OutOrStdout(), compilato)
 		if !strings.HasSuffix(compilato, "\n") {
-			fmt.Fprintln(cmd.OutOrStdout())
+			_, _ = fmt.Fprintln(cmd.OutOrStdout())
 		}
 		// Avviso su stderr per segnaposti non compilati (utile in pipe).
 		nonCompilati := []string{}
@@ -570,7 +570,7 @@ var renderCmd = &cobra.Command{
 			}
 		}
 		if len(nonCompilati) > 0 {
-			fmt.Fprintf(cmd.ErrOrStderr(),
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
 				"[pap] segnaposti non compilati: %s\n", strings.Join(nonCompilati, ", "))
 		}
 		return nil

@@ -54,7 +54,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.24"
+          go-version: "1.25.10"
 
       - name: Genera go.sum
         working-directory: apps/cli
