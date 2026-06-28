@@ -19,6 +19,11 @@ import {
   espandiImportConToken,
 } from "$lib/util/palette-espansione";
 
+// Firma del mock invoke attesa da espandiImportConToken: tipizzata esplicitamente
+// perché in vitest 4 `vi.fn()` ritorna Mock<Procedure | Constructable>, non più
+// assegnabile a una firma specifica come argomento.
+type InvokeImportFn = (body: string, pid: string) => Promise<string>;
+
 // ── Costanti di test ─────────────────────────────────────────────────────────
 
 const BODY_SENZA_IMPORT = "Ciao {{nome}}, benvenuto in {{luogo}}!";
@@ -52,7 +57,7 @@ describe("espandiImportConToken: caso normale (invoke ok)", () => {
   it("chiama invokeFn e ritorna bodyEspanso quando il token è aggiornato", async () => {
     // Arrange
     let seq = 1;
-    const invokeFn = vi.fn().mockResolvedValue(BODY_ESPANSO_SIMULATO);
+    const invokeFn = vi.fn<InvokeImportFn>().mockResolvedValue(BODY_ESPANSO_SIMULATO);
 
     // Act
     const risultato = await espandiImportConToken(
@@ -78,7 +83,7 @@ describe("espandiImportConToken: body senza import", () => {
   it("non chiama invokeFn e ritorna bodyEspanso=null, erroreEspansione=null", async () => {
     // Arrange
     let seq = 1;
-    const invokeFn = vi.fn();
+    const invokeFn = vi.fn<InvokeImportFn>();
 
     // Act
     const risultato = await espandiImportConToken(
@@ -104,7 +109,7 @@ describe("espandiImportConToken: invoke fallisce", () => {
     // Arrange: il backend Tauri lancia un errore come stringa con prefisso "Error: "
     let seq = 1;
     const invokeFn = vi
-      .fn()
+      .fn<InvokeImportFn>()
       .mockRejectedValue("Error: cycle detected");
 
     // Act
@@ -136,7 +141,7 @@ describe("espandiImportConToken: out-of-order / race condition (HIGH-1)", () => 
     const invokeA = vi.fn(
       () => new Promise<string>((res) => (resolveA = res)),
     );
-    const invokeB = vi.fn().mockResolvedValue("espanso-B");
+    const invokeB = vi.fn<InvokeImportFn>().mockResolvedValue("espanso-B");
 
     // Act: avvia A (token=1)
     seqGlobale = 1;
@@ -180,7 +185,7 @@ describe("espandiImportConToken: out-of-order / race condition (HIGH-1)", () => 
     const invokeA = vi.fn(
       () => new Promise<string>((_, rej) => (rejectA = rej)),
     );
-    const invokeB = vi.fn().mockResolvedValue("espanso-B");
+    const invokeB = vi.fn<InvokeImportFn>().mockResolvedValue("espanso-B");
 
     // Avvia A (token=1)
     seqGlobale = 1;
