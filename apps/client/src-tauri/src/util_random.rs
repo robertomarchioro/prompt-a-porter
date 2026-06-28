@@ -1,7 +1,7 @@
 // Modulo util_random — generazione di bytes casuali sicuri via OS RNG.
 //
 // Centralizza l'accesso a `rand::rngs::SysRng` in un unico punto:
-// - Isola la dipendenza dall'API fallibile di rand 0.10 (`TryRngCore`).
+// - Isola la dipendenza dall'API fallibile di rand 0.10 (`TryRng`).
 // - Propaga l'errore come `PapErrore::RngNonDisponibile` (opaco, no leakage).
 // - Semantica fail-closed: se l'OS RNG non è disponibile l'operazione fallisce,
 //   non si prosegue con un buffer non inizializzato o debole.
@@ -9,7 +9,7 @@
 // Tutti i moduli che generano ID o salt devono usare `riempi_random` invece
 // di accedere direttamente a `SysRng`.
 
-use rand::rand_core::TryRngCore;
+use rand::rand_core::TryRng;
 use rand::rngs::SysRng;
 
 use crate::errore::PapErrore;
