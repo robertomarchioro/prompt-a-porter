@@ -20,6 +20,7 @@
   import { apriModale } from "$lib/stores/modale.svelte";
   import { statoEditor } from "$lib/stores/preferenze.svelte";
   import { segnaPasso } from "$lib/aiuto/primi-passi.svelte";
+  import { scaricaBlob, slugFile } from "$lib/util/dati-export";
 
   const META_KEY = "pap.detail.meta-collapsed";
   function caricaMetaCollapsed(): boolean {
@@ -431,6 +432,50 @@
     apriModale({ tipo: "compila", promptId });
   }
 
+  // ─── #402: azioni della toolbar editor (preferito / fork / export) ───
+  // Comandi backend condivisi con il menu contestuale di ListPane.
+
+  /** #402: marca/smarca il prompt corrente come preferito. */
+  async function toggleFavorito(): Promise<void> {
+    if (!dettaglio) return;
+    try {
+      await invoke("libreria_toggle_preferito", { id: promptId });
+      dettaglio.preferito = !dettaglio.preferito;
+      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+    } catch (e) {
+      console.error("[detail] toggle preferito", e);
+      window.alert("Errore nel marcare il preferito: " + String(e));
+    }
+  }
+
+  /** #402: fork del prompt corrente, poi apre la copia. */
+  async function forkCorrente(): Promise<void> {
+    if (!dettaglio) return;
+    try {
+      const nuovoId = await invoke<string>("prompt_fork", { promptId });
+      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
+      window.dispatchEvent(
+        new CustomEvent("pap:apri-prompt", { detail: nuovoId }),
+      );
+    } catch (e) {
+      console.error("[detail] fork", e);
+      window.alert("Errore nel fork del prompt: " + String(e));
+    }
+  }
+
+  /** #402: esporta il prompt corrente come file Markdown. */
+  async function esportaMarkdown(): Promise<void> {
+    if (!dettaglio) return;
+    try {
+      const md = await invoke<string>("prompt_export_markdown", { promptId });
+      const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+      scaricaBlob(blob, `${slugFile(titolo || dettaglio.titolo)}.md`);
+    } catch (e) {
+      console.error("[detail] export markdown", e);
+      window.alert("Errore nell'esportazione Markdown: " + String(e));
+    }
+  }
+
   /**
    * Issue #158: beforeunload (chiusura app) con dirty mostra dialog
    * standard del browser/webview. L'utente può scegliere "Annulla"
@@ -543,9 +588,9 @@
             class="ico"
             type="button"
             class:fav-on={dettaglio.preferito}
-            title="Preferito (F8)"
+            title="Preferito"
             aria-label="Preferito"
-            onclick={() => console.log("F8 toggle fav")}
+            onclick={() => void toggleFavorito()}
           >
             <Star
               size={14}
@@ -555,18 +600,18 @@
           <button
             class="ico"
             type="button"
-            title="Fork (F8)"
+            title="Fork"
             aria-label="Fork"
-            onclick={() => console.log("F8 fork")}
+            onclick={() => void forkCorrente()}
           >
             <GitFork size={14} />
           </button>
           <button
             class="ico"
             type="button"
-            title="Esporta MD (F8)"
+            title="Esporta MD"
             aria-label="Esporta MD"
-            onclick={() => console.log("F8 export MD")}
+            onclick={() => void esportaMarkdown()}
           >
             <Download size={14} />
           </button>
