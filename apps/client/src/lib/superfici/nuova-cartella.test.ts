@@ -10,8 +10,17 @@
  *   errori (stringa/Error/unknown), guardia nome vuoto/slash
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { nomeValido, eseguiCreaCartella } from "./nuova-cartella-logic";
+
+// Firma del mock invoke attesa da eseguiCreaCartella: tipizzata esplicitamente
+// perché in vitest 4 `vi.fn()` ritorna Mock<Procedure | Constructable>, non più
+// assegnabile a una firma specifica come argomento.
+type InvokeFolderFn = (
+  cmd: string,
+  args: { dati: { nome: string; parent_folder_id: null } },
+) => Promise<string>;
+type VoidFn = () => void;
 
 // ── Validazione nome ─────────────────────────────────────────────────────────
 
@@ -52,14 +61,14 @@ describe("nomeValido: validazione del nome cartella", () => {
 // ── Submit: invoke folder_crea con payload corretto ──────────────────────────
 
 describe("eseguiCreaCartella: payload invoke", () => {
-  let invokeFn: ReturnType<typeof vi.fn>;
-  let dispatchFn: ReturnType<typeof vi.fn>;
-  let onChiudi: ReturnType<typeof vi.fn>;
+  let invokeFn: Mock<InvokeFolderFn>;
+  let dispatchFn: Mock<VoidFn>;
+  let onChiudi: Mock<VoidFn>;
 
   beforeEach(() => {
-    invokeFn = vi.fn().mockResolvedValue("folder-id-123");
-    dispatchFn = vi.fn();
-    onChiudi = vi.fn();
+    invokeFn = vi.fn<InvokeFolderFn>().mockResolvedValue("folder-id-123");
+    dispatchFn = vi.fn<VoidFn>();
+    onChiudi = vi.fn<VoidFn>();
   });
 
   it("chiama folder_crea con { nome, parent_folder_id: null }", async () => {
@@ -105,14 +114,14 @@ describe("eseguiCreaCartella: payload invoke", () => {
 // ── Submit: side-effects al successo ─────────────────────────────────────────
 
 describe("eseguiCreaCartella: side-effects al successo", () => {
-  let invokeFn: ReturnType<typeof vi.fn>;
-  let dispatchFn: ReturnType<typeof vi.fn>;
-  let onChiudi: ReturnType<typeof vi.fn>;
+  let invokeFn: Mock<InvokeFolderFn>;
+  let dispatchFn: Mock<VoidFn>;
+  let onChiudi: Mock<VoidFn>;
 
   beforeEach(() => {
-    invokeFn = vi.fn().mockResolvedValue("folder-id-abc");
-    dispatchFn = vi.fn();
-    onChiudi = vi.fn();
+    invokeFn = vi.fn<InvokeFolderFn>().mockResolvedValue("folder-id-abc");
+    dispatchFn = vi.fn<VoidFn>();
+    onChiudi = vi.fn<VoidFn>();
   });
 
   it("chiama dispatchFn (pap:lista-mutata) esattamente una volta al successo", async () => {
@@ -129,8 +138,8 @@ describe("eseguiCreaCartella: side-effects al successo", () => {
 
   it("chiama dispatchFn prima di onChiudi (ordine corretto)", async () => {
     const callOrder: string[] = [];
-    dispatchFn = vi.fn().mockImplementation(() => { callOrder.push("dispatch"); });
-    onChiudi = vi.fn().mockImplementation(() => { callOrder.push("chiudi"); });
+    dispatchFn = vi.fn<VoidFn>().mockImplementation(() => { callOrder.push("dispatch"); });
+    onChiudi = vi.fn<VoidFn>().mockImplementation(() => { callOrder.push("chiudi"); });
 
     await eseguiCreaCartella("NuovaCartella", invokeFn, dispatchFn, onChiudi);
 
@@ -141,16 +150,16 @@ describe("eseguiCreaCartella: side-effects al successo", () => {
 // ── Submit: errori — dispatch e onChiudi NON chiamati ────────────────────────
 
 describe("eseguiCreaCartella: errore backend — nessun side-effect", () => {
-  let dispatchFn: ReturnType<typeof vi.fn>;
-  let onChiudi: ReturnType<typeof vi.fn>;
+  let dispatchFn: Mock<VoidFn>;
+  let onChiudi: Mock<VoidFn>;
 
   beforeEach(() => {
-    dispatchFn = vi.fn();
-    onChiudi = vi.fn();
+    dispatchFn = vi.fn<VoidFn>();
+    onChiudi = vi.fn<VoidFn>();
   });
 
   it("non chiama dispatchFn se il backend fallisce", async () => {
-    const invokeFn = vi.fn().mockRejectedValue(new Error("DB error"));
+    const invokeFn = vi.fn<InvokeFolderFn>().mockRejectedValue(new Error("DB error"));
 
     await eseguiCreaCartella("Test", invokeFn, dispatchFn, onChiudi);
 
@@ -158,7 +167,7 @@ describe("eseguiCreaCartella: errore backend — nessun side-effect", () => {
   });
 
   it("non chiama onChiudi se il backend fallisce", async () => {
-    const invokeFn = vi.fn().mockRejectedValue(new Error("DB error"));
+    const invokeFn = vi.fn<InvokeFolderFn>().mockRejectedValue(new Error("DB error"));
 
     await eseguiCreaCartella("Test", invokeFn, dispatchFn, onChiudi);
 
@@ -166,7 +175,7 @@ describe("eseguiCreaCartella: errore backend — nessun side-effect", () => {
   });
 
   it("non chiama dispatchFn né onChiudi per nome vuoto (validazione client)", async () => {
-    const invokeFn = vi.fn();
+    const invokeFn = vi.fn<InvokeFolderFn>();
 
     await eseguiCreaCartella("", invokeFn, dispatchFn, onChiudi);
 
@@ -175,7 +184,7 @@ describe("eseguiCreaCartella: errore backend — nessun side-effect", () => {
   });
 
   it("non chiama dispatchFn né onChiudi per nome con slash", async () => {
-    const invokeFn = vi.fn();
+    const invokeFn = vi.fn<InvokeFolderFn>();
 
     await eseguiCreaCartella("foo/bar", invokeFn, dispatchFn, onChiudi);
 
@@ -192,7 +201,7 @@ describe("eseguiCreaCartella: gestione errori", () => {
 
   it("propaga errore stringa dal backend rimuovendo prefisso 'Error: '", async () => {
     const invokeFn = vi
-      .fn()
+      .fn<InvokeFolderFn>()
       .mockRejectedValue(
         "Error: Impossibile creare cartella: UNIQUE constraint failed",
       );
@@ -206,7 +215,7 @@ describe("eseguiCreaCartella: gestione errori", () => {
   });
 
   it("propaga messaggio da istanza Error", async () => {
-    const invokeFn = vi.fn().mockRejectedValue(new Error("nome non valido"));
+    const invokeFn = vi.fn<InvokeFolderFn>().mockRejectedValue(new Error("nome non valido"));
 
     const risultato = await eseguiCreaCartella("Test", invokeFn, dispatchFn, onChiudi);
 
@@ -215,7 +224,7 @@ describe("eseguiCreaCartella: gestione errori", () => {
   });
 
   it("usa messaggio generico per errori non-stringa e non-Error", async () => {
-    const invokeFn = vi.fn().mockRejectedValue({ codice: 42 });
+    const invokeFn = vi.fn<InvokeFolderFn>().mockRejectedValue({ codice: 42 });
 
     const risultato = await eseguiCreaCartella("Test", invokeFn, dispatchFn, onChiudi);
 
@@ -224,7 +233,7 @@ describe("eseguiCreaCartella: gestione errori", () => {
   });
 
   it("ritorna ok=false senza lanciare eccezioni non gestite", async () => {
-    const invokeFn = vi.fn().mockRejectedValue("Error: server down");
+    const invokeFn = vi.fn<InvokeFolderFn>().mockRejectedValue("Error: server down");
 
     await expect(
       eseguiCreaCartella("Test", invokeFn, dispatchFn, onChiudi),
@@ -232,7 +241,7 @@ describe("eseguiCreaCartella: gestione errori", () => {
   });
 
   it("ritorna ok=false per nome vuoto con messaggio descrittivo", async () => {
-    const invokeFn = vi.fn();
+    const invokeFn = vi.fn<InvokeFolderFn>();
     const risultato = await eseguiCreaCartella("", invokeFn, dispatchFn, onChiudi);
 
     expect(risultato.ok).toBe(false);
