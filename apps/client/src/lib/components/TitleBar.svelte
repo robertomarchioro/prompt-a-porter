@@ -1,8 +1,20 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+  import { getVersion } from "@tauri-apps/api/app";
   import { statoTema, salvaTemaTono } from "$lib/stores/preferenze.svelte";
   import { apriModale } from "$lib/stores/modale.svelte";
   import { fmtShortcut } from "$lib/util/shortcut";
   import { Sun, Moon, Settings, HelpCircle } from "lucide-svelte";
+
+  // #404: versione reale dell'app (no piu' la stringa hardcoded errata).
+  let versione = $state("");
+  onMount(async () => {
+    try {
+      versione = await getVersion();
+    } catch {
+      versione = "";
+    }
+  });
 
   function toggleTema(): void {
     const successivo = statoTema.tema === "dark" ? "light" : "dark";
@@ -20,10 +32,11 @@
 </script>
 
 <header class="titlebar">
-  <div class="brand">
+  <div class="brand" title="Prompt a Porter">
     <span class="glyph">P</span>
-    <span class="name">Prompt a Porter</span>
-    <span class="version-tag">v0.8 redesign shell</span>
+    {#if versione}
+      <span class="version-tag">v{versione}</span>
+    {/if}
   </div>
   <div class="actions">
     <button
@@ -89,11 +102,6 @@
     color: var(--accent-team-on);
     font-weight: var(--fw-bold);
     font-size: var(--fs-xs);
-  }
-
-  .name {
-    font-weight: var(--fw-semibold);
-    color: var(--text-default);
   }
 
   .version-tag {
