@@ -1,15 +1,16 @@
 // Modulo util_random — generazione di bytes casuali sicuri via OS RNG.
 //
-// Centralizza l'accesso a `rand::rngs::OsRng` in un unico punto:
-// - Isola la dipendenza dall'API fallibile di rand 0.9 (`TryRngCore`).
+// Centralizza l'accesso a `rand::rngs::SysRng` in un unico punto:
+// - Isola la dipendenza dall'API fallibile di rand 0.10 (`TryRngCore`).
 // - Propaga l'errore come `PapErrore::RngNonDisponibile` (opaco, no leakage).
 // - Semantica fail-closed: se l'OS RNG non è disponibile l'operazione fallisce,
 //   non si prosegue con un buffer non inizializzato o debole.
 //
 // Tutti i moduli che generano ID o salt devono usare `riempi_random` invece
-// di accedere direttamente a `OsRng`.
+// di accedere direttamente a `SysRng`.
 
-use rand::TryRngCore;
+use rand::rand_core::TryRngCore;
+use rand::rngs::SysRng;
 
 use crate::errore::PapErrore;
 
@@ -18,7 +19,7 @@ use crate::errore::PapErrore;
 /// Propaga un `PapErrore::RngNonDisponibile` opaco se l'OS RNG non è
 /// accessibile — mai `unwrap()`, mai buffer parzialmente inizializzato.
 pub fn riempi_random(buf: &mut [u8]) -> Result<(), PapErrore> {
-    rand::rngs::OsRng
+    SysRng
         .try_fill_bytes(buf)
         .map_err(|_| PapErrore::RngNonDisponibile)
 }
