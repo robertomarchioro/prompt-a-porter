@@ -32,6 +32,8 @@
   let passwordConferma = $state("");
   let saltaCifratura = $state(false);
   let hotkey = $state("Ctrl+Shift+P");
+  // #404: nome del vault scelto dall'utente, mostrato nello switcher in alto.
+  let nomeVault = $state("Personale");
   let creaPromptEsempio = $state(true);
   // Issue #282: avvio automatico con Windows — OFF di default.
   let avvioAutomatico = $state(false);
@@ -117,6 +119,7 @@
           lingua: "it",
           onboarding_completato: true,
           crea_prompt_esempio: false,
+          nome_vault: nomeVault.trim() || "Personale",
         },
       });
       await invoke("registra_hotkey", { combo: "Ctrl+Shift+P" });
@@ -147,6 +150,7 @@
           lingua: "it",
           onboarding_completato: true,
           crea_prompt_esempio: creaPromptEsempio,
+          nome_vault: nomeVault.trim() || "Personale",
         },
       });
 
@@ -272,6 +276,15 @@
             <li>Nessun account, nessun server</li>
             <li>Cifratura locale opzionale</li>
           </ul>
+        </div>
+        <div class="vault-nome-campo">
+          <Field etichetta="Nome del vault">
+            <Input
+              bind:valore={nomeVault}
+              type="text"
+              placeholder="Es. Personale, Lavoro, Marketing…"
+            />
+          </Field>
         </div>
       {:else if step === 2}
         <h1 class="wizard-titolo">Cifra il tuo vault</h1>
@@ -575,6 +588,11 @@
     background: var(--accent-private-soft);
     border-radius: var(--radius-lg);
     margin-top: var(--sp-2);
+  }
+
+  /* #404: campo nome vault sotto la card di benvenuto. */
+  .vault-nome-campo {
+    margin-top: var(--sp-4);
   }
 
   .benvenuto-icona {

@@ -81,6 +81,15 @@ pub struct Preferenze {
     /// (riduce rumore visivo su body brevi).
     #[serde(default)]
     pub highlight_active_line: bool,
+    /// #404: nome del vault scelto dall'utente in onboarding, mostrato
+    /// nello switcher in alto a sinistra (al posto del fisso "Personale").
+    /// Default "Personale" per retro-compatibilità coi file pre-#404.
+    #[serde(default = "default_nome_vault")]
+    pub nome_vault: String,
+}
+
+fn default_nome_vault() -> String {
+    "Personale".to_string()
 }
 
 fn default_updater_abilitato() -> bool {
@@ -145,6 +154,7 @@ impl Default for Preferenze {
             font_size: 13,
             show_line_numbers: true,
             highlight_active_line: false,
+            nome_vault: "Personale".to_string(),
         }
     }
 }
@@ -245,6 +255,7 @@ mod test {
             font_size: 13,
             show_line_numbers: true,
             highlight_active_line: false,
+            nome_vault: "Personale".to_string(),
         };
 
         let json = serde_json::to_string_pretty(&prefs).unwrap();
@@ -317,6 +328,7 @@ mod test {
             font_size: 16,
             show_line_numbers: false,
             highlight_active_line: true,
+            nome_vault: "Marketing".to_string(),
         };
         salva_pure(dir.path(), &prefs).unwrap();
         let letto = carica_pure(&dir.path().join("preferenze.json")).unwrap();
@@ -327,6 +339,7 @@ mod test {
         assert!(letto.debug_log_abilitato);
         assert!(!letto.updater_abilitato);
         assert_eq!(letto.autosave_delay_ms, 1500);
+        assert_eq!(letto.nome_vault, "Marketing");
         assert!(!letto.line_wrapping);
         assert_eq!(letto.indent_size, 4);
         assert_eq!(letto.font_size, 16);
