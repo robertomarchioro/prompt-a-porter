@@ -1,5 +1,28 @@
 # Changelog — Prompt a Porter
 
+## v0.8.26 — Angolo in alto a sinistra, bottoni editor, varianti e grande manutenzione (Go 1.25, vitest 4) (2026-06-29)
+
+> Tre interventi UI nati dai test dal vivo (#402, #403, #404) più un ampio giro di manutenzione delle dipendenze — incluso lo **sblocco della catena Go 1.25**, rimasta ferma due settimane.
+
+### Feature
+
+- **Angolo in alto a sinistra ridisegnato** (#404):
+  - **Header in-app**: rimossa la ripetizione di "Prompt a Porter" (era sia nel titolo finestra OS sia nell'header) — ora resta il solo glifo come logo. Il numero di versione non è più la stringa hardcoded errata "v0.8 redesign shell" ma viene letto a runtime (`getVersion()`), quindi è sempre quello reale.
+  - **Nome del vault personalizzabile**: lo slot prima fisso a "Personale" ora mostra il **nome del vault** scelto dall'utente in onboarding (persistito in `Preferenze.nome_vault`, retro-compatibile con i vault esistenti che continuano a mostrare "Personale").
+  - **Codename "Ago e Filo"**: l'header riserva uno spazio dedicato al codename editoriale del rilascio. L'intero ciclo pre-1.0 porta il codename di laboratorio **"Ago e Filo"**; alla 1.0 subentrerà il primo nome del pool in ordine alfabetico ("Arioso Atelier"). Convenzione in `docs/roadmap/stagioni-e-nomi-rilascio.md`.
+- **Varianti evidenziate nella lista** (#403): le card delle varianti di un prompt ora hanno un **rientro** e un connettore **↳** con tooltip "Variante di «titolo padre»", così si vede il legame con il prompt principale. Scelta di design senza riordino della lista: ordinamento, drag-and-drop e multi-selezione restano invariati.
+
+### Fix
+
+- **Bottoni dell'editor finalmente funzionanti** (#402): nella toolbar dell'editor i tre bottoni in alto a destra — **preferito**, **fork**, **export Markdown** — erano stub rimasti dal redesign (facevano solo `console.log`) e i tooltip finivano con un fuorviante "(F8)". Ora sono cablati ai comandi backend già usati dal menu contestuale (`libreria_toggle_preferito`, `prompt_fork`, `prompt_export_markdown`) e i tooltip sono corretti.
+
+### Dipendenze e infrastruttura
+
+- **Catena Go 1.25 sbloccata** (#405 — chiude #334, #339, #396): il CLI passa a Go 1.25 (`modernc.org/sqlite` 1.53). Il blocco di due settimane non era golangci-lint ma l'**action `golangci-lint-action@v6`** che scaricava un binario non-go1.25; bumpata a **v9** il lint gira correttamente sul modulo go1.25. Sistemati anche i rilievi `errcheck` latenti emersi col lint ora funzionante.
+- **Migrazione a vitest 4** (#401): bump di `vitest` e `@vitest/coverage-v8` a 4.x con adeguamento delle tipizzazioni dei mock (in vitest 4 `vi.fn()` non è più assegnabile a una firma specifica senza generico).
+- **Major Rust**: `rand` 0.9 → 0.10 (#406, API rinominata `OsRng`→`SysRng`, `TryRngCore`→`TryRng`), `zip` 4 → 8 (#344), `ndarray` 0.16 → 0.17 (#346).
+- **Gruppi patch-minor e bump minori**: aggiornamenti cargo e npm raggruppati (#398, #399, #407) e singoli — `go-sqlite3` (#395), `actions/checkout` v7 (#397), `@types/node` 26 (#400), `actions/upload-pages-artifact` v5 (#337).
+
 ## v0.8.25 — Triage: identifier `com.pap.client`, tab Valutazioni, golden e pulizia CI (2026-06-19)
 
 > Ciclo di triage: 5 issue risolte in 4 gruppi (3 isole indipendenti + 1 cluster coordinato per il file `release.yml` condiviso). #334 (Go 1.25) resta rinviata per il deadlock golangci-lint/go1.25.
