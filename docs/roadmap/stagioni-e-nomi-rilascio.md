@@ -110,13 +110,19 @@ Esempio di intestazione completa di una release cardine:
 Arioso Atelier — Autunno-Inverno 2026 · v1.2.0
 ```
 
+### Il codename pre-1.0: «Ago e Filo»
+
+Prima della 1.0 il prodotto è **ancora in cucitura**: l'intero ciclo di sviluppo verso la prima release stabile (da `v0.8.x` in poi) porta un unico **codename di laboratorio**, **«Ago e Filo»**. È volutamente fuori schema rispetto al pool qui sotto — *sostantivo + sostantivo*, non *aggettivo + tessuto* allitterante: non battezza una svolta, battezza **l'officina che la precede**. Vive nell'header in-app accanto al numero di versione (`Ago e Filo · v0.8.25`), implementato come costante in `apps/client/src/lib/codename.ts`.
+
+Alla **1.0** si abbandona «Ago e Filo» e si pesca il **primo nome del pool in ordine alfabetico** — oggi **«Arioso Atelier»** (lettera A), coerente col suo registro di *"release fondante / di debutto"*.
+
 ### Pool di codename proposti (~20, in marcia alfabetica)
 
 Lista di partenza. Si pesca dall'alto verso il basso man mano che arrivano le release cardine; ogni nome è un **suggerimento di registro**, l'abbinamento finale al rilascio si decide quando la release prende forma.
 
 | Lettera | Codename | Tono / a quale tipo di svolta si addice |
 |---|---|---|
-| A | **Arioso Atelier** | Release fondante / di debutto di una linea (richiama anche il mood "ariosa" del brand) |
+| A | **Arioso Atelier** | Release fondante / di debutto di una linea (richiama anche il mood "ariosa" del brand) — **riservato alla 1.0** (subentra a «Ago e Filo») |
 | B | **Brioso Broccato** | Release ricca, ornata di molte feature |
 | C | **Cangiante Cashmere** | Release che cambia la percezione del prodotto (UX, redesign morbido) |
 | D | **Dorato Damasco** | Release "premium", rifinitura di pregio |

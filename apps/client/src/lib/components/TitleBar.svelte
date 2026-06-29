@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { getVersion } from "@tauri-apps/api/app";
+  import { CODENAME } from "$lib/codename";
   import { statoTema, salvaTemaTono } from "$lib/stores/preferenze.svelte";
   import { apriModale } from "$lib/stores/modale.svelte";
   import { fmtShortcut } from "$lib/util/shortcut";
@@ -32,8 +33,9 @@
 </script>
 
 <header class="titlebar">
-  <div class="brand" title="Prompt a Porter">
+  <div class="brand" title="Prompt a Porter — {CODENAME}">
     <span class="glyph">P</span>
+    <span class="codename">{CODENAME}</span>
     {#if versione}
       <span class="version-tag">v{versione}</span>
     {/if}
@@ -102,6 +104,11 @@
     color: var(--accent-team-on);
     font-weight: var(--fw-bold);
     font-size: var(--fs-xs);
+  }
+
+  .codename {
+    font-weight: var(--fw-semibold);
+    color: var(--text-default);
   }
 
   .version-tag {
