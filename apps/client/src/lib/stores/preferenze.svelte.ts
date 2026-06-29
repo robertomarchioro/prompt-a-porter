@@ -53,6 +53,8 @@ interface Preferenze {
   font_size: number;
   show_line_numbers: boolean;
   highlight_active_line: boolean;
+  // #404 — nome del vault scelto in onboarding (default "Personale")
+  nome_vault: string;
 }
 
 // M10 — Default editor (allineati ai default Rust in preferenze.rs)
@@ -93,6 +95,29 @@ class StatoEditor {
 }
 
 export const statoEditor = new StatoEditor();
+
+/**
+ * #404 — Store reattivo per il nome del vault, mostrato nello switcher
+ * in alto a sinistra. Caricato al boot (App.svelte); scritto in onboarding.
+ */
+class StatoVault {
+  nome = $state("Personale");
+  caricato = $state(false);
+}
+
+export const statoVault = new StatoVault();
+
+/** #404 — Carica il nome del vault dal backend. Idempotente, fail-safe. */
+export async function caricaVault(): Promise<void> {
+  try {
+    const prefs = await invoke<Preferenze>("preferenze_carica");
+    statoVault.nome = prefs.nome_vault?.trim() || "Personale";
+  } catch (err) {
+    console.error("[preferenze] carica vault fallito, uso default", err);
+  } finally {
+    statoVault.caricato = true;
+  }
+}
 
 function clampInt(v: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(v)));

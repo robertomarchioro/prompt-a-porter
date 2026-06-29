@@ -14,6 +14,7 @@
   import NavItem from "./NavItem.svelte";
   import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
   import { MODELLI_TARGET } from "$lib/modelli-target";
+  import { statoVault } from "$lib/stores/preferenze.svelte";
   import {
     apriMenu,
     type VoceMenu,
@@ -237,7 +238,7 @@
 
 <aside class="sidebar" data-tour="sidebar">
   <div class="sidebar-top">
-    <WorkspaceSwitcher nome="Personale" />
+    <WorkspaceSwitcher nome={statoVault.nome} />
     <button
       class="collapse-btn"
       type="button"

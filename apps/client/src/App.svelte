@@ -27,6 +27,7 @@
     statoTema,
     caricaTemaTono,
     caricaEditor,
+    caricaVault,
     applicaThemeTone,
   } from "$lib/stores/preferenze.svelte";
 
@@ -82,6 +83,7 @@
   onMount(() => {
     void caricaTemaTono();
     void caricaEditor();
+    void caricaVault();
     // La palette è una finestra separata che non passa dal flusso vault.
     if (etichetta !== "palette") {
       void attendiBackendPronto();
