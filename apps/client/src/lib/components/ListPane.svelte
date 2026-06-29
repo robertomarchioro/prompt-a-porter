@@ -55,6 +55,9 @@
     /** Issue #141: body troncato a 800 char server-side, usato solo
      *  nella densità "anteprima". Vuoto se densità ≠ anteprima. */
     body_preview: string;
+    /** #403: id del prompt principale se questo è una variante; null se
+     *  è un principale. Già esposto da libreria_lista. */
+    parent_prompt_id: string | null;
   }
 
   interface Cartella {
@@ -103,6 +106,13 @@
 
   let stato = $state<StatoLista>(caricaStato());
   let prompts = $state<PromptCardData[]>([]);
+  // #403: mappa id→titolo per nominare il prompt padre nel tooltip variante.
+  const titoliById = $derived(new Map(prompts.map((p) => [p.id, p.titolo])));
+  function varianteTitle(p: PromptCardData): string {
+    if (!p.parent_prompt_id) return "";
+    const t = titoliById.get(p.parent_prompt_id);
+    return t ? `Variante di "${t}"` : "Variante";
+  }
   let cerca = $state("");
   let cercaDebounced = $state("");
   let cartelle = $state<Cartella[]>([]);
@@ -848,6 +858,7 @@
           class:drop-after={dropTargetIndex === idx &&
             dropPosition === "after"}
           class:dragging={draggedId === p.id}
+          class:variante={!!p.parent_prompt_id}
           class:selezionata-multi={selezioneMultipla?.has(p.id) || undefined}
           draggable="true"
           ondragstart={(e) => gestDragStart(e, p.id)}
@@ -864,6 +875,13 @@
           }}
           role="presentation"
         >
+          {#if p.parent_prompt_id}
+            <span
+              class="variante-marca"
+              title={varianteTitle(p)}
+              aria-label={varianteTitle(p)}>↳</span
+            >
+          {/if}
           <PromptCard
             id={p.id}
             titolo={p.titolo}
@@ -1200,6 +1218,21 @@
   }
 
   /* F5 PR-F: visual indicator selezione multipla per Diff libero */
+  /* #403: card variante — rientro + connettore verso il prompt padre. */
+  .card-wrap.variante {
+    padding-left: var(--sp-5);
+  }
+  .variante-marca {
+    position: absolute;
+    left: var(--sp-2);
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-subtle);
+    font-size: var(--fs-sm);
+    line-height: 1;
+    z-index: 1;
+  }
+
   .card-wrap.selezionata-multi {
     background: var(--accent-team-soft);
     box-shadow: inset 3px 0 0 var(--accent-team);
