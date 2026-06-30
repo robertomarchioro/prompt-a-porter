@@ -22,12 +22,9 @@
     List as ListIcon,
     Pencil,
     Lock,
-    Sliders,
     Search,
     Check,
     Copy,
-    ChevronDown,
-    ChevronRight,
     Bot,
     Sparkles,
     ScrollText,
@@ -44,9 +41,13 @@
     Eraser,
     CloudDownload,
     Database,
+    Info,
+    Power,
+    HelpCircle,
   } from "lucide-svelte";
   import Modale from "$lib/components/Modale.svelte";
   import AiutoSezione from "$lib/aiuto/AiutoSezione.svelte";
+  import AboutSezione from "$lib/aiuto/AboutSezione.svelte";
   import PannelloProviderConfig from "$lib/components/PannelloProviderConfig.svelte";
   import PannelloLinter from "$lib/components/PannelloLinter.svelte";
   import HotkeyInput from "$lib/components/HotkeyInput.svelte";
@@ -76,34 +77,39 @@
     type SyncState,
   } from "$lib/sync";
 
+  // Riordino sidebar: tutte le voci sono di primo livello (niente più
+  // accordion "Avanzate") e raggruppate per dominio tramite `gruppo`.
   type SezioneId =
     | "aspetto"
     | "vista"
-    | "sistema"
     | "editor"
-    | "sicurezza"
+    | "globali"
+    | "linter"
     | "dati"
-    | "avanzate"
-    | "sviluppo"
-    | "guida";
-  type SubSezioneId =
     | "provider"
     | "embeddings"
     | "audit"
+    | "sicurezza"
     | "sync"
+    | "sistema"
     | "hotkey"
-    | "globali"
-    | "linter";
+    | "aggiornamenti"
+    | "sviluppo"
+    | "guida"
+    | "info";
+
+  type GruppoId =
+    | "personalizzazione"
+    | "contenuti"
+    | "ai"
+    | "sicurezza-sync"
+    | "sistema"
+    | "aiuto";
 
   interface VoceSezione {
     id: SezioneId;
     label: string;
-    keywords: string[];
-  }
-
-  interface VoceSubSezione {
-    id: SubSezioneId;
-    label: string;
+    gruppo: GruppoId;
     keywords: string[];
   }
 
@@ -120,7 +126,6 @@
   // mutazioni del prop sezioneIniziale resettino la navigazione utente.
   let sezione = $state<SezioneId>(untrack(() => sezioneIniziale));
   let query = $state("");
-  let subSezioneAperta = $state<SubSezioneId | null>(null);
 
   // ─── M6 PR-4: sezione "Dati" import/export markdown ──────────────
   // Repo URL hardcoded per link doc utente (no env var per evitare
@@ -321,85 +326,12 @@
     }
   }
 
-  const subSezioni: VoceSubSezione[] = [
-    {
-      id: "provider",
-      label: "Provider AI",
-      keywords: [
-        "provider",
-        "ai",
-        "anthropic",
-        "openai",
-        "ollama",
-        "openai-compat",
-        "gemini",
-        "api key",
-        "endpoint",
-        "modello",
-      ],
-    },
-    {
-      id: "embeddings",
-      label: "Ricerca & Embeddings",
-      keywords: [
-        "ricerca",
-        "semantica",
-        "embeddings",
-        "minilm",
-        "alpha",
-        "ibrida",
-        "reindex",
-        "vettore",
-      ],
-    },
-    {
-      id: "audit",
-      label: "Audit log AI",
-      keywords: ["audit", "log", "csv", "export", "cleanup", "retention"],
-    },
-    {
-      id: "sync",
-      label: "Sync",
-      keywords: ["sync", "sincronizza", "logout", "stato", "remoto"],
-    },
-    {
-      id: "hotkey",
-      label: "Hotkey",
-      keywords: ["hotkey", "scorciatoia", "tasti", "palette", "ctrl", "shift"],
-    },
-    {
-      id: "globali",
-      label: "Segnaposti globali",
-      keywords: [
-        "segnaposti",
-        "globali",
-        "placeholder",
-        "default",
-        "variabili",
-        "globale",
-        "autore",
-      ],
-    },
-    {
-      id: "linter",
-      label: "Linter",
-      keywords: [
-        "linter",
-        "lint",
-        "regole",
-        "diagnosi",
-        "avvisi",
-        "warning",
-        "pii",
-        "segnaposti",
-      ],
-    },
-  ];
-
   const sezioni: VoceSezione[] = [
+    // ── Personalizzazione ──
     {
       id: "aspetto",
       label: "Aspetto",
+      gruppo: "personalizzazione",
       keywords: [
         "tema",
         "dark",
@@ -416,6 +348,7 @@
     {
       id: "vista",
       label: "Vista lista",
+      gruppo: "personalizzazione",
       keywords: [
         "densità",
         "compatta",
@@ -427,8 +360,136 @@
       ],
     },
     {
+      id: "editor",
+      label: "Editor",
+      gruppo: "personalizzazione",
+      keywords: [
+        "editor",
+        "autosave",
+        "wrap",
+        "wrapping",
+        "tasti",
+        "code",
+        "font",
+        "indent",
+        "riga",
+      ],
+    },
+    // ── Contenuti ──
+    {
+      id: "globali",
+      label: "Segnaposti globali",
+      gruppo: "contenuti",
+      keywords: [
+        "segnaposti",
+        "globali",
+        "placeholder",
+        "default",
+        "variabili",
+        "globale",
+        "autore",
+      ],
+    },
+    {
+      id: "linter",
+      label: "Linter",
+      gruppo: "contenuti",
+      keywords: [
+        "linter",
+        "lint",
+        "regole",
+        "diagnosi",
+        "avvisi",
+        "warning",
+        "pii",
+        "segnaposti",
+      ],
+    },
+    {
+      id: "dati",
+      label: "Dati",
+      gruppo: "contenuti",
+      keywords: [
+        "import",
+        "export",
+        "importa",
+        "esporta",
+        "markdown",
+        "md",
+        "backup",
+        "obsidian",
+        "foam",
+        "zip",
+        "front-matter",
+        "json",
+      ],
+    },
+    // ── AI ──
+    {
+      id: "provider",
+      label: "Provider AI",
+      gruppo: "ai",
+      keywords: [
+        "provider",
+        "ai",
+        "anthropic",
+        "openai",
+        "ollama",
+        "openai-compat",
+        "gemini",
+        "api key",
+        "endpoint",
+        "modello",
+      ],
+    },
+    {
+      id: "embeddings",
+      label: "Ricerca & Embeddings",
+      gruppo: "ai",
+      keywords: [
+        "ricerca",
+        "semantica",
+        "embeddings",
+        "minilm",
+        "alpha",
+        "ibrida",
+        "reindex",
+        "vettore",
+      ],
+    },
+    {
+      id: "audit",
+      label: "Audit log AI",
+      gruppo: "ai",
+      keywords: ["audit", "log", "csv", "export", "cleanup", "retention"],
+    },
+    // ── Sicurezza & Sync ──
+    {
+      id: "sicurezza",
+      label: "Sicurezza",
+      gruppo: "sicurezza-sync",
+      keywords: [
+        "vault",
+        "password",
+        "master",
+        "key",
+        "lock",
+        "blocca",
+        "cifratura",
+        "elimina",
+      ],
+    },
+    {
+      id: "sync",
+      label: "Sync",
+      gruppo: "sicurezza-sync",
+      keywords: ["sync", "sincronizza", "logout", "stato", "remoto"],
+    },
+    // ── Sistema ──
+    {
       id: "sistema",
       label: "Sistema",
+      gruppo: "sistema",
       keywords: [
         "sistema",
         "avvio",
@@ -442,66 +503,29 @@
       ],
     },
     {
-      id: "editor",
-      label: "Editor",
-      keywords: ["editor", "autosave", "wrap", "wrapping", "tasti", "code"],
+      id: "hotkey",
+      label: "Hotkey",
+      gruppo: "sistema",
+      keywords: ["hotkey", "scorciatoia", "tasti", "palette", "ctrl", "shift"],
     },
     {
-      id: "sicurezza",
-      label: "Sicurezza",
+      id: "aggiornamenti",
+      label: "Aggiornamenti",
+      gruppo: "sistema",
       keywords: [
-        "vault",
-        "password",
-        "master",
-        "key",
-        "lock",
-        "blocca",
-        "cifratura",
-      ],
-    },
-    {
-      id: "dati",
-      label: "Dati",
-      keywords: [
-        "import",
-        "export",
-        "importa",
-        "esporta",
-        "markdown",
-        "md",
-        "backup",
-        "obsidian",
-        "foam",
-        "zip",
-        "front-matter",
-      ],
-    },
-    {
-      id: "avanzate",
-      label: "Avanzate",
-      keywords: [
-        "provider",
-        "ai",
-        "anthropic",
-        "openai",
-        "ollama",
-        "gemini",
-        "embeddings",
-        "ricerca",
-        "audit",
-        "log",
-        "sync",
-        "hotkey",
-        "scorciatoia",
-        "segnaposti",
-        "globali",
-        "placeholder",
-        "default",
+        "aggiornamenti",
+        "update",
+        "updater",
+        "versione",
+        "nuova",
+        "github",
+        "installa",
       ],
     },
     {
       id: "sviluppo",
       label: "Sviluppo",
+      gruppo: "sistema",
       keywords: [
         "sviluppo",
         "debug",
@@ -516,9 +540,11 @@
         "beta",
       ],
     },
+    // ── Aiuto ──
     {
       id: "guida",
       label: "Guida e aiuto",
+      gruppo: "aiuto",
       keywords: [
         "guida",
         "aiuto",
@@ -532,38 +558,55 @@
         "faq",
       ],
     },
+    {
+      id: "info",
+      label: "Informazioni",
+      gruppo: "aiuto",
+      keywords: [
+        "informazioni",
+        "about",
+        "versione",
+        "version",
+        "licenza",
+        "license",
+        "agpl",
+        "credits",
+        "crediti",
+        "codename",
+        "repository",
+        "github",
+      ],
+    },
+  ];
+
+  // Ordine e label dei gruppi nella sidebar.
+  const GRUPPI: { id: GruppoId; label: string }[] = [
+    { id: "personalizzazione", label: "Personalizzazione" },
+    { id: "contenuti", label: "Contenuti" },
+    { id: "ai", label: "AI" },
+    { id: "sicurezza-sync", label: "Sicurezza & Sync" },
+    { id: "sistema", label: "Sistema" },
+    { id: "aiuto", label: "Aiuto" },
   ];
 
   const sezioniFiltrate = $derived.by(() => {
     const q = query.trim().toLowerCase();
     if (!q) return sezioni;
-    const matchesPerSezione = sezioni.filter((s) => {
-      if (s.label.toLowerCase().includes(q)) return true;
-      return s.keywords.some((k) => k.includes(q));
-    });
-    const matchSub = subSezioni.find(
+    return sezioni.filter(
       (s) =>
         s.label.toLowerCase().includes(q) ||
         s.keywords.some((k) => k.includes(q)),
     );
-    if (matchSub) {
-      const avanzate = sezioni.find((s) => s.id === "avanzate");
-      if (avanzate && !matchesPerSezione.find((s) => s.id === "avanzate")) {
-        return [...matchesPerSezione, avanzate];
-      }
-    }
-    return matchesPerSezione;
   });
 
-  const subSezioniFiltrate = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return subSezioni;
-    return subSezioni.filter(
-      (s) =>
-        s.label.toLowerCase().includes(q) ||
-        s.keywords.some((k) => k.includes(q)),
-    );
-  });
+  // Sidebar raggruppata: gruppi senza voci che matchano la ricerca
+  // vengono nascosti.
+  const gruppiFiltrati = $derived(
+    GRUPPI.map((g) => ({
+      ...g,
+      voci: sezioniFiltrate.filter((s) => s.gruppo === g.id),
+    })).filter((g) => g.voci.length > 0),
+  );
 
   $effect(() => {
     if (
@@ -571,18 +614,6 @@
       !sezioniFiltrate.find((s) => s.id === sezione)
     ) {
       sezione = sezioniFiltrate[0].id;
-    }
-  });
-
-  $effect(() => {
-    const q = query.trim().toLowerCase();
-    if (q && subSezioniFiltrate.length > 0 && sezione === "avanzate") {
-      if (
-        !subSezioneAperta ||
-        !subSezioniFiltrate.find((s) => s.id === subSezioneAperta)
-      ) {
-        subSezioneAperta = subSezioniFiltrate[0].id;
-      }
     }
   });
 
@@ -1125,36 +1156,35 @@
     }
   }
 
-  function toggleSubSezione(id: SubSezioneId): void {
-    subSezioneAperta = subSezioneAperta === id ? null : id;
-  }
-
+  // prefsFull serve a embeddings (ricerca semantica/alpha), sviluppo
+  // (toggle debug) e aggiornamenti (toggle updater): caricalo pigro
+  // appena si entra in una di queste sezioni.
   $effect(() => {
-    if (sezione === "avanzate" && prefsFull === null) {
+    if (
+      (sezione === "embeddings" ||
+        sezione === "sviluppo" ||
+        sezione === "aggiornamenti") &&
+      prefsFull === null
+    ) {
       void caricaPrefsFull();
     }
   });
 
   $effect(() => {
-    if (subSezioneAperta === "embeddings" && embStatus === null) {
+    if (sezione === "embeddings" && embStatus === null) {
       void caricaEmbStatus();
     }
   });
 
   $effect(() => {
-    if (subSezioneAperta === "globali" && globaliLista === null) {
+    if (sezione === "globali" && globaliLista === null) {
       void caricaGlobali();
     }
   });
 
   $effect(() => {
-    if (sezione === "sviluppo") {
-      if (prefsFull === null) {
-        void caricaPrefsFull();
-      }
-      if (debugInfo === null) {
-        void caricaDebugInfo();
-      }
+    if (sezione === "sviluppo" && debugInfo === null) {
+      void caricaDebugInfo();
     }
   });
 
@@ -1278,29 +1308,43 @@
         />
       </div>
       <nav>
-        <ul>
-          {#each sezioniFiltrate as s (s.id)}
-            <li>
-              <button
-                type="button"
-                class:attiva={sezione === s.id}
-                onclick={() => (sezione = s.id)}
-              >
-                {#if s.id === "aspetto"}<Palette size={14} />
-                {:else if s.id === "vista"}<ListIcon size={14} />
-                {:else if s.id === "editor"}<Pencil size={14} />
-                {:else if s.id === "sicurezza"}<Lock size={14} />
-                {:else if s.id === "dati"}<Database size={14} />
-                {:else if s.id === "avanzate"}<Sliders size={14} />
-                {:else}<FlaskConical size={14} />{/if}
-                <span>{s.label}</span>
-              </button>
-            </li>
-          {/each}
-          {#if sezioniFiltrate.length === 0}
-            <li class="vuoto-nav">Nessuna voce</li>
-          {/if}
-        </ul>
+        {#each gruppiFiltrati as g (g.id)}
+          <div class="nav-gruppo">{g.label}</div>
+          <ul>
+            {#each g.voci as s (s.id)}
+              <li>
+                <button
+                  type="button"
+                  class:attiva={sezione === s.id}
+                  onclick={() => (sezione = s.id)}
+                >
+                  {#if s.id === "aspetto"}<Palette size={14} />
+                  {:else if s.id === "vista"}<ListIcon size={14} />
+                  {:else if s.id === "editor"}<Pencil size={14} />
+                  {:else if s.id === "globali"}<Globe size={14} />
+                  {:else if s.id === "linter"}<ListChecks size={14} />
+                  {:else if s.id === "dati"}<Database size={14} />
+                  {:else if s.id === "provider"}<Bot size={14} />
+                  {:else if s.id === "embeddings"}<Sparkles size={14} />
+                  {:else if s.id === "audit"}<ScrollText size={14} />
+                  {:else if s.id === "sicurezza"}<Lock size={14} />
+                  {:else if s.id === "sync"}<RefreshCw size={14} />
+                  {:else if s.id === "sistema"}<Power size={14} />
+                  {:else if s.id === "hotkey"}<Keyboard size={14} />
+                  {:else if s.id === "aggiornamenti"}<CloudDownload size={14} />
+                  {:else if s.id === "sviluppo"}<FlaskConical size={14} />
+                  {:else if s.id === "guida"}<HelpCircle size={14} />
+                  {:else if s.id === "info"}<Info size={14} />
+                  {:else}<FlaskConical size={14} />{/if}
+                  <span>{s.label}</span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {/each}
+        {#if gruppiFiltrati.length === 0}
+          <p class="vuoto-nav">Nessuna voce</p>
+        {/if}
       </nav>
     </aside>
 
@@ -1885,345 +1929,313 @@
             <p class="dati-report-err">✗ {datiExportJson.errore}</p>
           {/if}
         </div>
-      {:else if sezione === "avanzate"}
-        <h3>Avanzate</h3>
-        <div class="accordion">
-          {#each subSezioniFiltrate as sub (sub.id)}
-            {@const aperta = subSezioneAperta === sub.id}
-            <div class="acc-item" class:aperta>
+      {:else if sezione === "provider"}
+        <h3>Provider AI</h3>
+        <PannelloProviderConfig />
+      {:else if sezione === "embeddings"}
+        <h3>Ricerca &amp; Embeddings</h3>
+        {#if embStatus === null && !embErrore}
+          <p class="hint">Caricamento stato modello…</p>
+        {:else if embErrore}
+          <p class="msg-err">{embErrore}</p>
+        {:else if embStatus}
+          <div class="campo">
+            <span class="campo-label">Stato modello (MiniLM)</span>
+            {#if embStatus.stato === "non_scaricato"}
+              <p class="hint">
+                Modello non scaricato. Path atteso:
+                <code>{embStatus.path_atteso}</code>
+              </p>
               <button
                 type="button"
-                class="acc-head"
-                onclick={() => toggleSubSezione(sub.id)}
-                aria-expanded={aperta}
+                class="btn-primary"
+                onclick={scaricaModello}
+                disabled={embOpInCorso !== ""}
               >
-                <span class="acc-icon">
-                  {#if sub.id === "provider"}<Bot size={14} />
-                  {:else if sub.id === "embeddings"}<Sparkles size={14} />
-                  {:else if sub.id === "audit"}<ScrollText size={14} />
-                  {:else if sub.id === "sync"}<RefreshCw size={14} />
-                  {:else if sub.id === "hotkey"}<Keyboard size={14} />
-                  {:else if sub.id === "linter"}<ListChecks size={14} />
-                  {:else}<Globe size={14} />{/if}
-                </span>
-                <span class="acc-label">{sub.label}</span>
-                <span class="acc-chev">
-                  {#if aperta}<ChevronDown size={14} />{:else}<ChevronRight
-                      size={14}
-                    />{/if}
-                </span>
+                {embOpInCorso === "download"
+                  ? "Scarico…"
+                  : "Scarica modello"}
               </button>
-              {#if aperta}
-                <div class="acc-body">
-                  {#if sub.id === "provider"}
-                    <PannelloProviderConfig />
-                  {:else if sub.id === "embeddings"}
-                    {#if embStatus === null && !embErrore}
-                      <p class="hint">Caricamento stato modello…</p>
-                    {:else if embErrore}
-                      <p class="msg-err">{embErrore}</p>
-                    {:else if embStatus}
-                      <div class="campo">
-                        <span class="campo-label">Stato modello (MiniLM)</span>
-                        {#if embStatus.stato === "non_scaricato"}
-                          <p class="hint">
-                            Modello non scaricato. Path atteso:
-                            <code>{embStatus.path_atteso}</code>
-                          </p>
-                          <button
-                            type="button"
-                            class="btn-primary"
-                            onclick={scaricaModello}
-                            disabled={embOpInCorso !== ""}
-                          >
-                            {embOpInCorso === "download"
-                              ? "Scarico…"
-                              : "Scarica modello"}
-                          </button>
-                          {#if embProgressDownload}
-                            <p class="hint">
-                              {embProgressDownload.file}:
-                              {embProgressDownload.bytes} /
-                              {embProgressDownload.total ?? "?"} byte
-                            </p>
-                          {/if}
-                        {:else if embStatus.stato === "pronto"}
-                          <p class="hint">
-                            Pronto ({embStatus.size_mb} MB) — non ancora
-                            caricato in memoria.
-                          </p>
-                          <button
-                            type="button"
-                            class="btn-primary"
-                            onclick={inizializzaModello}
-                            disabled={embOpInCorso !== ""}
-                          >
-                            {embOpInCorso === "init"
-                              ? "Inizializzo…"
-                              : "Inizializza"}
-                          </button>
-                        {:else}
-                          <p class="hint">
-                            Caricato in memoria (dim {embStatus.dimensione}).
-                          </p>
-                        {/if}
-                      </div>
-                    {/if}
-
-                    {#if prefsFull}
-                      <div class="campo">
-                        <label class="campo-row">
-                          <span>Ricerca semantica abilitata</span>
-                          <input
-                            type="checkbox"
-                            checked={prefsFull.ricerca_semantica_abilitata}
-                            onchange={() => void toggleRicercaSemantica()}
-                          />
-                        </label>
-                        <p class="hint">
-                          Quando attiva, la ricerca usa anche embeddings
-                          vettoriali (richiede modello inizializzato).
-                        </p>
-                      </div>
-                      <div class="campo">
-                        <span class="campo-label">
-                          Hybrid alpha (lessicale ↔ semantico)
-                          <strong class="num">
-                            {prefsFull.ricerca_alpha.toFixed(2)}
-                          </strong>
-                        </span>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={prefsFull.ricerca_alpha}
-                          onchange={(e) =>
-                            void aggiornaAlpha(
-                              parseFloat(
-                                (e.currentTarget as HTMLInputElement).value,
-                              ),
-                            )}
-                        />
-                        <p class="hint">
-                          0 = solo BM25 lessicale · 1 = solo coseno semantico ·
-                          0.5 bilanciato.
-                        </p>
-                      </div>
-                    {/if}
-                  {:else if sub.id === "audit"}
-                    <div class="campo">
-                      <span class="campo-label">Esporta cronologia</span>
-                      <button
-                        type="button"
-                        class="btn-ghost"
-                        onclick={esportaAudit}
-                        disabled={auditExportInCorso}
-                      >
-                        <Download size={14} />
-                        <span>
-                          {auditExportInCorso ? "Esporto…" : "Esporta CSV"}
-                        </span>
-                      </button>
-                      <p class="hint">
-                        Tutte le voci audit del vault in CSV.
-                      </p>
-                    </div>
-                    <div class="campo">
-                      <span class="campo-label">Cleanup retention</span>
-                      <div class="riga-inline">
-                        <input
-                          type="number"
-                          min="1"
-                          max="3650"
-                          bind:value={auditCleanupGiorni}
-                          class="num-input"
-                          aria-label="Giorni retention"
-                        />
-                        <span class="hint">giorni</span>
-                        <button
-                          type="button"
-                          class="btn-warn"
-                          onclick={eseguiAuditCleanup}
-                          disabled={auditCleanupInCorso}
-                        >
-                          {auditCleanupInCorso ? "Eseguo…" : "Elimina più vecchi"}
-                        </button>
-                      </div>
-                      <p class="hint">
-                        Rimuove voci audit antecedenti al numero di giorni
-                        indicato. Operazione irreversibile.
-                      </p>
-                    </div>
-                    {#if auditMessaggio}
-                      <p
-                        class="msg-info"
-                        class:msg-err={auditMessaggio.startsWith("Errore")}
-                      >
-                        {auditMessaggio}
-                      </p>
-                    {/if}
-                  {:else if sub.id === "sync"}
-                    <div class="campo">
-                      <span class="campo-label">Stato</span>
-                      <p class="hint">
-                        <strong>{syncState.stato}</strong>
-                        {#if syncState.ultimoSync}
-                          · ultimo sync {syncState.ultimoSync.slice(0, 16)}
-                        {/if}
-                        {#if syncState.conflitti > 0}
-                          · {syncState.conflitti} conflitti
-                        {/if}
-                      </p>
-                      {#if syncState.errore}
-                        <p class="msg-err">{syncState.errore}</p>
-                      {/if}
-                    </div>
-                    <div class="campo">
-                      <div class="riga-azioni">
-                        <button
-                          type="button"
-                          class="btn-primary"
-                          onclick={avviaSyncOra}
-                          disabled={syncOraInCorso ||
-                            syncState.stato === "non_configurato"}
-                        >
-                          {syncOraInCorso ? "Sincronizzo…" : "Sincronizza ora"}
-                        </button>
-                        <button
-                          type="button"
-                          class="btn-ghost"
-                          onclick={eseguiSyncLogout}
-                          disabled={syncState.stato === "non_configurato"}
-                        >
-                          Logout
-                        </button>
-                      </div>
-                      {#if syncState.stato === "non_configurato"}
-                        <p class="hint">
-                          Sync non configurata. Per configurare login al server
-                          remoto usa la superficie legacy
-                          <em>Impostazioni → Sincronizzazione</em>.
-                          Configurazione redesign-first prevista in v0.9.
-                        </p>
-                      {/if}
-                    </div>
-                  {:else if sub.id === "hotkey"}
-                    <div class="campo">
-                      <span class="campo-label">Apri palette globale</span>
-                      <HotkeyInput bind:valore={hotkeyValore} />
-                      <div class="riga-azioni">
-                        <button
-                          type="button"
-                          class="btn-primary"
-                          onclick={salvaHotkey}
-                        >
-                          {hotkeySalvata ? "Salvato ✓" : "Salva"}
-                        </button>
-                      </div>
-                      <p class="hint">
-                        Registrato a livello sistema. La modifica diventa
-                        effettiva al prossimo riavvio dell'app.
-                      </p>
-                    </div>
-                  {:else if sub.id === "linter"}
-                    <PannelloLinter />
-                  {:else if sub.id === "globali"}
-                    <div class="campo">
-                      <p class="hint">
-                        Definisci valori di default per segnaposti
-                        <code>{`{{global nome}}`}</code>. Quando un prompt
-                        usa un segnaposto globale, il suo valore viene
-                        pre-riempito automaticamente in Compila e
-                        l'eventuale modifica viene salvata come nuovo
-                        default.
-                      </p>
-                    </div>
-                    <div class="campo">
-                      <span class="campo-label">Aggiungi segnaposto</span>
-                      <div class="globale-form">
-                        <input
-                          type="text"
-                          class="num-input globale-nome"
-                          placeholder="nome (es. autore)"
-                          bind:value={globaleNuovoNome}
-                          aria-label="Nome segnaposto globale"
-                        />
-                        <input
-                          type="text"
-                          class="globale-valore"
-                          placeholder="valore di default"
-                          bind:value={globaleNuovoValore}
-                          aria-label="Valore segnaposto globale"
-                        />
-                        <button
-                          type="button"
-                          class="btn-primary"
-                          onclick={aggiungiGlobale}
-                        >
-                          <Plus size={14} />
-                          <span>Aggiungi</span>
-                        </button>
-                      </div>
-                    </div>
-                    {#if globaliErrore}
-                      <p class="msg-err">{globaliErrore}</p>
-                    {/if}
-                    <div class="campo">
-                      <span class="campo-label">
-                        Segnaposti definiti
-                        {#if globaliLista}
-                          <strong class="num">({globaliLista.length})</strong>
-                        {/if}
-                      </span>
-                      {#if globaliLista === null}
-                        <p class="hint">Caricamento…</p>
-                      {:else if globaliLista.length === 0}
-                        <p class="hint">
-                          Nessun segnaposto globale definito.
-                        </p>
-                      {:else}
-                        <div class="globali-tabella" role="table">
-                          {#each globaliLista as g (g.name)}
-                            <div class="globali-riga" role="row">
-                              <code class="globali-nome" title={g.name}>
-                                {`{{global ${g.name}}}`}
-                              </code>
-                              <input
-                                type="text"
-                                class="globali-input"
-                                bind:value={globaliEdit[g.name]}
-                                aria-label={`Valore di ${g.name}`}
-                              />
-                              <button
-                                type="button"
-                                class="btn-ghost"
-                                onclick={() => salvaGlobale(g.name)}
-                                disabled={globaliEdit[g.name] === g.value}
-                                title="Salva valore"
-                              >
-                                <Check size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                class="btn-ghost btn-danger"
-                                onclick={() => eliminaGlobale(g.name)}
-                                title="Elimina segnaposto globale"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          {/each}
-                        </div>
-                      {/if}
-                    </div>
-                  {/if}
-                </div>
+              {#if embProgressDownload}
+                <p class="hint">
+                  {embProgressDownload.file}:
+                  {embProgressDownload.bytes} /
+                  {embProgressDownload.total ?? "?"} byte
+                </p>
               {/if}
+            {:else if embStatus.stato === "pronto"}
+              <p class="hint">
+                Pronto ({embStatus.size_mb} MB) — non ancora
+                caricato in memoria.
+              </p>
+              <button
+                type="button"
+                class="btn-primary"
+                onclick={inizializzaModello}
+                disabled={embOpInCorso !== ""}
+              >
+                {embOpInCorso === "init"
+                  ? "Inizializzo…"
+                  : "Inizializza"}
+              </button>
+            {:else}
+              <p class="hint">
+                Caricato in memoria (dim {embStatus.dimensione}).
+              </p>
+            {/if}
+          </div>
+        {/if}
+
+        {#if prefsFull}
+          <div class="campo">
+            <label class="campo-row">
+              <span>Ricerca semantica abilitata</span>
+              <input
+                type="checkbox"
+                checked={prefsFull.ricerca_semantica_abilitata}
+                onchange={() => void toggleRicercaSemantica()}
+              />
+            </label>
+            <p class="hint">
+              Quando attiva, la ricerca usa anche embeddings
+              vettoriali (richiede modello inizializzato).
+            </p>
+          </div>
+          <div class="campo">
+            <span class="campo-label">
+              Hybrid alpha (lessicale ↔ semantico)
+              <strong class="num">
+                {prefsFull.ricerca_alpha.toFixed(2)}
+              </strong>
+            </span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={prefsFull.ricerca_alpha}
+              onchange={(e) =>
+                void aggiornaAlpha(
+                  parseFloat(
+                    (e.currentTarget as HTMLInputElement).value,
+                  ),
+                )}
+            />
+            <p class="hint">
+              0 = solo BM25 lessicale · 1 = solo coseno semantico ·
+              0.5 bilanciato.
+            </p>
+          </div>
+        {/if}
+      {:else if sezione === "audit"}
+        <h3>Audit log AI</h3>
+        <div class="campo">
+          <span class="campo-label">Esporta cronologia</span>
+          <button
+            type="button"
+            class="btn-ghost"
+            onclick={esportaAudit}
+            disabled={auditExportInCorso}
+          >
+            <Download size={14} />
+            <span>
+              {auditExportInCorso ? "Esporto…" : "Esporta CSV"}
+            </span>
+          </button>
+          <p class="hint">
+            Tutte le voci audit del vault in CSV.
+          </p>
+        </div>
+        <div class="campo">
+          <span class="campo-label">Cleanup retention</span>
+          <div class="riga-inline">
+            <input
+              type="number"
+              min="1"
+              max="3650"
+              bind:value={auditCleanupGiorni}
+              class="num-input"
+              aria-label="Giorni retention"
+            />
+            <span class="hint">giorni</span>
+            <button
+              type="button"
+              class="btn-warn"
+              onclick={eseguiAuditCleanup}
+              disabled={auditCleanupInCorso}
+            >
+              {auditCleanupInCorso ? "Eseguo…" : "Elimina più vecchi"}
+            </button>
+          </div>
+          <p class="hint">
+            Rimuove voci audit antecedenti al numero di giorni
+            indicato. Operazione irreversibile.
+          </p>
+        </div>
+        {#if auditMessaggio}
+          <p
+            class="msg-info"
+            class:msg-err={auditMessaggio.startsWith("Errore")}
+          >
+            {auditMessaggio}
+          </p>
+        {/if}
+      {:else if sezione === "sync"}
+        <h3>Sync</h3>
+        <div class="campo">
+          <span class="campo-label">Stato</span>
+          <p class="hint">
+            <strong>{syncState.stato}</strong>
+            {#if syncState.ultimoSync}
+              · ultimo sync {syncState.ultimoSync.slice(0, 16)}
+            {/if}
+            {#if syncState.conflitti > 0}
+              · {syncState.conflitti} conflitti
+            {/if}
+          </p>
+          {#if syncState.errore}
+            <p class="msg-err">{syncState.errore}</p>
+          {/if}
+        </div>
+        <div class="campo">
+          <div class="riga-azioni">
+            <button
+              type="button"
+              class="btn-primary"
+              onclick={avviaSyncOra}
+              disabled={syncOraInCorso ||
+                syncState.stato === "non_configurato"}
+            >
+              {syncOraInCorso ? "Sincronizzo…" : "Sincronizza ora"}
+            </button>
+            <button
+              type="button"
+              class="btn-ghost"
+              onclick={eseguiSyncLogout}
+              disabled={syncState.stato === "non_configurato"}
+            >
+              Logout
+            </button>
+          </div>
+          {#if syncState.stato === "non_configurato"}
+            <p class="hint">
+              Sync non configurata. Per configurare login al server
+              remoto usa la superficie legacy
+              <em>Impostazioni → Sincronizzazione</em>.
+              Configurazione redesign-first prevista in v0.9.
+            </p>
+          {/if}
+        </div>
+      {:else if sezione === "hotkey"}
+        <h3>Hotkey</h3>
+        <div class="campo">
+          <span class="campo-label">Apri palette globale</span>
+          <HotkeyInput bind:valore={hotkeyValore} />
+          <div class="riga-azioni">
+            <button
+              type="button"
+              class="btn-primary"
+              onclick={salvaHotkey}
+            >
+              {hotkeySalvata ? "Salvato ✓" : "Salva"}
+            </button>
+          </div>
+          <p class="hint">
+            Registrato a livello sistema. La modifica diventa
+            effettiva al prossimo riavvio dell'app.
+          </p>
+        </div>
+      {:else if sezione === "linter"}
+        <h3>Linter</h3>
+        <PannelloLinter />
+      {:else if sezione === "globali"}
+        <h3>Segnaposti globali</h3>
+        <div class="campo">
+          <p class="hint">
+            Definisci valori di default per segnaposti
+            <code>{`{{global nome}}`}</code>. Quando un prompt
+            usa un segnaposto globale, il suo valore viene
+            pre-riempito automaticamente in Compila e
+            l'eventuale modifica viene salvata come nuovo
+            default.
+          </p>
+        </div>
+        <div class="campo">
+          <span class="campo-label">Aggiungi segnaposto</span>
+          <div class="globale-form">
+            <input
+              type="text"
+              class="num-input globale-nome"
+              placeholder="nome (es. autore)"
+              bind:value={globaleNuovoNome}
+              aria-label="Nome segnaposto globale"
+            />
+            <input
+              type="text"
+              class="globale-valore"
+              placeholder="valore di default"
+              bind:value={globaleNuovoValore}
+              aria-label="Valore segnaposto globale"
+            />
+            <button
+              type="button"
+              class="btn-primary"
+              onclick={aggiungiGlobale}
+            >
+              <Plus size={14} />
+              <span>Aggiungi</span>
+            </button>
+          </div>
+        </div>
+        {#if globaliErrore}
+          <p class="msg-err">{globaliErrore}</p>
+        {/if}
+        <div class="campo">
+          <span class="campo-label">
+            Segnaposti definiti
+            {#if globaliLista}
+              <strong class="num">({globaliLista.length})</strong>
+            {/if}
+          </span>
+          {#if globaliLista === null}
+            <p class="hint">Caricamento…</p>
+          {:else if globaliLista.length === 0}
+            <p class="hint">
+              Nessun segnaposto globale definito.
+            </p>
+          {:else}
+            <div class="globali-tabella" role="table">
+              {#each globaliLista as g (g.name)}
+                <div class="globali-riga" role="row">
+                  <code class="globali-nome" title={g.name}>
+                    {`{{global ${g.name}}}`}
+                  </code>
+                  <input
+                    type="text"
+                    class="globali-input"
+                    bind:value={globaliEdit[g.name]}
+                    aria-label={`Valore di ${g.name}`}
+                  />
+                  <button
+                    type="button"
+                    class="btn-ghost"
+                    onclick={() => salvaGlobale(g.name)}
+                    disabled={globaliEdit[g.name] === g.value}
+                    title="Salva valore"
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-ghost btn-danger"
+                    onclick={() => eliminaGlobale(g.name)}
+                    title="Elimina segnaposto globale"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              {/each}
             </div>
-          {/each}
-          {#if subSezioniFiltrate.length === 0}
-            <p class="hint">Nessuna sub-sezione corrisponde alla ricerca.</p>
           {/if}
         </div>
       {:else if sezione === "sistema"}
@@ -2398,8 +2410,9 @@
             </details>
           </div>
         </div>
-
-        <!-- v1.0 M1.4b — Sub-card Aggiornamenti -->
+      {:else if sezione === "aggiornamenti"}
+        <h3>Aggiornamenti</h3>
+        <!-- v1.0 M1.4b — card Aggiornamenti -->
         <div class="campo">
           <div class="sviluppo-card">
             <div class="sviluppo-card-h">
@@ -2501,7 +2514,9 @@
           </div>
         </div>
       {:else if sezione === "guida"}
-        <AiutoSezione />
+        <AiutoSezione vaiInfo={() => (sezione = "info")} />
+      {:else if sezione === "info"}
+        <AboutSezione />
       {/if}
     </section>
   </div>
@@ -2543,6 +2558,11 @@
     outline: none;
   }
 
+  nav {
+    display: flex;
+    flex-direction: column;
+  }
+
   nav ul {
     list-style: none;
     margin: 0;
@@ -2550,6 +2570,20 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+  }
+
+  /* Intestazione di gruppo nella sidebar (Personalizzazione, AI, …). */
+  .nav-gruppo {
+    padding: var(--sp-2) var(--sp-2) 4px;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+
+  .nav-gruppo:not(:first-child) {
+    margin-top: var(--sp-2);
   }
 
   nav button {
@@ -2803,66 +2837,6 @@
     display: flex;
     gap: 6px;
     margin-top: 4px;
-  }
-
-  /* ── Accordion Avanzate (D2) ── */
-  .accordion {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .acc-item {
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-    background: var(--bg-input);
-  }
-
-  .acc-head {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-2);
-    width: 100%;
-    padding: var(--sp-2) var(--sp-3);
-    border: 0;
-    background: transparent;
-    color: var(--text-default);
-    font-size: var(--fs-sm);
-    font-weight: var(--fw-medium);
-    cursor: pointer;
-    text-align: left;
-  }
-
-  .acc-head:hover {
-    background: var(--bg-overlay);
-  }
-
-  .acc-icon {
-    color: var(--text-muted);
-    display: inline-flex;
-  }
-
-  .acc-label {
-    flex: 1;
-  }
-
-  .acc-chev {
-    color: var(--text-muted);
-    display: inline-flex;
-  }
-
-  .acc-item.aperta .acc-head {
-    border-bottom: 1px solid var(--border-subtle);
-    background: var(--bg-overlay);
-  }
-
-  .acc-body {
-    padding: var(--sp-3);
-    background: var(--bg-canvas);
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-3);
   }
 
   .campo-row {

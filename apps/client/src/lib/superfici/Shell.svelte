@@ -438,7 +438,6 @@
       | "vista"
       | "editor"
       | "sicurezza"
-      | "avanzate"
       | "guida"
       | undefined}
     onChiudi={chiudiModale}
