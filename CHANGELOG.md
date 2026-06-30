@@ -1,5 +1,17 @@
 # Changelog — Prompt a Porter
 
+## v0.8.29 — Lista: voto medio in "Migliori" + connettore varianti riparato (2026-06-30)
+
+> Due interventi sulla colonna elenco prompt: l'ordinamento "Migliori" ora mostra il voto, e il connettore delle varianti torna a comparire.
+
+### Feature
+
+- **Voto medio nell'ordinamento "Migliori"** (#415): nella lista, ordinando per **Migliori**, la card mostra ora il **voto medio a due decimali** (media degli ultimi 90 giorni, la stessa finestra usata dall'ordinamento) al posto del conteggio usi. Negli altri ordinamenti resta il numero di usi; in densità "compatta" resta il tempo relativo. Formato coerente con la tab Valutazioni (segno `+` sui positivi, `—` se nessun voto nella finestra).
+
+### Fix
+
+- **Connettore varianti di nuovo visibile in lista** (#416 — chiude una regressione di #412): il rientro e il connettore **↳** ("Variante di «…»") non comparivano più perché la query della lista non restituiva il campo `parent_prompt_id` (era esposto solo nel dettaglio). Ora la lista lo include di nuovo, senza modifiche al frontend.
+
 ## v0.8.28 — Impostazioni: scroll indipendente tra sidebar e dettaglio (2026-06-30)
 
 > Rifinitura del riordino di v0.8.27: nel menu Impostazioni la barra delle sezioni a sinistra e l'area dei dati a destra ora scorrono separatamente.
