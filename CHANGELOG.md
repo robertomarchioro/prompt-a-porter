@@ -1,5 +1,13 @@
 # Changelog — Prompt a Porter
 
+## v0.8.28 — Impostazioni: scroll indipendente tra sidebar e dettaglio (2026-06-30)
+
+> Rifinitura del riordino di v0.8.27: nel menu Impostazioni la barra delle sezioni a sinistra e l'area dei dati a destra ora scorrono separatamente.
+
+### Fix
+
+- **Scroll indipendente nel menu Impostazioni** (#414): la modale aveva un unico contenitore di scroll, così scorrendo il dettaglio scorreva via anche la sidebar. Ora la **lista delle sezioni** (sinistra) e l'**area di dettaglio** (destra) hanno ciascuna il proprio scroll, e la casella di ricerca resta **pinnata** in cima alla sidebar. Introdotto un prop opt-in `corpoFisso` sulla primitiva `Modale` (master-detail a tutta altezza), senza impatto sugli altri modali.
+
 ## v0.8.27 — Impostazioni riordinate (sidebar a 6 gruppi) + rifiniture header e ordinamento (2026-06-30)
 
 > Il menu Impostazioni, cresciuto a 10 voci più un accordion eterogeneo, viene riorganizzato in una sidebar a gruppi con un solo modo di navigare. In più, due rifiniture nate dall'uso e un ordinamento "Migliori" più equo.
