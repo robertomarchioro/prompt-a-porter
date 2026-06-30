@@ -21,6 +21,11 @@
     densita?: Densita;
     righePreview?: number; // F3 PR-B
     bodyPreview?: string; // F3 PR-B
+    /** Voto medio (ultimi 90 giorni) in [-1, 1]; null se nessun voto. */
+    ratingMedio?: number | null;
+    /** Quando true (ordine = "Migliori") la meta mostra il voto medio al
+     *  posto del conteggio usi. */
+    mostraRating?: boolean;
     onclick?: () => void;
     onToggleFavorite?: () => void;
   }
@@ -37,9 +42,19 @@
     densita = "comoda",
     righePreview = 3,
     bodyPreview,
+    ratingMedio = null,
+    mostraRating = false,
     onclick,
     onToggleFavorite,
   }: Props = $props();
+
+  // Formato coerente con RatingTab: segno "+" sui positivi, due decimali,
+  // "—" se nessun voto nella finestra.
+  function fmtVoto(media: number | null): string {
+    if (media === null) return "—";
+    const segno = media > 0 ? "+" : "";
+    return `${segno}${media.toFixed(2)}`;
+  }
 
   function gestFav(e: MouseEvent): void {
     e.stopPropagation();
@@ -131,6 +146,10 @@
   <div class="meta">
     {#if densita === "compatta"}
       <span class="meta-time">{tempoRelativo(aggiornatoA)}</span>
+    {:else if mostraRating}
+      <span class="meta-voto" title="Voto medio (ultimi 90 giorni)">
+        {fmtVoto(ratingMedio)}
+      </span>
     {:else}
       <span class="meta-uso">{usoCount}×</span>
     {/if}
@@ -306,5 +325,11 @@
 
   .meta-uso {
     font-variant-numeric: tabular-nums;
+  }
+
+  .meta-voto {
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--fw-medium);
+    color: var(--text-muted);
   }
 </style>
