@@ -27,6 +27,11 @@ pub struct PromptCard {
     /// limitare il payload (lista max 100 card → max ~80 KB extra).
     /// Il client poi ri-applica `righePreview` via CSS `-webkit-line-clamp`.
     pub body_preview: String,
+    /// Voto medio degli ultimi 90 giorni (stessa finestra dell'ordinamento
+    /// "Migliori"/qualita), in `[-1, 1]`. `None` se nessun voto nella
+    /// finestra. Mostrato in lista al posto del conteggio usi quando si
+    /// ordina per qualita.
+    pub rating_medio: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -108,6 +113,7 @@ fn riga_a_card(row: &rusqlite::Row) -> rusqlite::Result<PromptCard> {
         aggiornato_a: row.get::<_, Option<String>>(6)?.unwrap_or_default(),
         tags: vec![],
         body_preview: row.get::<_, Option<String>>(7)?.unwrap_or_default(),
+        rating_medio: row.get::<_, Option<f64>>(8)?,
     })
 }
 
@@ -224,7 +230,11 @@ pub fn lista_pure(
         let sql = format!(
             "SELECT p.Id, p.Title, p.Description, p.Visibility,
                     p.IsFavorite, p.UseCount, p.UpdatedAt,
-                    SUBSTR(COALESCE(p.Body, ''), 1, 800) AS body_preview
+                    SUBSTR(COALESCE(p.Body, ''), 1, 800) AS body_preview,
+                    (SELECT AVG(CAST(r.Rating AS REAL))
+                     FROM PromptRatings r
+                     WHERE r.PromptId = p.Id
+                       AND r.CreatedAt >= datetime('now', '-90 days')) AS rating_medio
              FROM Prompts p
              LEFT JOIN PromptTags pt ON pt.PromptId = p.Id
              WHERE p.DeletedAt IS NULL{vista_cond}
@@ -888,6 +898,49 @@ mod test {
         inserisci_prompt(&conn, "p2", "Due", "workspace", 0, None);
         let cards = lista_pure(&conn, &filtro_default("tutti")).unwrap();
         assert_eq!(cards.len(), 2);
+    }
+
+    #[test]
+    fn lista_pure_espone_rating_medio_finestra_90gg() {
+        // La lista restituisce il voto medio degli ultimi 90 giorni così che
+        // il frontend possa mostrarlo al posto del conteggio usi quando si
+        // ordina per "Migliori". Stessa finestra/semantica dell'ORDER BY.
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        inserisci_prompt(&conn, "p-voti", "Con voti", "private", 0, None);
+        inserisci_prompt(&conn, "p-senza", "Senza voti", "private", 0, None);
+        inserisci_prompt(&conn, "p-vecchio", "Voto vecchio", "private", 0, None);
+
+        // p-voti: +1, +1, 0 → media 0.6667 nella finestra
+        for (i, r) in [1, 1, 0].iter().enumerate() {
+            conn.execute(
+                "INSERT INTO PromptRatings (Id, PromptId, UserId, Rating, CreatedAt)
+                 VALUES (?1, 'p-voti', 'usr-locale', ?2, datetime('now'))",
+                rusqlite::params![format!("rtg-{i}"), r],
+            )
+            .unwrap();
+        }
+        // p-vecchio: un voto oltre i 90 giorni → fuori finestra → None
+        conn.execute(
+            "INSERT INTO PromptRatings (Id, PromptId, UserId, Rating, CreatedAt)
+             VALUES ('rtg-old', 'p-vecchio', 'usr-locale', 1, datetime('now', '-100 days'))",
+            [],
+        )
+        .unwrap();
+
+        let cards = lista_pure(&conn, &filtro_default("tutti")).unwrap();
+        let trova = |id: &str| cards.iter().find(|c| c.id == id).unwrap();
+
+        let media = trova("p-voti").rating_medio.expect("media presente");
+        assert!((media - 2.0 / 3.0).abs() < 1e-6, "media attesa ~0.667, vista {media}");
+        assert!(
+            trova("p-senza").rating_medio.is_none(),
+            "nessun voto → None"
+        );
+        assert!(
+            trova("p-vecchio").rating_medio.is_none(),
+            "voto oltre 90 giorni escluso dalla finestra → None"
+        );
     }
 
     #[test]

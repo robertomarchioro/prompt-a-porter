@@ -58,6 +58,10 @@
     /** #403: id del prompt principale se questo è una variante; null se
      *  è un principale. Già esposto da libreria_lista. */
     parent_prompt_id: string | null;
+    /** Voto medio degli ultimi 90 giorni (stessa finestra dell'ordine
+     *  "Migliori"), in [-1, 1]; null se nessun voto nella finestra.
+     *  Mostrato in lista al posto del conteggio usi quando ordine = qualita. */
+    rating_medio: number | null;
   }
 
   interface Cartella {
@@ -895,6 +899,8 @@
             densita={stato.densita}
             righePreview={stato.righePreview}
             bodyPreview={p.body_preview}
+            ratingMedio={p.rating_medio}
+            mostraRating={stato.ordine === "qualita"}
             onclick={() => onSelezionaPrompt(p.id)}
           />
         </div>
