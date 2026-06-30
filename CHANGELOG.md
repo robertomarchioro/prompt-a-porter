@@ -1,5 +1,19 @@
 # Changelog — Prompt a Porter
 
+## v0.8.27 — Impostazioni riordinate (sidebar a 6 gruppi) + rifiniture header e ordinamento (2026-06-30)
+
+> Il menu Impostazioni, cresciuto a 10 voci più un accordion eterogeneo, viene riorganizzato in una sidebar a gruppi con un solo modo di navigare. In più, due rifiniture nate dall'uso e un ordinamento "Migliori" più equo.
+
+### Feature
+
+- **Impostazioni riorganizzate** (#413): la sidebar passa da 10 voci flat + l'accordion "Avanzate" (7 sotto-voci eterogenee) a **17 voci di primo livello raggruppate in 6 sezioni di dominio** — *Personalizzazione*, *Contenuti*, *AI*, *Sicurezza & Sync*, *Sistema*, *Aiuto*. Un solo pattern di navigazione (un clic = una pagina, niente più accordion). **Hotkey**, **Linter** e **Segnaposti globali**, prima sepolti dentro "Avanzate", diventano voci di primo livello; **Aggiornamenti** esce da "Sviluppo" in sezione propria; debutta la pagina **Informazioni** (versione runtime, codename, link al progetto).
+- **Ordinamento "Migliori" più equo** (#413): a parità di rating medio negli ultimi 90 giorni, l'ordinamento per qualità mette davanti il prompt con **più voti** (un 1.0 su 10 voti batte un 1.0 su 1 voto): più consenso = stima più affidabile.
+
+### Fix
+
+- **Header più pulito** (#413): rimosso il glifo "P" ridondante accanto al codename (restano codename del ciclo + versione reale).
+- **Nome vault subito visibile** (#413): a fine onboarding lo store del vault viene ricaricato, così lo switcher mostra immediatamente il nome scelto invece del default "Personale" letto al boot.
+
 ## v0.8.26 — Angolo in alto a sinistra, bottoni editor, varianti e grande manutenzione (Go 1.25, vitest 4) (2026-06-29)
 
 > Tre interventi UI nati dai test dal vivo (#402, #403, #404) più un ampio giro di manutenzione delle dipendenze — incluso lo **sblocco della catena Go 1.25**, rimasta ferma due settimane.
