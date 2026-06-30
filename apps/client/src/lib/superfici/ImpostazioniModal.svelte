@@ -1295,7 +1295,7 @@
   }
 </script>
 
-<Modale titolo="Impostazioni" larghezza="xl" {onChiudi}>
+<Modale titolo="Impostazioni" larghezza="xl" corpoFisso {onChiudi}>
   <div class="layout">
     <aside class="nav-pane">
       <div class="search-box">
@@ -2523,22 +2523,31 @@
 </Modale>
 
 <style>
+  /* Master-detail a tutta altezza: la modale usa `corpoFisso`, quindi il
+     layout riempie il corpo e le due colonne scrollano in modo indipendente
+     (grid-template-rows: minmax(0,1fr) + min-height:0 sui figli abilitano lo
+     scroll interno invece di far crescere il contenitore). */
   .layout {
+    flex: 1;
+    min-height: 0;
     display: grid;
     grid-template-columns: 220px 1fr;
-    gap: var(--sp-3);
-    min-height: 480px;
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .nav-pane {
     border-right: 1px solid var(--border-subtle);
-    padding-right: var(--sp-2);
+    padding: var(--sp-3) var(--sp-2) var(--sp-3) var(--sp-3);
     display: flex;
     flex-direction: column;
     gap: var(--sp-2);
+    min-height: 0;
+    overflow: hidden;
   }
 
+  /* Resta pinnata in cima: scorre solo la lista <nav> sotto. */
   .search-box {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -2559,6 +2568,9 @@
   }
 
   nav {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
   }
@@ -2620,7 +2632,9 @@
   }
 
   .dettaglio {
-    padding: 0 var(--sp-2);
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--sp-3);
     display: flex;
     flex-direction: column;
     gap: var(--sp-4);

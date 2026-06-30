@@ -23,6 +23,10 @@
     larghezza?: Larghezza;
     children: Snippet;
     footer?: Snippet;
+    // Quando true il corpo NON scrolla né ha padding: il contenuto diventa
+    // un contenitore flex a tutta altezza e gestisce da sé le proprie aree
+    // di scroll (es. master-detail con due colonne indipendenti).
+    corpoFisso?: boolean;
   }
 
   let {
@@ -32,6 +36,7 @@
     larghezza = "md",
     children,
     footer,
+    corpoFisso = false,
   }: Props = $props();
 
   // F10 PR-B: focus trap manuale (no bits-ui dep) + restore focus al
@@ -127,7 +132,7 @@
         <X size={16} />
       </button>
     </header>
-    <div class="contenuto">
+    <div class="contenuto" class:fisso={corpoFisso}>
       {@render children()}
     </div>
     {#if footer}
@@ -228,6 +233,15 @@
     flex: 1;
     overflow: auto;
     padding: var(--sp-3);
+  }
+
+  /* Corpo a tutta altezza senza scroll proprio: il contenuto gestisce le
+     sue aree di scroll interne (vedi prop `corpoFisso`). */
+  .contenuto.fisso {
+    overflow: hidden;
+    min-height: 0;
+    padding: 0;
+    display: flex;
   }
 
   .footer {
