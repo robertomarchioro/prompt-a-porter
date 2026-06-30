@@ -125,7 +125,15 @@
     <p>Avvio…</p>
   </main>
 {:else if !authCompleted}
-  <Onboarding oncompletato={() => (authCompleted = true)} />
+  <Onboarding
+    oncompletato={() => {
+      authCompleted = true;
+      // #404: l'onboarding ha appena salvato `nome_vault`; ricarica lo
+      // store così lo switcher mostra il nome scelto e non il default
+      // "Personale" letto al boot (prima che il file esistesse).
+      void caricaVault();
+    }}
+  />
 {:else}
   <Shell />
 {/if}

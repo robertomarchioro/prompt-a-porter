@@ -176,8 +176,9 @@ pub fn lista_pure(
             "alfabetico" => "p.Title COLLATE NOCASE ASC",
             // Migliori: rating medio degli ultimi 90 giorni (decrescente).
             // Prompt senza rating finiscono in fondo (COALESCE = -2,
-            // sotto al minimo possibile -1). Tie-breaker su UseCount +
-            // UpdatedAt per stabilità.
+            // sotto al minimo possibile -1). A parità di media, vince chi
+            // ha più voti nella stessa finestra (un 1.0 su 10 voti batte un
+            // 1.0 su 1 voto). Tie-breaker finali su UseCount + UpdatedAt.
             "qualita" => {
                 "COALESCE(
                     (SELECT AVG(CAST(r.Rating AS REAL))
@@ -185,6 +186,11 @@ pub fn lista_pure(
                      WHERE r.PromptId = p.Id
                        AND r.CreatedAt >= datetime('now', '-90 days')),
                     -2
+                 ) DESC,
+                 (SELECT COUNT(*)
+                  FROM PromptRatings r
+                  WHERE r.PromptId = p.Id
+                    AND r.CreatedAt >= datetime('now', '-90 days')
                  ) DESC, p.UseCount DESC, p.UpdatedAt DESC"
             }
             _ => "COALESCE(p.LastUsedAt, p.UpdatedAt) DESC",
@@ -581,6 +587,11 @@ mod test {
                       WHERE r.PromptId = p.Id
                         AND r.CreatedAt >= datetime('now', '-90 days')),
                      -2
+                 ) DESC,
+                 (SELECT COUNT(*)
+                  FROM PromptRatings r
+                  WHERE r.PromptId = p.Id
+                    AND r.CreatedAt >= datetime('now', '-90 days')
                  ) DESC, p.UseCount DESC, p.UpdatedAt DESC",
             )
             .unwrap();
@@ -591,6 +602,71 @@ mod test {
             .collect();
 
         assert_eq!(ids, vec!["prm-top", "prm-mid", "prm-no"]);
+    }
+
+    #[test]
+    fn ordine_qualita_a_parita_di_media_vince_piu_voti() {
+        // A parità di rating medio, l'ordine "qualita" mette davanti chi ha
+        // più voti nella finestra di 90 giorni (più consenso = più affidabile).
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+
+        // Due prompt con media identica (+1.0) ma cardinalità diversa:
+        // prm-molti: 3 voti +1 → media 1.0, 3 voti
+        // prm-pochi: 1 voto  +1 → media 1.0, 1 voto
+        // UpdatedAt uguale così l'unico discriminante è il conteggio voti.
+        for (id, titolo) in [("prm-molti", "Molti"), ("prm-pochi", "Pochi")] {
+            conn.execute(
+                "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body,
+                 Visibility, Version, CreatedAt, UpdatedAt)
+                 VALUES (?1, 'ws-personale', 'usr-locale', ?2, 'body', 'private', 1,
+                 datetime('now'), datetime('now'))",
+                rusqlite::params![id, titolo],
+            )
+            .unwrap();
+        }
+
+        for i in 0..3 {
+            conn.execute(
+                "INSERT INTO PromptRatings (Id, PromptId, UserId, Rating, CreatedAt)
+                 VALUES (?1, 'prm-molti', 'usr-locale', 1, datetime('now'))",
+                rusqlite::params![format!("rtg-molti-{}", i)],
+            )
+            .unwrap();
+        }
+        conn.execute(
+            "INSERT INTO PromptRatings (Id, PromptId, UserId, Rating, CreatedAt)
+             VALUES ('rtg-pochi-0', 'prm-pochi', 'usr-locale', 1, datetime('now'))",
+            [],
+        )
+        .unwrap();
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT p.Id FROM Prompts p
+                 WHERE p.DeletedAt IS NULL
+                 GROUP BY p.Id
+                 ORDER BY COALESCE(
+                     (SELECT AVG(CAST(r.Rating AS REAL))
+                      FROM PromptRatings r
+                      WHERE r.PromptId = p.Id
+                        AND r.CreatedAt >= datetime('now', '-90 days')),
+                     -2
+                 ) DESC,
+                 (SELECT COUNT(*)
+                  FROM PromptRatings r
+                  WHERE r.PromptId = p.Id
+                    AND r.CreatedAt >= datetime('now', '-90 days')
+                 ) DESC, p.UseCount DESC, p.UpdatedAt DESC",
+            )
+            .unwrap();
+        let ids: Vec<String> = stmt
+            .query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        assert_eq!(ids, vec!["prm-molti", "prm-pochi"]);
     }
 
     #[test]

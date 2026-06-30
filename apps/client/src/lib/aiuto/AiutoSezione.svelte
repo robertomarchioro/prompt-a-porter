@@ -5,7 +5,16 @@
   // solo le porte d'ingresso. Il tour guidato (Fase 1) si aggancerà qui.
   import { urlDoc, titoloDoc, type ChiaveDoc } from "./docs-links";
   import { richiediTourBenvenuto } from "./tour.svelte";
-  import { Play } from "lucide-svelte";
+  import { Play, Info } from "lucide-svelte";
+
+  interface Props {
+    // Callback opzionale: porta alla pagina "Informazioni" (About) dentro
+    // la stessa modale Impostazioni. Reso opzionale per non vincolare altri
+    // eventuali usi di questo componente.
+    vaiInfo?: () => void;
+  }
+
+  let { vaiInfo }: Props = $props();
 
   interface Gruppo {
     titolo: string;
@@ -68,7 +77,41 @@
   </div>
 {/each}
 
+{#if vaiInfo}
+  <button type="button" class="info-link" onclick={vaiInfo}>
+    <Info size={14} aria-hidden="true" />
+    Informazioni su Prompt a Porter
+  </button>
+{/if}
+
 <style>
+  .info-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 0.75rem;
+    padding: 0.4rem 0.55rem;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: var(--fs-sm, 0.9rem);
+    border-radius: 6px;
+    cursor: pointer;
+    transition:
+      background 0.12s ease,
+      color 0.12s ease;
+  }
+
+  .info-link:hover {
+    background: var(--bg-overlay);
+    color: var(--text-default);
+  }
+
+  .info-link:focus-visible {
+    outline: 2px solid var(--accent-private);
+    outline-offset: 2px;
+  }
+
   .tour-btn {
     display: inline-flex;
     align-items: center;

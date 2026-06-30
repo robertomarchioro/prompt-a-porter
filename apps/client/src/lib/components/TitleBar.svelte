@@ -34,7 +34,6 @@
 
 <header class="titlebar">
   <div class="brand" title="Prompt a Porter — {CODENAME}">
-    <span class="glyph">P</span>
     <span class="codename">{CODENAME}</span>
     {#if versione}
       <span class="version-tag">v{versione}</span>
@@ -91,19 +90,6 @@
     align-items: center;
     gap: var(--sp-2);
     font-size: var(--fs-sm);
-  }
-
-  .glyph {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: var(--radius-sm);
-    background: var(--accent-team);
-    color: var(--accent-team-on);
-    font-weight: var(--fw-bold);
-    font-size: var(--fs-xs);
   }
 
   .codename {
