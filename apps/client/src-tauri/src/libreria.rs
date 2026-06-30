@@ -32,6 +32,11 @@ pub struct PromptCard {
     /// finestra. Mostrato in lista al posto del conteggio usi quando si
     /// ordina per qualita.
     pub rating_medio: Option<f64>,
+    /// #403/#412: id del prompt principale se questa card è una variante,
+    /// `None` se è un principale. Il frontend lo usa per il rientro + il
+    /// connettore "↳" nella lista. Va esposto qui (non solo nel dettaglio),
+    /// altrimenti l'evidenziazione varianti in lista non compare.
+    pub parent_prompt_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -114,6 +119,7 @@ fn riga_a_card(row: &rusqlite::Row) -> rusqlite::Result<PromptCard> {
         tags: vec![],
         body_preview: row.get::<_, Option<String>>(7)?.unwrap_or_default(),
         rating_medio: row.get::<_, Option<f64>>(8)?,
+        parent_prompt_id: row.get::<_, Option<String>>(9)?,
     })
 }
 
@@ -234,7 +240,8 @@ pub fn lista_pure(
                     (SELECT AVG(CAST(r.Rating AS REAL))
                      FROM PromptRatings r
                      WHERE r.PromptId = p.Id
-                       AND r.CreatedAt >= datetime('now', '-90 days')) AS rating_medio
+                       AND r.CreatedAt >= datetime('now', '-90 days')) AS rating_medio,
+                    p.ParentPromptId AS parent_prompt_id
              FROM Prompts p
              LEFT JOIN PromptTags pt ON pt.PromptId = p.Id
              WHERE p.DeletedAt IS NULL{vista_cond}
@@ -940,6 +947,35 @@ mod test {
         assert!(
             trova("p-vecchio").rating_medio.is_none(),
             "voto oltre 90 giorni escluso dalla finestra → None"
+        );
+    }
+
+    #[test]
+    fn lista_pure_espone_parent_prompt_id_per_varianti() {
+        // #412: il connettore varianti in lista (rientro + "↳") legge
+        // parent_prompt_id dalla query lista, non solo dal dettaglio. Verifica
+        // che la card della variante riporti l'id del principale e che il
+        // principale resti None.
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        inserisci_prompt(&conn, "p-principale", "Principale", "private", 0, None);
+        inserisci_prompt(&conn, "p-variante", "Variante", "private", 0, None);
+        conn.execute(
+            "UPDATE Prompts SET ParentPromptId = 'p-principale' WHERE Id = 'p-variante'",
+            [],
+        )
+        .unwrap();
+
+        let cards = lista_pure(&conn, &filtro_default("tutti")).unwrap();
+        let trova = |id: &str| cards.iter().find(|c| c.id == id).unwrap();
+        assert_eq!(
+            trova("p-variante").parent_prompt_id.as_deref(),
+            Some("p-principale"),
+            "la variante espone l'id del principale"
+        );
+        assert!(
+            trova("p-principale").parent_prompt_id.is_none(),
+            "il principale non ha parent"
         );
     }
 
