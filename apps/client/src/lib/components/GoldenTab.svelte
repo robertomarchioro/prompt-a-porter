@@ -149,6 +149,8 @@
     providers: ProviderConfigItem[];
     providerScelto: string;
     modelScelto: string;
+    judgeProviderScelto: string;
+    judgeModelScelto: string;
     stato: StatoBatch;
     caricamentoProviders: boolean;
     errore: string;
@@ -157,10 +159,17 @@
     providers: [],
     providerScelto: "",
     modelScelto: "",
+    judgeProviderScelto: "",
+    judgeModelScelto: "",
     stato: { fase: "scelta" },
     caricamentoProviders: false,
     errore: "",
   });
+
+  // Almeno un golden usa llm-judge → il batch mostra i selettori del giudice.
+  const haGoldenGiudice = $derived(
+    goldens.some((g) => g.similarity_fn === "llm-judge"),
+  );
 
   // Carica i soli provider abilitati; usato sia dal batch sia dalla run
   // singola. Ritorna l'errore user-facing invece di lanciare.
@@ -204,6 +213,8 @@
       providers: [],
       providerScelto: "",
       modelScelto: "",
+      judgeProviderScelto: "",
+      judgeModelScelto: "",
       stato: { fase: "scelta" },
       caricamentoProviders: true,
       errore: "",
@@ -214,6 +225,8 @@
       modaleBatch.providers = res.providers;
       modaleBatch.providerScelto = init.provider;
       modaleBatch.modelScelto = init.model;
+      modaleBatch.judgeProviderScelto = init.provider;
+      modaleBatch.judgeModelScelto = init.model;
     } else {
       modaleBatch.errore = res.errore;
     }
@@ -232,11 +245,21 @@
     modaleBatch.modelScelto = p?.default_model ?? "";
   }
 
+  function onCambiaJudgeProviderBatch(): void {
+    const p = modaleBatch.providers.find(
+      (x) => x.provider === modaleBatch.judgeProviderScelto,
+    );
+    modaleBatch.judgeModelScelto = p?.default_model ?? "";
+  }
+
   async function eseguiTutti(): Promise<void> {
     if (
       !modaleBatch.providerScelto ||
       !modaleBatch.modelScelto.trim() ||
-      goldens.length === 0
+      goldens.length === 0 ||
+      (haGoldenGiudice &&
+        (!modaleBatch.judgeProviderScelto ||
+          !modaleBatch.judgeModelScelto.trim()))
     ) {
       return;
     }
@@ -255,6 +278,12 @@
           goldenId: g.id,
           providerKind: modaleBatch.providerScelto,
           model: modaleBatch.modelScelto,
+          ...(g.similarity_fn === "llm-judge"
+            ? {
+                judgeProvider: modaleBatch.judgeProviderScelto,
+                judgeModel: modaleBatch.judgeModelScelto,
+              }
+            : {}),
         });
         registraEsito(g.id, obs);
         risultati.push({
@@ -288,20 +317,22 @@
     providers: ProviderConfigItem[];
     providerScelto: string;
     modelScelto: string;
+    judgeProviderScelto: string;
+    judgeModelScelto: string;
     caricamentoProviders: boolean;
     stato: StatoRun;
     errore: string;
-    mostraOutput: boolean;
   }>({
     aperto: false,
     golden: null,
     providers: [],
     providerScelto: "",
     modelScelto: "",
+    judgeProviderScelto: "",
+    judgeModelScelto: "",
     caricamentoProviders: false,
     stato: { fase: "scelta" },
     errore: "",
-    mostraOutput: false,
   });
 
   async function apriRun(g: Golden): Promise<void> {
@@ -311,10 +342,11 @@
       providers: [],
       providerScelto: "",
       modelScelto: "",
+      judgeProviderScelto: "",
+      judgeModelScelto: "",
       caricamentoProviders: true,
       stato: { fase: "scelta" },
       errore: "",
-      mostraOutput: false,
     };
     const res = await caricaProviderAbilitati();
     if (res.ok) {
@@ -322,6 +354,9 @@
       modaleRun.providers = res.providers;
       modaleRun.providerScelto = init.provider;
       modaleRun.modelScelto = init.model;
+      // Default del giudice: stesso provider/modello (modificabile).
+      modaleRun.judgeProviderScelto = init.provider;
+      modaleRun.judgeModelScelto = init.model;
     } else {
       modaleRun.errore = res.errore;
     }
@@ -340,9 +375,23 @@
     modaleRun.modelScelto = p?.default_model ?? "";
   }
 
+  function onCambiaJudgeProviderRun(): void {
+    const p = modaleRun.providers.find(
+      (x) => x.provider === modaleRun.judgeProviderScelto,
+    );
+    modaleRun.judgeModelScelto = p?.default_model ?? "";
+  }
+
   async function eseguiSingolo(): Promise<void> {
     const g = modaleRun.golden;
     if (!g || !modaleRun.providerScelto || !modaleRun.modelScelto.trim()) {
+      return;
+    }
+    const richiedeGiudice = g.similarity_fn === "llm-judge";
+    if (
+      richiedeGiudice &&
+      (!modaleRun.judgeProviderScelto || !modaleRun.judgeModelScelto.trim())
+    ) {
       return;
     }
     ultimoProviderScelto = modaleRun.providerScelto;
@@ -354,6 +403,12 @@
         goldenId: g.id,
         providerKind: modaleRun.providerScelto,
         model: modaleRun.modelScelto,
+        ...(richiedeGiudice
+          ? {
+              judgeProvider: modaleRun.judgeProviderScelto,
+              judgeModel: modaleRun.judgeModelScelto,
+            }
+          : {}),
       });
       registraEsito(g.id, obs);
       modaleRun.stato = { fase: "completato", obs };
@@ -642,6 +697,35 @@
             placeholder="Es. claude-sonnet-4-6, gpt-4o, llama3.2…"
           />
         </label>
+        {#if haGoldenGiudice}
+          <div class="run-giudice">
+            <p class="batch-hint run-warn">
+              Alcuni golden usano <code>llm-judge</code>: scegli il
+              <strong>provider giudice</strong> (usato solo per quei golden).
+            </p>
+            <label class="batch-field">
+              <span class="batch-label">Provider giudice</span>
+              <select
+                class="batch-input"
+                bind:value={modaleBatch.judgeProviderScelto}
+                onchange={onCambiaJudgeProviderBatch}
+              >
+                {#each modaleBatch.providers as p (p.provider)}
+                  <option value={p.provider}>{p.provider}</option>
+                {/each}
+              </select>
+            </label>
+            <label class="batch-field">
+              <span class="batch-label">Modello giudice</span>
+              <input
+                class="batch-input"
+                type="text"
+                bind:value={modaleBatch.judgeModelScelto}
+                placeholder="Es. claude-sonnet-4-6, gpt-4o…"
+              />
+            </label>
+          </div>
+        {/if}
         <p class="batch-hint">
           I golden verranno eseguiti in serie (uno alla volta) per evitare
           rate-limit. Stima ~5-30s per golden a seconda del provider.
@@ -692,7 +776,10 @@
           onclick={eseguiTutti}
           disabled={!modaleBatch.providerScelto ||
             !modaleBatch.modelScelto.trim() ||
-            modaleBatch.providers.length === 0}
+            modaleBatch.providers.length === 0 ||
+            (haGoldenGiudice &&
+              (!modaleBatch.judgeProviderScelto ||
+                !modaleBatch.judgeModelScelto.trim()))}
         >
           Esegui {goldens.length} test
         </button>
@@ -744,11 +831,33 @@
           />
         </label>
         {#if modaleRun.golden?.similarity_fn === "llm-judge"}
-          <p class="batch-hint run-warn">
-            Questo golden usa <code>llm-judge</code>, che richiede un provider
-            giudice ancora non selezionabile da qui: l'esecuzione registrerà
-            un errore finché non arriva quel supporto.
-          </p>
+          <div class="run-giudice">
+            <p class="batch-hint run-warn">
+              Questo golden usa <code>llm-judge</code>: un secondo modello fa
+              da <strong>giudice</strong> e assegna il punteggio 0–1.
+            </p>
+            <label class="batch-field">
+              <span class="batch-label">Provider giudice</span>
+              <select
+                class="batch-input"
+                bind:value={modaleRun.judgeProviderScelto}
+                onchange={onCambiaJudgeProviderRun}
+              >
+                {#each modaleRun.providers as p (p.provider)}
+                  <option value={p.provider}>{p.provider}</option>
+                {/each}
+              </select>
+            </label>
+            <label class="batch-field">
+              <span class="batch-label">Modello giudice</span>
+              <input
+                class="batch-input"
+                type="text"
+                bind:value={modaleRun.judgeModelScelto}
+                placeholder="Es. claude-sonnet-4-6, gpt-4o…"
+              />
+            </label>
+          </div>
         {/if}
       </div>
     {:else if modaleRun.stato.fase === "esecuzione"}
@@ -825,7 +934,10 @@
           onclick={eseguiSingolo}
           disabled={!modaleRun.providerScelto ||
             !modaleRun.modelScelto.trim() ||
-            modaleRun.providers.length === 0}
+            modaleRun.providers.length === 0 ||
+            (modaleRun.golden?.similarity_fn === "llm-judge" &&
+              (!modaleRun.judgeProviderScelto ||
+                !modaleRun.judgeModelScelto.trim()))}
         >
           Esegui
         </button>
@@ -1271,6 +1383,19 @@
   /* Esecuzione singola: dettaglio risultato */
   .run-warn code {
     font-family: var(--font-mono);
+  }
+  /* Blocco selettori del provider giudice (llm-judge) */
+  .run-giudice {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    padding: var(--sp-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-overlay);
+  }
+  .run-giudice .batch-hint {
+    margin: 0;
   }
   .run-result {
     display: flex;
