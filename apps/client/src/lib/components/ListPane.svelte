@@ -112,6 +112,10 @@
   let prompts = $state<PromptCardData[]>([]);
   // #403: mappa id→titolo per nominare il prompt padre nel tooltip variante.
   const titoliById = $derived(new Map(prompts.map((p) => [p.id, p.titolo])));
+  // L'evidenziazione varianti (rientro + connettore "↳") ha senso solo con
+  // ordine "A-Z", dove i titoli — e quindi le sister — tendono a stare
+  // vicini. Con gli altri criteri la lista resta piatta.
+  const mostraVarianti = $derived(stato.ordine === "alfabetico");
   function varianteTitle(p: PromptCardData): string {
     if (!p.parent_prompt_id) return "";
     const t = titoliById.get(p.parent_prompt_id);
@@ -862,7 +866,7 @@
           class:drop-after={dropTargetIndex === idx &&
             dropPosition === "after"}
           class:dragging={draggedId === p.id}
-          class:variante={!!p.parent_prompt_id}
+          class:variante={mostraVarianti && !!p.parent_prompt_id}
           class:selezionata-multi={selezioneMultipla?.has(p.id) || undefined}
           draggable="true"
           ondragstart={(e) => gestDragStart(e, p.id)}
@@ -879,7 +883,7 @@
           }}
           role="presentation"
         >
-          {#if p.parent_prompt_id}
+          {#if mostraVarianti && p.parent_prompt_id}
             <span
               class="variante-marca"
               title={varianteTitle(p)}
