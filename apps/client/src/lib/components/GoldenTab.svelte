@@ -2,8 +2,9 @@
   /**
    * Tab Test golden del DetailPane (F5 PR-C).
    *
-   * Tabella read-only dei golden test associati al prompt + bottone elimina.
-   * Crea/modifica/esegui sono placeholder F8 (richiedono UI provider config).
+   * Lista dei golden test del prompt con crea, elimina, esecuzione singola
+   * (con dettaglio risultato) ed esecuzione batch ("Esegui tutti").
+   * La modifica di un golden esistente è ancora un placeholder.
    *
    * Riferimento blueprint: docs/roadmap/redesign-v08/blueprint-F5.md §3
    */
@@ -25,9 +26,23 @@
     aggiornato_a: string;
   }
 
-  // Shape parziale: serve solo `passed` per la UI batch.
+  // Risultato di un'esecuzione, come restituito da `golden_esegui`.
+  // Campi in snake_case (serde default lato Rust).
   interface Observation {
+    id: string;
+    prompt_version_id: string;
+    golden_id: string | null;
+    provider: string;
+    model: string;
+    actual_output: string;
+    similarita: number | null;
     passed: boolean;
+    latenza_ms: number | null;
+    tokens_used: number | null;
+    costo_stimato: number | null;
+    errore: string | null;
+    ran_at: string;
+    ran_by: string;
   }
 
   interface ProviderConfigItem {
@@ -38,9 +53,18 @@
   }
 
   interface RisultatoBatch {
+    id: string;
     etichetta: string;
     passed: boolean;
     errore?: string;
+  }
+
+  // Ultimo esito per golden (id → esito), aggiornato da run singole e batch,
+  // per mostrare un badge di stato accanto a ciascun golden nella lista.
+  interface Esito {
+    passed: boolean;
+    similarita: number | null;
+    errore: boolean;
   }
 
   interface Props {
@@ -52,6 +76,21 @@
 
   let goldens = $state<Golden[]>([]);
   let caricamento = $state(false);
+  let ultimoEsito = $state<Record<string, Esito>>({});
+  // Ultimo provider/modello usati: pre-riempiono i picker di run.
+  let ultimoProviderScelto = $state("");
+  let ultimoModelScelto = $state("");
+
+  function registraEsito(id: string, obs: Observation): void {
+    ultimoEsito = {
+      ...ultimoEsito,
+      [id]: {
+        passed: obs.passed,
+        similarita: obs.similarita,
+        errore: !!obs.errore,
+      },
+    };
+  }
 
   async function carica(): Promise<void> {
     caricamento = true;
@@ -123,6 +162,42 @@
     errore: "",
   });
 
+  // Carica i soli provider abilitati; usato sia dal batch sia dalla run
+  // singola. Ritorna l'errore user-facing invece di lanciare.
+  async function caricaProviderAbilitati(): Promise<
+    | { ok: true; providers: ProviderConfigItem[] }
+    | { ok: false; errore: string }
+  > {
+    try {
+      const lista = await invoke<ProviderConfigItem[]>("provider_config_lista");
+      const providers = lista.filter((p) => p.abilitato);
+      if (providers.length === 0) {
+        return {
+          ok: false,
+          errore:
+            "Nessun provider AI abilitato. Configura un provider in Impostazioni → Provider AI.",
+        };
+      }
+      return { ok: true, providers };
+    } catch (e) {
+      return { ok: false, errore: String(e).replace(/^Error: /, "") };
+    }
+  }
+
+  // Sceglie provider/modello iniziali: preferisce l'ultimo usato se ancora
+  // tra gli abilitati, altrimenti il primo della lista.
+  function providerIniziale(providers: ProviderConfigItem[]): {
+    provider: string;
+    model: string;
+  } {
+    const ultimo = providers.find((p) => p.provider === ultimoProviderScelto);
+    if (ultimo) {
+      return { provider: ultimo.provider, model: ultimoModelScelto };
+    }
+    const primo = providers[0];
+    return { provider: primo.provider, model: primo.default_model ?? "" };
+  }
+
   async function apriBatch(): Promise<void> {
     modaleBatch = {
       aperto: true,
@@ -133,22 +208,16 @@
       caricamentoProviders: true,
       errore: "",
     };
-    try {
-      const lista = await invoke<ProviderConfigItem[]>("provider_config_lista");
-      modaleBatch.providers = lista.filter((p) => p.abilitato);
-      if (modaleBatch.providers.length === 0) {
-        modaleBatch.errore =
-          "Nessun provider AI abilitato. Configura un provider in Impostazioni → Provider AI.";
-      } else {
-        const primo = modaleBatch.providers[0];
-        modaleBatch.providerScelto = primo.provider;
-        modaleBatch.modelScelto = primo.default_model ?? "";
-      }
-    } catch (e) {
-      modaleBatch.errore = String(e).replace(/^Error: /, "");
-    } finally {
-      modaleBatch.caricamentoProviders = false;
+    const res = await caricaProviderAbilitati();
+    if (res.ok) {
+      const init = providerIniziale(res.providers);
+      modaleBatch.providers = res.providers;
+      modaleBatch.providerScelto = init.provider;
+      modaleBatch.modelScelto = init.model;
+    } else {
+      modaleBatch.errore = res.errore;
     }
+    modaleBatch.caricamentoProviders = false;
   }
 
   function chiudiBatch(): void {
@@ -171,6 +240,8 @@
     ) {
       return;
     }
+    ultimoProviderScelto = modaleBatch.providerScelto;
+    ultimoModelScelto = modaleBatch.modelScelto;
     const risultati: RisultatoBatch[] = [];
     for (let i = 0; i < goldens.length; i++) {
       const g = goldens[i];
@@ -185,9 +256,16 @@
           providerKind: modaleBatch.providerScelto,
           model: modaleBatch.modelScelto,
         });
-        risultati.push({ etichetta: g.etichetta, passed: obs.passed });
+        registraEsito(g.id, obs);
+        risultati.push({
+          id: g.id,
+          etichetta: g.etichetta,
+          passed: obs.passed,
+          errore: obs.errore ?? undefined,
+        });
       } catch (e) {
         risultati.push({
+          id: g.id,
           etichetta: g.etichetta,
           passed: false,
           errore: String(e).replace(/^Error: /, ""),
@@ -195,6 +273,98 @@
       }
     }
     modaleBatch.stato = { fase: "completato", risultati };
+  }
+
+  // --- Esecuzione singola con dettaglio risultato ---
+
+  type StatoRun =
+    | { fase: "scelta" }
+    | { fase: "esecuzione" }
+    | { fase: "completato"; obs: Observation };
+
+  let modaleRun = $state<{
+    aperto: boolean;
+    golden: Golden | null;
+    providers: ProviderConfigItem[];
+    providerScelto: string;
+    modelScelto: string;
+    caricamentoProviders: boolean;
+    stato: StatoRun;
+    errore: string;
+    mostraOutput: boolean;
+  }>({
+    aperto: false,
+    golden: null,
+    providers: [],
+    providerScelto: "",
+    modelScelto: "",
+    caricamentoProviders: false,
+    stato: { fase: "scelta" },
+    errore: "",
+    mostraOutput: false,
+  });
+
+  async function apriRun(g: Golden): Promise<void> {
+    modaleRun = {
+      aperto: true,
+      golden: g,
+      providers: [],
+      providerScelto: "",
+      modelScelto: "",
+      caricamentoProviders: true,
+      stato: { fase: "scelta" },
+      errore: "",
+      mostraOutput: false,
+    };
+    const res = await caricaProviderAbilitati();
+    if (res.ok) {
+      const init = providerIniziale(res.providers);
+      modaleRun.providers = res.providers;
+      modaleRun.providerScelto = init.provider;
+      modaleRun.modelScelto = init.model;
+    } else {
+      modaleRun.errore = res.errore;
+    }
+    modaleRun.caricamentoProviders = false;
+  }
+
+  function chiudiRun(): void {
+    if (modaleRun.stato.fase === "esecuzione") return; // no chiusura mid-run
+    modaleRun.aperto = false;
+  }
+
+  function onCambiaProviderRun(): void {
+    const p = modaleRun.providers.find(
+      (x) => x.provider === modaleRun.providerScelto,
+    );
+    modaleRun.modelScelto = p?.default_model ?? "";
+  }
+
+  async function eseguiSingolo(): Promise<void> {
+    const g = modaleRun.golden;
+    if (!g || !modaleRun.providerScelto || !modaleRun.modelScelto.trim()) {
+      return;
+    }
+    ultimoProviderScelto = modaleRun.providerScelto;
+    ultimoModelScelto = modaleRun.modelScelto;
+    modaleRun.errore = "";
+    modaleRun.stato = { fase: "esecuzione" };
+    try {
+      const obs = await invoke<Observation>("golden_esegui", {
+        goldenId: g.id,
+        providerKind: modaleRun.providerScelto,
+        model: modaleRun.modelScelto,
+      });
+      registraEsito(g.id, obs);
+      modaleRun.stato = { fase: "completato", obs };
+    } catch (e) {
+      modaleRun.errore = String(e).replace(/^Error: /, "");
+      modaleRun.stato = { fase: "scelta" };
+    }
+  }
+
+  function fmtPercento(v: number | null): string {
+    return v === null ? "—" : `${(v * 100).toFixed(0)}%`;
   }
 
   // --- Modale crea golden (#382) ---
@@ -348,15 +518,32 @@
               <span class="badge muted"
                 >aggiornato {tempoRelativo(g.aggiornato_a)}</span
               >
+              {#if ultimoEsito[g.id]}
+                {@const es = ultimoEsito[g.id]}
+                <span
+                  class="badge esito"
+                  class:pass={es.passed && !es.errore}
+                  class:fail={!es.passed || es.errore}
+                  title={es.errore
+                    ? "Ultima esecuzione: errore"
+                    : es.passed
+                      ? "Ultima esecuzione: passato"
+                      : "Ultima esecuzione: fallito"}
+                >
+                  {es.errore
+                    ? "⚠ errore"
+                    : `${es.passed ? "✓" : "✗"} ${fmtPercento(es.similarita)}`}
+                </span>
+              {/if}
             </div>
           </div>
           <div class="riga-azioni">
             <button
               class="ico"
               type="button"
-              title="Esegui (F8 — richiede provider config)"
+              title="Esegui questo golden"
               aria-label="Esegui golden"
-              onclick={() => console.log("F8 esegui golden", g.id)}
+              onclick={() => apriRun(g)}
             >
               <Play size={14} />
             </button>
@@ -481,6 +668,144 @@
         <button class="primary" type="button" onclick={chiudiBatch}>
           Chiudi
         </button>
+      {/if}
+    {/snippet}
+  </Modale>
+{/if}
+
+{#if modaleRun.aperto}
+  <Modale
+    titolo="Esegui golden"
+    sottotitolo={modaleRun.golden?.etichetta}
+    larghezza="md"
+    onChiudi={chiudiRun}
+  >
+    {#if modaleRun.caricamentoProviders}
+      <p class="batch-info">Caricamento provider…</p>
+    {:else if modaleRun.errore}
+      <p class="batch-error">{modaleRun.errore}</p>
+    {:else if modaleRun.stato.fase === "scelta"}
+      <div class="batch-form">
+        <label class="batch-field">
+          <span class="batch-label">Provider</span>
+          <select
+            class="batch-input"
+            bind:value={modaleRun.providerScelto}
+            onchange={onCambiaProviderRun}
+          >
+            {#each modaleRun.providers as p (p.provider)}
+              <option value={p.provider}>{p.provider}</option>
+            {/each}
+          </select>
+        </label>
+        <label class="batch-field">
+          <span class="batch-label">Modello</span>
+          <input
+            class="batch-input"
+            type="text"
+            bind:value={modaleRun.modelScelto}
+            placeholder="Es. claude-sonnet-4-6, gpt-4o, llama3.2…"
+          />
+        </label>
+        {#if modaleRun.golden?.similarity_fn === "llm-judge"}
+          <p class="batch-hint run-warn">
+            Questo golden usa <code>llm-judge</code>, che richiede un provider
+            giudice ancora non selezionabile da qui: l'esecuzione registrerà
+            un errore finché non arriva quel supporto.
+          </p>
+        {/if}
+      </div>
+    {:else if modaleRun.stato.fase === "esecuzione"}
+      <p class="batch-info">Esecuzione in corso… chiamata al provider AI.</p>
+    {:else if modaleRun.stato.fase === "completato"}
+      {@const obs = modaleRun.stato.obs}
+      <div class="run-result">
+        {#if obs.errore}
+          <div class="run-esito err">
+            <span class="run-esito-icon">⚠</span>
+            <span>Esecuzione fallita</span>
+          </div>
+          <p class="run-error-msg">{obs.errore}</p>
+        {:else}
+          <div class="run-esito" class:pass={obs.passed} class:fail={!obs.passed}>
+            <span class="run-esito-icon">{obs.passed ? "✓" : "✗"}</span>
+            <span>{obs.passed ? "Passato" : "Fallito"}</span>
+          </div>
+          <div class="run-score">
+            <div class="run-score-head">
+              <span>Similarità <strong>{fmtPercento(obs.similarita)}</strong></span>
+              <span class="run-score-soglia">
+                soglia {fmtPercento(modaleRun.golden?.soglia_tolleranza ?? null)}
+              </span>
+            </div>
+            <div class="run-bar">
+              <div
+                class="run-bar-fill"
+                class:pass={obs.passed}
+                class:fail={!obs.passed}
+                style:width="{(obs.similarita ?? 0) * 100}%"
+              ></div>
+              <div
+                class="run-bar-soglia"
+                style:left="{(modaleRun.golden?.soglia_tolleranza ?? 0) * 100}%"
+                title="Soglia"
+              ></div>
+            </div>
+          </div>
+        {/if}
+
+        <div class="run-meta">
+          <span class="run-meta-item">{obs.provider} · {obs.model}</span>
+          {#if obs.latenza_ms !== null}
+            <span class="run-meta-item">{obs.latenza_ms} ms</span>
+          {/if}
+          {#if obs.tokens_used !== null}
+            <span class="run-meta-item">{obs.tokens_used} token</span>
+          {/if}
+        </div>
+
+        {#if !obs.errore}
+          <div class="run-io">
+            <div class="run-io-block">
+              <span class="run-io-label">Output ricevuto</span>
+              <pre class="run-io-text">{obs.actual_output || "(vuoto)"}</pre>
+            </div>
+            <details class="run-io-atteso">
+              <summary>Confronta con l'output atteso</summary>
+              <pre class="run-io-text">{modaleRun.golden?.expected_output ?? ""}</pre>
+            </details>
+          </div>
+        {/if}
+      </div>
+    {/if}
+    {#snippet footer()}
+      {#if modaleRun.stato.fase === "scelta"}
+        <button class="secondary" type="button" onclick={chiudiRun}>
+          Annulla
+        </button>
+        <button
+          class="primary"
+          type="button"
+          onclick={eseguiSingolo}
+          disabled={!modaleRun.providerScelto ||
+            !modaleRun.modelScelto.trim() ||
+            modaleRun.providers.length === 0}
+        >
+          Esegui
+        </button>
+      {:else if modaleRun.stato.fase === "esecuzione"}
+        <button class="secondary" type="button" disabled>
+          Esecuzione in corso…
+        </button>
+      {:else}
+        <button
+          class="secondary"
+          type="button"
+          onclick={() => (modaleRun.stato = { fase: "scelta" })}
+        >
+          Ri-esegui
+        </button>
+        <button class="primary" type="button" onclick={chiudiRun}>Chiudi</button>
       {/if}
     {/snippet}
   </Modale>
@@ -882,6 +1207,144 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* Badge di ultimo esito nella riga golden */
+  .badge.esito {
+    font-family: var(--font-ui);
+    font-weight: var(--fw-medium);
+    border-color: transparent;
+  }
+  .badge.esito.pass {
+    color: var(--accent-success, #2c8a2c);
+    background: rgba(44, 138, 44, 0.12);
+  }
+  .badge.esito.fail {
+    color: var(--danger);
+    background: rgba(220, 80, 80, 0.12);
+  }
+
+  /* Esecuzione singola: dettaglio risultato */
+  .run-warn code {
+    font-family: var(--font-mono);
+  }
+  .run-result {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .run-esito {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: var(--fw-semibold);
+    font-size: var(--fs-base);
+  }
+  .run-esito.pass {
+    color: var(--accent-success, #2c8a2c);
+  }
+  .run-esito.fail,
+  .run-esito.err {
+    color: var(--danger);
+  }
+  .run-esito-icon {
+    font-size: 1.2em;
+  }
+  .run-error-msg {
+    margin: 0;
+    padding: 8px 10px;
+    background: rgba(220, 80, 80, 0.08);
+    border-radius: var(--radius-sm);
+    color: var(--danger);
+    font-size: var(--fs-sm);
+    white-space: pre-wrap;
+  }
+  .run-score {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .run-score-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--fs-sm);
+    color: var(--text-default);
+  }
+  .run-score-soglia {
+    color: var(--text-muted);
+  }
+  .run-bar {
+    position: relative;
+    width: 100%;
+    height: 8px;
+    background: var(--bg-overlay);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+  .run-bar-fill {
+    height: 100%;
+    border-radius: var(--radius-full);
+  }
+  .run-bar-fill.pass {
+    background: var(--accent-success, #2c8a2c);
+  }
+  .run-bar-fill.fail {
+    background: var(--danger);
+  }
+  .run-bar-soglia {
+    position: absolute;
+    top: -2px;
+    width: 2px;
+    height: 12px;
+    background: var(--text-default);
+    transform: translateX(-1px);
+  }
+  .run-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+  .run-meta-item {
+    font-family: var(--font-mono);
+  }
+  .run-io {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+  .run-io-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .run-io-label {
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+  .run-io-text {
+    margin: 0;
+    padding: 8px 10px;
+    max-height: 200px;
+    overflow: auto;
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .run-io-atteso summary {
+    cursor: pointer;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+  .run-io-atteso[open] summary {
+    margin-bottom: 4px;
   }
 
   /* #382: modale editor golden */
