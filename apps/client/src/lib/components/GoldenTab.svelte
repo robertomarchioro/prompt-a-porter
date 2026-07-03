@@ -907,6 +907,14 @@
           {#if obs.tokens_used !== null}
             <span class="run-meta-item">{obs.tokens_used} token</span>
           {/if}
+          {#if obs.costo_stimato !== null}
+            <span
+              class="run-meta-item"
+              title="Costo stimato (input stimato dalla lunghezza del prompt + output reale; prezzi indicativi)"
+            >
+              ~${obs.costo_stimato.toFixed(4)}
+            </span>
+          {/if}
         </div>
 
         {#if !obs.errore}

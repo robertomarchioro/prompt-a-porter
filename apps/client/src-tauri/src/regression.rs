@@ -445,6 +445,12 @@ pub(crate) fn esegui_pure_con_ctx(
                     similarity::is_passed(&golden.similarity_fn, s, golden.soglia_tolleranza)
                 })
                 .unwrap_or(false);
+            let costo_stimato = crate::pricing::stima_costo(
+                provider.name(),
+                &out.model,
+                &prompt_compilato,
+                out.tokens_used,
+            );
             Observation {
                 id,
                 prompt_version_id,
@@ -456,7 +462,7 @@ pub(crate) fn esegui_pure_con_ctx(
                 passed,
                 latenza_ms: Some(out.latency_ms),
                 tokens_used: out.tokens_used,
-                costo_stimato: None,
+                costo_stimato,
                 errore,
                 ran_at,
                 ran_by: user_id.to_string(),
