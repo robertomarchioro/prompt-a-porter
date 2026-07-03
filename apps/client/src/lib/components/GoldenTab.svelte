@@ -2,9 +2,9 @@
   /**
    * Tab Test golden del DetailPane (F5 PR-C).
    *
-   * Lista dei golden test del prompt con crea, elimina, esecuzione singola
-   * (con dettaglio risultato) ed esecuzione batch ("Esegui tutti").
-   * La modifica di un golden esistente è ancora un placeholder.
+   * Lista dei golden test del prompt con crea, modifica, elimina,
+   * esecuzione singola (con dettaglio risultato) ed esecuzione batch
+   * ("Esegui tutti").
    *
    * Riferimento blueprint: docs/roadmap/redesign-v08/blueprint-F5.md §3
    */
@@ -378,8 +378,12 @@
 
   type SimilarityFn = (typeof SIMILARITY_FN_VALIDE)[number];
 
+  // Lo stesso modale serve sia per creare sia per modificare: `modalita`
+  // sceglie il comando backend, `id` è valorizzato solo in modifica.
   let modaleEditor = $state<{
     aperto: boolean;
+    modalita: "crea" | "modifica";
+    id: string | null;
     etichetta: string;
     input_vars: string;
     expected_output: string;
@@ -389,6 +393,8 @@
     errore: string;
   }>({
     aperto: false,
+    modalita: "crea",
+    id: null,
     etichetta: "",
     input_vars: "{}",
     expected_output: "",
@@ -401,11 +407,28 @@
   function apriEditor(): void {
     modaleEditor = {
       aperto: true,
+      modalita: "crea",
+      id: null,
       etichetta: "",
       input_vars: "{}",
       expected_output: "",
       similarity_fn: "cosine",
       soglia_tolleranza: 0.85,
+      invio: false,
+      errore: "",
+    };
+  }
+
+  function apriEditorModifica(g: Golden): void {
+    modaleEditor = {
+      aperto: true,
+      modalita: "modifica",
+      id: g.id,
+      etichetta: g.etichetta,
+      input_vars: g.input_vars,
+      expected_output: g.expected_output,
+      similarity_fn: g.similarity_fn as SimilarityFn,
+      soglia_tolleranza: g.soglia_tolleranza,
       invio: false,
       errore: "",
     };
@@ -419,16 +442,29 @@
   async function salvaGolden(): Promise<void> {
     modaleEditor = { ...modaleEditor, invio: true, errore: "" };
     try {
-      await invoke("golden_crea", {
-        dati: {
-          prompt_id: promptId,
-          etichetta: modaleEditor.etichetta.trim(),
-          input_vars: modaleEditor.input_vars,
-          expected_output: modaleEditor.expected_output,
-          similarity_fn: modaleEditor.similarity_fn,
-          soglia_tolleranza: modaleEditor.soglia_tolleranza,
-        },
-      });
+      if (modaleEditor.modalita === "modifica" && modaleEditor.id) {
+        await invoke("golden_aggiorna", {
+          dati: {
+            id: modaleEditor.id,
+            etichetta: modaleEditor.etichetta.trim(),
+            input_vars: modaleEditor.input_vars,
+            expected_output: modaleEditor.expected_output,
+            similarity_fn: modaleEditor.similarity_fn,
+            soglia_tolleranza: modaleEditor.soglia_tolleranza,
+          },
+        });
+      } else {
+        await invoke("golden_crea", {
+          dati: {
+            prompt_id: promptId,
+            etichetta: modaleEditor.etichetta.trim(),
+            input_vars: modaleEditor.input_vars,
+            expected_output: modaleEditor.expected_output,
+            similarity_fn: modaleEditor.similarity_fn,
+            soglia_tolleranza: modaleEditor.soglia_tolleranza,
+          },
+        });
+      }
       modaleEditor = { ...modaleEditor, aperto: false, invio: false };
       window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
     } catch (e) {
@@ -550,9 +586,9 @@
             <button
               class="ico"
               type="button"
-              title="Modifica (F8 modale)"
+              title="Modifica golden"
               aria-label="Modifica golden"
-              onclick={() => console.log("F8 modifica golden", g.id)}
+              onclick={() => apriEditorModifica(g)}
             >
               <Pencil size={14} />
             </button>
@@ -813,8 +849,12 @@
 
 {#if modaleEditor.aperto}
   <Modale
-    titolo="Nuovo golden test"
-    sottotitolo="Definisci un caso di test atteso per questo prompt"
+    titolo={modaleEditor.modalita === "modifica"
+      ? "Modifica golden test"
+      : "Nuovo golden test"}
+    sottotitolo={modaleEditor.modalita === "modifica"
+      ? "Aggiorna il caso di test atteso"
+      : "Definisci un caso di test atteso per questo prompt"}
     larghezza="md"
     onChiudi={chiudiEditor}
   >
@@ -897,7 +937,11 @@
           !modaleEditor.etichetta.trim() ||
           !modaleEditor.expected_output.trim()}
       >
-        {modaleEditor.invio ? "Salvataggio..." : "Salva golden"}
+        {modaleEditor.invio
+          ? "Salvataggio..."
+          : modaleEditor.modalita === "modifica"
+            ? "Salva modifiche"
+            : "Salva golden"}
       </button>
     {/snippet}
   </Modale>
