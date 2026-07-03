@@ -16,6 +16,7 @@ pub mod libreria;
 pub mod linting;
 pub mod migrazione;
 pub mod preferenze;
+pub mod pricing;
 pub mod prompt;
 pub mod prompt_componibili;
 pub mod provider_ai;
