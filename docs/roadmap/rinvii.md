@@ -2,9 +2,9 @@
 
 > Censimento unificato di **tutto ciò che è stato deliberatamente rinviato** durante lo sviluppo. Singola fonte di verità: nuovi rinvii vengono aggiunti qui ad ogni PR che li introduce, e gli item vengono spostati nell'archivio storico quando atterrano.
 >
-> **Aggiornato al**: 2026-06-19.
+> **Aggiornato al**: 2026-07-04.
 >
-> **Stato macro**: PaP **Personale v1.0.0 è completa** (chiusa con la patch line v0.8.11, milestone M1-M8 tutte atterrate il 2026-05-19). Da allora la patch line **v0.8.x** prosegue con feature e manutenzione incrementale (fino a **v0.8.23**: guida interattiva completa, menu contestuale completo, sintassi `{{global}}`). Lo stream **Enterprise v2.0** non è ancora aperto (gate domanda-driven).
+> **Stato macro**: PaP **Personale v1.0.0 è completa** (chiusa con la patch line v0.8.11, milestone M1-M8 tutte atterrate il 2026-05-19). Da allora la patch line **v0.8.x** prosegue con feature e manutenzione incrementale (fino a **v0.8.31**: linter personalizzabile, riordino Impostazioni, **Test Golden completo lato UI**). Lo stream **Enterprise v2.0** non è ancora aperto (gate domanda-driven).
 
 ## Convenzioni
 
@@ -43,7 +43,8 @@ Tutto lo stream v1.0 (recupero rinvii Fase 1-4 + signing/updater) è **atterrato
 
 - 📋 → v1.x: **Lint rules IMP004/IMP005** per la sintassi scopata (`with k=v`: variabile dichiarata non usata; `version=N`: versione inesistente). Richiede refactor del linter per accesso DB.
 - 📋 → v1.x: **Migration automatica backreference** alla promozione di una variante a principale (M3 PR-5). Gli `{{import "id-vecchia-main"}}` nei prompt terzi continuano a puntare alla vecchia main. Riscriverli richiede una decisione semantica (silenziosa vs notifica utente) → rinviato per non decidere sotto pressione.
-- 📋 → v1.x: **CLI `pap test <promptId> [--golden=...]`** per CI/CD — `apps/cli` esistente, manca il subcommand.
+- 📋 → v1.x: **CLI `pap test <promptId> [--golden=...]`** per CI/CD — il subcommand manca, ma (esplorazione 2026-07-04) **non è un'aggiunta piccola**: CLI (Go) e MCP (TS) aprono il vault SQLite **direttamente, read-only, solo non cifrato** e non hanno accesso a provider/embeddings/similarità (solo-Rust). Non esiste una `pap-core` né FFI, e `cosine` non è replicabile fuori da Rust (serve ONNX+MiniLM). Percorso corretto = **nuovo binario Rust headless** che avvolge `regression::esegui_pure_con_ctx` (già Tauri-free), invocato da CLI/MCP; + blocchi cifratura (SQLCipher/Argon2) e scrittura osservazioni. Vedi memoria `golden_ui_completa`.
+- 📋 → v1.x (o v0.9): **Multi-vault** — `WorkspaceSwitcher.svelte` mostra lo switcher ma la selezione di più vault è rinviata (commento `WorkspaceSwitcher.svelte:17`). Oggi vault singolo.
 - 📋 → v1.x: **Doc utente `docs/utente/prompt-componibili.md`** aggiornato con esempi `with`/`version`/intellisense.
 - 📋 → v1.x: **Distribuzione statistiche per cartella** (priorità bassa, top-importati copre l'80%).
 
@@ -55,8 +56,6 @@ Rinvii introdotti dopo il completamento v1.0, nella patch line attuale.
 
 | Item | Marker | Note |
 |---|---|---|
-| **#334 — CLI Go 1.25 + modernc/sqlite 1.52** | 🔧 (blocked) | `modernc.org/sqlite` 1.52 esige go1.25, ma nessuna release di golangci-lint è ancora buildata con go1.25 → rifiuta di lintare un modulo go1.25. Build/test/vet passano: blocca solo il lint. Sblocca quando golangci-lint rilascia un build go1.25 (vedi Dependabot #339 `golangci-lint-action` 6→9 da valutare). Issue #334 etichettata `blocked`. |
-| **Migrazione a vitest 4** (Dependabot #341 `@vitest/coverage-v8` + #345 `vitest`) | 🔧 | Major coordinato (i due vanno insieme); vitest 4 rompe l'attuale setup di test → migrazione config/API rinviata a un ciclo dedicato. PR lasciate aperte/rosse. |
 | **#303 opzione 3 — sostituzione import via dropdown** | 📋 | Cancellando un prompt referenziato, oltre a "rimuovi gli import" offrire "sostituisci con un altro prompt da dropdown". Stessa macchina di `import_rimuovi_da_dipendenti` ma riscrive `ImportRef.path` invece di rimuovere → futuro `import_sostituisci_in_dipendenti(target, replacement)`. Primo taglio (annulla + rimozione massiva) atterrato in v0.8.20. |
 | **Embedding stale dopo rimozione import di massa** (#303) | 🎨 → v1.x | `import_rimuovi_da_dipendenti` non ricalcola gli embedding dei prompt modificati → restano stale fino al prossimo save/backfill. |
 | **Release matrix macOS / Linux** | 📋 / 🔒 | I target macOS/Linux sono ancora commentati nella build matrix di `release.yml` (solo Windows NSIS + portable in produzione). macOS notarization resta 🔒 (Apple Developer cert separato, non richiesto). |
@@ -122,7 +121,8 @@ Non ancora aperto (gate domanda-driven). Vedi [`v2.0-enterprise.md`](./v2.0-ente
 - 📋 → v2.0 Step 7: **RBAC cartelle** (FolderPermissions con additive permissions, inheritance)
 
 ### Da Fase 4 Step 8 — Golden + regression
-- 📋 → v2.0: **MCP integration** `pap_test_prompt(promptId)` come tool MCP per agenti — richiede MCP HTTP/SSE
+- La **UI desktop dei golden è completa** dal v0.8.30 (esecuzione singola + dettaglio, modifica, giudice llm-judge, costo stimato — #418-421). Restano solo le integrazioni CLI/MCP sotto.
+- 📋 → v2.0: **MCP integration** `pap_test_prompt(promptId)` come tool MCP per agenti — richiede MCP HTTP/SSE (stesso runner Rust headless della CLI `pap test`, vedi §1)
 
 ### Cross-cutting / opzionali
 - 🔒 → v2.0: **Server cross-compile CI matrix** Linux/Windows/macOS (sblocca con Step 0a)
@@ -133,7 +133,9 @@ Non ancora aperto (gate domanda-driven). Vedi [`v2.0-enterprise.md`](./v2.0-ente
 
 | Item | Marker | Note |
 |---|---|---|
-| **golangci-lint sul server / CLI bloccato a go1.24** | 🔧 | L'action `golangci/golangci-lint-action` non linta moduli che targettano go1.25 finché il suo binario non è buildato con go1.25. Stesso blocco di #334. Verificare con Dependabot #339 (action 6→9). Sul server è oggi sostituito con `go vet` (PR #17). |
+| **Segreti (`sync_token`) nel keychain OS** | 🔒 → v1.x | Oggi `sync_token` è salvato in chiaro in `preferenze.json` (mitigato: `0600` su Unix, AppData per-utente su Windows). `preferenze.rs:193` prevede lo spostamento nel keychain OS (crate `keyring`). **Unico debito con implicazioni di sicurezza.** |
+| **Tabella prezzi `pricing.rs` indicativa** | 🎨 → manutenzione | La stima del `costo_stimato` dei golden usa prezzi hardcoded (USD/1M token) + token di input stimati euristicamente; da aggiornare quando cambiano i listini dei provider. |
+| **Conteggio token euristico** (`statistiche.rs`) | 🎨 | "~N token medi" via euristica lunghezza; tokenizer reale rinviato (bassa priorità). |
 | **Workflow CI non auto-listati nei propri path filter**: `cli-build.yml`, `mcp-server-build.yml`, `server-build.yml`. Modifiche a questi YAML non triggerano una run di validazione | 🎨 → v1.x | Quick win ~1 ora. Vedi `docs/contribuire/ci-workflows.md`. |
 | **Fallback `candle-core` per ONNX** se `ort` torna instabile | 🔧 | Piano B documentato in `docs/architettura/decisioni/onnx-bundle.md`. Non attivato (ort stabile da v0.3.0). |
 | **Workflow `bootstrap-go.yml`** che rigenera `go.sum` server + CLI on-demand | 🔧 | Considerato e non implementato. Se `go.sum` torna a divergere, valuteremo. |
@@ -196,6 +198,15 @@ Item con razionale costo/beneficio sfavorevole, conservati come traccia decision
 - ✅ **v0.8.21** guida: auto-offerta tour post-onboarding (#368) + micro-tour per-feature (#369)
 - ✅ **v0.8.22** hotfix: il tour di benvenuto non partiva (#370, cleanup `$effect` annullava i rAF)
 - ✅ **v0.8.23** menu contestuale completo (#374-#380, 7 PR: card/cartelle/editor/chip-tag/varianti/bulk + Gestisci tag) + checklist "Primi passi" (#372) + sintassi `{{globale}}`→`{{global}}` (#371) + fix ancora glossario (#373). Lungo la strada: scoperto e corretto bug serde `prompt_sposta` (campi struct camelCase) già presente in main.
+- ✅ **v0.8.24** linter personalizzabile Fasi 1+2 (#381/#383 toggle per-regola, #384/#385 tuning severità+soglie) + fix icona Diagnosi (#386).
+- ✅ **v0.8.25** triage: rename identifier `com.pap.client` + migrazione one-shot, tab Valutazioni (#390), creazione golden (#382), `checkout@v5` (#388), warning Rust test (#387) — PR #391-#394.
+- ✅ **v0.8.26** angolo alto-sx/codename (#404), bottoni editor (#402), connettore varianti (#403) + **catena Go 1.25 sbloccata** (#405 — chiude **#334**: il blocco era `golangci-lint-action` v6, non il linter; action→v9 + toolchain 1.25 + modernc 1.53) + **migrazione vitest 4** (#401) + rand 0.10/zip 8/ndarray + 19 dipendenze.
+- ✅ **v0.8.27** riordino sidebar Impostazioni (6 gruppi, #413) + ordinamento "Migliori" pesa-voti + rifiniture header/onboarding.
+- ✅ **v0.8.28** scroll indipendente sidebar/dettaglio Impostazioni (#414, prop `corpoFisso` su `Modale`).
+- ✅ **v0.8.29** voto medio 90gg in "Migliori" (#415) + fix connettore varianti in lista (#416, regressione #412: `parent_prompt_id` non esposto).
+- ✅ **v0.8.30** **Test Golden completo lato UI** (#418 esecuzione singola + dettaglio, #419 modifica, #420 giudice llm-judge, #421 costo stimato `pricing.rs`) + connettore varianti solo con ordinamento "A-Z" (#417).
+- ✅ **v0.8.31** rifiniture Golden: inserimento guidato variabili + descrizione similarità (#422), selettore modello a tendina per provider pubblici (#423); + editor aggiornato dopo ripristino da cronologia (#425).
+- ✅ **post-v0.8.31**: fix falso positivo linter **PH003** — non segnala più `{{global nome}}` e `{{import "..."}}` come nomi illegali (#428).
 
 ---
 
