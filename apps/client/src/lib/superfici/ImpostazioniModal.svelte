@@ -1094,7 +1094,7 @@
     auditMessaggio = "";
     auditExportInCorso = true;
     try {
-      const csv = await invoke<string>("audit_export_csv", { filtro: null });
+      const csv = await invoke<string>("audit_export_csv", { filtro: {} });
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
