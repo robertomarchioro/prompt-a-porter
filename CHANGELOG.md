@@ -1,5 +1,18 @@
 # Changelog — Prompt a Porter
 
+## v0.8.32 — Build Linux riabilitata + fix CLI e linter (2026-07-04)
+
+> Torna la build Linux nella release, e arrivano correzioni a linter e CLI.
+
+### Feature
+
+- **Build Linux nella release** (#432): la pipeline di rilascio produce di nuovo i pacchetti **`.deb`** e **`.AppImage`** (x86_64) per Linux, con auto-update via AppImage. Restava solo Windows; ora Windows + Linux (macOS ancora escluso, richiede la notarization Apple).
+- **CLI: `render` più completo e versione corretta** (#430): il comando `pap render` ora **espande i segnaposti globali** `{{global nome}}` leggendo il vault, e **avvisa** quando lascia intatti segnaposti non compilati, globali non trovati o import `{{import "..."}}` (che la CLI non espande) — l'output non è più silenziosamente incompleto. Inoltre `pap version` non mostra più un numero fisso: riflette la versione dell'app.
+
+### Fix
+
+- **Linter: `{{global}}` e `{{import}}` non più segnalati a torto** (#428): la regola PH003 ("nome segnaposto con caratteri non consentiti") segnalava erroneamente le sintassi valide `{{global nome}}` e `{{import "..."}}`. Ora le riconosce come corrette; un nome globale davvero malformato continua a essere segnalato.
+
 ## v0.8.31 — Rifiniture Test Golden + fix editor dopo ripristino (2026-07-04)
 
 > Tre correzioni nate dai test dal vivo su Test Golden e Cronologia.
