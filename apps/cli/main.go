@@ -21,10 +21,14 @@ import (
 )
 
 const (
-	cliVersion    = "0.1.0"
 	identifier    = "com.pap.client"
 	vaultFilename = "pap-vault.db"
 )
+
+// cliVersion è iniettata a build time con `-ldflags "-X main.cliVersion=<ver>"`
+// (vedi cli-build.yml, che la legge da apps/client/package.json). Il default
+// segue la linea dell'app per i build locali senza ldflags.
+var cliVersion = "0.8.31"
 
 // ─── Tipi ───
 
@@ -313,6 +317,58 @@ func estraiSegnaposti(body string) []string {
 	return out
 }
 
+var (
+	// {{global nome}} — segnaposto globale (valore dal vault).
+	reGlobal = regexp.MustCompile(`\{\{\s*global\s+(\w+)\s*\}\}`)
+	// {{import "path" ...}} — import (con eventuali modificatori with/version).
+	reImport = regexp.MustCompile(`\{\{\s*import\s+"([^"]*)"[^}]*\}\}`)
+)
+
+// caricaGlobali legge i segnaposti globali dal vault. Se la tabella non
+// esiste (vault anteriore a V015) ritorna una mappa vuota senza errore.
+func caricaGlobali(db *sql.DB) map[string]string {
+	m := map[string]string{}
+	rows, err := db.Query(`SELECT Name, Value FROM GlobalPlaceholders`)
+	if err != nil {
+		return m
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var n, v string
+		if err := rows.Scan(&n, &v); err != nil {
+			return m
+		}
+		m[n] = v
+	}
+	return m
+}
+
+// espandiGlobali sostituisce {{global nome}} col valore dal vault; lascia
+// intatti i globali non trovati (segnalati poi come warning).
+func espandiGlobali(body string, globals map[string]string) string {
+	return reGlobal.ReplaceAllStringFunc(body, func(match string) string {
+		sub := reGlobal.FindStringSubmatch(match)
+		if v, ok := globals[sub[1]]; ok && strings.TrimSpace(v) != "" {
+			return v
+		}
+		return match
+	})
+}
+
+// nomiUnici estrae il gruppo 1 di tutti i match, deduplicati preservando
+// l'ordine di apparizione.
+func nomiUnici(re *regexp.Regexp, s string) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, m := range re.FindAllStringSubmatch(s, -1) {
+		if !seen[m[1]] {
+			seen[m[1]] = true
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
+
 // ─── Output formatters ───
 
 func formatPrompts(prompts []Prompt, format string) (string, error) {
@@ -557,21 +613,39 @@ var renderCmd = &cobra.Command{
 			return err
 		}
 
-		compilato := compila(p.Body, vars)
+		// Espandi prima i globali dal vault, poi i segnaposti forniti.
+		globali := caricaGlobali(db)
+		bodyEspanso := espandiGlobali(p.Body, globali)
+		compilato := compila(bodyEspanso, vars)
+
 		_, _ = fmt.Fprint(cmd.OutOrStdout(), compilato)
 		if !strings.HasSuffix(compilato, "\n") {
 			_, _ = fmt.Fprintln(cmd.OutOrStdout())
 		}
-		// Avviso su stderr per segnaposti non compilati (utile in pipe).
+
+		// Avvisi su stderr (utili in pipe): l'output non è mai
+		// silenziosamente incompleto.
+		errw := cmd.ErrOrStderr()
+		// 1) segnaposti semplici non forniti
 		nonCompilati := []string{}
-		for _, s := range estraiSegnaposti(p.Body) {
+		for _, s := range estraiSegnaposti(bodyEspanso) {
 			if v, ok := vars[s]; !ok || strings.TrimSpace(v) == "" {
 				nonCompilati = append(nonCompilati, s)
 			}
 		}
 		if len(nonCompilati) > 0 {
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
+			_, _ = fmt.Fprintf(errw,
 				"[pap] segnaposti non compilati: %s\n", strings.Join(nonCompilati, ", "))
+		}
+		// 2) globali rimasti (non presenti nel vault)
+		if g := nomiUnici(reGlobal, compilato); len(g) > 0 {
+			_, _ = fmt.Fprintf(errw,
+				"[pap] segnaposti globali non trovati nel vault: %s\n", strings.Join(g, ", "))
+		}
+		// 3) import: la CLI non li espande (serve il client desktop)
+		if im := nomiUnici(reImport, p.Body); len(im) > 0 {
+			_, _ = fmt.Fprintf(errw,
+				"[pap] import NON espansi dalla CLI (usa il client desktop per compilarli): %s\n", strings.Join(im, ", "))
 		}
 		return nil
 	},
