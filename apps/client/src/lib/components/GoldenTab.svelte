@@ -9,6 +9,7 @@
    * Riferimento blueprint: docs/roadmap/redesign-v08/blueprint-F5.md §3
    */
   import { invoke } from "@tauri-apps/api/core";
+  import { estraiSegnaposti } from "$lib/template";
   import AiutoLink from "$lib/aiuto/AiutoLink.svelte";
   import { onDestroy, onMount } from "svelte";
   import { Play, PlayCircle, Pencil, Trash2, Plus } from "lucide-svelte";
@@ -433,14 +434,33 @@
 
   type SimilarityFn = (typeof SIMILARITY_FN_VALIDE)[number];
 
+  // #422: descrizione di ogni funzione, mostrata sotto il selettore.
+  const SIMILARITY_FN_DESCR: Record<SimilarityFn, string> = {
+    cosine:
+      "Similarità semantica (embeddings locali): tollera riformulazioni. Passa se il punteggio è ≥ soglia.",
+    "llm-judge":
+      "Un secondo modello (giudice) valuta la risposta con un voto 0–1. Passa se ≥ soglia. Richiede un provider giudice all'esecuzione.",
+    "exact-match":
+      "Corrisponde solo se l'output è identico all'atteso (a meno di spazi iniziali/finali). La soglia è ignorata.",
+    regex:
+      "L'output atteso è un'espressione regolare che deve trovare corrispondenza nella risposta. La soglia è ignorata.",
+  };
+
   // Lo stesso modale serve sia per creare sia per modificare: `modalita`
   // sceglie il comando backend, `id` è valorizzato solo in modifica.
+  // #422: inserimento guidato delle variabili. `segnaposti` sono i nomi
+  // dei segnaposti NON globali estratti dal corpo del prompt; `valoriInput`
+  // il valore per ciascuno. `input_vars` (JSON grezzo) resta come fallback
+  // se il body non è caricabile. `bodyStato` guida la UI.
   let modaleEditor = $state<{
     aperto: boolean;
     modalita: "crea" | "modifica";
     id: string | null;
     etichetta: string;
     input_vars: string;
+    segnaposti: string[];
+    valoriInput: Record<string, string>;
+    bodyStato: "caricamento" | "ok" | "errore";
     expected_output: string;
     similarity_fn: SimilarityFn;
     soglia_tolleranza: number;
@@ -452,12 +472,51 @@
     id: null,
     etichetta: "",
     input_vars: "{}",
+    segnaposti: [],
+    valoriInput: {},
+    bodyStato: "caricamento",
     expected_output: "",
     similarity_fn: "cosine",
     soglia_tolleranza: 0.85,
     invio: false,
     errore: "",
   });
+
+  // Carica il corpo del prompt, estrae i segnaposti non globali e inizializza
+  // i valori (in modifica pre-riempie dai valori già salvati).
+  async function caricaSegnaposti(inputVarsIniziali: string): Promise<void> {
+    try {
+      const det = await invoke<{ body: string }>("libreria_dettaglio", {
+        id: promptId,
+      });
+      const nomi = [
+        ...new Set(
+          estraiSegnaposti(det.body)
+            .filter((s) => !s.globale)
+            .map((s) => s.nome),
+        ),
+      ];
+      let iniziali: Record<string, string> = {};
+      try {
+        const parsed: unknown = JSON.parse(inputVarsIniziali || "{}");
+        if (parsed && typeof parsed === "object") {
+          iniziali = parsed as Record<string, string>;
+        }
+      } catch {
+        /* JSON non valido → si parte da vuoto */
+      }
+      const valori: Record<string, string> = {};
+      for (const n of nomi) {
+        valori[n] = typeof iniziali[n] === "string" ? iniziali[n] : "";
+      }
+      modaleEditor.segnaposti = nomi;
+      modaleEditor.valoriInput = valori;
+      modaleEditor.bodyStato = "ok";
+    } catch {
+      // Fallback: se non riusciamo a leggere il prompt, mostriamo il JSON grezzo.
+      modaleEditor.bodyStato = "errore";
+    }
+  }
 
   function apriEditor(): void {
     modaleEditor = {
@@ -466,12 +525,16 @@
       id: null,
       etichetta: "",
       input_vars: "{}",
+      segnaposti: [],
+      valoriInput: {},
+      bodyStato: "caricamento",
       expected_output: "",
       similarity_fn: "cosine",
       soglia_tolleranza: 0.85,
       invio: false,
       errore: "",
     };
+    void caricaSegnaposti("{}");
   }
 
   function apriEditorModifica(g: Golden): void {
@@ -481,12 +544,16 @@
       id: g.id,
       etichetta: g.etichetta,
       input_vars: g.input_vars,
+      segnaposti: [],
+      valoriInput: {},
+      bodyStato: "caricamento",
       expected_output: g.expected_output,
       similarity_fn: g.similarity_fn as SimilarityFn,
       soglia_tolleranza: g.soglia_tolleranza,
       invio: false,
       errore: "",
     };
+    void caricaSegnaposti(g.input_vars);
   }
 
   function chiudiEditor(): void {
@@ -494,15 +561,29 @@
     modaleEditor = { ...modaleEditor, aperto: false };
   }
 
+  // Serializza le variabili di input: dai campi guidati quando il body è
+  // stato letto, altrimenti dal JSON grezzo del fallback.
+  function serializzaInputVars(): string {
+    if (modaleEditor.bodyStato === "ok") {
+      const obj: Record<string, string> = {};
+      for (const n of modaleEditor.segnaposti) {
+        obj[n] = modaleEditor.valoriInput[n] ?? "";
+      }
+      return JSON.stringify(obj);
+    }
+    return modaleEditor.input_vars;
+  }
+
   async function salvaGolden(): Promise<void> {
     modaleEditor = { ...modaleEditor, invio: true, errore: "" };
+    const input_vars = serializzaInputVars();
     try {
       if (modaleEditor.modalita === "modifica" && modaleEditor.id) {
         await invoke("golden_aggiorna", {
           dati: {
             id: modaleEditor.id,
             etichetta: modaleEditor.etichetta.trim(),
-            input_vars: modaleEditor.input_vars,
+            input_vars,
             expected_output: modaleEditor.expected_output,
             similarity_fn: modaleEditor.similarity_fn,
             soglia_tolleranza: modaleEditor.soglia_tolleranza,
@@ -513,7 +594,7 @@
           dati: {
             prompt_id: promptId,
             etichetta: modaleEditor.etichetta.trim(),
-            input_vars: modaleEditor.input_vars,
+            input_vars,
             expected_output: modaleEditor.expected_output,
             similarity_fn: modaleEditor.similarity_fn,
             soglia_tolleranza: modaleEditor.soglia_tolleranza,
@@ -990,17 +1071,48 @@
           autocomplete="off"
         />
       </label>
-      <label class="editor-field" for="editor-input-vars">
-        <span class="editor-label">Variabili di input (JSON)</span>
-        <textarea
-          id="editor-input-vars"
-          class="editor-input editor-textarea"
-          bind:value={modaleEditor.input_vars}
-          placeholder={"{}"}
-          rows={4}
-          spellcheck={false}
-        ></textarea>
-      </label>
+      <div class="editor-field">
+        <span class="editor-label">Variabili di input</span>
+        {#if modaleEditor.bodyStato === "caricamento"}
+          <p class="editor-hint">Lettura dei segnaposti dal prompt…</p>
+        {:else if modaleEditor.bodyStato === "errore"}
+          <p class="editor-hint">
+            Impossibile leggere i segnaposti dal prompt: inserisci le variabili
+            come oggetto JSON <code>{`{"nome": "valore"}`}</code>.
+          </p>
+          <textarea
+            class="editor-input editor-textarea"
+            bind:value={modaleEditor.input_vars}
+            placeholder={"{}"}
+            rows={4}
+            spellcheck={false}
+          ></textarea>
+        {:else if modaleEditor.segnaposti.length === 0}
+          <p class="editor-hint">
+            Questo prompt non ha segnaposti <code>{`{{nome}}`}</code> da
+            compilare: lascia pure vuoto.
+          </p>
+        {:else}
+          <p class="editor-hint">
+            Un valore per ogni segnaposto del prompt (i segnaposti globali sono
+            esclusi, hanno già un valore predefinito).
+          </p>
+          <div class="vars-guidate">
+            {#each modaleEditor.segnaposti as nome (nome)}
+              <label class="var-riga">
+                <code class="var-nome" title={nome}>{`{{${nome}}}`}</code>
+                <input
+                  class="editor-input"
+                  type="text"
+                  bind:value={modaleEditor.valoriInput[nome]}
+                  placeholder="valore per {nome}"
+                  autocomplete="off"
+                />
+              </label>
+            {/each}
+          </div>
+        {/if}
+      </div>
       <label class="editor-field" for="editor-expected-output">
         <span class="editor-label">Output atteso</span>
         <textarea
@@ -1023,6 +1135,7 @@
             <option value={fn}>{fn}</option>
           {/each}
         </select>
+        <p class="editor-hint">{SIMILARITY_FN_DESCR[modaleEditor.similarity_fn]}</p>
       </label>
       <label class="editor-field" for="editor-soglia">
         <span class="editor-label">Soglia tolleranza (0-1, default 0.85)</span>
@@ -1559,5 +1672,35 @@
     margin: 0;
     font-size: var(--fs-sm);
     color: var(--danger);
+  }
+  /* #422: testo di aiuto sotto un campo */
+  .editor-hint {
+    margin: 0;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    line-height: 1.45;
+  }
+  .editor-hint code {
+    font-family: var(--font-mono);
+  }
+  /* #422: griglia dei campi guidati (un valore per segnaposto) */
+  .vars-guidate {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .var-riga {
+    display: grid;
+    grid-template-columns: minmax(80px, 30%) 1fr;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+  .var-nome {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-default);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>
