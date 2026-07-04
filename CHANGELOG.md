@@ -1,5 +1,15 @@
 # Changelog — Prompt a Porter
 
+## v0.8.31 — Rifiniture Test Golden + fix editor dopo ripristino (2026-07-04)
+
+> Tre correzioni nate dai test dal vivo su Test Golden e Cronologia.
+
+### Fix
+
+- **Inserimento guidato delle variabili golden** (#422): nel modale di creazione/modifica di un test golden, il campo "Variabili di input" non è più un JSON grezzo con placeholder `{}` poco chiaro: ora l'app legge il prompt, estrae i suoi segnaposti `{{nome}}` (esclusi i globali) e mostra **un campo per ciascuno**. Se il prompt non ha segnaposti lo indica; se il contenuto non è leggibile ricade sulla vecchia casella JSON. Aggiunta anche una breve **descrizione** sotto il selettore della funzione di similarità.
+- **Selettore del modello a tendina** (#423): eseguendo un golden, per i provider pubblici (Anthropic, OpenAI, Google/Gemini) il campo "Modello" è ora un **menu a tendina** coi modelli noti; per gli altri provider (Ollama, endpoint compatibili) resta un campo di testo libero. Il modello predefinito configurato nelle impostazioni pre-seleziona la voce.
+- **Editor aggiornato dopo un ripristino** (#425): ripristinando una versione precedente dalla Cronologia, tornando al tab Editor si vedeva ancora il testo vecchio. Ora l'editor mostra subito il contenuto della versione ripristinata.
+
 ## v0.8.30 — Test Golden completo + connettore varianti solo in A-Z (2026-07-04)
 
 > La funzione Test Golden diventa pienamente usabile dall'interfaccia (esecuzione singola con dettaglio, modifica, giudice per llm-judge, costo stimato), e il connettore delle varianti compare solo con l'ordinamento alfabetico.
