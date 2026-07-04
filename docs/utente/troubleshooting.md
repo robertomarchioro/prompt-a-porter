@@ -26,6 +26,20 @@ sudo apt install libfuse2
 
 In alternativa, usa il pacchetto `.deb`.
 
+### Linux (XFCE / Xubuntu): l'icona nel tray non appare
+
+Su XFCE — quindi anche **Xubuntu** — l'area di notifica di default ("Area di notifica (legacy)") mostra solo icone vecchio stile *xembed* e **ignora** le icone moderne *StatusNotifier/AppIndicator* che usa Prompt a Porter. L'app pubblica correttamente l'icona, ma manca chi la mostra nel pannello.
+
+Aggiungi al pannello il plugin **Status Notifier**:
+
+```bash
+sudo apt install xfce4-statusnotifier-plugin
+```
+
+Poi tasto destro sul pannello → **Pannello → Aggiungi nuovi elementi…** → aggiungi **"Status Notifier Plugin"**. Riavvia l'app: l'icona compare accanto all'orologio.
+
+Su GNOME serve un'estensione tipo *AppIndicator/KStatusNotifier Support*; su KDE Plasma il tray funziona nativamente. (La libreria di sistema `libayatana-appindicator3-1` è comunque richiesta: il pacchetto `.deb` la installa come dipendenza.)
+
 ### "Vault non trovato" / dialog vault vuoto
 
 L'app cerca il vault nei path di default (vedi [`getting-started.md`](./getting-started.md) — sezione Onboarding). Se il file non esiste, l'onboarding si avvia e ti guida nella creazione.
