@@ -1,5 +1,20 @@
 # Changelog — Prompt a Porter
 
+## v0.8.30 — Test Golden completo + connettore varianti solo in A-Z (2026-07-04)
+
+> La funzione Test Golden diventa pienamente usabile dall'interfaccia (esecuzione singola con dettaglio, modifica, giudice per llm-judge, costo stimato), e il connettore delle varianti compare solo con l'ordinamento alfabetico.
+
+### Feature
+
+- **Test Golden — esecuzione singola con dettaglio** (#418): il tasto "Esegui" su un singolo golden ora apre un pannello che sceglie provider/modello, lancia il test e mostra il **dettaglio del risultato**: esito Passato/Fallito, **punteggio di similarità** con barra e soglia, provider · modello · latenza · token, **output ricevuto** a confronto con quello atteso, ed eventuali errori del provider. Un badge di ultimo esito compare accanto a ogni golden.
+- **Test Golden — modifica** (#419): ora è possibile **modificare** un golden esistente (prima si poteva solo creare o eliminare).
+- **Test Golden — giudice per llm-judge** (#420): i golden che usano la valutazione `llm-judge` mostrano i selettori del **provider giudice** (sia in esecuzione singola sia in batch), così vengono eseguiti correttamente invece di dare errore.
+- **Test Golden — costo stimato** (#421): ogni esecuzione mostra una **stima del costo** (`~$…`) basata sui token; prezzi indicativi per Anthropic/OpenAI/Gemini, gratis per i modelli locali Ollama.
+
+### Fix
+
+- **Connettore varianti solo con ordinamento "A-Z"** (#417): il rientro e il connettore **↳** delle varianti ora compaiono solo con l'ordinamento alfabetico, dove padre e variante tendono a stare vicini; con gli altri criteri (Recenti/Popolari/Migliori) la lista resta piatta.
+
 ## v0.8.29 — Lista: voto medio in "Migliori" + connettore varianti riparato (2026-06-30)
 
 > Due interventi sulla colonna elenco prompt: l'ordinamento "Migliori" ora mostra il voto, e il connettore delle varianti torna a comparire.
