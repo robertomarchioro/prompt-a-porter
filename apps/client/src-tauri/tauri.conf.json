@@ -47,6 +47,8 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "licenseFile": "../../../LICENSE",
+    "category": "Utility",
     "windows": {
       "nsis": {
         "installMode": "currentUser",
@@ -56,7 +58,7 @@
     },
     "linux": {
       "deb": {
-        "depends": ["libayatana-appindicator3-1"]
+        "depends": ["libayatana-appindicator3-1", "libc6"]
       }
     },
     "createUpdaterArtifacts": true
