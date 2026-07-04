@@ -442,7 +442,9 @@ Richiede WebView2 runtime (incluso in Windows 11; su Windows 10 scaricabile [da 
 
 L'installer MSI e' stato rimosso di proposito (WiX/MSI installa in `Program Files` con UAC, contro la filosofia local-first single-user di PaP).
 
-> **Nota:** i target macOS / Linux sono temporaneamente disabilitati nella build matrix (in corso di riabilitazione).
+**Linux:** disponibili anche `.deb` e `.AppImage` (x86_64). L'AppImage riceve gli auto-update.
+
+> **Nota:** il target macOS resta temporaneamente disabilitato (richiede un certificato Apple Developer per la notarization).
 '@
 $publishedNotes = $notesTemplate.Replace('__TAG__', $Tag).Replace('__REPO__', $Repo)
 
@@ -530,7 +532,11 @@ if ($doUpdaterReSign) {
                 $platform.signature = $newSigContent[$fname].Trim()
                 Write-Host "  latest.json platforms.$($prop.Name) -> nuova signature per $fname"
             } else {
-                Write-Warning "  latest.json platforms.$($prop.Name) -> url '$fname' non in target ri-firmati, lascio signature stale"
+                # Atteso per le piattaforme non-Windows (Linux .deb/.AppImage,
+                # eventuale macOS): non le ri-firmiamo perché signtool non le
+                # tocca, quindi la firma Ed25519 della CI resta VALIDA. Va
+                # lasciata invariata, non è un problema.
+                Write-Host "  latest.json platforms.$($prop.Name) -> '$fname' non ri-firmato (piattaforma non-Windows): firma CI invariata (valida, binario non modificato)."
             }
         }
         $latest.pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
