@@ -56,11 +56,6 @@ pub struct Issue {
 
 // ─────────── Regex statici (compile-once) ───────────
 
-fn re_segnaposto_doppio() -> &'static Regex {
-    static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| Regex::new(r"\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}").unwrap())
-}
-
 /// Match per segnaposto MALFORMATO `{nome}` (single brace), escludendo
 /// quelli ben formati `{{nome}}`. Il regex usa look-around emulato:
 /// match `{nome}` solo se NON preceduto e seguito da `{`/`}`.
@@ -78,6 +73,24 @@ fn re_segnaposto_singolo() -> &'static Regex {
 fn re_segnaposto_caratteri_speciali() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| Regex::new(r"\{\{\s*([^}]*?)\s*\}\}").unwrap())
+}
+
+/// Segnaposto ben formato `{{nome}}` **oppure** globale `{{global nome}}`
+/// (issue #159): entrambe le forme sono valide e non devono far scattare
+/// PH003.
+fn re_segnaposto_doppio_o_globale() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r"\{\{\s*(?:global\s+)?[A-Za-z_][A-Za-z0-9_]*\s*\}\}").unwrap()
+    })
+}
+
+/// Statement di import `{{import "..."}}` (con eventuali modificatori
+/// `with k=v` / `version=N`, M4). È sintassi valida gestita dalle regole
+/// IMP*, non un nome-segnaposto con caratteri illegali → escluso da PH003.
+fn re_segnaposto_import() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| Regex::new(r#"\{\{\s*import\s"#).unwrap())
 }
 
 fn re_email() -> &'static Regex {
@@ -178,11 +191,17 @@ fn regola_ph001_segnaposti_malformati(body: &str, out: &mut Vec<Issue>) {
 }
 
 fn regola_ph003_caratteri_speciali(body: &str, out: &mut Vec<Issue>) {
-    let valido = re_segnaposto_doppio();
+    let valido = re_segnaposto_doppio_o_globale();
+    let import = re_segnaposto_import();
     for cap in re_segnaposto_caratteri_speciali().captures_iter(body) {
         let intero = cap.get(0).map(|m| m.as_str()).unwrap_or("");
-        // Skip i ben formati (matchano il regex valido).
+        // Skip le forme valide: `{{nome}}`, `{{global nome}}`.
         if valido.is_match(intero) {
+            continue;
+        }
+        // Skip gli import `{{import "..."}}` (with/version inclusi): sintassi
+        // valida gestita dalle regole IMP*, non un nome con caratteri illegali.
+        if import.is_match(intero) {
             continue;
         }
         let nome = cap.get(1).map(|m| m.as_str()).unwrap_or("");
@@ -818,6 +837,33 @@ mod test {
     #[test]
     fn ph003_caratteri_speciali_nel_nome() {
         let body = "Ciao {{nome con spazi}}, sufficientemente lungo per evitare LEN002.";
+        let issues = analizza(body);
+        assert!(ha_codice(&issues, "PH003"));
+    }
+
+    #[test]
+    fn ph003_no_falso_positivo_su_global_e_import() {
+        // Le sintassi valide {{global nome}} e {{import "..."}} (con
+        // with/version) NON devono far scattare PH003 (falso positivo storico).
+        for body in [
+            "Ciao {{global autore}}, sufficientemente lungo per evitare LEN002.",
+            "Testo {{ global  autore }} con spazi extra, lungo per evitare LEN002.",
+            "Pre {{import \"intro/base\"}} post, sufficientemente lungo per LEN002.",
+            "Pre {{import \"x\" with tono=formale}} post, lungo per evitare LEN002.",
+            "Pre {{import \"x\" version=3}} post, sufficientemente lungo per LEN002.",
+        ] {
+            let issues = analizza(body);
+            assert!(
+                !ha_codice(&issues, "PH003"),
+                "PH003 falso positivo su: {body}"
+            );
+        }
+    }
+
+    #[test]
+    fn ph003_scatta_ancora_su_global_malformato() {
+        // Un nome globale con caratteri illegali resta un errore legittimo.
+        let body = "Ciao {{global nome-con-trattino}}, lungo per evitare LEN002.";
         let issues = analizza(body);
         assert!(ha_codice(&issues, "PH003"));
     }
