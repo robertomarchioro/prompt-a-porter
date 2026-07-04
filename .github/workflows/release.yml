@@ -14,17 +14,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # NOTE: per semplificare i prossimi passaggi (debug v0.8.x) il
-          # workflow è temporaneamente ridotto alla sola **versione
-          # portable Windows**. Gli altri target sono commentati in attesa
-          # di essere riabilitati quando si rigenera il pacchetto multi-OS.
+          # NOTE: target Windows (NSIS + portable) e Linux (deb + AppImage)
+          # attivi. macOS resta commentato (richiede Apple Developer cert
+          # per notarization, non ancora disponibile).
           #
           # - platform: macos-14
           #   args: --target aarch64-apple-darwin
           #   rust-target: aarch64-apple-darwin
-          # - platform: ubuntu-22.04
-          #   args: ""
-          #   rust-target: x86_64-unknown-linux-gnu
+          - platform: ubuntu-22.04
+            # Linux: deb + AppImage (l'AppImage alimenta anche l'updater).
+            # rpm escluso di proposito: `targets: "all"` in tauri.conf.json
+            # lo includerebbe, ma richiede `rpmbuild` non installato sul runner.
+            args: "--bundles deb,appimage"
+            rust-target: x86_64-unknown-linux-gnu
           - platform: windows-latest
             # Bundle ristretto a NSIS (`--bundles nsis`): l'MSI è stato
             # rimosso di proposito perché WiX/MSI installa per-machine in
@@ -116,7 +118,7 @@ jobs:
             >
             > Vedi `docs/contribuire/release-signing-workflow.md`.
 
-            **Versione portable Windows** (unico artifact in questa release):
+            **Versione portable Windows:**
             il file `Prompt-a-Porter-portable-windows-x64-${{ github.ref_name }}.zip`
             contiene l'eseguibile standalone, senza installer. Estrai e lancia
             `Prompt a Porter.exe`. Richiede WebView2 runtime (incluso in
@@ -136,8 +138,11 @@ jobs:
             `Program Files` ed esige elevazione, contro la filosofia
             local-first single-user di PaP.
 
-            > **Nota:** i target macOS / Linux sono temporaneamente
-            > disabilitati nella build matrix (in corso di riabilitazione).
+            **Linux:** la release include anche i pacchetti `.deb` e
+            `.AppImage` (x86_64). L'AppImage supporta l'auto-update.
+
+            > **Nota:** il target macOS resta temporaneamente disabilitato
+            > (richiede un certificato Apple Developer per la notarization).
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
