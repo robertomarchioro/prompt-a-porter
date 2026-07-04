@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 use tauri::State;
 
-use crate::embeddings::EmbeddingsState;
+use crate::embeddings::{session_caricata, EmbeddingsState};
 use crate::errore::PapErrore;
 use crate::provider_ai::{AIProvider, OllamaProvider};
 use crate::similarity;
@@ -419,6 +419,29 @@ pub(crate) fn esegui_pure_con_ctx(
     let body = carica_prompt_body(conn, &golden.prompt_id)?;
     let prompt_compilato = compila_per_golden(&body, &golden.input_vars)?;
     let prompt_version_id = current_version_id(conn, &golden.prompt_id)?;
+
+    // Pre-check #435: se il golden usa cosine, la Session embeddings deve
+    // essere già caricata. Meglio fermarsi qui che far pagare al provider
+    // e scoprire il problema solo nella fase di similarità.
+    if golden.similarity_fn == "cosine" {
+        match rt {
+            None => {
+                return Err(PapErrore::Generico(
+                    "La similarità cosine richiede il modello embeddings inizializzato: \
+                     aprilo in Impostazioni → Ricerca & Embeddings prima di eseguire."
+                        .into(),
+                ));
+            }
+            Some(state) if !session_caricata(state) => {
+                return Err(PapErrore::Generico(
+                    "La similarità cosine richiede il modello embeddings inizializzato: \
+                     aprilo in Impostazioni → Ricerca & Embeddings prima di eseguire."
+                        .into(),
+                ));
+            }
+            _ => {}
+        }
+    }
 
     let ran_at: String = conn.query_row("SELECT datetime('now')", [], |r| r.get(0))?;
     let id = genera_id_con_prefix("obs")?;
@@ -1230,7 +1253,9 @@ mod test {
     #[test]
     fn esegui_provider_errore_persiste_observation_con_errore() {
         let (conn, _) = db_test_con_versione();
-        let g = nuovo_default("prm-1", "lab");
+        // Usa exact-match così il test non è bloccato dal pre-check cosine.
+        let mut g = nuovo_default("prm-1", "lab");
+        g.similarity_fn = "exact-match".into();
         let golden_id = crea_pure(&conn, &g).unwrap();
 
         let provider = MockProvider {
@@ -1594,5 +1619,144 @@ mod test {
         assert!(actions.contains(&"golden.creato".to_string()));
         assert!(actions.contains(&"golden.aggiornato".to_string()));
         assert!(actions.contains(&"golden.eliminato".to_string()));
+    }
+
+    // ─────────── Test pre-check cosine (#435) ───────────
+
+    /// Un golden cosine con rt = None deve fallire PRIMA di chiamare il
+    /// provider (il mock non deve essere invocato).
+    #[test]
+    fn esegui_cosine_rt_none_fallisce_senza_chiamare_provider() {
+        let (conn, _) = db_test_con_versione();
+        let mut g = nuovo_default("prm-1", "pre-check-cosine");
+        g.similarity_fn = "cosine".into();
+        let golden_id = crea_pure(&conn, &g).unwrap();
+
+        // Provider che traccia se `generate` viene chiamato.
+        use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+        struct SpyProvider {
+            chiamato: Arc<AtomicBool>,
+        }
+        impl crate::provider_ai::AIProvider for SpyProvider {
+            fn name(&self) -> &'static str {
+                "spy"
+            }
+            fn generate(
+                &self,
+                _prompt: &str,
+                _model: &str,
+            ) -> Result<crate::provider_ai::GenerateOutput, PapErrore> {
+                self.chiamato.store(true, Ordering::SeqCst);
+                Ok(crate::provider_ai::GenerateOutput {
+                    content: "x".into(),
+                    latency_ms: 0,
+                    tokens_used: None,
+                    provider: "spy",
+                    model: "m".into(),
+                })
+            }
+        }
+
+        let chiamato = Arc::new(AtomicBool::new(false));
+        let provider = SpyProvider { chiamato: Arc::clone(&chiamato) };
+
+        // rt = None → deve fallire con messaggio del pre-check.
+        let r = esegui_pure_con_provider(
+            &conn,
+            None, // rt assente
+            &golden_id,
+            &provider,
+            "llama3.2",
+            "usr-locale",
+        );
+
+        assert!(r.is_err(), "Atteso errore per cosine senza embeddings");
+        let msg = r.unwrap_err().to_string();
+        assert!(
+            msg.contains("cosine") || msg.contains("embeddings"),
+            "Errore deve menzionare cosine/embeddings, got: {msg}"
+        );
+        assert!(
+            !chiamato.load(Ordering::SeqCst),
+            "Il provider NON deve essere chiamato prima del pre-check"
+        );
+    }
+
+    /// Un golden cosine con rt = Some(state) ma sessione non caricata
+    /// deve fallire allo stesso modo (senza invocare il provider).
+    #[test]
+    fn esegui_cosine_session_non_caricata_fallisce_senza_provider() {
+        let (conn, _) = db_test_con_versione();
+        let mut g = nuovo_default("prm-1", "pre-check-session");
+        g.similarity_fn = "cosine".into();
+        let golden_id = crea_pure(&conn, &g).unwrap();
+
+        use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+        struct SpyProvider {
+            chiamato: Arc<AtomicBool>,
+        }
+        impl crate::provider_ai::AIProvider for SpyProvider {
+            fn name(&self) -> &'static str { "spy" }
+            fn generate(&self, _prompt: &str, _model: &str)
+                -> Result<crate::provider_ai::GenerateOutput, PapErrore>
+            {
+                self.chiamato.store(true, Ordering::SeqCst);
+                Ok(crate::provider_ai::GenerateOutput {
+                    content: "x".into(), latency_ms: 0,
+                    tokens_used: None, provider: "spy", model: "m".into(),
+                })
+            }
+        }
+
+        let chiamato = Arc::new(AtomicBool::new(false));
+        let provider = SpyProvider { chiamato: Arc::clone(&chiamato) };
+
+        // EmbeddingsState senza Session caricata (new() = vuoto).
+        let rt = crate::embeddings::EmbeddingsState::new();
+
+        let r = esegui_pure_con_ctx(
+            &conn,
+            Some(&rt), // rt presente ma session non caricata
+            &golden_id,
+            &provider,
+            "llama3.2",
+            None,
+            None,
+            "usr-locale",
+        );
+
+        assert!(r.is_err(), "Atteso errore per session non caricata");
+        let msg = r.unwrap_err().to_string();
+        assert!(
+            msg.contains("cosine") || msg.contains("embeddings"),
+            "Errore deve menzionare cosine/embeddings, got: {msg}"
+        );
+        assert!(
+            !chiamato.load(Ordering::SeqCst),
+            "Il provider NON deve essere chiamato prima del pre-check"
+        );
+    }
+
+    /// Un golden exact-match con rt = None deve proseguire normalmente
+    /// (il pre-check è solo per cosine).
+    #[test]
+    fn esegui_exact_match_rt_none_non_e_bloccato() {
+        let (conn, _) = db_test_con_versione();
+        let mut g = nuovo_default("prm-1", "exact-no-block");
+        g.expected_output = "ciao".into();
+        g.similarity_fn = "exact-match".into();
+        let golden_id = crea_pure(&conn, &g).unwrap();
+
+        let provider = MockProvider {
+            nome: "ollama",
+            risposta: "ciao".into(),
+            errore: None,
+            latency: 10,
+        };
+        // rt = None, similarity_fn = "exact-match" → deve passare.
+        let obs = esegui_pure_con_provider(
+            &conn, None, &golden_id, &provider, "llama3.2", "usr-locale"
+        ).unwrap();
+        assert!(obs.passed);
     }
 }

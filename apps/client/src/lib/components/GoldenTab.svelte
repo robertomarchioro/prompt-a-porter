@@ -268,6 +268,25 @@
     ) {
       return;
     }
+    // #435: pre-check cosine — se almeno un golden usa cosine, verifica
+    // subito che il modello embeddings sia caricato.
+    const haGoldenCosine = goldens.some((g) => g.similarity_fn === "cosine");
+    if (haGoldenCosine) {
+      try {
+        const embSt = await invoke<{ stato: string }>("embeddings_status");
+        if (embSt.stato !== "caricato") {
+          modaleBatch.errore =
+            "La similarità cosine richiede il modello embeddings inizializzato: " +
+            "aprilo in Impostazioni → Ricerca & Embeddings prima di eseguire.";
+          return;
+        }
+      } catch {
+        modaleBatch.errore =
+          "Impossibile verificare lo stato del modello embeddings. " +
+          "Controlla Impostazioni → Ricerca & Embeddings.";
+        return;
+      }
+    }
     ultimoProviderScelto = modaleBatch.providerScelto;
     ultimoModelScelto = modaleBatch.modelScelto;
     const risultati: RisultatoBatch[] = [];
@@ -399,6 +418,24 @@
     ) {
       return;
     }
+    // #435: pre-check cosine — verifica subito se il modello embeddings è
+    // pronto, prima di chiamare il provider (che costa tempo/denaro).
+    if (g.similarity_fn === "cosine") {
+      try {
+        const embSt = await invoke<{ stato: string }>("embeddings_status");
+        if (embSt.stato !== "caricato") {
+          modaleRun.errore =
+            "La similarità cosine richiede il modello embeddings inizializzato: " +
+            "aprilo in Impostazioni → Ricerca & Embeddings prima di eseguire.";
+          return;
+        }
+      } catch {
+        modaleRun.errore =
+          "Impossibile verificare lo stato del modello embeddings. " +
+          "Controlla Impostazioni → Ricerca & Embeddings.";
+        return;
+      }
+    }
     ultimoProviderScelto = modaleRun.providerScelto;
     ultimoModelScelto = modaleRun.modelScelto;
     modaleRun.errore = "";
@@ -456,6 +493,8 @@
   // dei segnaposti NON globali estratti dal corpo del prompt; `valoriInput`
   // il valore per ciascuno. `input_vars` (JSON grezzo) resta come fallback
   // se il body non è caricabile. `bodyStato` guida la UI.
+  // #436: `tentatoInvio` traccia il primo tentativo di salvataggio;
+  // abilita la visualizzazione dei campi obbligatori mancanti.
   let modaleEditor = $state<{
     aperto: boolean;
     modalita: "crea" | "modifica";
@@ -469,6 +508,7 @@
     similarity_fn: SimilarityFn;
     soglia_tolleranza: number;
     invio: boolean;
+    tentatoInvio: boolean;
     errore: string;
   }>({
     aperto: false,
@@ -483,6 +523,7 @@
     similarity_fn: "cosine",
     soglia_tolleranza: 0.85,
     invio: false,
+    tentatoInvio: false,
     errore: "",
   });
 
@@ -536,6 +577,7 @@
       similarity_fn: "cosine",
       soglia_tolleranza: 0.85,
       invio: false,
+      tentatoInvio: false,
       errore: "",
     };
     void caricaSegnaposti("{}");
@@ -555,6 +597,7 @@
       similarity_fn: g.similarity_fn as SimilarityFn,
       soglia_tolleranza: g.soglia_tolleranza,
       invio: false,
+      tentatoInvio: false,
       errore: "",
     };
     void caricaSegnaposti(g.input_vars);
@@ -579,6 +622,12 @@
   }
 
   async function salvaGolden(): Promise<void> {
+    // #436: segna che l'utente ha tentato di salvare; i campi obbligatori
+    // vuoti mostreranno il bordo rosso.
+    modaleEditor = { ...modaleEditor, tentatoInvio: true };
+    if (!modaleEditor.etichetta.trim() || !modaleEditor.expected_output.trim()) {
+      return;
+    }
     modaleEditor = { ...modaleEditor, invio: true, errore: "" };
     const input_vars = serializzaInputVars();
     try {
@@ -1107,10 +1156,14 @@
         <input
           id="editor-etichetta"
           class="editor-input"
+          class:campo-errore={modaleEditor.tentatoInvio && !modaleEditor.etichetta.trim()}
           type="text"
           bind:value={modaleEditor.etichetta}
           placeholder="Es. risposta breve, caso limite vuoto..."
           autocomplete="off"
+          aria-invalid={modaleEditor.tentatoInvio && !modaleEditor.etichetta.trim()
+            ? "true"
+            : undefined}
         />
       </label>
       <div class="editor-field">
@@ -1160,10 +1213,16 @@
         <textarea
           id="editor-expected-output"
           class="editor-input editor-textarea"
+          class:campo-errore={modaleEditor.tentatoInvio &&
+            !modaleEditor.expected_output.trim()}
           bind:value={modaleEditor.expected_output}
           placeholder="Testo atteso, regex o prompt giudice..."
           rows={4}
           spellcheck={false}
+          aria-invalid={modaleEditor.tentatoInvio &&
+          !modaleEditor.expected_output.trim()
+            ? "true"
+            : undefined}
         ></textarea>
       </label>
       <label class="editor-field" for="editor-similarity-fn">
@@ -1714,6 +1773,10 @@
     margin: 0;
     font-size: var(--fs-sm);
     color: var(--danger);
+  }
+  /* #436: campo obbligatorio mancante dopo tentativo di salvataggio */
+  .campo-errore {
+    border-color: var(--danger);
   }
   /* #422: testo di aiuto sotto un campo */
   .editor-hint {
