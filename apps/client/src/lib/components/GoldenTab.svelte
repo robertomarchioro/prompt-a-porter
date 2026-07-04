@@ -10,6 +10,10 @@
    */
   import { invoke } from "@tauri-apps/api/core";
   import { estraiSegnaposti } from "$lib/template";
+  import {
+    providerHaModelliNoti,
+    opzioniModello,
+  } from "$lib/modelli-provider";
   import AiutoLink from "$lib/aiuto/AiutoLink.svelte";
   import { onDestroy, onMount } from "svelte";
   import { Play, PlayCircle, Pencil, Trash2, Plus } from "lucide-svelte";
@@ -771,12 +775,20 @@
         </label>
         <label class="batch-field">
           <span class="batch-label">Modello</span>
-          <input
-            class="batch-input"
-            type="text"
-            bind:value={modaleBatch.modelScelto}
-            placeholder="Es. claude-sonnet-4-6, gpt-4o, llama3.2…"
-          />
+          {#if providerHaModelliNoti(modaleBatch.providerScelto)}
+            <select class="batch-input" bind:value={modaleBatch.modelScelto}>
+              {#each opzioniModello(modaleBatch.providerScelto, modaleBatch.modelScelto) as m (m)}
+                <option value={m}>{m}</option>
+              {/each}
+            </select>
+          {:else}
+            <input
+              class="batch-input"
+              type="text"
+              bind:value={modaleBatch.modelScelto}
+              placeholder="Es. llama3.2, mistral… (nome esatto del modello)"
+            />
+          {/if}
         </label>
         {#if haGoldenGiudice}
           <div class="run-giudice">
@@ -798,12 +810,23 @@
             </label>
             <label class="batch-field">
               <span class="batch-label">Modello giudice</span>
-              <input
-                class="batch-input"
-                type="text"
-                bind:value={modaleBatch.judgeModelScelto}
-                placeholder="Es. claude-sonnet-4-6, gpt-4o…"
-              />
+              {#if providerHaModelliNoti(modaleBatch.judgeProviderScelto)}
+                <select
+                  class="batch-input"
+                  bind:value={modaleBatch.judgeModelScelto}
+                >
+                  {#each opzioniModello(modaleBatch.judgeProviderScelto, modaleBatch.judgeModelScelto) as m (m)}
+                    <option value={m}>{m}</option>
+                  {/each}
+                </select>
+              {:else}
+                <input
+                  class="batch-input"
+                  type="text"
+                  bind:value={modaleBatch.judgeModelScelto}
+                  placeholder="Nome esatto del modello"
+                />
+              {/if}
             </label>
           </div>
         {/if}
@@ -904,12 +927,20 @@
         </label>
         <label class="batch-field">
           <span class="batch-label">Modello</span>
-          <input
-            class="batch-input"
-            type="text"
-            bind:value={modaleRun.modelScelto}
-            placeholder="Es. claude-sonnet-4-6, gpt-4o, llama3.2…"
-          />
+          {#if providerHaModelliNoti(modaleRun.providerScelto)}
+            <select class="batch-input" bind:value={modaleRun.modelScelto}>
+              {#each opzioniModello(modaleRun.providerScelto, modaleRun.modelScelto) as m (m)}
+                <option value={m}>{m}</option>
+              {/each}
+            </select>
+          {:else}
+            <input
+              class="batch-input"
+              type="text"
+              bind:value={modaleRun.modelScelto}
+              placeholder="Es. llama3.2, mistral… (nome esatto del modello)"
+            />
+          {/if}
         </label>
         {#if modaleRun.golden?.similarity_fn === "llm-judge"}
           <div class="run-giudice">
@@ -931,12 +962,23 @@
             </label>
             <label class="batch-field">
               <span class="batch-label">Modello giudice</span>
-              <input
-                class="batch-input"
-                type="text"
-                bind:value={modaleRun.judgeModelScelto}
-                placeholder="Es. claude-sonnet-4-6, gpt-4o…"
-              />
+              {#if providerHaModelliNoti(modaleRun.judgeProviderScelto)}
+                <select
+                  class="batch-input"
+                  bind:value={modaleRun.judgeModelScelto}
+                >
+                  {#each opzioniModello(modaleRun.judgeProviderScelto, modaleRun.judgeModelScelto) as m (m)}
+                    <option value={m}>{m}</option>
+                  {/each}
+                </select>
+              {:else}
+                <input
+                  class="batch-input"
+                  type="text"
+                  bind:value={modaleRun.judgeModelScelto}
+                  placeholder="Nome esatto del modello"
+                />
+              {/if}
             </label>
           </div>
         {/if}
