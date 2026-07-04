@@ -445,3 +445,50 @@ func TestFormatPrompt(t *testing.T) {
 		t.Errorf("table minimo non dovrebbe avere campi opzionali: %s", out)
 	}
 }
+
+// ─── #render globali + import (fix v0.8.x) ───
+
+func TestEspandiGlobali(t *testing.T) {
+	globals := map[string]string{"autore": "Mario Rossi", "vuoto": "  "}
+	body := "Di {{global autore}}. Manca {{global ignoto}}. Vuoto {{global vuoto}}. Var {{nome}}."
+	got := espandiGlobali(body, globals)
+	want := "Di Mario Rossi. Manca {{global ignoto}}. Vuoto {{global vuoto}}. Var {{nome}}."
+	if got != want {
+		t.Errorf("espandiGlobali:\n got=%q\nwant=%q", got, want)
+	}
+}
+
+func TestCaricaGlobali(t *testing.T) {
+	db := dbTest(t)
+	// La tabella non è nello schema base: la creiamo qui (come V015).
+	if _, err := db.Exec(`CREATE TABLE GlobalPlaceholders (Name TEXT PRIMARY KEY, Value TEXT NOT NULL, UpdatedAt TEXT NOT NULL DEFAULT (datetime('now')))`); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO GlobalPlaceholders (Name, Value) VALUES ('autore','Anna'),('team','PaP')`); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	g := caricaGlobali(db)
+	if g["autore"] != "Anna" || g["team"] != "PaP" || len(g) != 2 {
+		t.Errorf("caricaGlobali = %v", g)
+	}
+}
+
+func TestCaricaGlobaliTabellaAssente(t *testing.T) {
+	db := dbTest(t) // schema base senza GlobalPlaceholders
+	g := caricaGlobali(db)
+	if len(g) != 0 {
+		t.Errorf("vault senza tabella globali deve dare mappa vuota, got %v", g)
+	}
+}
+
+func TestNomiUnici(t *testing.T) {
+	body := `Import {{import "intro/base"}} e {{import "intro/base"}} e {{import "altro" with k=v}}. Global {{global x}}.`
+	imp := nomiUnici(reImport, body)
+	if len(imp) != 2 || imp[0] != "intro/base" || imp[1] != "altro" {
+		t.Errorf("import paths = %v", imp)
+	}
+	glob := nomiUnici(reGlobal, body)
+	if len(glob) != 1 || glob[0] != "x" {
+		t.Errorf("global names = %v", glob)
+	}
+}

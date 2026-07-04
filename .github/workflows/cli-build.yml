@@ -94,7 +94,10 @@ jobs:
           CGO_ENABLED: "0"
         run: |
           mkdir -p dist
-          go build -ldflags="-s -w" -o dist/pap-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} .
+          # Versione allineata all'app (fonte: apps/client/package.json).
+          VER=$(grep -m1 '"version"' ../client/package.json | sed -E 's/.*"version"[^"]*"([^"]+)".*/\1/')
+          echo "cliVersion = ${VER:-dev}"
+          go build -ldflags="-s -w -X main.cliVersion=${VER:-dev}" -o dist/pap-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} .
 
       - name: Verifica artefatto
         run: |
