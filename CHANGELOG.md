@@ -1,5 +1,17 @@
 # Changelog — Prompt a Porter
 
+## v0.8.33 — Triage: fix Test Golden, export audit e pacchetto .deb Linux (2026-07-04)
+
+> Ciclo di triage: 4 issue segnalate durante i primi test dal vivo su Linux, risolte in 3 gruppi, più le rifiniture per la tray su XFCE.
+
+### Fix
+
+- **Test Golden: controllo embeddings immediato per "cosine"** (#435): eseguendo un golden con similarità `cosine`, l'app verifica **subito** che il modello embeddings sia inizializzato e — se non lo è — segnala l'errore prima di chiamare (e pagare) il provider AI, invece di scoprirlo alla fine.
+- **Test Golden: campi obbligatori evidenziati** (#436): nel modale di creazione/modifica, se salvi con **Etichetta** o **Output atteso** vuoti il campo mancante viene ora evidenziato con bordo rosso, così è chiaro cosa manca.
+- **Audit Log AI: esportazione CSV** (#438): risolto l'errore *"invalid type: null"* che compariva cliccando **Esporta CSV**.
+- **Pacchetto `.deb` Linux: errori lintian** (#437): corretti il contatto Maintainer (con email), la dipendenza da `libc6`, il file di copyright (dalla LICENSE) e la categoria della voce nel menu applicazioni. Restano fuori scope changelog/man page/Section (limiti del bundler Tauri).
+- **Linux/XFCE: guida per l'icona nel tray** (#439): documentato in troubleshooting che su XFCE/Xubuntu serve il plugin *Status Notifier* del pannello perché l'icona compaia; il `.deb` dichiara ora la dipendenza `libayatana-appindicator3-1`.
+
 ## v0.8.32 — Build Linux riabilitata + fix CLI e linter (2026-07-04)
 
 > Torna la build Linux nella release, e arrivano correzioni a linter e CLI.
