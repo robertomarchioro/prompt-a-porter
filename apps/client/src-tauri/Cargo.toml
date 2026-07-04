@@ -2,7 +2,7 @@
 name = "pap"
 version = "0.8.32"
 description = "Prompt a Porter — Libreria locale per prompt AI"
-authors = ["Roberto Marchioro"]
+authors = ["Roberto Marchioro <robertomarchioro@icloud.com>"]
 license = "AGPL-3.0-only"
 edition = "2021"
 rust-version = "1.77"
