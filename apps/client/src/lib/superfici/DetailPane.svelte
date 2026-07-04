@@ -224,6 +224,24 @@
     }, 50);
   }
 
+  // #425: dopo un rollback dalla Cronologia il DB cambia ma `body` restava
+  // quello caricato all'apertura del prompt (caricaDettaglio scatta solo al
+  // cambio di promptId). Se il prompt ripristinato è quello aperto, ricarica
+  // il dettaglio così l'editor mostra subito il contenuto ripristinato.
+  function onPromptRipristinato(e: Event): void {
+    const detail = (e as CustomEvent<{ promptId: string }>).detail;
+    if (!detail || detail.promptId !== promptId) return;
+    // Il contenuto sta per essere sostituito: annulla un autosave pendente.
+    if (timerAutosave) {
+      clearTimeout(timerAutosave);
+      timerAutosave = undefined;
+    }
+    void (async () => {
+      await caricaDettaglio(promptId);
+      dirty = false;
+    })();
+  }
+
   onMount(async () => {
     try {
       cartelleCache = await invoke<Cartella[]>("folder_lista");
@@ -231,12 +249,14 @@
       /* ignore */
     }
     window.addEventListener("pap:goto-line", onGotoLine);
+    window.addEventListener("pap:prompt-ripristinato", onPromptRipristinato);
     window.addEventListener("beforeunload", onBeforeUnload);
   });
 
   onDestroy(() => {
     if (timerAutosave) clearTimeout(timerAutosave);
     window.removeEventListener("pap:goto-line", onGotoLine);
+    window.removeEventListener("pap:prompt-ripristinato", onPromptRipristinato);
     window.removeEventListener("beforeunload", onBeforeUnload);
   });
 

@@ -108,6 +108,12 @@
         promptId,
         targetVersion: version,
       });
+      // Evento dedicato: il DetailPane ricarica il contenuto del prompt aperto
+      // così l'editor mostra subito la versione ripristinata (#425). Distinto
+      // da `pap:lista-mutata` (che lo dispatcha anche l'autosave dell'editor).
+      window.dispatchEvent(
+        new CustomEvent("pap:prompt-ripristinato", { detail: { promptId } }),
+      );
       window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
     } catch (e) {
       console.error("[cronologia] prompt_rollback", e);
