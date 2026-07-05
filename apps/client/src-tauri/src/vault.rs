@@ -154,9 +154,18 @@ fn deriva_chiave(
 }
 
 /// Applica la chiave derivata al DB via PRAGMA key.
+///
+/// Fix #459 (review HIGH): sia la rappresentazione hex della chiave sia
+/// l'istruzione PRAGMA che la incorpora contengono la chiave in chiaro
+/// (l'hex è banalmente reversibile in byte) — sono la copia più esposta
+/// perché è esattamente ciò che viene consegnato a SQLCipher. `chiave` era
+/// già `Zeroizing`, ma queste due `String` derivate venivano droppate
+/// senza essere azzerate. Avvolte in `Zeroizing` così vengono azzerate al
+/// drop invece di restare come byte residui in RAM.
 fn applica_chiave(conn: &Connection, chiave: &[u8; KEY_LEN]) -> Result<(), PapErrore> {
-    let hex = bytes_a_hex(chiave);
-    conn.execute_batch(&format!("PRAGMA key = \"x'{hex}'\";"))?;
+    let hex: Zeroizing<String> = Zeroizing::new(bytes_a_hex(chiave));
+    let pragma: Zeroizing<String> = Zeroizing::new(format!("PRAGMA key = \"x'{}'\";", hex.as_str()));
+    conn.execute_batch(&pragma)?;
     Ok(())
 }
 
@@ -514,9 +523,12 @@ pub(crate) fn vault_cambia_password_impl(
         ARGON2_PARALLELISM,
     )?;
 
-    // Re-key del database
-    let hex_nuova = bytes_a_hex(chiave_nuova.as_slice());
-    conn.execute_batch(&format!("PRAGMA rekey = \"x'{hex_nuova}'\";"))?;
+    // Re-key del database. Fix #459 (review HIGH): hex + istruzione PRAGMA
+    // azzerati al drop, stesso ragionamento di `applica_chiave`.
+    let hex_nuova: Zeroizing<String> = Zeroizing::new(bytes_a_hex(chiave_nuova.as_slice()));
+    let pragma_rekey: Zeroizing<String> =
+        Zeroizing::new(format!("PRAGMA rekey = \"x'{}'\";", hex_nuova.as_str()));
+    conn.execute_batch(&pragma_rekey)?;
     crate::audit::registra(conn, "vault.password_cambiata", "Vault", "", None);
 
     // Aggiorna metadata con nuovo salt
