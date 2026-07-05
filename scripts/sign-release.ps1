@@ -83,24 +83,40 @@ param(
     # e si procede senza re-signing.
     [string]$UpdaterPrivKey = $env:TAURI_UPDATER_PRIVATE_KEY_PATH,
 
-    [string]$UpdaterPrivKeyPassword = $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+    # NOTA: nessun default legato a env var qui (a differenza degli altri
+    # parametri) — la precedenza fra le fonti (parametro esplicito, file
+    # cifrato DPAPI, legacy env var in chiaro) viene risolta esplicitamente
+    # sotto, subito dopo il param block. Vedi commento li' per il perche'.
+    [string]$UpdaterPrivKeyPassword
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-# Fallback passphrase: se non passata via -UpdaterPrivKeyPassword ne' via env
-# var TAURI_SIGNING_PRIVATE_KEY_PASSWORD, prova a leggerla dal file cifrato
-# DPAPI creato da setup-windows.ps1 (scripts/setup-windows.ps1 §7). Il file
-# e' decifrabile solo dallo stesso utente Windows sulla stessa macchina, a
-# differenza di una env var User-scope che resta in chiaro nel registro.
-if ([string]::IsNullOrEmpty($UpdaterPrivKeyPassword)) {
+# Risoluzione passphrase chiave Updater, in ordine di precedenza:
+#   1. Parametro -UpdaterPrivKeyPassword passato esplicitamente (intento
+#      utente diretto, massima precedenza).
+#   2. File cifrato DPAPI creato da setup-windows.ps1 (scripts/setup-windows.ps1
+#      §7) — decifrabile solo dallo stesso utente Windows sulla stessa
+#      macchina.
+#   3. La legacy env var TAURI_SIGNING_PRIVATE_KEY_PASSWORD (plaintext,
+#      User scope) NON viene piu' usata automaticamente: se presente,
+#      avvisiamo e la ignoriamo (era leggibile in chiaro da registro/altri
+#      processi dello stesso utente — vedi #446). Il file DPAPI ha sempre
+#      precedenza su di essa.
+$UpdaterPrivKeyPasswordExplicit = $PSBoundParameters.ContainsKey('UpdaterPrivKeyPassword')
+if (-not $UpdaterPrivKeyPasswordExplicit) {
+    if ($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) {
+        Write-Host "[WARN] TAURI_SIGNING_PRIVATE_KEY_PASSWORD (env var in chiaro, legacy) e' settata ma NON viene piu' usata automaticamente."
+        Write-Host "       Il file cifrato DPAPI (se presente) ha precedenza. Rimuovi la env var legacy con:"
+        Write-Host "       [Environment]::SetEnvironmentVariable('TAURI_SIGNING_PRIVATE_KEY_PASSWORD', `$null, 'User')"
+    }
     $encPwdFile = Join-Path $env:USERPROFILE '.tauri\pap-updater.pwd.enc'
     if (Test-Path $encPwdFile) {
         try {
             $secureFromFile = Get-Content -Path $encPwdFile -Raw | ConvertTo-SecureString
             $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureFromFile)
-            $UpdaterPrivKeyPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+            $UpdaterPrivKeyPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
             [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
         } catch {
             Write-Host "[WARN] impossibile decifrare $encPwdFile (creato da altro utente/macchina?). Ignorato."
@@ -127,9 +143,10 @@ function Show-PreflightSummary {
     $envThumb = [Environment]::GetEnvironmentVariable('CERTUM_CERT_THUMBPRINT', 'User')
     $envKey = [Environment]::GetEnvironmentVariable('TAURI_UPDATER_PRIVATE_KEY_PATH', 'User')
     # La passphrase non e' piu' persistita in chiaro come env var User: puo'
-    # arrivare da -UpdaterPrivKeyPassword, da env var di sessione, o dal file
-    # cifrato DPAPI (vedi risoluzione fallback sopra). Riflettiamo lo stato
-    # risolto in $UpdaterPrivKeyPassword, non una env var specifica.
+    # arrivare da -UpdaterPrivKeyPassword esplicito o dal file cifrato DPAPI
+    # (vedi risoluzione precedenza sopra, subito dopo il param block).
+    # Riflettiamo lo stato risolto in $UpdaterPrivKeyPassword, non una env
+    # var specifica.
     $envPwd = $UpdaterPrivKeyPassword
 
     $checks = [System.Collections.ArrayList]@()
