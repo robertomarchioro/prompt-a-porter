@@ -177,6 +177,13 @@ jobs:
       - name: Pacchettizza versione portable (Windows)
         if: matrix.platform == 'windows-latest'
         shell: pwsh
+        env:
+          # Interpolare ${{ github.* }} direttamente in un blocco `run:`
+          # espone a script injection (il valore finirebbe incollato nello
+          # script prima dell'esecuzione). Passiamo i valori via env così
+          # PowerShell li legge come dati, non come sorgente.
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
           $finalName = "Prompt a Porter.exe"
           $releaseDir = "apps/client/src-tauri/target/release"
@@ -209,7 +216,7 @@ jobs:
           }
           Write-Host "Eseguibile portable scelto: $exePath"
 
-          $tag = "${{ github.ref_name }}"
+          $tag = $env:TAG
           $stagingDir = "portable-staging"
           New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
           # Rinomina sempre a "Prompt a Porter.exe" nel zip per coerenza UX
@@ -250,7 +257,7 @@ jobs:
           Cancella la cartella estratta. Per rimuovere anche i dati,
           cancella %APPDATA%\com.pap.client\.
 
-          Source: https://github.com/${{ github.repository }}
+          Source: https://github.com/$env:REPO
           Licenza: AGPL-3.0-only
           "@
           $readmeContent | Out-File -FilePath "$stagingDir/README.txt" -Encoding utf8
