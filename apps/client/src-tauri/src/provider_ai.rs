@@ -653,9 +653,18 @@ pub(crate) fn config_lista_pure(
     Ok(rows)
 }
 
+/// Fix #456: rifiuta il salvataggio di una API key quando il vault
+/// corrente non è cifrato. Le API key sono segreti long-lived (a
+/// differenza della password del vault, che l'utente digita ogni volta):
+/// persisterle in un DB SQLite in chiaro le espone a chiunque abbia
+/// accesso al filesystem. Il chiamante (comando Tauri) determina
+/// `vault_cifrato` leggendo `vault-meta.json` PRIMA di aprire la
+/// connessione, così questa funzione resta pura e testabile senza
+/// dover costruire un `VaultState` reale.
 pub(crate) fn config_salva_pure(
     conn: &Connection,
     input: &ProviderConfigInput,
+    vault_cifrato: bool,
 ) -> Result<(), PapErrore> {
     valida_provider(&input.provider)?;
     // Se api_key è None o stringa vuota, manteniamo la chiave esistente.
@@ -664,6 +673,15 @@ pub(crate) fn config_salva_pure(
         .as_ref()
         .map(|k| k.is_empty())
         .unwrap_or(true);
+
+    // Rifiuta di persistere una NUOVA api_key se il vault non è cifrato.
+    // Non blocca l'aggiornamento di base_url/default_model/abilitato quando
+    // la chiave non viene toccata (manteni_chiave=true): in quel caso non
+    // stiamo scrivendo nessun nuovo segreto in chiaro.
+    if !manteni_chiave && !vault_cifrato {
+        return Err(PapErrore::VaultNonCifrato);
+    }
+
     if manteni_chiave {
         conn.execute(
             "INSERT INTO ProviderConfig (Provider, ApiKey, BaseUrl, DefaultModel,
@@ -837,7 +855,11 @@ pub fn provider_config_salva(
     input: ProviderConfigInput,
     state: State<'_, VaultState>,
 ) -> Result<(), PapErrore> {
-    state.with_conn(|conn| config_salva_pure(conn, &input))
+    // Fix #456: determina se il vault è cifrato PRIMA di scrivere, così
+    // `config_salva_pure` può rifiutare il salvataggio di una nuova API key
+    // quando il vault è in chiaro.
+    let vault_cifrato = crate::vault::vault_cifrato_impl(&state)?;
+    state.with_conn(|conn| config_salva_pure(conn, &input, vault_cifrato))
 }
 
 #[tauri::command]
@@ -1180,7 +1202,7 @@ mod test {
             default_model: Some("claude-sonnet-4.6".into()),
             abilitato: true,
         };
-        config_salva_pure(&conn, &input).unwrap();
+        config_salva_pure(&conn, &input, true).unwrap();
         let r = config_lista_pure(&conn).unwrap();
         assert_eq!(r.len(), 1);
         assert_eq!(r[0].provider, "anthropic");
@@ -1200,7 +1222,7 @@ mod test {
             default_model: None,
             abilitato: true,
         };
-        config_salva_pure(&conn, &input).unwrap();
+        config_salva_pure(&conn, &input, true).unwrap();
         let cfg = config_carica_completa(&conn, "openai").unwrap();
         assert_eq!(cfg.api_key.as_deref(), Some("sk-test"));
     }
@@ -1215,7 +1237,7 @@ mod test {
             default_model: None,
             abilitato: true,
         };
-        let r = config_salva_pure(&conn, &input);
+        let r = config_salva_pure(&conn, &input, true);
         assert!(r.is_err());
         assert!(r.unwrap_err().to_string().contains("non riconosciuto"));
     }
@@ -1233,6 +1255,7 @@ mod test {
                 default_model: Some("claude-3.7".into()),
                 abilitato: true,
             },
+            true,
         )
         .unwrap();
         // Upsert SENZA passare api_key (None) — deve preservarla.
@@ -1245,6 +1268,7 @@ mod test {
                 default_model: Some("claude-sonnet-4.6".into()),
                 abilitato: true,
             },
+            true,
         )
         .unwrap();
         let cfg = config_carica_completa(&conn, "anthropic").unwrap();
@@ -1264,6 +1288,7 @@ mod test {
                 default_model: None,
                 abilitato: true,
             },
+            true,
         )
         .unwrap();
         config_salva_pure(
@@ -1275,6 +1300,7 @@ mod test {
                 default_model: None,
                 abilitato: true,
             },
+            true,
         )
         .unwrap();
         let cfg = config_carica_completa(&conn, "openai").unwrap();
@@ -1293,6 +1319,7 @@ mod test {
                 default_model: None,
                 abilitato: true,
             },
+            true,
         )
         .unwrap();
         config_elimina_pure(&conn, "anthropic").unwrap();
@@ -1305,6 +1332,80 @@ mod test {
         let r = config_elimina_pure(&conn, "anthropic");
         assert!(r.is_err());
     }
+
+    // ─────────── #456: rifiuto API key su vault non cifrato ───────────
+
+    #[test]
+    fn config_salva_nuova_api_key_su_vault_non_cifrato_e_rifiutata() {
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "anthropic".into(),
+            api_key: Some("sk-ant-xyz".into()),
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+        };
+        let r = config_salva_pure(&conn, &input, false);
+        assert!(matches!(r, Err(PapErrore::VaultNonCifrato)));
+        // Nessuna riga deve essere stata scritta.
+        assert_eq!(config_lista_pure(&conn).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn config_salva_senza_api_key_su_vault_non_cifrato_e_permessa() {
+        // Aggiornare base_url/default_model senza toccare la chiave deve
+        // funzionare anche su vault non cifrato: non stiamo persistendo
+        // nessun nuovo segreto in chiaro.
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "ollama".into(),
+            api_key: None,
+            base_url: Some("http://localhost:11434".into()),
+            default_model: Some("llama3.1".into()),
+            abilitato: true,
+        };
+        config_salva_pure(&conn, &input, false).unwrap();
+        let r = config_lista_pure(&conn).unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].provider, "ollama");
+    }
+
+    #[test]
+    fn config_salva_api_key_vuota_su_vault_non_cifrato_e_permessa() {
+        // Stringa vuota == "non toccare la chiave" (manteni_chiave=true),
+        // stesso trattamento di None.
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "ollama".into(),
+            api_key: Some("".into()),
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+        };
+        config_salva_pure(&conn, &input, false).unwrap();
+        assert_eq!(config_lista_pure(&conn).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn config_salva_nuova_api_key_su_vault_cifrato_e_permessa() {
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "anthropic".into(),
+            api_key: Some("sk-ant-xyz".into()),
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+        };
+        config_salva_pure(&conn, &input, true).unwrap();
+        assert_eq!(config_lista_pure(&conn).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn vault_non_cifrato_messaggio_menziona_cifratura() {
+        let msg = PapErrore::VaultNonCifrato.to_string();
+        assert!(msg.contains("cifr"), "Il messaggio deve menzionare la cifratura: {msg}");
+    }
+
 
     #[test]
     fn istanzia_provider_anthropic_con_chiave() {
