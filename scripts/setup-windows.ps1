@@ -530,7 +530,11 @@ if (Test-Path $keyDest) {
         Write-Host "Lascia vuoto se la chiave non e' cifrata."
         $securePwd = Read-Host "Password chiave Tauri Updater (vuoto = nessuna)" -AsSecureString
         if ($securePwd.Length -gt 0) {
-            $securePwd | ConvertFrom-SecureString | Out-File -FilePath $pwdFile -Encoding utf8 -Force
+            # NB: NON usare `Out-File -Encoding utf8`: in Windows PowerShell 5.1
+            # scrive un BOM UTF-8 che poi rompe `ConvertTo-SecureString` in
+            # lettura ("Input string was not in a correct format"). WriteAllText
+            # scrive UTF-8 senza BOM e senza newline finale. (#467)
+            [IO.File]::WriteAllText($pwdFile, ($securePwd | ConvertFrom-SecureString))
             Write-Host "[OK] passphrase salvata cifrata in $pwdFile"
         } else {
             Write-Host "[INFO] skip: nessuna passphrase impostata."
