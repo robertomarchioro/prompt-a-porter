@@ -24,9 +24,9 @@ jobs:
       run:
         working-directory: apps/cli
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.25.10"
           cache-dependency-path: apps/cli/go.sum
@@ -43,7 +43,7 @@ jobs:
         run: go tool cover -func=coverage.out
 
       - name: Lint (golangci-lint)
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
           working-directory: apps/cli
           version: latest
@@ -77,9 +77,9 @@ jobs:
             goarch: arm64
             ext: ".exe"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: "1.25.10"
           cache-dependency-path: apps/cli/go.sum
@@ -105,7 +105,7 @@ jobs:
           test -f dist/pap-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pap-${{ matrix.goos }}-${{ matrix.goarch }}
           path: apps/cli/dist/pap-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}

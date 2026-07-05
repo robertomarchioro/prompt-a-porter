@@ -43,6 +43,11 @@ ehthumbs.db
 *.swo
 *~
 
+# === Claude Code (config locale per-operatore, mai condivisa) ===
+# settings.local.json contiene allowlist di permessi e override ambiente
+# specifici della macchina: va tenuto fuori dallo stato condiviso del repo.
+.claude/settings.local.json
+
 # === Log ===
 *.log
 npm-debug.log*
