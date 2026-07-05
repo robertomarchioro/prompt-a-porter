@@ -885,6 +885,15 @@ pub(crate) fn config_carica_completa(
 pub(crate) fn istanzia_provider(
     cfg: &ProviderConfigItem,
 ) -> Result<Box<dyn AIProvider>, PapErrore> {
+    // Fix #457 (review HIGH): `config_salva_pure` valida `base_url` solo al
+    // salvataggio. Righe scritte da una build precedente a #457, o
+    // importate/ripristinate da backup/migrazione, non passano MAI da lì e
+    // resterebbero non validate per sempre pur venendo usate ad ogni
+    // generazione reale. Ri-validiamo qui, al punto d'uso, così qualunque
+    // provenienza del dato è protetta allo stesso modo.
+    if let Some(url) = &cfg.base_url {
+        valida_base_url(url)?;
+    }
     match cfg.provider.as_str() {
         "ollama" => Ok(Box::new(match cfg.base_url.clone() {
             Some(u) if !u.trim().is_empty() => OllamaProvider::new(u),
@@ -1725,6 +1734,60 @@ mod test {
         };
         let p = istanzia_provider(&cfg).unwrap();
         assert_eq!(p.name(), "ollama");
+    }
+
+    // ─── Review HIGH: #457 riapplicato al punto d'uso, non solo al salvataggio ───
+
+    #[test]
+    fn istanzia_provider_rivalida_base_url_riga_legacy_non_validata() {
+        // Simula una riga scritta da una build PRE-#457 (o importata/
+        // ripristinata da backup), quando `base_url` non veniva ancora
+        // validato al salvataggio: `config_carica_completa` la caricherebbe
+        // così com'è. `istanzia_provider` deve rifiutarla comunque, non
+        // fidarsi ciecamente del contenuto del DB.
+        let cfg = ProviderConfigItem {
+            provider: "ollama".into(),
+            api_key: None,
+            base_url: Some("file:///etc/passwd".into()),
+            default_model: None,
+            abilitato: true,
+            creato_a: "x".into(),
+            aggiornato_a: "x".into(),
+        };
+        let r = istanzia_provider(&cfg);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn istanzia_provider_rivalida_base_url_userinfo_legacy_rifiutato() {
+        let cfg = ProviderConfigItem {
+            provider: "anthropic".into(),
+            api_key: Some("k".into()),
+            base_url: Some("http://127.0.0.1:11434@evil.com/".into()),
+            default_model: None,
+            abilitato: true,
+            creato_a: "x".into(),
+            aggiornato_a: "x".into(),
+        };
+        let r = istanzia_provider(&cfg);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn istanzia_provider_base_url_valido_ancora_accettato() {
+        // Sentinel anti-regressione: la ri-validazione non deve rompere
+        // il percorso legittimo (base_url https custom valido).
+        let cfg = ProviderConfigItem {
+            provider: "openai-compat".into(),
+            api_key: Some("k".into()),
+            base_url: Some("https://my-proxy.example.com".into()),
+            default_model: None,
+            abilitato: true,
+            creato_a: "x".into(),
+            aggiornato_a: "x".into(),
+        };
+        let p = istanzia_provider(&cfg).unwrap();
+        assert_eq!(p.name(), "openai");
     }
 
     #[test]
