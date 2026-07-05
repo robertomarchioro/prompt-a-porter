@@ -628,6 +628,65 @@ fn valida_provider(name: &str) -> Result<(), PapErrore> {
     Ok(())
 }
 
+/// Fix #457: valida lo schema di un `base_url` custom fornito dall'utente
+/// per un provider AI (config salvata o smoke-test Ollama).
+///
+/// Regole:
+/// - stringa vuota/whitespace → Ok: significa "usa il default del
+///   provider", non c'è nessun input da validare.
+/// - `https://<host>` → sempre accettato.
+/// - `http://<host>` → accettato SOLO se l'host è un loopback
+///   (`localhost`, `127.0.0.1`, `::1`): Ollama gira tipicamente in locale
+///   senza TLS. `http://` verso un host remoto trasmetterebbe la API key
+///   (se presente in header) in chiaro sulla rete.
+/// - qualunque altro schema (`file://`, `ftp://`, nessuno schema, ecc.) →
+///   rifiutato: `file://` permetterebbe di leggere file locali arbitrari
+///   attraverso il client HTTP, altri schemi non sono endpoint HTTP validi.
+pub(crate) fn valida_base_url(url: &str) -> Result<(), PapErrore> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Ok(());
+    }
+    let lower = trimmed.to_ascii_lowercase();
+
+    if let Some(resto) = lower.strip_prefix("https://") {
+        if resto.is_empty() {
+            return Err(PapErrore::Generico(
+                "base_url non valido: host mancante dopo https://".into(),
+            ));
+        }
+        return Ok(());
+    }
+
+    if let Some(resto) = lower.strip_prefix("http://") {
+        // Gli host IPv6 sono racchiusi tra `[...]` (es. `[::1]:11434`): il
+        // separatore `:` fa parte dell'indirizzo, quindi va estratto PRIMA
+        // di splittare su `:` per gli altri formati (host:porta).
+        let host = if let Some(resto_senza_parentesi) = resto.strip_prefix('[') {
+            resto_senza_parentesi
+                .split(']')
+                .next()
+                .unwrap_or("")
+        } else {
+            resto.split(['/', ':', '?', '#']).next().unwrap_or("")
+        };
+        if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+            return Ok(());
+        }
+        return Err(PapErrore::Generico(
+            "base_url non valido: http:// è consentito solo per host locali \
+             (localhost/127.0.0.1); usa https:// per host remoti."
+                .into(),
+        ));
+    }
+
+    Err(PapErrore::Generico(
+        "base_url non valido: schema non consentito. Richiesto https://, \
+         o http:// solo per host locali."
+            .into(),
+    ))
+}
+
 pub(crate) fn config_lista_pure(
     conn: &Connection,
 ) -> Result<Vec<ProviderConfigItem>, PapErrore> {
@@ -667,6 +726,11 @@ pub(crate) fn config_salva_pure(
     vault_cifrato: bool,
 ) -> Result<(), PapErrore> {
     valida_provider(&input.provider)?;
+    // Fix #457: valida lo schema del base_url custom (previene SSRF/leak
+    // della API key verso host remoti non-TLS o lettura file:// locali).
+    if let Some(url) = &input.base_url {
+        valida_base_url(url)?;
+    }
     // Se api_key è None o stringa vuota, manteniamo la chiave esistente.
     let manteni_chiave = input
         .api_key
@@ -836,6 +900,12 @@ pub fn provider_ollama_genera(
     model: String,
     base_url: Option<String>,
 ) -> Result<GenerateOutput, PapErrore> {
+    // Fix #457: valida lo schema del base_url anche sul percorso di smoke
+    // test, non solo al salvataggio della config — un base_url malevolo
+    // passato direttamente dal frontend deve essere rifiutato qui.
+    if let Some(url) = &base_url {
+        valida_base_url(url)?;
+    }
     let provider = match base_url {
         Some(u) if !u.trim().is_empty() => OllamaProvider::new(u),
         _ => OllamaProvider::default(),
@@ -1406,6 +1476,95 @@ mod test {
         assert!(msg.contains("cifr"), "Il messaggio deve menzionare la cifratura: {msg}");
     }
 
+    // ─────────── #457: validazione base_url (SSRF / key exfiltration) ───────────
+
+    #[test]
+    fn valida_base_url_https_ok() {
+        assert!(valida_base_url("https://api.anthropic.com").is_ok());
+        assert!(valida_base_url("https://my-proxy.example.com:8443/v1").is_ok());
+    }
+
+    #[test]
+    fn valida_base_url_http_localhost_ok() {
+        assert!(valida_base_url("http://localhost:11434").is_ok());
+        assert!(valida_base_url("http://127.0.0.1:11434").is_ok());
+        assert!(valida_base_url("http://[::1]:11434").is_ok());
+    }
+
+    #[test]
+    fn valida_base_url_http_remoto_rifiutato() {
+        let r = valida_base_url("http://example.com");
+        assert!(r.is_err());
+        assert!(r.unwrap_err().to_string().contains("http://"));
+    }
+
+    #[test]
+    fn valida_base_url_file_scheme_rifiutato() {
+        let r = valida_base_url("file:///etc/passwd");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn valida_base_url_garbage_rifiutato() {
+        assert!(valida_base_url("not-a-url").is_err());
+        assert!(valida_base_url("ftp://example.com").is_err());
+        assert!(valida_base_url("javascript:alert(1)").is_err());
+    }
+
+    #[test]
+    fn valida_base_url_stringa_vuota_ok() {
+        // Vuota/whitespace = "usa il default del provider".
+        assert!(valida_base_url("").is_ok());
+        assert!(valida_base_url("   ").is_ok());
+    }
+
+    #[test]
+    fn valida_base_url_https_senza_host_rifiutato() {
+        assert!(valida_base_url("https://").is_err());
+    }
+
+    #[test]
+    fn config_salva_base_url_invalido_e_rifiutato() {
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "ollama".into(),
+            api_key: None,
+            base_url: Some("file:///etc/passwd".into()),
+            default_model: None,
+            abilitato: true,
+        };
+        let r = config_salva_pure(&conn, &input, false);
+        assert!(r.is_err());
+        assert_eq!(config_lista_pure(&conn).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn config_salva_base_url_http_remoto_e_rifiutato() {
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "openai-compat".into(),
+            api_key: None,
+            base_url: Some("http://malicious.example.com".into()),
+            default_model: None,
+            abilitato: true,
+        };
+        let r = config_salva_pure(&conn, &input, false);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn provider_ollama_genera_base_url_invalido_rifiutato_prima_della_chiamata_http() {
+        // Non possiamo verificare l'assenza di chiamate HTTP direttamente,
+        // ma possiamo verificare che l'errore di validazione arrivi PRIMA
+        // di qualunque tentativo di rete (nessun timeout HTTP nel test).
+        let r = provider_ollama_genera(
+            "ciao".into(),
+            "llama3.1".into(),
+            Some("file:///etc/passwd".into()),
+        );
+        assert!(r.is_err());
+        assert!(r.unwrap_err().to_string().contains("base_url"));
+    }
 
     #[test]
     fn istanzia_provider_anthropic_con_chiave() {
