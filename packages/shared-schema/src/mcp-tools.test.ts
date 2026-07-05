@@ -33,9 +33,19 @@ describe("papSearchArgsSchema", () => {
     expect(risultato.success).toBe(false);
   });
 
-  it("rifiuta limit oltre il massimo consentito", () => {
-    const risultato = papSearchArgsSchema.safeParse({ limit: 51 });
+  it("rifiuta limit non intero", () => {
+    const risultato = papSearchArgsSchema.safeParse({ limit: 1.5 });
     expect(risultato.success).toBe(false);
+  });
+
+  it("accetta limit fuori range (0, negativo, >50): il clamp avviene lato server", () => {
+    // Il vecchio comportamento faceva clamp silenzioso in promptCerca/
+    // promptListRecent (Math.min(Math.max(limit,1),50)); lo schema valida
+    // solo il tipo (intero) per non trasformare un caso prima "tollerato"
+    // in un hard-fail regressivo.
+    expect(papSearchArgsSchema.safeParse({ limit: 51 }).success).toBe(true);
+    expect(papSearchArgsSchema.safeParse({ limit: 0 }).success).toBe(true);
+    expect(papSearchArgsSchema.safeParse({ limit: -1 }).success).toBe(true);
   });
 
   it("rifiuta query oversize oltre MAX_TEXT_LENGTH", () => {
@@ -69,6 +79,38 @@ describe("papSearchArgsSchema", () => {
     const risultato = papSearchArgsSchema.safeParse({ query: "x", extra: "nope" });
     expect(risultato.success).toBe(false);
   });
+
+  it("accetta null esplicito per query/limit/target_model/tags (client che serializzano unset come null)", () => {
+    const risultato = papSearchArgsSchema.safeParse({
+      query: null,
+      limit: null,
+      target_model: null,
+      tags: null,
+    });
+    expect(risultato.success).toBe(true);
+    if (risultato.success) {
+      expect(risultato.data.query).toBeNull();
+      expect(risultato.data.limit).toBeNull();
+      expect(risultato.data.target_model).toBeNull();
+      expect(risultato.data.tags).toBeNull();
+    }
+  });
+
+  it("null equivale a undefined per il pattern `a.x ?? default` usato nel server", () => {
+    const risultato = papSearchArgsSchema.safeParse({
+      query: null,
+      limit: null,
+      target_model: null,
+      tags: null,
+    });
+    expect(risultato.success).toBe(true);
+    if (!risultato.success) return;
+    const a = risultato.data;
+    expect(a.query ?? "").toBe("");
+    expect(a.limit ?? 10).toBe(10);
+    expect(a.target_model ?? null).toBeNull();
+    expect(a.tags ?? []).toEqual([]);
+  });
 });
 
 describe("papGetArgsSchema", () => {
@@ -94,8 +136,18 @@ describe("papListRecentArgsSchema", () => {
     expect(papListRecentArgsSchema.safeParse({}).success).toBe(true);
   });
 
-  it("rifiuta limit negativo", () => {
-    expect(papListRecentArgsSchema.safeParse({ limit: -1 }).success).toBe(false);
+  it("accetta limit negativo (il clamp avviene lato server, non nello schema)", () => {
+    expect(papListRecentArgsSchema.safeParse({ limit: -1 }).success).toBe(true);
+  });
+
+  it("rifiuta limit di tipo sbagliato", () => {
+    expect(papListRecentArgsSchema.safeParse({ limit: "10" }).success).toBe(false);
+  });
+
+  it("accetta limit null", () => {
+    const risultato = papListRecentArgsSchema.safeParse({ limit: null });
+    expect(risultato.success).toBe(true);
+    if (risultato.success) expect(risultato.data.limit).toBeNull();
   });
 });
 
@@ -133,5 +185,13 @@ describe("papRenderArgsSchema", () => {
     for (let i = 0; i < 201; i++) vars[`k${i}`] = "v";
     const risultato = papRenderArgsSchema.safeParse({ prompt_id: "abc", vars });
     expect(risultato.success).toBe(false);
+  });
+
+  it("accetta vars null (client che serializzano unset come null) e coalesce al default", () => {
+    const risultato = papRenderArgsSchema.safeParse({ prompt_id: "abc", vars: null });
+    expect(risultato.success).toBe(true);
+    if (!risultato.success) return;
+    expect(risultato.data.vars).toBeNull();
+    expect(risultato.data.vars ?? {}).toEqual({});
   });
 });

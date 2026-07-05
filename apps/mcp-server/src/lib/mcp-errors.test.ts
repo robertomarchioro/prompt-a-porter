@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import { rispostaErroreValidazione } from "./mcp-errors.js";
+import { rispostaErroreArgomentiTroppoGrandi, rispostaErroreValidazione } from "./mcp-errors.js";
 
 function erroreDa(schema: z.ZodType, dato: unknown): z.ZodError {
   const risultato = schema.safeParse(dato);
@@ -46,5 +46,15 @@ describe("rispostaErroreValidazione", () => {
     const risposta = rispostaErroreValidazione("pap_search", error);
 
     expect(risposta.content[0].text.split("; ")).toHaveLength(2);
+  });
+});
+
+describe("rispostaErroreArgomentiTroppoGrandi", () => {
+  it("segnala isError true e include nome del tool e soglia nel messaggio", () => {
+    const risposta = rispostaErroreArgomentiTroppoGrandi("pap_render", 100_000);
+
+    expect(risposta.isError).toBe(true);
+    expect(risposta.content[0].text).toContain("pap_render");
+    expect(risposta.content[0].text).toContain("100000");
   });
 });

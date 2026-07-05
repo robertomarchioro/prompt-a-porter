@@ -26,13 +26,18 @@ const promptIdSchema = z
   .min(1, "prompt_id non può essere vuoto")
   .max(MAX_SHORT_STRING_LENGTH, `prompt_id supera i ${MAX_SHORT_STRING_LENGTH} caratteri`);
 
+// `limit` viene comunque bloccato tra 1 e 50 lato server (vedi promptCerca/
+// promptListRecent in index.ts): qui validiamo solo il tipo (numero intero),
+// non l'intervallo, per preservare il comportamento storico di "clamp"
+// invece di un hard-fail su valori fuori range (es. 0, negativi, >50).
 const limitSchema = z
   .number({ error: "limit deve essere un numero" })
   .int("limit deve essere un intero")
-  .positive("limit deve essere positivo")
-  .max(50, "limit non può superare 50")
-  .optional();
+  .nullish();
 
+// `.nullish()` (accetta anche `null`, non solo `undefined`) perché molti
+// client MCP serializzano un argomento opzionale non impostato come
+// `null` esplicito nel JSON invece di ometterlo del tutto.
 const tagsSchema = z
   .array(
     z
@@ -41,19 +46,19 @@ const tagsSchema = z
     { error: "tags deve essere un array di stringhe" },
   )
   .max(MAX_TAGS_COUNT, `troppi tag (max ${MAX_TAGS_COUNT})`)
-  .optional();
+  .nullish();
 
 export const papSearchArgsSchema = z
   .object({
     query: z
       .string({ error: "query deve essere una stringa" })
       .max(MAX_TEXT_LENGTH, `query oltre i ${MAX_TEXT_LENGTH} caratteri`)
-      .optional(),
+      .nullish(),
     limit: limitSchema,
     target_model: z
       .string({ error: "target_model deve essere una stringa" })
       .max(MAX_SHORT_STRING_LENGTH, `target_model oltre i ${MAX_SHORT_STRING_LENGTH} caratteri`)
-      .optional(),
+      .nullish(),
     tags: tagsSchema,
   })
   .strict();
@@ -90,7 +95,7 @@ export const papRenderArgsSchema = z
       .refine((v) => Object.keys(v).length <= MAX_VARS_COUNT, {
         message: `troppi segnaposti in vars (max ${MAX_VARS_COUNT})`,
       })
-      .optional(),
+      .nullish(),
   })
   .strict();
 

@@ -12,6 +12,7 @@ on:
       - "!apps/mcp-server/**/CHANGELOG.md"
       - "!apps/mcp-server/**/LICENSE"
       - "!packages/shared-schema/**/*.md"
+      - "!packages/shared-schema/**/LICENSE"
   pull_request:
     branches: [main]
     paths:
@@ -23,6 +24,7 @@ on:
       - "!apps/mcp-server/**/CHANGELOG.md"
       - "!apps/mcp-server/**/LICENSE"
       - "!packages/shared-schema/**/*.md"
+      - "!packages/shared-schema/**/LICENSE"
   workflow_dispatch:
 
 jobs:

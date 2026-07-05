@@ -35,7 +35,11 @@ import {
 } from "@pap/shared-schema";
 
 import { sanitizzaFts } from "./lib/fts.js";
-import { rispostaErroreValidazione } from "./lib/mcp-errors.js";
+import { argsTroppoGrandi, clampLimit, MAX_ARGS_JSON_LENGTH } from "./lib/limits.js";
+import {
+  rispostaErroreArgomentiTroppoGrandi,
+  rispostaErroreValidazione,
+} from "./lib/mcp-errors.js";
 import { compila, estraiSegnaposti } from "./lib/template.js";
 
 // ─── Vault path discovery ───
@@ -108,7 +112,7 @@ function promptCerca(
   targetModel: string | null,
   tagsFilter: string[],
 ): PromptRow[] {
-  const lim = Math.min(Math.max(limit, 1), 50);
+  const lim = clampLimit(limit);
 
   let sql: string;
   const params: unknown[] = [];
@@ -168,7 +172,7 @@ function promptGet(id: string): PromptDettaglio | null {
 }
 
 function promptListRecent(limit: number): PromptRow[] {
-  const lim = Math.min(Math.max(limit, 1), 50);
+  const lim = clampLimit(limit);
   return db
     .prepare(
       `SELECT Id as id, Title as title, Description as description, Body as body,
@@ -266,6 +270,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+
+  // Guardia aggregata economica PRIMA di qualunque safeParse per-tool:
+  // rifiuta subito payload enormi (es. milioni di chiavi in `vars` o
+  // elementi in `tags`) senza far attraversare l'intera struttura al
+  // parser Zod, che altrimenti la validerebbe per intero prima di
+  // scoprire che supera i limiti dichiarati nello schema.
+  if (argsTroppoGrandi(args)) {
+    return rispostaErroreArgomentiTroppoGrandi(name, MAX_ARGS_JSON_LENGTH);
+  }
 
   try {
     switch (name) {
