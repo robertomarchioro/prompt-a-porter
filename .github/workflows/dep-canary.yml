@@ -20,12 +20,13 @@ jobs:
     name: Rust latest deps (canary)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       # Toolchain LATEST stabile — nessun pin, contrario della stable lane.
       # Vuole scoprire rotture prima che vengano fissate nel lockfile committato.
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
+          toolchain: stable
           components: llvm-tools-preview
 
       - name: Installa dipendenze sistema
@@ -34,7 +35,9 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
 
       - name: Installa cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
+        uses: taiki-e/install-action@54676833da63830b7c258a0ddb1e64cb3cab2663 # cargo-llvm-cov
+        with:
+          tool: cargo-llvm-cov
 
       # cargo update: risolve le versioni più recenti compatibili con Cargo.toml
       # (ignorando il Cargo.lock committato). Simula cosa succederebbe
@@ -54,7 +57,7 @@ jobs:
       # (deduplicazione per titolo fisso).
       - name: Apri o aggiorna issue di tracciamento su fallimento
         if: failure()
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const LABEL = 'dep-canary';
