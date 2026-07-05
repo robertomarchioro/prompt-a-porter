@@ -27,7 +27,19 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
+import {
+  papGetArgsSchema,
+  papListRecentArgsSchema,
+  papRenderArgsSchema,
+  papSearchArgsSchema,
+} from "@pap/shared-schema";
+
 import { sanitizzaFts } from "./lib/fts.js";
+import { argsTroppoGrandi, clampLimit, MAX_ARGS_JSON_LENGTH } from "./lib/limits.js";
+import {
+  rispostaErroreArgomentiTroppoGrandi,
+  rispostaErroreValidazione,
+} from "./lib/mcp-errors.js";
 import { compila, estraiSegnaposti } from "./lib/template.js";
 
 // ─── Vault path discovery ───
@@ -100,7 +112,7 @@ function promptCerca(
   targetModel: string | null,
   tagsFilter: string[],
 ): PromptRow[] {
-  const lim = Math.min(Math.max(limit, 1), 50);
+  const lim = clampLimit(limit);
 
   let sql: string;
   const params: unknown[] = [];
@@ -160,7 +172,7 @@ function promptGet(id: string): PromptDettaglio | null {
 }
 
 function promptListRecent(limit: number): PromptRow[] {
-  const lim = Math.min(Math.max(limit, 1), 50);
+  const lim = clampLimit(limit);
   return db
     .prepare(
       `SELECT Id as id, Title as title, Description as description, Body as body,
@@ -259,15 +271,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
+  // Guardia aggregata economica PRIMA di qualunque safeParse per-tool:
+  // rifiuta subito payload enormi (es. milioni di chiavi in `vars` o
+  // elementi in `tags`) senza far attraversare l'intera struttura al
+  // parser Zod, che altrimenti la validerebbe per intero prima di
+  // scoprire che supera i limiti dichiarati nello schema.
+  if (argsTroppoGrandi(args)) {
+    return rispostaErroreArgomentiTroppoGrandi(name, MAX_ARGS_JSON_LENGTH);
+  }
+
   try {
     switch (name) {
       case "pap_search": {
-        const a = (args ?? {}) as {
-          query?: string;
-          limit?: number;
-          target_model?: string;
-          tags?: string[];
-        };
+        const parsed = papSearchArgsSchema.safeParse(args ?? {});
+        if (!parsed.success) {
+          return rispostaErroreValidazione(name, parsed.error);
+        }
+        const a = parsed.data;
         const risultati = promptCerca(
           a.query ?? "",
           a.limit ?? 10,
@@ -298,7 +318,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "pap_get": {
-        const a = args as { prompt_id: string };
+        const parsed = papGetArgsSchema.safeParse(args ?? {});
+        if (!parsed.success) {
+          return rispostaErroreValidazione(name, parsed.error);
+        }
+        const a = parsed.data;
         const p = promptGet(a.prompt_id);
         if (!p) {
           return {
@@ -325,7 +349,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "pap_list_recent": {
-        const a = (args ?? {}) as { limit?: number };
+        const parsed = papListRecentArgsSchema.safeParse(args ?? {});
+        if (!parsed.success) {
+          return rispostaErroreValidazione(name, parsed.error);
+        }
+        const a = parsed.data;
         const risultati = promptListRecent(a.limit ?? 10);
         return {
           content: [
@@ -347,7 +375,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "pap_render": {
-        const a = args as { prompt_id: string; vars?: Record<string, string> };
+        const parsed = papRenderArgsSchema.safeParse(args ?? {});
+        if (!parsed.success) {
+          return rispostaErroreValidazione(name, parsed.error);
+        }
+        const a = parsed.data;
         const p = promptGet(a.prompt_id);
         if (!p) {
           return {
