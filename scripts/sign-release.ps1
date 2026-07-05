@@ -89,6 +89,25 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# Fallback passphrase: se non passata via -UpdaterPrivKeyPassword ne' via env
+# var TAURI_SIGNING_PRIVATE_KEY_PASSWORD, prova a leggerla dal file cifrato
+# DPAPI creato da setup-windows.ps1 (scripts/setup-windows.ps1 §7). Il file
+# e' decifrabile solo dallo stesso utente Windows sulla stessa macchina, a
+# differenza di una env var User-scope che resta in chiaro nel registro.
+if ([string]::IsNullOrEmpty($UpdaterPrivKeyPassword)) {
+    $encPwdFile = Join-Path $env:USERPROFILE '.tauri\pap-updater.pwd.enc'
+    if (Test-Path $encPwdFile) {
+        try {
+            $secureFromFile = Get-Content -Path $encPwdFile -Raw | ConvertTo-SecureString
+            $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureFromFile)
+            $UpdaterPrivKeyPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+        } catch {
+            Write-Host "[WARN] impossibile decifrare $encPwdFile (creato da altro utente/macchina?). Ignorato."
+        }
+    }
+}
+
 # 1. Preflight checks
 Write-Host "==========================================================="
 Write-Host "  Prompt a Porter - sign-release.ps1"
@@ -107,7 +126,11 @@ function Show-PreflightSummary {
 
     $envThumb = [Environment]::GetEnvironmentVariable('CERTUM_CERT_THUMBPRINT', 'User')
     $envKey = [Environment]::GetEnvironmentVariable('TAURI_UPDATER_PRIVATE_KEY_PATH', 'User')
-    $envPwd = [Environment]::GetEnvironmentVariable('TAURI_SIGNING_PRIVATE_KEY_PASSWORD', 'User')
+    # La passphrase non e' piu' persistita in chiaro come env var User: puo'
+    # arrivare da -UpdaterPrivKeyPassword, da env var di sessione, o dal file
+    # cifrato DPAPI (vedi risoluzione fallback sopra). Riflettiamo lo stato
+    # risolto in $UpdaterPrivKeyPassword, non una env var specifica.
+    $envPwd = $UpdaterPrivKeyPassword
 
     $checks = [System.Collections.ArrayList]@()
 
