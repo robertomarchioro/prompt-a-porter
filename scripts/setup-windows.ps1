@@ -168,17 +168,23 @@ function Get-LatestGhMsiUrl {
     if (-not $asset) { throw "Asset MSI gh CLI non trovato nella latest release" }
     # gh CLI pubblica un file `*_checksums.txt` firmato per ogni release:
     # lo leggiamo per recuperare l'hash SHA-256 atteso dell'MSI scelto.
-    $expectedSha256 = $null
+    # FAIL-CLOSED: gh CLI pubblica SEMPRE questo file, quindi se non
+    # riusciamo a scaricarlo/parsarlo interrompiamo l'installazione invece
+    # di procedere senza verifica (era un [WARN] non bloccante prima).
     $checksumsAsset = $rel.assets | Where-Object { $_.name -like '*checksums.txt' } | Select-Object -First 1
-    if ($checksumsAsset) {
-        try {
-            $checksumsContent = (Invoke-WebRequest -Uri $checksumsAsset.browser_download_url -UseBasicParsing).Content
-            $line = ($checksumsContent -split "`r?`n") | Where-Object { $_ -match [regex]::Escape($asset.name) } | Select-Object -First 1
-            if ($line) { $expectedSha256 = ($line -split '\s+')[0] }
-        } catch {
-            Write-Host "  [WARN] impossibile scaricare checksums.txt gh CLI: verifica integrita' saltata."
-        }
+    if (-not $checksumsAsset) {
+        throw "Asset checksums.txt non trovato nella latest release di gh CLI: impossibile verificare l'integrita' dell'MSI, installazione interrotta."
     }
+    try {
+        $checksumsContent = (Invoke-WebRequest -Uri $checksumsAsset.browser_download_url -UseBasicParsing).Content
+    } catch {
+        throw "Download di checksums.txt gh CLI fallito: $($_.Exception.Message). Installazione interrotta (nessuna verifica integrita' senza checksum)."
+    }
+    $line = ($checksumsContent -split "`r?`n") | Where-Object { $_ -match [regex]::Escape($asset.name) } | Select-Object -First 1
+    if (-not $line) {
+        throw "Hash SHA-256 per $($asset.name) non trovato in checksums.txt: installazione interrotta."
+    }
+    $expectedSha256 = ($line -split '\s+')[0]
     return [pscustomobject]@{ Url = $asset.browser_download_url; Sha256 = $expectedSha256 }
 }
 
@@ -191,14 +197,19 @@ function Get-LatestNodeLtsMsiUrl {
     $url = "https://nodejs.org/dist/$($lts.version)/$fileName"
     # nodejs.org pubblica SHASUMS256.txt per ogni release: lo usiamo per
     # verificare l'integrita' dell'MSI scaricato.
-    $expectedSha256 = $null
+    # FAIL-CLOSED: nodejs.org pubblica SEMPRE questo file, quindi se non
+    # riusciamo a scaricarlo/parsarlo interrompiamo l'installazione invece
+    # di procedere senza verifica (era un [WARN] non bloccante prima).
     try {
         $shasums = (Invoke-WebRequest -Uri "https://nodejs.org/dist/$($lts.version)/SHASUMS256.txt" -UseBasicParsing).Content
-        $line = ($shasums -split "`r?`n") | Where-Object { $_ -match [regex]::Escape($fileName) } | Select-Object -First 1
-        if ($line) { $expectedSha256 = ($line -split '\s+')[0] }
     } catch {
-        Write-Host "  [WARN] impossibile scaricare SHASUMS256.txt Node.js: verifica integrita' saltata."
+        throw "Download di SHASUMS256.txt Node.js fallito: $($_.Exception.Message). Installazione interrotta (nessuna verifica integrita' senza checksum)."
     }
+    $line = ($shasums -split "`r?`n") | Where-Object { $_ -match [regex]::Escape($fileName) } | Select-Object -First 1
+    if (-not $line) {
+        throw "Hash SHA-256 per $fileName non trovato in SHASUMS256.txt: installazione interrotta."
+    }
+    $expectedSha256 = ($line -split '\s+')[0]
     return [pscustomobject]@{ Url = $url; Sha256 = $expectedSha256 }
 }
 
