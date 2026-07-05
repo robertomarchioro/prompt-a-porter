@@ -81,11 +81,54 @@ rsync -a --files-from="$STAGING/files.txt" ./ "$BUILD"/
 # --- 2. Gate scan segreti (pattern ad alta confidenza, con allowlist) ---
 # Solo pattern di segreti REALI per evitare falsi-abort; i casi noti innocui
 # stanno in $ALLOWLIST_FILE. Estendi i pattern se servono altri formati.
-SECRET_PATTERNS='-----BEGIN (RSA|OPENSSH|EC|DSA|PGP|ENCRYPTED)? ?PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|gho_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{60,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{12,}|AIza[0-9A-Za-z_\-]{35}'
-HITS="$(grep -rInE "$SECRET_PATTERNS" "$BUILD" 2>/dev/null | grep -vFf "$ALLOWLIST_FILE" || true)"
-if [ -n "$HITS" ]; then
+#
+# NOTA: il pattern inizia con "-----BEGIN..." che grep scambierebbe per
+# un'opzione da riga di comando (leading "-") senza il flag `-e` esplicito
+# — bug presente in precedenza che disattivava SILENZIOSAMENTE l'intero
+# gate (grep falliva con "unrecognized option", l'errore finiva su
+# /dev/null e `|| true` lo inghiottiva, HITS restava sempre vuoto). Fixato
+# qui sotto con `-e "$SECRET_PATTERNS"`.
+SECRET_PATTERNS='-----BEGIN (RSA|OPENSSH|EC|DSA|PGP|ENCRYPTED)? ?PRIVATE KEY-----'
+SECRET_PATTERNS="$SECRET_PATTERNS"'|ghp_[A-Za-z0-9]{36}|gho_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{60,}'
+SECRET_PATTERNS="$SECRET_PATTERNS"'|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{12,}|AIza[0-9A-Za-z_\-]{35}'
+# Anthropic / OpenAI / Stripe / SendGrid
+SECRET_PATTERNS="$SECRET_PATTERNS"'|sk-ant-[A-Za-z0-9_\-]{20,}|sk-proj-[A-Za-z0-9_\-]{20,}|sk-[A-Za-z0-9]{20,}'
+SECRET_PATTERNS="$SECRET_PATTERNS"'|sk_live_[A-Za-z0-9]{20,}|rk_live_[A-Za-z0-9]{20,}|SG\.[A-Za-z0-9_.\-]{20,}'
+# Assegnazioni generiche password/secret/api-key con valore non banale
+SECRET_PATTERNS="$SECRET_PATTERNS"'|([Pp]assword|[Ss]ecret|[Aa]pi[_-]?[Kk]ey)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"']{8,}["'"'"']'
+HITS="$(grep -rInE -e "$SECRET_PATTERNS" "$BUILD" 2>/dev/null | grep -vFf "$ALLOWLIST_FILE" || true)"
+
+# --- 2b. Euristica blob base64 ad alta entropia (es. chiave privata Ed25519
+# Tauri Updater). Scansione ristretta ai file tracciati NON lockfile: i
+# lockfile (Cargo.lock, go.sum, pnpm-lock.yaml, ecc.) contengono hash
+# esadecimali/sha512-base64 lunghi che darebbero falsi positivi sistematici.
+# Scartiamo anche i match puramente esadecimali (probabili checksum/hash,
+# non segreti in formato base64 "vero" che include lettere g-z/G-Z, '+',
+# '/' o '=' di padding).
+BASE64_MIN_LEN=60
+LOCK_FILE_REGEX='(^|/)(Cargo\.lock|go\.sum|pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$'
+BASE64_HITS=""
+while IFS= read -r f; do
+  if printf '%s' "$f" | grep -qE "$LOCK_FILE_REGEX"; then
+    continue
+  fi
+  [ -f "$BUILD/$f" ] || continue
+  while IFS= read -r tok; do
+    case "$tok" in
+      *[!0-9a-fA-F]*) ;; # contiene char non-esadecimale -> possibile segreto
+      *) continue ;;      # solo hex -> probabile checksum/hash, skip
+    esac
+    BASE64_HITS="${BASE64_HITS}${f}: blob base64 sospetto (${#tok} char, prefisso ${tok:0:12}...)"$'\n'
+  done < <(grep -oE "[A-Za-z0-9+/]{${BASE64_MIN_LEN},}=?=?" "$BUILD/$f" 2>/dev/null || true)
+done < "$STAGING/files.txt"
+if [ -n "$BASE64_HITS" ]; then
+  BASE64_HITS="$(printf '%s' "$BASE64_HITS" | grep -vFf "$ALLOWLIST_FILE" || true)"
+fi
+
+if [ -n "$HITS" ] || [ -n "$BASE64_HITS" ]; then
   printf '\033[31m✗ GATE SEGRETI: possibili segreti reali — pubblicazione ABORTITA.\033[0m\n' >&2
-  printf '%s\n' "$HITS" >&2
+  [ -n "$HITS" ] && printf '%s\n' "$HITS" >&2
+  [ -n "$BASE64_HITS" ] && printf '%s' "$BASE64_HITS" >&2
   printf '\nSe sono falsi positivi, aggiungili a %s dopo verifica.\n' "$ALLOWLIST_FILE" >&2
   exit 2
 fi
