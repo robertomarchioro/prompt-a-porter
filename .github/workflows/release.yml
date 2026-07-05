@@ -182,6 +182,7 @@ jobs:
           # espone a script injection (il valore finirebbe incollato nello
           # script prima dell'esecuzione). Passiamo i valori via env così
           # PowerShell li legge come dati, non come sorgente.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
@@ -280,5 +281,3 @@ jobs:
 
           # Upload come asset della release draft creata da tauri-action.
           gh release upload $tag $zipName --clobber
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
