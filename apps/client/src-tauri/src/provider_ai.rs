@@ -628,6 +628,103 @@ fn valida_provider(name: &str) -> Result<(), PapErrore> {
     Ok(())
 }
 
+/// Host locali consentiti per `http://` (letterali ESATTI, confronto
+/// case-insensitive già normalizzato a monte). Deliberatamente NON usiamo
+/// `Ipv4Addr::is_loopback()`/`Ipv6Addr::is_loopback()` sull'host parsato:
+/// accetterebbe silenziosamente forme alternative dello stesso indirizzo
+/// (decimale `2130706433`, ottale `0177.0.0.1`, ecc.) che WHATWG/`url`
+/// normalizzano a `127.0.0.1` — un validatore "intelligente" diventerebbe
+/// esso stesso un vettore di offuscamento. L'allowlist testuale stretta è
+/// volutamente noiosa da forzare.
+const HOST_LOCALI_CONSENTITI: &[&str] = &["localhost", "127.0.0.1", "::1"];
+
+/// Fix #457 (review CRITICAL): valida lo schema/host di un `base_url`
+/// custom fornito dall'utente per un provider AI (config salvata o
+/// smoke-test Ollama).
+///
+/// Usa `url::Url::parse` (conforme WHATWG) invece di string-splitting
+/// manuale: un parser manuale che cerca il primo `:`/`/` dopo lo schema
+/// interpreta MALE un URL con userinfo come `http://127.0.0.1@evil.com/`
+/// (vede host=127.0.0.1, ma il client HTTP si connette DAVVERO a
+/// evil.com, che riceve la API key in chiaro — vedi audit #457 follow-up).
+///
+/// Regole:
+/// - stringa vuota/whitespace → Ok: significa "usa il default del
+///   provider", non c'è nessun input da validare.
+/// - qualunque userinfo (`user:pass@host` o anche solo `user@host`) →
+///   SEMPRE rifiutato: non esiste un caso d'uso legittimo per un
+///   provider AI, ed è il principale vettore per ingannare un parser
+///   ingenuo sull'host reale.
+/// - `https://<host>` → accettato (host non vuoto).
+/// - `http://<host>` → accettato SOLO se l'host è uno dei letterali
+///   `HOST_LOCALI_CONSENTITI` (confronto ESATTO, case-insensitive):
+///   Ollama gira tipicamente in locale senza TLS. `http://` verso un
+///   host remoto trasmetterebbe la API key (se presente in header) in
+///   chiaro sulla rete.
+/// - qualunque altro schema (`file://`, `ftp://`, `javascript:`,
+///   nessuno schema, ecc.) → rifiutato: `file://` permetterebbe di
+///   leggere file locali arbitrari attraverso il client HTTP, altri
+///   schemi non sono endpoint HTTP validi.
+pub(crate) fn valida_base_url(url: &str) -> Result<(), PapErrore> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Ok(());
+    }
+
+    let parsed = url::Url::parse(trimmed)
+        .map_err(|_| PapErrore::Generico("base_url non valido: URL non analizzabile.".into()))?;
+
+    // Fix #457 CRITICAL: rifiuta qualunque userinfo PRIMA di ispezionare
+    // l'host — altrimenti un validatore "furbo" costruito sopra l'host
+    // parsato correttamente potrebbe comunque essere aggirato da varianti
+    // future di questa funzione che tornassero a ispezionare la stringa
+    // grezza. Qui lo controlliamo direttamente sui campi strutturati.
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(PapErrore::Generico(
+            "base_url non valido: credenziali (user:pass@) non consentite nell'URL.".into(),
+        ));
+    }
+
+    match parsed.scheme() {
+        "https" => {
+            if parsed.host_str().unwrap_or("").is_empty() {
+                return Err(PapErrore::Generico(
+                    "base_url non valido: host mancante dopo https://".into(),
+                ));
+            }
+            Ok(())
+        }
+        "http" => {
+            // A questo punto l'URL non ha userinfo (verificato sopra): il
+            // testo tra `http://` e la prima `/`/`?`/`#` è esattamente
+            // `host[:porta]` come scritto dall'utente, senza ambiguità.
+            // Confronto testuale ESATTO con l'allowlist (non semantico):
+            // vedi doc-comment di HOST_LOCALI_CONSENTITI sul perché.
+            let lower = trimmed.to_ascii_lowercase();
+            let resto = lower.strip_prefix("http://").unwrap_or("");
+            let host_grezzo = if let Some(dentro_parentesi) = resto.strip_prefix('[') {
+                dentro_parentesi.split(']').next().unwrap_or("")
+            } else {
+                resto.split(['/', ':', '?', '#']).next().unwrap_or("")
+            };
+            if HOST_LOCALI_CONSENTITI.contains(&host_grezzo) {
+                Ok(())
+            } else {
+                Err(PapErrore::Generico(
+                    "base_url non valido: http:// è consentito solo per host locali \
+                     (localhost/127.0.0.1); usa https:// per host remoti."
+                        .into(),
+                ))
+            }
+        }
+        _ => Err(PapErrore::Generico(
+            "base_url non valido: schema non consentito. Richiesto https://, \
+             o http:// solo per host locali."
+                .into(),
+        )),
+    }
+}
+
 pub(crate) fn config_lista_pure(
     conn: &Connection,
 ) -> Result<Vec<ProviderConfigItem>, PapErrore> {
@@ -653,17 +750,40 @@ pub(crate) fn config_lista_pure(
     Ok(rows)
 }
 
+/// Fix #456: rifiuta il salvataggio di una API key quando il vault
+/// corrente non è cifrato. Le API key sono segreti long-lived (a
+/// differenza della password del vault, che l'utente digita ogni volta):
+/// persisterle in un DB SQLite in chiaro le espone a chiunque abbia
+/// accesso al filesystem. Il chiamante (comando Tauri) determina
+/// `vault_cifrato` leggendo `vault-meta.json` PRIMA di aprire la
+/// connessione, così questa funzione resta pura e testabile senza
+/// dover costruire un `VaultState` reale.
 pub(crate) fn config_salva_pure(
     conn: &Connection,
     input: &ProviderConfigInput,
+    vault_cifrato: bool,
 ) -> Result<(), PapErrore> {
     valida_provider(&input.provider)?;
+    // Fix #457: valida lo schema del base_url custom (previene SSRF/leak
+    // della API key verso host remoti non-TLS o lettura file:// locali).
+    if let Some(url) = &input.base_url {
+        valida_base_url(url)?;
+    }
     // Se api_key è None o stringa vuota, manteniamo la chiave esistente.
     let manteni_chiave = input
         .api_key
         .as_ref()
         .map(|k| k.is_empty())
         .unwrap_or(true);
+
+    // Rifiuta di persistere una NUOVA api_key se il vault non è cifrato.
+    // Non blocca l'aggiornamento di base_url/default_model/abilitato quando
+    // la chiave non viene toccata (manteni_chiave=true): in quel caso non
+    // stiamo scrivendo nessun nuovo segreto in chiaro.
+    if !manteni_chiave && !vault_cifrato {
+        return Err(PapErrore::VaultNonCifrato);
+    }
+
     if manteni_chiave {
         conn.execute(
             "INSERT INTO ProviderConfig (Provider, ApiKey, BaseUrl, DefaultModel,
@@ -765,6 +885,15 @@ pub(crate) fn config_carica_completa(
 pub(crate) fn istanzia_provider(
     cfg: &ProviderConfigItem,
 ) -> Result<Box<dyn AIProvider>, PapErrore> {
+    // Fix #457 (review HIGH): `config_salva_pure` valida `base_url` solo al
+    // salvataggio. Righe scritte da una build precedente a #457, o
+    // importate/ripristinate da backup/migrazione, non passano MAI da lì e
+    // resterebbero non validate per sempre pur venendo usate ad ogni
+    // generazione reale. Ri-validiamo qui, al punto d'uso, così qualunque
+    // provenienza del dato è protetta allo stesso modo.
+    if let Some(url) = &cfg.base_url {
+        valida_base_url(url)?;
+    }
     match cfg.provider.as_str() {
         "ollama" => Ok(Box::new(match cfg.base_url.clone() {
             Some(u) if !u.trim().is_empty() => OllamaProvider::new(u),
@@ -818,6 +947,12 @@ pub fn provider_ollama_genera(
     model: String,
     base_url: Option<String>,
 ) -> Result<GenerateOutput, PapErrore> {
+    // Fix #457: valida lo schema del base_url anche sul percorso di smoke
+    // test, non solo al salvataggio della config — un base_url malevolo
+    // passato direttamente dal frontend deve essere rifiutato qui.
+    if let Some(url) = &base_url {
+        valida_base_url(url)?;
+    }
     let provider = match base_url {
         Some(u) if !u.trim().is_empty() => OllamaProvider::new(u),
         _ => OllamaProvider::default(),
@@ -837,7 +972,11 @@ pub fn provider_config_salva(
     input: ProviderConfigInput,
     state: State<'_, VaultState>,
 ) -> Result<(), PapErrore> {
-    state.with_conn(|conn| config_salva_pure(conn, &input))
+    // Fix #456: determina se il vault è cifrato PRIMA di scrivere, così
+    // `config_salva_pure` può rifiutare il salvataggio di una nuova API key
+    // quando il vault è in chiaro.
+    let vault_cifrato = crate::vault::vault_cifrato_impl(&state)?;
+    state.with_conn(|conn| config_salva_pure(conn, &input, vault_cifrato))
 }
 
 #[tauri::command]
@@ -1180,7 +1319,7 @@ mod test {
             default_model: Some("claude-sonnet-4.6".into()),
             abilitato: true,
         };
-        config_salva_pure(&conn, &input).unwrap();
+        config_salva_pure(&conn, &input, true).unwrap();
         let r = config_lista_pure(&conn).unwrap();
         assert_eq!(r.len(), 1);
         assert_eq!(r[0].provider, "anthropic");
@@ -1200,7 +1339,7 @@ mod test {
             default_model: None,
             abilitato: true,
         };
-        config_salva_pure(&conn, &input).unwrap();
+        config_salva_pure(&conn, &input, true).unwrap();
         let cfg = config_carica_completa(&conn, "openai").unwrap();
         assert_eq!(cfg.api_key.as_deref(), Some("sk-test"));
     }
@@ -1215,7 +1354,7 @@ mod test {
             default_model: None,
             abilitato: true,
         };
-        let r = config_salva_pure(&conn, &input);
+        let r = config_salva_pure(&conn, &input, true);
         assert!(r.is_err());
         assert!(r.unwrap_err().to_string().contains("non riconosciuto"));
     }
@@ -1233,6 +1372,7 @@ mod test {
                 default_model: Some("claude-3.7".into()),
                 abilitato: true,
             },
+            true,
         )
         .unwrap();
         // Upsert SENZA passare api_key (None) — deve preservarla.
@@ -1245,6 +1385,7 @@ mod test {
                 default_model: Some("claude-sonnet-4.6".into()),
                 abilitato: true,
             },
+            true,
         )
         .unwrap();
         let cfg = config_carica_completa(&conn, "anthropic").unwrap();
@@ -1264,6 +1405,7 @@ mod test {
                 default_model: None,
                 abilitato: true,
             },
+            true,
         )
         .unwrap();
         config_salva_pure(
@@ -1275,6 +1417,7 @@ mod test {
                 default_model: None,
                 abilitato: true,
             },
+            true,
         )
         .unwrap();
         let cfg = config_carica_completa(&conn, "openai").unwrap();
@@ -1293,6 +1436,7 @@ mod test {
                 default_model: None,
                 abilitato: true,
             },
+            true,
         )
         .unwrap();
         config_elimina_pure(&conn, "anthropic").unwrap();
@@ -1304,6 +1448,247 @@ mod test {
         let conn = db_test();
         let r = config_elimina_pure(&conn, "anthropic");
         assert!(r.is_err());
+    }
+
+    // ─────────── #456: rifiuto API key su vault non cifrato ───────────
+
+    #[test]
+    fn config_salva_nuova_api_key_su_vault_non_cifrato_e_rifiutata() {
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "anthropic".into(),
+            api_key: Some("sk-ant-xyz".into()),
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+        };
+        let r = config_salva_pure(&conn, &input, false);
+        assert!(matches!(r, Err(PapErrore::VaultNonCifrato)));
+        // Nessuna riga deve essere stata scritta.
+        assert_eq!(config_lista_pure(&conn).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn config_salva_senza_api_key_su_vault_non_cifrato_e_permessa() {
+        // Aggiornare base_url/default_model senza toccare la chiave deve
+        // funzionare anche su vault non cifrato: non stiamo persistendo
+        // nessun nuovo segreto in chiaro.
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "ollama".into(),
+            api_key: None,
+            base_url: Some("http://localhost:11434".into()),
+            default_model: Some("llama3.1".into()),
+            abilitato: true,
+        };
+        config_salva_pure(&conn, &input, false).unwrap();
+        let r = config_lista_pure(&conn).unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].provider, "ollama");
+    }
+
+    #[test]
+    fn config_salva_api_key_vuota_su_vault_non_cifrato_e_permessa() {
+        // Stringa vuota == "non toccare la chiave" (manteni_chiave=true),
+        // stesso trattamento di None.
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "ollama".into(),
+            api_key: Some("".into()),
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+        };
+        config_salva_pure(&conn, &input, false).unwrap();
+        assert_eq!(config_lista_pure(&conn).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn config_salva_nuova_api_key_su_vault_cifrato_e_permessa() {
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "anthropic".into(),
+            api_key: Some("sk-ant-xyz".into()),
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+        };
+        config_salva_pure(&conn, &input, true).unwrap();
+        assert_eq!(config_lista_pure(&conn).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn vault_non_cifrato_messaggio_menziona_cifratura() {
+        let msg = PapErrore::VaultNonCifrato.to_string();
+        assert!(msg.contains("cifr"), "Il messaggio deve menzionare la cifratura: {msg}");
+    }
+
+    // ─────────── #457: validazione base_url (SSRF / key exfiltration) ───────────
+
+    #[test]
+    fn valida_base_url_https_ok() {
+        assert!(valida_base_url("https://api.anthropic.com").is_ok());
+        assert!(valida_base_url("https://my-proxy.example.com:8443/v1").is_ok());
+    }
+
+    #[test]
+    fn valida_base_url_http_localhost_ok() {
+        assert!(valida_base_url("http://localhost:11434").is_ok());
+        assert!(valida_base_url("http://127.0.0.1:11434").is_ok());
+        assert!(valida_base_url("http://[::1]:11434").is_ok());
+    }
+
+    #[test]
+    fn valida_base_url_http_remoto_rifiutato() {
+        let r = valida_base_url("http://example.com");
+        assert!(r.is_err());
+        assert!(r.unwrap_err().to_string().contains("http://"));
+    }
+
+    #[test]
+    fn valida_base_url_file_scheme_rifiutato() {
+        let r = valida_base_url("file:///etc/passwd");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn valida_base_url_garbage_rifiutato() {
+        assert!(valida_base_url("not-a-url").is_err());
+        assert!(valida_base_url("ftp://example.com").is_err());
+        assert!(valida_base_url("javascript:alert(1)").is_err());
+    }
+
+    #[test]
+    fn valida_base_url_stringa_vuota_ok() {
+        // Vuota/whitespace = "usa il default del provider".
+        assert!(valida_base_url("").is_ok());
+        assert!(valida_base_url("   ").is_ok());
+    }
+
+    #[test]
+    fn valida_base_url_https_senza_host_rifiutato() {
+        assert!(valida_base_url("https://").is_err());
+    }
+
+    // ─── Review CRITICAL: bypass via userinfo (user:pass@host) ───
+
+    #[test]
+    fn valida_base_url_userinfo_ipv4_bypass_rifiutato() {
+        // Il validatore precedente vedeva host="127.0.0.1" (username),
+        // ma il client HTTP si connette DAVVERO a evil.com (authority
+        // reale dopo la @) — la API key sarebbe stata inviata in chiaro
+        // a evil.com. Deve essere rifiutato SEMPRE, non "accettato perché
+        // sembra localhost".
+        let r = valida_base_url("http://127.0.0.1:11434@evil.com/");
+        assert!(r.is_err());
+        assert!(r.unwrap_err().to_string().contains("credenziali"));
+    }
+
+    #[test]
+    fn valida_base_url_userinfo_localhost_bypass_rifiutato() {
+        let r = valida_base_url("http://localhost:1@evil.com/");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn valida_base_url_userinfo_ipv6_bypass_rifiutato() {
+        let r = valida_base_url("http://[::1]:80@evil.com/");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn valida_base_url_userinfo_su_host_locale_legittimo_rifiutato_comunque() {
+        // Anche se l'host DOPO la @ è realmente locale, le credenziali
+        // nell'URL non hanno un caso d'uso legittimo per un provider AI:
+        // rifiutiamo a prescindere per non lasciare aperta la sintassi.
+        let r = valida_base_url("http://user:pass@localhost/");
+        assert!(r.is_err());
+    }
+
+    // ─── Review CRITICAL: host camuffati (non letterali) sempre rifiutati ───
+
+    #[test]
+    fn valida_base_url_sottodominio_di_localhost_rifiutato() {
+        // "localhost.attacker.com" NON è "localhost": un confronto per
+        // suffisso/substring sarebbe stato un'altra falla.
+        let r = valida_base_url("http://localhost.attacker.com/");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn valida_base_url_ipv4_decimale_rifiutato() {
+        // 2130706433 == 127.0.0.1 in decimale a 32 bit: WHATWG/`url`
+        // normalizzerebbero silenziosamente a "127.0.0.1" se usassimo
+        // un controllo semantico (is_loopback()). L'allowlist testuale
+        // stretta lo rifiuta perché non è uno dei letterali consentiti.
+        let r = valida_base_url("http://2130706433/");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn valida_base_url_0000_rifiutato() {
+        // 0.0.0.0 non è loopback (non è nemmeno in HOST_LOCALI_CONSENTITI).
+        let r = valida_base_url("http://0.0.0.0/");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn valida_base_url_trailing_dot_rifiutato() {
+        // "localhost." (FQDN con punto finale) non è il letterale esatto
+        // "localhost": rifiutato per rigore, nessun uso legittimo lo richiede.
+        let r = valida_base_url("http://localhost./");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn valida_base_url_uppercase_host_accettato() {
+        // Case-insensitivity è normalizzazione DNS legittima (non un
+        // bypass): "LOCALHOST" e "localhost" sono lo stesso host.
+        assert!(valida_base_url("http://LOCALHOST:11434/").is_ok());
+        assert!(valida_base_url("http://LoCaLhOsT/").is_ok());
+    }
+
+    #[test]
+    fn config_salva_base_url_invalido_e_rifiutato() {
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "ollama".into(),
+            api_key: None,
+            base_url: Some("file:///etc/passwd".into()),
+            default_model: None,
+            abilitato: true,
+        };
+        let r = config_salva_pure(&conn, &input, false);
+        assert!(r.is_err());
+        assert_eq!(config_lista_pure(&conn).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn config_salva_base_url_http_remoto_e_rifiutato() {
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "openai-compat".into(),
+            api_key: None,
+            base_url: Some("http://malicious.example.com".into()),
+            default_model: None,
+            abilitato: true,
+        };
+        let r = config_salva_pure(&conn, &input, false);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn provider_ollama_genera_base_url_invalido_rifiutato_prima_della_chiamata_http() {
+        // Non possiamo verificare l'assenza di chiamate HTTP direttamente,
+        // ma possiamo verificare che l'errore di validazione arrivi PRIMA
+        // di qualunque tentativo di rete (nessun timeout HTTP nel test).
+        let r = provider_ollama_genera(
+            "ciao".into(),
+            "llama3.1".into(),
+            Some("file:///etc/passwd".into()),
+        );
+        assert!(r.is_err());
+        assert!(r.unwrap_err().to_string().contains("base_url"));
     }
 
     #[test]
@@ -1349,6 +1734,60 @@ mod test {
         };
         let p = istanzia_provider(&cfg).unwrap();
         assert_eq!(p.name(), "ollama");
+    }
+
+    // ─── Review HIGH: #457 riapplicato al punto d'uso, non solo al salvataggio ───
+
+    #[test]
+    fn istanzia_provider_rivalida_base_url_riga_legacy_non_validata() {
+        // Simula una riga scritta da una build PRE-#457 (o importata/
+        // ripristinata da backup), quando `base_url` non veniva ancora
+        // validato al salvataggio: `config_carica_completa` la caricherebbe
+        // così com'è. `istanzia_provider` deve rifiutarla comunque, non
+        // fidarsi ciecamente del contenuto del DB.
+        let cfg = ProviderConfigItem {
+            provider: "ollama".into(),
+            api_key: None,
+            base_url: Some("file:///etc/passwd".into()),
+            default_model: None,
+            abilitato: true,
+            creato_a: "x".into(),
+            aggiornato_a: "x".into(),
+        };
+        let r = istanzia_provider(&cfg);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn istanzia_provider_rivalida_base_url_userinfo_legacy_rifiutato() {
+        let cfg = ProviderConfigItem {
+            provider: "anthropic".into(),
+            api_key: Some("k".into()),
+            base_url: Some("http://127.0.0.1:11434@evil.com/".into()),
+            default_model: None,
+            abilitato: true,
+            creato_a: "x".into(),
+            aggiornato_a: "x".into(),
+        };
+        let r = istanzia_provider(&cfg);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn istanzia_provider_base_url_valido_ancora_accettato() {
+        // Sentinel anti-regressione: la ri-validazione non deve rompere
+        // il percorso legittimo (base_url https custom valido).
+        let cfg = ProviderConfigItem {
+            provider: "openai-compat".into(),
+            api_key: Some("k".into()),
+            base_url: Some("https://my-proxy.example.com".into()),
+            default_model: None,
+            abilitato: true,
+            creato_a: "x".into(),
+            aggiornato_a: "x".into(),
+        };
+        let p = istanzia_provider(&cfg).unwrap();
+        assert_eq!(p.name(), "openai");
     }
 
     #[test]

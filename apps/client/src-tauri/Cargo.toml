@@ -38,6 +38,11 @@ tauri-plugin-updater = "2"
 # l'avvio al boot parte ridotto nel tray. Toggle in Impostazioni → Sistema,
 # escluso in versione portable (path exe non stabile). Vedi lib.rs::run().
 tauri-plugin-autostart = "2"
+# Fix #443: su Linux (AppImage/.deb) Tauri Updater NON auto-riavvia l'app
+# dopo downloadAndInstall() come invece fa su Windows (NSIS). Questo plugin
+# espone `relaunch()` invocabile dal frontend per forzare il riavvio anche
+# su Linux/macOS.
+tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
@@ -49,6 +54,10 @@ rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"]
 sqlite-vec = "0.1"
 argon2 = "0.5"
 rand = "0.10"
+# Fix #459: azzera la memoria dei buffer chiave/password del vault al
+# drop, invece di lasciarli in RAM come byte residui recuperabili da un
+# core dump o da un attacker con accesso al processo dopo l'uso.
+zeroize = "1"
 # Regex per modulo linting (Fase 3 Step 5): rilevamento segnaposti
 # malformati, PII (email, CC, API key), n-gram repetition.
 regex = "1"
@@ -63,6 +72,11 @@ ndarray = "0.17"
 # HTTP client per scaricare il modello ONNX da HuggingFace al primo uso.
 # Feature tls-rustls (no openssl, build più portabile in CI).
 ureq = { version = "2.10", default-features = false, features = ["tls"] }
+# Fix #457 (review): parsing URL conforme WHATWG invece di string-splitting
+# manuale — necessario per rifiutare correttamente userinfo (`user:pass@host`)
+# e host camuffati. Già presente in Cargo.lock come dipendenza transitiva
+# di ureq/altri crate; qui diventa dipendenza diretta.
+url = "2"
 # Tokenizer compatibile con tokenizer.json di HuggingFace per pre-processare
 # il testo prima dell'inference ort. default-features=false evita onig
 # (richiede C compiler), progressbar (TTY) e esaxx_fast. fancy-regex come
@@ -72,6 +86,11 @@ tokenizers = { version = "0.23", default-features = false, features = ["fancy-re
 flate2 = "1.0"
 tar = "0.4"
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
+# Fix #458: verifica SHA-256 degli artefatti scaricati (modello ONNX,
+# tokenizer, libonnxruntime) PRIMA di estrarli/caricarli. Evita di
+# eseguire codice nativo (libonnxruntime) o dati non verificati se il
+# download è stato manomesso (MITM, mirror compromesso, ecc.).
+sha2 = "0.10"
 
 [dev-dependencies]
 tempfile = "3"

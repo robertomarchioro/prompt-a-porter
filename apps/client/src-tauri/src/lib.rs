@@ -353,6 +353,11 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--minimized"]),
         ))
+        // Fix #443: su Linux (AppImage/.deb) il processo sostituito in-place
+        // dall'updater non si auto-rilancia come su Windows (NSIS). Il
+        // frontend chiama `relaunch()` da `@tauri-apps/plugin-process` dopo
+        // `downloadAndInstall()` per garantire il riavvio su tutte le piattaforme.
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let data_dir = app
                 .path()

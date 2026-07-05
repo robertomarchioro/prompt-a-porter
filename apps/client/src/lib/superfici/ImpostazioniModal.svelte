@@ -17,6 +17,7 @@
   } from "@tauri-apps/plugin-autostart";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { onMount, onDestroy, untrack } from "svelte";
+  import { eseguiRelaunchPostInstall } from "$lib/updater-relaunch";
   import {
     Palette,
     List as ListIcon,
@@ -924,9 +925,22 @@
         return;
       }
       await update.downloadAndInstall();
-      // Dopo install riuscito, Tauri Updater chiude l'app per riavviarla.
-      // Se il control torna qui significa che download/install non hanno
-      // applicato (caso edge), riporto a idle.
+      // Fix #443: su Windows (NSIS) l'installer chiude e riavvia l'app da
+      // solo dopo downloadAndInstall(). Su Linux (AppImage/.deb) e macOS
+      // questo NON accade: il binario viene sostituito in-place ma il
+      // processo corrente resta in esecuzione con il vecchio codice.
+      // Chiamiamo esplicitamente relaunch() per garantire il riavvio ovunque.
+      const { relaunch } = await import("@tauri-apps/plugin-process");
+      const risultatoRelaunch = await eseguiRelaunchPostInstall(relaunch);
+      if (risultatoRelaunch.kind === "riavvio_manuale_richiesto") {
+        console.error(
+          "[impostazioni] relaunch post-update fallito, riavvio manuale richiesto",
+        );
+        updaterStato = { kind: "error", message: risultatoRelaunch.messaggio };
+        return;
+      }
+      // Se relaunch() ha successo il processo termina prima di arrivare
+      // qui sulla maggior parte delle piattaforme; il fallback resta idle.
       updaterStato = { kind: "idle" };
     } catch (e) {
       updaterStato = { kind: "error", message: String(e) };

@@ -27,6 +27,11 @@ pub enum PapErrore {
     /// Errore di validazione/dominio business (es. nome cartella vuoto,
     /// destinazione non valida, etc.).
     Generico(String),
+    /// Fix #456: l'utente ha tentato di salvare una API key di un provider
+    /// AI mentre il vault corrente NON è cifrato. Le API key non devono mai
+    /// essere persistite in chiaro su disco: l'utente deve prima cifrare
+    /// il vault (vault_cambia_password da vault non cifrato → cifrato).
+    VaultNonCifrato,
 }
 
 impl fmt::Display for PapErrore {
@@ -57,6 +62,10 @@ impl fmt::Display for PapErrore {
                 non è disponibile. Se il problema persiste, riavvia l'applicazione."
             ),
             Self::Generico(msg) => write!(f, "{msg}"),
+            Self::VaultNonCifrato => write!(
+                f,
+                "Il vault non è cifrato: cifra il vault per poter salvare le API key dei provider AI."
+            ),
         }
     }
 }
