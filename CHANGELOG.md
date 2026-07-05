@@ -1,5 +1,22 @@
 # Changelog — Prompt a Porter
 
+## v0.8.34 — Security review: hardening client, MCP e pipeline di rilascio (2026-07-05)
+
+> Security review dell'intero progetto, risolta in 3 gruppi (client, server MCP, CI/script). La review adversariale sulle PR ha intercettato due difetti critici in cui il fix stesso non proteggeva davvero — corretti prima del merge.
+
+### Fix
+
+- **Aggiornamento su Linux/macOS: l'app si riavvia da sola** (#443): dopo aver installato un aggiornamento, su Linux (AppImage/.deb) e macOS l'app non ripartiva automaticamente (funzionava solo su Windows). Ora esegue il riavvio esplicito; se non è possibile (es. installazioni `.deb`) mostra un messaggio che invita a riaprirla manualmente.
+
+### Sicurezza
+
+- **Chiavi API rifiutate su vault non cifrato** (#456): salvando una chiave API di un provider su un vault *non* cifrato, l'app ora rifiuta l'operazione con un errore chiaro, invece di scriverla in chiaro nel database.
+- **Validazione dell'endpoint dei provider AI** (#457): il `base_url` dei provider viene ora validato con un vero parser di URL — solo `https://` (o `http://` verso `localhost`), niente `file://` né trucchi tipo `http://localhost@host-esterno`. Impedisce che una chiave API finisca, in chiaro, verso un endpoint non fidato. La verifica scatta anche all'uso, non solo al salvataggio, così valgono anche le configurazioni già esistenti.
+- **Verifica di integrità dei file scaricati** (#458): il modello di embeddings e la libreria `onnxruntime` vengono verificati con SHA-256 (fail-closed) prima di essere estratti o caricati, e ri-verificati a ogni avvio — non solo al primo download — per impedire la sostituzione della libreria nativa a posteriori.
+- **Azzeramento in memoria delle chiavi del vault** (#459): le chiavi di cifratura e le password del vault vengono ora azzerate dalla memoria appena non servono più (incluse le copie esadecimali passate a SQLCipher), riducendo l'esposizione a memory dump.
+- **Server MCP: validazione degli input** (#460): gli argomenti dei tool MCP sono ora validati a runtime con schemi condivisi (nuovo pacchetto `shared-schema`), con limiti di dimensione e un tetto aggregato sul payload, così un client MCP malevolo non può più far crashare il server né saturarne CPU/memoria.
+- **Pipeline di rilascio e script** (#445, #446, #447, #461): chiusa una injection via nome del tag in `release.yml`; passphrase della chiave di firma non più in chiaro (DPAPI su Windows, keyring su Linux); **corretto il gate anti-segreti di pubblicazione, che passava sempre** (ora fail-closed, con test di regressione); permessi minimi (`contents: read`) sui workflow di build e verifica dei checksum sui download di setup.
+
 ## v0.8.33 — Triage: fix Test Golden, export audit e pacchetto .deb Linux (2026-07-04)
 
 > Ciclo di triage: 4 issue segnalate durante i primi test dal vivo su Linux, risolte in 3 gruppi, più le rifiniture per la tray su XFCE.
