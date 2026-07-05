@@ -54,6 +54,10 @@ rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"]
 sqlite-vec = "0.1"
 argon2 = "0.5"
 rand = "0.10"
+# Fix #459: azzera la memoria dei buffer chiave/password del vault al
+# drop, invece di lasciarli in RAM come byte residui recuperabili da un
+# core dump o da un attacker con accesso al processo dopo l'uso.
+zeroize = "1"
 # Regex per modulo linting (Fase 3 Step 5): rilevamento segnaposti
 # malformati, PII (email, CC, API key), n-gram repetition.
 regex = "1"

@@ -6,6 +6,7 @@ use argon2::{Algorithm, Argon2, Params, Version};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use zeroize::Zeroizing;
 
 use crate::errore::PapErrore;
 use crate::migrazione;
@@ -129,20 +130,24 @@ fn hex_a_bytes(hex: &str) -> Result<Vec<u8>, PapErrore> {
         .collect()
 }
 
+/// Fix #459: la chiave derivata (32 byte usati per cifrare l'intero vault)
+/// è avvolta in `Zeroizing` così viene azzerata in memoria automaticamente
+/// al drop, invece di restare come byte residui recuperabili da un core
+/// dump o da un attacker con accesso al processo dopo l'uso.
 fn deriva_chiave(
     password: &str,
     salt: &[u8],
     memory_kib: u32,
     time_cost: u32,
     parallelism: u32,
-) -> Result<[u8; KEY_LEN], PapErrore> {
+) -> Result<Zeroizing<[u8; KEY_LEN]>, PapErrore> {
     let params = Params::new(memory_kib, time_cost, parallelism, Some(KEY_LEN))
         .map_err(|e| PapErrore::DerivazioneFallita(e.to_string()))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
-    let mut chiave = [0u8; KEY_LEN];
+    let mut chiave = Zeroizing::new([0u8; KEY_LEN]);
     argon2
-        .hash_password_into(password.as_bytes(), salt, &mut chiave)
+        .hash_password_into(password.as_bytes(), salt, &mut *chiave)
         .map_err(|e| PapErrore::DerivazioneFallita(e.to_string()))?;
 
     Ok(chiave)
@@ -211,6 +216,8 @@ pub fn vault_aperto(state: State<'_, VaultState>) -> bool {
 ///   probabile creazione precedente fallita a metà), lo rimuove e procede.
 #[tauri::command]
 pub fn vault_crea(password: String, state: State<'_, VaultState>) -> Result<(), PapErrore> {
+    // Fix #459: azzera la password in memoria al termine della chiamata.
+    let password = Zeroizing::new(password);
     vault_crea_impl(&password, &state)
 }
 
@@ -387,6 +394,8 @@ pub(crate) fn vault_cifrato_impl(state: &VaultState) -> Result<bool, PapErrore> 
 /// Sblocca il vault esistente con la password.
 #[tauri::command]
 pub fn vault_unlock(password: String, state: State<'_, VaultState>) -> Result<(), PapErrore> {
+    // Fix #459: azzera la password in memoria al termine della chiamata.
+    let password = Zeroizing::new(password);
     vault_unlock_impl(&password, &state)
 }
 
@@ -453,6 +462,9 @@ pub fn vault_cambia_password(
     password_nuova: String,
     state: State<'_, VaultState>,
 ) -> Result<(), PapErrore> {
+    // Fix #459: azzera entrambe le password in memoria al termine della chiamata.
+    let password_vecchia = Zeroizing::new(password_vecchia);
+    let password_nuova = Zeroizing::new(password_nuova);
     vault_cambia_password_impl(&password_vecchia, &password_nuova, &state)
 }
 
@@ -503,7 +515,7 @@ pub(crate) fn vault_cambia_password_impl(
     )?;
 
     // Re-key del database
-    let hex_nuova = bytes_a_hex(&chiave_nuova);
+    let hex_nuova = bytes_a_hex(chiave_nuova.as_slice());
     conn.execute_batch(&format!("PRAGMA rekey = \"x'{hex_nuova}'\";"))?;
     crate::audit::registra(conn, "vault.password_cambiata", "Vault", "", None);
 
@@ -752,7 +764,7 @@ mod test {
         // Re-key con password2
         let salt2 = genera_salt().unwrap();
         let chiave2 = deriva_chiave("password_due_ok", &salt2, 4096, 1, 1).unwrap();
-        let hex2 = bytes_a_hex(&chiave2);
+        let hex2 = bytes_a_hex(chiave2.as_slice());
         conn.execute_batch(&format!("PRAGMA rekey = \"x'{hex2}'\";"))
             .unwrap();
         drop(conn);

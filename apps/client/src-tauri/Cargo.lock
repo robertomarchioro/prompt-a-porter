@@ -3242,6 +3242,7 @@ dependencies = [
  "tempfile",
  "tokenizers",
  "ureq",
+ "zeroize",
  "zip 8.6.0",
 ]
 
