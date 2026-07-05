@@ -24,6 +24,7 @@ use ndarray::{Array1, Array2};
 use ort::session::Session;
 use ort::value::Tensor;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -41,9 +42,21 @@ pub const MODEL_ID: &str = "multilingual-MiniLM-L12-v2";
 pub const EMBEDDING_DIM: usize = 384;
 
 const HF_REPO: &str = "Xenova/paraphrase-multilingual-MiniLM-L12-v2";
-const FILES_HF: &[(&str, &str)] = &[
-    ("onnx/model_quantized.onnx", "model.onnx"),
-    ("tokenizer.json", "tokenizer.json"),
+
+// Fix #458: hash SHA-256 attesi per gli artefatti scaricati da HuggingFace,
+// pinnati sul commit `main` corrente al momento della scrittura di questa
+// PR. Se HuggingFace aggiorna il file, il download fallirà con un errore
+// esplicito (fail-closed) invece di caricare silenziosamente un file
+// diverso da quello verificato: in quel caso l'hash va aggiornato di
+// proposito in un commit dedicato.
+const SHA256_MODEL_ONNX: &str =
+    "66fc00f5f29afcaff34092e1bdd20008ca3918265a82fb9695a551e510cc4ebc";
+const SHA256_TOKENIZER_JSON: &str =
+    "b60b6b43406a48bf3638526314f3d232d97058bc93472ff2de930d43686fa441";
+
+const FILES_HF: &[(&str, &str, &str)] = &[
+    ("onnx/model_quantized.onnx", "model.onnx", SHA256_MODEL_ONNX),
+    ("tokenizer.json", "tokenizer.json", SHA256_TOKENIZER_JSON),
 ];
 
 // ─────────── Costanti onnxruntime ───────────
@@ -155,7 +168,35 @@ fn dim_cartella_mb(path: &Path) -> u64 {
 }
 
 fn modello_completo(path: &Path) -> bool {
-    FILES_HF.iter().all(|(_, locale)| path.join(locale).is_file())
+    FILES_HF
+        .iter()
+        .all(|(_, locale, _)| path.join(locale).is_file())
+}
+
+// ─────────── Verifica integrità (fix #458) ───────────
+
+/// Calcola l'hash SHA-256 di un buffer, come stringa hex minuscola.
+fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    digest.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Verifica che l'hash SHA-256 di `bytes` corrisponda a `atteso`
+/// (confronto case-insensitive). Fail-closed: qualunque mismatch produce
+/// un errore esplicito invece di procedere silenziosamente con un
+/// artefatto non verificato — in particolare `libonnxruntime` è codice
+/// nativo caricato ed eseguito nel processo, quindi un archivio
+/// manomesso equivarrebbe a RCE.
+fn verifica_sha256(bytes: &[u8], atteso: &str, nome_file: &str) -> Result<(), PapErrore> {
+    let calcolato = sha256_hex(bytes);
+    if !calcolato.eq_ignore_ascii_case(atteso) {
+        return Err(PapErrore::Generico(format!(
+            "Verifica integrità fallita per {nome_file}: l'hash SHA-256 del download \
+             non corrisponde a quello atteso. Il file potrebbe essere stato manomesso \
+             o il mirror è compromesso; download interrotto."
+        )));
+    }
+    Ok(())
 }
 
 // ─────────── Status command ───────────
@@ -265,6 +306,7 @@ fn scarica_file(
     indice_file: usize,
     totale_file: usize,
     nome_visibile: &str,
+    sha256_atteso: &str,
 ) -> Result<(), PapErrore> {
     let dest_tmp = dest.with_extension("download-partial");
     if let Some(parent) = dest_tmp.parent() {
@@ -275,6 +317,9 @@ fn scarica_file(
     let mut buf = [0u8; 64 * 1024];
     let mut acc: u64 = 0;
     let mut last_emit_acc: u64 = 0;
+    // Fix #458: hash calcolato incrementalmente mentre il file viene
+    // scritto su disco, per evitare di doverlo rileggere per intero dopo.
+    let mut hasher = Sha256::new();
     loop {
         let n = reader
             .read(&mut buf)
@@ -283,6 +328,7 @@ fn scarica_file(
             break;
         }
         out.write_all(&buf[..n])?;
+        hasher.update(&buf[..n]);
         acc += n as u64;
         if acc - last_emit_acc >= 256 * 1024 {
             let _ = app.emit(
@@ -300,6 +346,20 @@ fn scarica_file(
     }
     out.flush()?;
     drop(out);
+
+    // Fix #458: verifica integrità PRIMA di spostare il file nella
+    // posizione finale da cui verrà caricato/usato. Su mismatch il file
+    // parziale viene rimosso (fail-closed, niente file sospetto residuo).
+    let digest_hex: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
+    if !digest_hex.eq_ignore_ascii_case(sha256_atteso) {
+        let _ = fs::remove_file(&dest_tmp);
+        return Err(PapErrore::Generico(format!(
+            "Verifica integrità fallita per {nome_visibile}: l'hash SHA-256 del download \
+             non corrisponde a quello atteso. Il file potrebbe essere stato manomesso \
+             o il mirror è compromesso; download interrotto."
+        )));
+    }
+
     fs::rename(&dest_tmp, dest)?;
     let _ = app.emit(
         "embeddings:download:progress",
@@ -316,30 +376,43 @@ fn scarica_file(
 
 // ─────────── Download libonnxruntime ───────────
 
-/// Tarball name + sub-path della libreria nativa nella release upstream.
-fn ort_release_filename() -> Result<(String, String), PapErrore> {
+/// Tarball name + sub-path della libreria nativa nella release upstream +
+/// hash SHA-256 atteso dell'intero archivio (fix #458).
+///
+/// L'hash è verificato PRIMA dell'estrazione: `libonnxruntime` è codice
+/// nativo caricato ed eseguito nel processo (via `ORT_DYLIB_PATH`), quindi
+/// un archivio manomesso non verificato equivarrebbe a RCE. Ogni
+/// piattaforma supportata ha il proprio hash pinnato qui; una piattaforma
+/// non elencata fallisce chiusa nel branch `(os, arch)` sottostante,
+/// invece di scaricare/estrarre un artefatto non verificato.
+fn ort_release_filename() -> Result<(String, String, &'static str), PapErrore> {
     let arch = std::env::consts::ARCH;
     let lib = nome_libonnxruntime();
-    let (suffix, sub) = match (std::env::consts::OS, arch) {
+    let (suffix, sub, sha256_atteso) = match (std::env::consts::OS, arch) {
         ("linux", "x86_64") => (
             format!("onnxruntime-linux-x64-{ORT_VERSION}.tgz"),
             format!("onnxruntime-linux-x64-{ORT_VERSION}/lib/{lib}"),
+            "b6deea7f2e22c10c043019f294a0ea4d2a6c0ae52a009c34847640db75ec5580",
         ),
         ("linux", "aarch64") => (
             format!("onnxruntime-linux-aarch64-{ORT_VERSION}.tgz"),
             format!("onnxruntime-linux-aarch64-{ORT_VERSION}/lib/{lib}"),
+            "0b9f47d140411d938e47915824d8daaa424df95a88b5f1fc843172a75168f7a0",
         ),
         ("macos", "aarch64") => (
             format!("onnxruntime-osx-arm64-{ORT_VERSION}.tgz"),
             format!("onnxruntime-osx-arm64-{ORT_VERSION}/lib/{lib}"),
+            "8182db0ebb5caa21036a3c78178f17fabb98a7916bdab454467c8f4cf34bcfdf",
         ),
         ("macos", "x86_64") => (
             format!("onnxruntime-osx-x86_64-{ORT_VERSION}.tgz"),
             format!("onnxruntime-osx-x86_64-{ORT_VERSION}/lib/{lib}"),
+            "a8e43edcaa349cbfc51578a7fc61ea2b88793ccf077b4bc65aca58999d20cf0f",
         ),
         ("windows", "x86_64") => (
             format!("onnxruntime-win-x64-{ORT_VERSION}.zip"),
             format!("onnxruntime-win-x64-{ORT_VERSION}/lib/{lib}"),
+            "72c23470310ec79a7d42d27fe9d257e6c98540c73fa5a1db1f67f538c6c16f2f",
         ),
         (os, arch) => {
             return Err(PapErrore::Generico(format!(
@@ -347,7 +420,7 @@ fn ort_release_filename() -> Result<(String, String), PapErrore> {
             )))
         }
     };
-    Ok((suffix, sub))
+    Ok((suffix, sub, sha256_atteso))
 }
 
 fn estrai_libonnxruntime(
@@ -418,18 +491,18 @@ pub fn embeddings_download(
     let totale_file = FILES_HF.len() + if libonnxruntime_da_scaricare { 1 } else { 0 };
 
     // 1. Modello + tokenizer da HuggingFace
-    for (idx, (path_remoto, nome_locale)) in FILES_HF.iter().enumerate() {
+    for (idx, (path_remoto, nome_locale, sha256_atteso)) in FILES_HF.iter().enumerate() {
         let dest = dir_modello.join(nome_locale);
         if dest.is_file() {
             continue;
         }
         let url = format!("https://huggingface.co/{HF_REPO}/resolve/main/{path_remoto}");
-        scarica_file(&app, &url, &dest, idx + 1, totale_file, nome_locale)?;
+        scarica_file(&app, &url, &dest, idx + 1, totale_file, nome_locale, sha256_atteso)?;
     }
 
     // 2. libonnxruntime da Microsoft GitHub release (tarball/zip → estrai solo lib)
     if libonnxruntime_da_scaricare {
-        let (filename, path_in_archive) = ort_release_filename()?;
+        let (filename, path_in_archive, sha256_atteso) = ort_release_filename()?;
         let url = format!("{ORT_RELEASE_BASE}v{ORT_VERSION}/{filename}");
         let (bytes, _total) = http_get_with_progress(
             &app,
@@ -438,6 +511,9 @@ pub fn embeddings_download(
             totale_file,
             &filename,
         )?;
+        // Fix #458: verifica integrità dell'intero archivio PRIMA di
+        // estrarre/caricare la libreria nativa al suo interno.
+        verifica_sha256(&bytes, sha256_atteso, &filename)?;
         estrai_libonnxruntime(&bytes, &path_in_archive, &lib_path)?;
         log::info!("libonnxruntime estratta in {}", lib_path.display());
     }
@@ -766,9 +842,12 @@ mod test {
         // Sentinel: la fn ritorna Ok per la piattaforma corrente di test.
         let r = ort_release_filename();
         assert!(r.is_ok(), "Piattaforma corrente deve essere supportata");
-        let (filename, sub) = r.unwrap();
+        let (filename, sub, sha256_atteso) = r.unwrap();
         assert!(filename.contains(ORT_VERSION));
         assert!(sub.contains("/lib/"));
+        // Fix #458: hash pinnato, 64 hex char (SHA-256), non vuoto/placeholder.
+        assert_eq!(sha256_atteso.len(), 64);
+        assert!(sha256_atteso.chars().all(|c| c.is_ascii_hexdigit()));
     }
 
     #[test]
@@ -1000,8 +1079,68 @@ mod test {
     fn ort_release_filename_versione_consistente() {
         // Sentinel: il filename ritorna la stessa ORT_VERSION (no drift).
         let r = ort_release_filename().unwrap();
-        let (filename, _sub) = r;
+        let (filename, _sub, _sha256_atteso) = r;
         // Filename contiene sempre la versione configurata.
         assert!(filename.contains(ORT_VERSION));
+    }
+
+    // ─────────── #458: verifica integrità SHA-256 ───────────
+
+    #[test]
+    fn sha256_hex_valore_noto() {
+        // sha256("") ha un valore noto e stabile — sentinel anti-regressione
+        // dell'algoritmo/encoding usato.
+        assert_eq!(
+            sha256_hex(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[test]
+    fn verifica_sha256_hash_corretto_ok() {
+        let bytes = b"contenuto di test";
+        let atteso = sha256_hex(bytes);
+        assert!(verifica_sha256(bytes, &atteso, "file.txt").is_ok());
+    }
+
+    #[test]
+    fn verifica_sha256_case_insensitive() {
+        let bytes = b"contenuto di test";
+        let atteso = sha256_hex(bytes).to_uppercase();
+        assert!(verifica_sha256(bytes, &atteso, "file.txt").is_ok());
+    }
+
+    #[test]
+    fn verifica_sha256_mismatch_e_errore_fail_closed() {
+        let bytes = b"contenuto originale";
+        let atteso_sbagliato =
+            "0000000000000000000000000000000000000000000000000000000000000000";
+        let r = verifica_sha256(bytes, atteso_sbagliato, "modello.onnx");
+        assert!(r.is_err());
+        let msg = r.unwrap_err().to_string();
+        assert!(msg.contains("modello.onnx"), "Deve nominare il file: {msg}");
+        assert!(msg.contains("integrità"), "Deve menzionare l'integrità: {msg}");
+    }
+
+    #[test]
+    fn sha256_atteso_ort_hash_reale_non_placeholder() {
+        // Sentinel anti-regressione: l'hash pinnato per la piattaforma
+        // corrente deve essere reale (64 hex char), non un placeholder
+        // tipo tutto-zero che romperebbe silenziosamente `verifica_sha256`.
+        let placeholder_zero = "0".repeat(64);
+        assert_ne!(
+            ort_release_filename().unwrap().2,
+            placeholder_zero,
+            "l'hash della piattaforma corrente non deve essere un placeholder"
+        );
+    }
+
+    #[test]
+    fn model_e_tokenizer_sha256_reali_pinnati_non_placeholder() {
+        let placeholder_zero = "0".repeat(64);
+        assert_ne!(SHA256_MODEL_ONNX, placeholder_zero);
+        assert_ne!(SHA256_TOKENIZER_JSON, placeholder_zero);
+        assert_eq!(SHA256_MODEL_ONNX.len(), 64);
+        assert_eq!(SHA256_TOKENIZER_JSON.len(), 64);
     }
 }
