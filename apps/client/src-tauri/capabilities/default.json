@@ -16,6 +16,7 @@
     "global-shortcut:allow-unregister",
     "log:default",
     "updater:default",
-    "autostart:default"
+    "autostart:default",
+    "process:allow-restart"
   ]
 }

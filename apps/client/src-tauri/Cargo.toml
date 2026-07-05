@@ -38,6 +38,11 @@ tauri-plugin-updater = "2"
 # l'avvio al boot parte ridotto nel tray. Toggle in Impostazioni → Sistema,
 # escluso in versione portable (path exe non stabile). Vedi lib.rs::run().
 tauri-plugin-autostart = "2"
+# Fix #443: su Linux (AppImage/.deb) Tauri Updater NON auto-riavvia l'app
+# dopo downloadAndInstall() come invece fa su Windows (NSIS). Questo plugin
+# espone `relaunch()` invocabile dal frontend per forzare il riavvio anche
+# su Linux/macOS.
+tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
