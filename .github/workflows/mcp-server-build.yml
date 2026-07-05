@@ -21,6 +21,9 @@ on:
       - "!apps/mcp-server/**/LICENSE"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   lint-and-build:
     runs-on: ubuntu-latest

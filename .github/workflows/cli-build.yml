@@ -17,6 +17,9 @@ on:
       - "!apps/cli/**/LICENSE"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest

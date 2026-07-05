@@ -6,6 +6,9 @@ on:
     # Lunedì alle 06:00 UTC settimanale
     - cron: "0 6 * * 1"
 
+permissions:
+  contents: read
+
 jobs:
   rust-audit:
     name: cargo audit (client Tauri)
