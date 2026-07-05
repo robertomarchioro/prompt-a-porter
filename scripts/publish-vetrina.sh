@@ -81,11 +81,102 @@ rsync -a --files-from="$STAGING/files.txt" ./ "$BUILD"/
 # --- 2. Gate scan segreti (pattern ad alta confidenza, con allowlist) ---
 # Solo pattern di segreti REALI per evitare falsi-abort; i casi noti innocui
 # stanno in $ALLOWLIST_FILE. Estendi i pattern se servono altri formati.
-SECRET_PATTERNS='-----BEGIN (RSA|OPENSSH|EC|DSA|PGP|ENCRYPTED)? ?PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|gho_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{60,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{12,}|AIza[0-9A-Za-z_\-]{35}'
-HITS="$(grep -rInE "$SECRET_PATTERNS" "$BUILD" 2>/dev/null | grep -vFf "$ALLOWLIST_FILE" || true)"
-if [ -n "$HITS" ]; then
+#
+# NOTA STORICA (2 regressioni "gate always-pass" già capitate su questo
+# script, occhio a non reintrodurle):
+#   1) il pattern inizia con "-----BEGIN..." che grep scambierebbe per
+#      un'opzione da riga di comando (leading "-") senza il flag `-e`
+#      esplicito — grep falliva con "unrecognized option", l'errore finiva
+#      su /dev/null e `|| true` lo inghiottiva, HITS restava sempre vuoto.
+#      Fixato con `-e "$SECRET_PATTERNS"`.
+#   2) $ALLOWLIST_FILE contiene righe vuote/commenti. Con `grep -F` un
+#      pattern-file con una riga VUOTA fa sì che il pattern vuoto matchi
+#      OGNI riga in input, e con `-v` questo esclude TUTTO l'output (anche
+#      segreti reali). Fixato pre-pulendo l'allowlist (via
+#      allowlist_clean_file, sotto) esattamente come si fa già per
+#      $EXCLUDE_FILE, e saltando `grep -vF` del tutto quando la lista
+#      ripulita è vuota (nessun pattern -> nessun filtro, non un match-all).
+#      Vedi scripts/test-publish-vetrina-gate.sh per il test di regressione.
+SECRET_PATTERNS='-----BEGIN (RSA|OPENSSH|EC|DSA|PGP|ENCRYPTED)? ?PRIVATE KEY-----'
+SECRET_PATTERNS="$SECRET_PATTERNS"'|ghp_[A-Za-z0-9]{36}|gho_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{60,}'
+SECRET_PATTERNS="$SECRET_PATTERNS"'|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{12,}|AIza[0-9A-Za-z_\-]{35}'
+# Anthropic / OpenAI / Stripe / SendGrid
+SECRET_PATTERNS="$SECRET_PATTERNS"'|sk-ant-[A-Za-z0-9_\-]{20,}|sk-proj-[A-Za-z0-9_\-]{20,}|sk-[A-Za-z0-9]{20,}'
+SECRET_PATTERNS="$SECRET_PATTERNS"'|sk_live_[A-Za-z0-9]{20,}|rk_live_[A-Za-z0-9]{20,}|SG\.[A-Za-z0-9_.\-]{20,}'
+# Assegnazioni generiche password/secret/api-key con valore non banale.
+# \b (word boundary, estensione GNU) evita falsi positivi su identificatori
+# camelCase come "testSecret"/"errorePassword" dove "Secret"/"Password" e'
+# solo una sottostringa del nome, non la keyword isolata. Il valore
+# richiesto esclude gli spazi (un vero segreto/password/api-key non ne
+# contiene quasi mai) per evitare falsi positivi su prosa/UI che capita
+# somigli a un'assegnazione (es. "### Cambio password: \"Errore durante...\"").
+SECRET_PATTERNS="$SECRET_PATTERNS"'|\b([Pp]assword|[Ss]ecret|[Aa]pi[_-]?[Kk]ey)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"'[:space:]]{8,}["'"'"']'
+
+# Allowlist ripulita (niente righe vuote/commenti) — vedi NOTA STORICA (2)
+# sopra. Se non resta nessun pattern valido, ALLOWLIST_CLEAN_FILE è vuoto:
+# in quel caso NON invocare `grep -vF` (pattern-file vuoto = comportamento
+# non garantito/pericoloso), semplicemente non filtrare nulla (`cat`).
+ALLOWLIST_CLEAN_FILE="$STAGING/allowlist.clean.txt"
+grep -vE '^[[:space:]]*(#|$)' "$ALLOWLIST_FILE" > "$ALLOWLIST_CLEAN_FILE" || true
+filter_allowlist() {
+  if [ -s "$ALLOWLIST_CLEAN_FILE" ]; then
+    grep -vFf "$ALLOWLIST_CLEAN_FILE" || true
+  else
+    cat
+  fi
+}
+
+# `-a`/--binary-files=text (al posto di `-I`): un segreto in un file con
+# anche un solo byte non-UTF8 (o un formato binario come .pfx/.p12/DER)
+# verrebbe classificato "binary" da grep e SALTATO con `-I`. Forziamo la
+# scansione testuale di tutto.
+# `|| true` sull'INTERA pipe (non solo dentro filter_allowlist): con
+# `pipefail` attivo, se il grep principale non trova nulla (exit 1, il
+# caso "nessun segreto" — quello buono) la pipe restituirebbe comunque
+# stato non-zero anche se filter_allowlist ha successo, facendo uscire lo
+# script sotto `set -e` PRIMA di stampare "Gate segreti: OK".
+HITS="$(grep -rnE -a -e "$SECRET_PATTERNS" "$BUILD" 2>/dev/null | filter_allowlist || true)"
+
+# --- 2b. Euristica blob base64 ad alta entropia (es. chiave privata Ed25519
+# Tauri Updater). Scansione ristretta ai file tracciati NON lockfile: i
+# lockfile (Cargo.lock, go.sum, pnpm-lock.yaml, ecc.) contengono hash
+# esadecimali/sha512-base64 lunghi che darebbero falsi positivi sistematici.
+# Scartiamo anche i match puramente esadecimali (probabili checksum/hash,
+# non segreti in formato base64 "vero" che include lettere g-z/G-Z, '+',
+# '/' o '=' di padding), e i path di URL http(s):// (un path lungo di
+# lettere/cifre/slash rientra nell'alfabeto base64 e darebbe falsi positivi
+# sistematici su qualunque script con una URL pinnata lunga — vedi
+# scripts/setup-ubuntu.sh). Le secret patterns "vere" (AKIA, sk-, ecc. nel
+# gate primario sopra) non hanno questo problema e restano invariate.
+BASE64_MIN_LEN=60
+LOCK_FILE_REGEX='(^|/)(Cargo\.lock|go\.sum|pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$'
+BASE64_HITS=""
+while IFS= read -r f; do
+  if printf '%s' "$f" | grep -qE "$LOCK_FILE_REGEX"; then
+    continue
+  fi
+  [ -f "$BUILD/$f" ] || continue
+  while IFS= read -r tok; do
+    case "$tok" in
+      *[!0-9a-fA-F]*) ;; # contiene char non-esadecimale -> possibile segreto
+      *) continue ;;      # solo hex -> probabile checksum/hash, skip
+    esac
+    # Il check allowlist va fatto sul token INTERO e sul path del file (non
+    # sul messaggio troncato sotto): un allowlist entry con il blob completo
+    # (es. la chiave pubblica Updater) o con il path del file (es. il test
+    # di regressione del gate stesso) deve poter matchare qui, altrimenti un
+    # confronto contro il solo prefisso troncato non funzionerebbe mai.
+    if [ -s "$ALLOWLIST_CLEAN_FILE" ] && printf '%s\n%s\n' "$f" "$tok" | grep -qFf "$ALLOWLIST_CLEAN_FILE"; then
+      continue
+    fi
+    BASE64_HITS="${BASE64_HITS}${f}: blob base64 sospetto (${#tok} char, prefisso ${tok:0:12}...)"$'\n'
+  done < <(sed -E 's#https?://[A-Za-z0-9./_-]+##g' "$BUILD/$f" 2>/dev/null | grep -a -oE "[A-Za-z0-9+/]{${BASE64_MIN_LEN},}=?=?" 2>/dev/null || true)
+done < "$STAGING/files.txt"
+
+if [ -n "$HITS" ] || [ -n "$BASE64_HITS" ]; then
   printf '\033[31m✗ GATE SEGRETI: possibili segreti reali — pubblicazione ABORTITA.\033[0m\n' >&2
-  printf '%s\n' "$HITS" >&2
+  [ -n "$HITS" ] && printf '%s\n' "$HITS" >&2
+  [ -n "$BASE64_HITS" ] && printf '%s' "$BASE64_HITS" >&2
   printf '\nSe sono falsi positivi, aggiungili a %s dopo verifica.\n' "$ALLOWLIST_FILE" >&2
   exit 2
 fi

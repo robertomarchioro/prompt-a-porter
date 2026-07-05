@@ -111,13 +111,27 @@ function Install-WinGetPackage {
 function Install-MsiFromUrl {
     param(
         [string]$Url,
-        [string]$DisplayName
+        [string]$DisplayName,
+        # Se fornito, verifica l'hash SHA-256 dell'MSI scaricato prima di
+        # eseguirlo. Se omesso (nessun checksum pubblicato disponibile per
+        # questo asset), la verifica viene saltata con un warning esplicito.
+        [string]$ExpectedSha256
     )
     $rand = [System.IO.Path]::GetRandomFileName()
     $tmpMsi = Join-Path $env:TEMP "setup-$rand.msi"
     $logFile = Join-Path $env:TEMP "msi-install-$rand.log"
     Write-Host "  Download MSI: $Url"
     Invoke-WebRequest -Uri $Url -OutFile $tmpMsi -UseBasicParsing
+    if ($ExpectedSha256) {
+        $actualSha256 = (Get-FileHash -Path $tmpMsi -Algorithm SHA256).Hash
+        if ($actualSha256 -ne $ExpectedSha256.ToUpper()) {
+            Remove-Item -Path $tmpMsi -Force -ErrorAction SilentlyContinue
+            throw "Checksum SHA-256 non corrispondente per $DisplayName (atteso $ExpectedSha256, ottenuto $actualSha256). Download NON eseguito per sicurezza."
+        }
+        Write-Host "  [OK] checksum SHA-256 verificato"
+    } else {
+        Write-Host "  [WARN] nessun checksum pubblicato disponibile per ${DisplayName}: verifica integrita' SALTATA."
+    }
     Write-Host "  Installazione msiexec (UAC prompt se richiesto, accetta)..."
     try {
         $proc = Start-Process -FilePath msiexec.exe `
@@ -152,7 +166,26 @@ function Get-LatestGhMsiUrl {
     $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/cli/cli/releases/latest' -Headers @{ 'User-Agent' = 'pap-setup' }
     $asset = $rel.assets | Where-Object { $_.name -like '*windows_amd64.msi' } | Select-Object -First 1
     if (-not $asset) { throw "Asset MSI gh CLI non trovato nella latest release" }
-    return $asset.browser_download_url
+    # gh CLI pubblica un file `*_checksums.txt` firmato per ogni release:
+    # lo leggiamo per recuperare l'hash SHA-256 atteso dell'MSI scelto.
+    # FAIL-CLOSED: gh CLI pubblica SEMPRE questo file, quindi se non
+    # riusciamo a scaricarlo/parsarlo interrompiamo l'installazione invece
+    # di procedere senza verifica (era un [WARN] non bloccante prima).
+    $checksumsAsset = $rel.assets | Where-Object { $_.name -like '*checksums.txt' } | Select-Object -First 1
+    if (-not $checksumsAsset) {
+        throw "Asset checksums.txt non trovato nella latest release di gh CLI: impossibile verificare l'integrita' dell'MSI, installazione interrotta."
+    }
+    try {
+        $checksumsContent = (Invoke-WebRequest -Uri $checksumsAsset.browser_download_url -UseBasicParsing).Content
+    } catch {
+        throw "Download di checksums.txt gh CLI fallito: $($_.Exception.Message). Installazione interrotta (nessuna verifica integrita' senza checksum)."
+    }
+    $line = ($checksumsContent -split "`r?`n") | Where-Object { $_ -match [regex]::Escape($asset.name) } | Select-Object -First 1
+    if (-not $line) {
+        throw "Hash SHA-256 per $($asset.name) non trovato in checksums.txt: installazione interrotta."
+    }
+    $expectedSha256 = ($line -split '\s+')[0]
+    return [pscustomobject]@{ Url = $asset.browser_download_url; Sha256 = $expectedSha256 }
 }
 
 function Get-LatestNodeLtsMsiUrl {
@@ -160,7 +193,24 @@ function Get-LatestNodeLtsMsiUrl {
     $idx = Invoke-RestMethod -Uri 'https://nodejs.org/dist/index.json' -Headers @{ 'User-Agent' = 'pap-setup' }
     $lts = $idx | Where-Object { $_.lts -and $_.lts -ne $false } | Select-Object -First 1
     if (-not $lts) { throw "Nessuna versione LTS Node.js trovata" }
-    return "https://nodejs.org/dist/$($lts.version)/node-$($lts.version)-x64.msi"
+    $fileName = "node-$($lts.version)-x64.msi"
+    $url = "https://nodejs.org/dist/$($lts.version)/$fileName"
+    # nodejs.org pubblica SHASUMS256.txt per ogni release: lo usiamo per
+    # verificare l'integrita' dell'MSI scaricato.
+    # FAIL-CLOSED: nodejs.org pubblica SEMPRE questo file, quindi se non
+    # riusciamo a scaricarlo/parsarlo interrompiamo l'installazione invece
+    # di procedere senza verifica (era un [WARN] non bloccante prima).
+    try {
+        $shasums = (Invoke-WebRequest -Uri "https://nodejs.org/dist/$($lts.version)/SHASUMS256.txt" -UseBasicParsing).Content
+    } catch {
+        throw "Download di SHASUMS256.txt Node.js fallito: $($_.Exception.Message). Installazione interrotta (nessuna verifica integrita' senza checksum)."
+    }
+    $line = ($shasums -split "`r?`n") | Where-Object { $_ -match [regex]::Escape($fileName) } | Select-Object -First 1
+    if (-not $line) {
+        throw "Hash SHA-256 per $fileName non trovato in SHASUMS256.txt: installazione interrotta."
+    }
+    $expectedSha256 = ($line -split '\s+')[0]
+    return [pscustomobject]@{ Url = $url; Sha256 = $expectedSha256 }
 }
 
 # 1. Preflight: verifica winget (opzionale - fallback con download diretto MSI
@@ -186,7 +236,8 @@ if ($SkipInstall) {
         Install-WinGetPackage -PackageId 'GitHub.cli' -DisplayName 'GitHub CLI'
     } else {
         Write-Host "Installo GitHub CLI via MSI diretto..."
-        Install-MsiFromUrl -Url (Get-LatestGhMsiUrl) -DisplayName 'GitHub CLI'
+        $ghMsi = Get-LatestGhMsiUrl
+        Install-MsiFromUrl -Url $ghMsi.Url -DisplayName 'GitHub CLI' -ExpectedSha256 $ghMsi.Sha256
     }
 
     # 2b. SimplySign Desktop
@@ -214,7 +265,8 @@ if ($SkipInstall) {
         Install-WinGetPackage -PackageId 'OpenJS.NodeJS.LTS' -DisplayName 'Node.js LTS'
     } else {
         Write-Host "Installo Node.js LTS via MSI diretto..."
-        Install-MsiFromUrl -Url (Get-LatestNodeLtsMsiUrl) -DisplayName 'Node.js LTS'
+        $nodeMsi = Get-LatestNodeLtsMsiUrl
+        Install-MsiFromUrl -Url $nodeMsi.Url -DisplayName 'Node.js LTS' -ExpectedSha256 $nodeMsi.Sha256
     }
 
     # Refresh PATH per la sessione corrente (gli installer aggiungono a
@@ -325,6 +377,17 @@ function Install-WinSdkSigningTools {
     # i componenti voluti via /features OptionId.SigningTools (~30 MB).
     # URL stabile: fwlink che redireziona al Windows 11 SDK installer
     # corrente. Alternativa documentata: https://aka.ms/windowssdk
+    #
+    # RISCHIO ACCETTATO: a differenza di gh CLI e Node.js (verificati sotto
+    # via SHA-256 da checksum pubblicati), questo bootstrapper Microsoft e'
+    # "rolling" (il fwlink redireziona sempre alla versione corrente del
+    # Windows SDK) e Microsoft non pubblica un checksum stabile scaricabile
+    # per questo specifico bootstrapper .exe. Mitigazioni: la URL e'
+    # scaricata via HTTPS da un host Microsoft (go.microsoft.com) con
+    # linkid pinnato (non un dominio arbitrario), ed esegue solo l'installer
+    # ufficiale firmato Authenticode Microsoft (Windows valida la firma
+    # all'esecuzione). Se serve massima garanzia, installa manualmente da
+    # https://aka.ms/windowssdk verificandone tu la firma prima di eseguire.
     $url = 'https://go.microsoft.com/fwlink/?linkid=2286561'
     $tmpExe = Join-Path $env:TEMP ("winsdksetup-" + [System.IO.Path]::GetRandomFileName() + ".exe")
     Write-Host "  Download Windows SDK bootstrapper..."
@@ -446,19 +509,32 @@ if (Test-Path $keyDest) {
     [Environment]::SetEnvironmentVariable('TAURI_UPDATER_PRIVATE_KEY_PATH', $keyDest, 'User')
     Write-Host "[OK] TAURI_UPDATER_PRIVATE_KEY_PATH settata (User scope)"
 
-    # Password chiave (opzionale)
-    $existingPwd = [Environment]::GetEnvironmentVariable('TAURI_SIGNING_PRIVATE_KEY_PASSWORD', 'User')
-    if ($null -eq $existingPwd) {
+    # Password chiave (opzionale). NON viene piu' persistita in chiaro come
+    # env var User (leggibile in chiaro da registro/Task Manager/altri
+    # processi dello stesso utente): viene invece cifrata con DPAPI
+    # (legabile solo dall'utente Windows corrente su questa macchina) e
+    # salvata su file. scripts\sign-release.ps1 la decifra automaticamente.
+    $pwdFile = Join-Path $tauriDir 'pap-updater.pwd.enc'
+    $legacyPlaintextPwd = [Environment]::GetEnvironmentVariable('TAURI_SIGNING_PRIVATE_KEY_PASSWORD', 'User')
+    if ($legacyPlaintextPwd) {
+        Write-Host "[WARN] TAURI_SIGNING_PRIVATE_KEY_PASSWORD e' ancora settata in CHIARO (User scope)"
+        Write-Host "       da una versione precedente di questo script. Rimuovila con:"
+        Write-Host "       [Environment]::SetEnvironmentVariable('TAURI_SIGNING_PRIVATE_KEY_PASSWORD', `$null, 'User')"
+    }
+    if (Test-Path $pwdFile) {
+        Write-Host "[OK] passphrase cifrata gia' presente: $pwdFile"
+    } else {
         Write-Host ""
         Write-Host "Se la chiave Tauri Updater ha una password (passphrase),"
-        Write-Host "settala come env var. Lascia vuoto se la chiave non e' cifrata."
-        $pwd = Read-Host "Password chiave Tauri Updater (vuoto = nessuna)"
-        if ($pwd) {
-            [Environment]::SetEnvironmentVariable('TAURI_SIGNING_PRIVATE_KEY_PASSWORD', $pwd, 'User')
-            Write-Host "[OK] TAURI_SIGNING_PRIVATE_KEY_PASSWORD settata (User scope)"
+        Write-Host "verra' salvata cifrata (DPAPI) in $pwdFile."
+        Write-Host "Lascia vuoto se la chiave non e' cifrata."
+        $securePwd = Read-Host "Password chiave Tauri Updater (vuoto = nessuna)" -AsSecureString
+        if ($securePwd.Length -gt 0) {
+            $securePwd | ConvertFrom-SecureString | Out-File -FilePath $pwdFile -Encoding utf8 -Force
+            Write-Host "[OK] passphrase salvata cifrata in $pwdFile"
+        } else {
+            Write-Host "[INFO] skip: nessuna passphrase impostata."
         }
-    } else {
-        Write-Host "[OK] TAURI_SIGNING_PRIVATE_KEY_PASSWORD gia' settata"
     }
 }
 
@@ -475,10 +551,10 @@ Write-Host ""
 Write-Host "Env vars (User scope, persistenti):"
 $tp = [Environment]::GetEnvironmentVariable('CERTUM_CERT_THUMBPRINT','User')
 $kp = [Environment]::GetEnvironmentVariable('TAURI_UPDATER_PRIVATE_KEY_PATH','User')
-$pw = [Environment]::GetEnvironmentVariable('TAURI_SIGNING_PRIVATE_KEY_PASSWORD','User')
+$pwdFileSummary = Join-Path (Join-Path $env:USERPROFILE '.tauri') 'pap-updater.pwd.enc'
 Write-Host "  CERTUM_CERT_THUMBPRINT:              $(if($tp){$tp}else{'(non settata)'})"
 Write-Host "  TAURI_UPDATER_PRIVATE_KEY_PATH:      $(if($kp){$kp}else{'(non settata)'})"
-Write-Host "  TAURI_SIGNING_PRIVATE_KEY_PASSWORD:  $(if($pw){'(settata, valore nascosto)'}else{'(non settata)'})"
+Write-Host "  Passphrase chiave Updater (cifrata): $(if(Test-Path $pwdFileSummary){'presente (DPAPI, ' + $pwdFileSummary + ')'}else{'(non impostata)'})"
 Write-Host ""
 Write-Host "Prossimi step:"
 Write-Host "  1. CHIUDI E RIAPRI PowerShell (per caricare env vars + nuovi tool in PATH)"

@@ -120,7 +120,28 @@ if ! $SKIP_INSTALL; then
   # 4. Node.js LTS via NodeSource
   if ! cmd_exists node; then
     section "4. Node.js LTS"
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+    # NOTA SICUREZZA: non usiamo piu' la URL "rolling"
+    # https://deb.nodesource.com/setup_lts.x pipeata direttamente in
+    # `sudo bash` (il contenuto puo' cambiare in qualsiasi momento senza
+    # preavviso, senza modo di verificarne l'integrita'). Pinniamo invece
+    # a un commit specifico e immutabile del repo nodesource/distributions
+    # e verifichiamo lo sha256 dello script scaricato prima di eseguirlo.
+    # Per aggiornare il pin (es. nuova LTS major): scarica manualmente
+    # https://deb.nodesource.com/setup_lts.x, ispezionalo, poi aggiorna
+    # NODESOURCE_SETUP_URL (nuovo commit SHA) e NODESOURCE_SETUP_SHA256
+    # qui sotto.
+    NODESOURCE_SETUP_URL="https://raw.githubusercontent.com/nodesource/distributions/c6e581b0d24e5d043476ddb947d70e6fe10e83c9/scripts/deb/setup_lts.x"
+    NODESOURCE_SETUP_SHA256="6e3d580f5bd7ccf2aa1e8df8d35c60d78e873c3ff8beb282c9bebd914904ad72"
+    nodesource_script="$(mktemp)"
+    curl -fsSL "$NODESOURCE_SETUP_URL" -o "$nodesource_script"
+    if ! echo "$NODESOURCE_SETUP_SHA256  $nodesource_script" | sha256sum -c - >/dev/null 2>&1; then
+      echo "[FAIL] checksum NodeSource setup script non corrisponde al pin atteso."
+      echo "       Non eseguo lo script. Vedi commento sopra per aggiornare il pin."
+      rm -f "$nodesource_script"
+      exit 1
+    fi
+    sudo -E bash "$nodesource_script"
+    rm -f "$nodesource_script"
     sudo apt-get install -y nodejs
     echo "[OK] node: $(node -v)"
   else
@@ -211,6 +232,21 @@ else
     echo "[OK] pubkey in $PUB_PATH:"
     cat "$PUB_PATH"
     echo ""
+    if [[ -n "$KEY_PWD" ]]; then
+      if cmd_exists secret-tool; then
+        # Passphrase custodita nel keyring di sistema (GNOME Keyring /
+        # KWallet via libsecret), non in chiaro su disco. Vedi sezione 9
+        # per come viene riletta nella shell.
+        secret-tool store --label="Prompt a Porter - Tauri Updater key passphrase" \
+          service prompt-a-porter account tauri-updater-key <<<"$KEY_PWD"
+        echo "[OK] passphrase salvata nel keyring (secret-tool)"
+      else
+        echo "[WARN] secret-tool (libsecret-tools) non trovato: passphrase NON salvata."
+        echo "       Installa con: sudo apt-get install libsecret-tools"
+        echo "       poi rilancia, oppure salvala manualmente in un password manager."
+      fi
+    fi
+    unset KEY_PWD
     echo "PROSSIMI STEP:"
     echo "  1. Backup di $KEY_PATH in password manager (Bitwarden, 1Password, etc.)"
     echo "  2. Aggiorna apps/client/src-tauri/tauri.conf.json:"
@@ -236,8 +272,16 @@ $MARKER
 # Path alla chiave privata Tauri Updater (usata da scripts/sign-release.ps1
 # su Windows; su Linux serve per tauri signer sign / generate).
 export TAURI_UPDATER_PRIVATE_KEY_PATH="\$HOME/.tauri/pap-updater.key"
-# Decommenta se la chiave Updater e' cifrata:
-# export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="<password>"
+# Se la chiave Updater e' cifrata, la passphrase NON va scritta qui in
+# chiaro. Viene invece custodita nel keyring di sistema (GNOME Keyring /
+# KWallet via libsecret) e riletta a ogni apertura di shell:
+#   salvarla:   secret-tool store --label="Prompt a Porter - Tauri Updater key passphrase" \\
+#                 service prompt-a-porter account tauri-updater-key
+#   rimuoverla: secret-tool clear service prompt-a-porter account tauri-updater-key
+if command -v secret-tool >/dev/null 2>&1; then
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD="\$(secret-tool lookup service prompt-a-porter account tauri-updater-key 2>/dev/null)"
+  export TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+fi
 $END_MARKER
 EOF
   echo "[OK] aggiunto blocco in $BASHRC"
