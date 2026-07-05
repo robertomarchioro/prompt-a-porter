@@ -5,20 +5,24 @@ on:
     branches: [main]
     paths:
       - "apps/mcp-server/**"
+      - "packages/shared-schema/**"
       - "pnpm-workspace.yaml"
       - "pnpm-lock.yaml"
       - "!apps/mcp-server/**/*.md"
       - "!apps/mcp-server/**/CHANGELOG.md"
       - "!apps/mcp-server/**/LICENSE"
+      - "!packages/shared-schema/**/*.md"
   pull_request:
     branches: [main]
     paths:
       - "apps/mcp-server/**"
+      - "packages/shared-schema/**"
       - "pnpm-workspace.yaml"
       - "pnpm-lock.yaml"
       - "!apps/mcp-server/**/*.md"
       - "!apps/mcp-server/**/CHANGELOG.md"
       - "!apps/mcp-server/**/LICENSE"
+      - "!packages/shared-schema/**/*.md"
   workflow_dispatch:
 
 jobs:
@@ -37,13 +41,22 @@ jobs:
       - name: Installa dipendenze
         run: pnpm install --frozen-lockfile
 
-      - name: Type-check (lint)
+      - name: Type-check @pap/shared-schema (lint)
+        run: pnpm --filter @pap/shared-schema lint
+
+      - name: Test @pap/shared-schema con coverage (gate 80%)
+        run: pnpm --filter @pap/shared-schema test:coverage
+
+      - name: Build @pap/shared-schema
+        run: pnpm --filter @pap/shared-schema build
+
+      - name: Type-check @pap/mcp-server (lint)
         run: pnpm --filter @pap/mcp-server lint
 
-      - name: Test con coverage (gate 80%)
+      - name: Test @pap/mcp-server con coverage (gate 80%)
         run: pnpm --filter @pap/mcp-server test:coverage
 
-      - name: Build TypeScript
+      - name: Build @pap/mcp-server
         run: pnpm --filter @pap/mcp-server build
 
       - name: Verifica output
