@@ -103,8 +103,14 @@ SECRET_PATTERNS="$SECRET_PATTERNS"'|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{12,
 # Anthropic / OpenAI / Stripe / SendGrid
 SECRET_PATTERNS="$SECRET_PATTERNS"'|sk-ant-[A-Za-z0-9_\-]{20,}|sk-proj-[A-Za-z0-9_\-]{20,}|sk-[A-Za-z0-9]{20,}'
 SECRET_PATTERNS="$SECRET_PATTERNS"'|sk_live_[A-Za-z0-9]{20,}|rk_live_[A-Za-z0-9]{20,}|SG\.[A-Za-z0-9_.\-]{20,}'
-# Assegnazioni generiche password/secret/api-key con valore non banale
-SECRET_PATTERNS="$SECRET_PATTERNS"'|([Pp]assword|[Ss]ecret|[Aa]pi[_-]?[Kk]ey)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"']{8,}["'"'"']'
+# Assegnazioni generiche password/secret/api-key con valore non banale.
+# \b (word boundary, estensione GNU) evita falsi positivi su identificatori
+# camelCase come "testSecret"/"errorePassword" dove "Secret"/"Password" e'
+# solo una sottostringa del nome, non la keyword isolata. Il valore
+# richiesto esclude gli spazi (un vero segreto/password/api-key non ne
+# contiene quasi mai) per evitare falsi positivi su prosa/UI che capita
+# somigli a un'assegnazione (es. "### Cambio password: \"Errore durante...\"").
+SECRET_PATTERNS="$SECRET_PATTERNS"'|\b([Pp]assword|[Ss]ecret|[Aa]pi[_-]?[Kk]ey)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"'[:space:]]{8,}["'"'"']'
 
 # Allowlist ripulita (niente righe vuote/commenti) — vedi NOTA STORICA (2)
 # sopra. Se non resta nessun pattern valido, ALLOWLIST_CLEAN_FILE è vuoto:
@@ -137,7 +143,11 @@ HITS="$(grep -rnE -a -e "$SECRET_PATTERNS" "$BUILD" 2>/dev/null | filter_allowli
 # esadecimali/sha512-base64 lunghi che darebbero falsi positivi sistematici.
 # Scartiamo anche i match puramente esadecimali (probabili checksum/hash,
 # non segreti in formato base64 "vero" che include lettere g-z/G-Z, '+',
-# '/' o '=' di padding).
+# '/' o '=' di padding), e i path di URL http(s):// (un path lungo di
+# lettere/cifre/slash rientra nell'alfabeto base64 e darebbe falsi positivi
+# sistematici su qualunque script con una URL pinnata lunga — vedi
+# scripts/setup-ubuntu.sh). Le secret patterns "vere" (AKIA, sk-, ecc. nel
+# gate primario sopra) non hanno questo problema e restano invariate.
 BASE64_MIN_LEN=60
 LOCK_FILE_REGEX='(^|/)(Cargo\.lock|go\.sum|pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$'
 BASE64_HITS=""
@@ -151,12 +161,17 @@ while IFS= read -r f; do
       *[!0-9a-fA-F]*) ;; # contiene char non-esadecimale -> possibile segreto
       *) continue ;;      # solo hex -> probabile checksum/hash, skip
     esac
+    # Il check allowlist va fatto sul token INTERO e sul path del file (non
+    # sul messaggio troncato sotto): un allowlist entry con il blob completo
+    # (es. la chiave pubblica Updater) o con il path del file (es. il test
+    # di regressione del gate stesso) deve poter matchare qui, altrimenti un
+    # confronto contro il solo prefisso troncato non funzionerebbe mai.
+    if [ -s "$ALLOWLIST_CLEAN_FILE" ] && printf '%s\n%s\n' "$f" "$tok" | grep -qFf "$ALLOWLIST_CLEAN_FILE"; then
+      continue
+    fi
     BASE64_HITS="${BASE64_HITS}${f}: blob base64 sospetto (${#tok} char, prefisso ${tok:0:12}...)"$'\n'
-  done < <(grep -a -oE "[A-Za-z0-9+/]{${BASE64_MIN_LEN},}=?=?" "$BUILD/$f" 2>/dev/null || true)
+  done < <(sed -E 's#https?://[A-Za-z0-9./_-]+##g' "$BUILD/$f" 2>/dev/null | grep -a -oE "[A-Za-z0-9+/]{${BASE64_MIN_LEN},}=?=?" 2>/dev/null || true)
 done < "$STAGING/files.txt"
-if [ -n "$BASE64_HITS" ]; then
-  BASE64_HITS="$(printf '%s' "$BASE64_HITS" | filter_allowlist || true)"
-fi
 
 if [ -n "$HITS" ] || [ -n "$BASE64_HITS" ]; then
   printf '\033[31m✗ GATE SEGRETI: possibili segreti reali — pubblicazione ABORTITA.\033[0m\n' >&2
