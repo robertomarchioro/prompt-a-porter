@@ -185,17 +185,49 @@ fn sha256_hex(bytes: &[u8]) -> String {
 /// (confronto case-insensitive). Fail-closed: qualunque mismatch produce
 /// un errore esplicito invece di procedere silenziosamente con un
 /// artefatto non verificato — in particolare `libonnxruntime` è codice
-/// nativo caricato ed eseguito nel processo, quindi un archivio
-/// manomesso equivarrebbe a RCE.
+/// nativo caricato ed eseguito nel processo, quindi un file manomesso
+/// (a download avvenuto, o riscritto sul disco in un momento successivo)
+/// equivarrebbe a RCE. Usata sia subito dopo il download sia ad ogni
+/// riavvio prima di ricaricare gli artefatti dalla cache locale.
 fn verifica_sha256(bytes: &[u8], atteso: &str, nome_file: &str) -> Result<(), PapErrore> {
     let calcolato = sha256_hex(bytes);
     if !calcolato.eq_ignore_ascii_case(atteso) {
         return Err(PapErrore::Generico(format!(
-            "Verifica integrità fallita per {nome_file}: l'hash SHA-256 del download \
-             non corrisponde a quello atteso. Il file potrebbe essere stato manomesso \
-             o il mirror è compromesso; download interrotto."
+            "Verifica integrità fallita per {nome_file}: l'hash SHA-256 non corrisponde \
+             a quello atteso. Il file potrebbe essere stato manomesso, corrotto o \
+             sostituito; operazione interrotta."
         )));
     }
+    Ok(())
+}
+
+/// Fix #458 (review MEDIUM): ri-verifica il SHA-256 di TUTTI gli artefatti
+/// in cache (modello, tokenizer, libonnxruntime) ad OGNI avvio, non solo
+/// al primo download. Senza questo, un attacker con scrittura sulla
+/// data-dir dell'app (o una corruzione silenziosa su disco) potrebbe
+/// sostituire `libonnxruntime` DOPO la verifica iniziale: ai riavvii
+/// successivi il file veniva fidato solo perché "esiste su disco"
+/// (`lib_path.is_file()`), senza ricontrollarne il contenuto. Fail-closed:
+/// il primo mismatch interrompe il caricamento con un errore esplicito.
+fn verifica_artefatti_cache_su_disco(dir_modello: &Path, lib_path: &Path) -> Result<(), PapErrore> {
+    for (_, nome_locale, sha256_atteso) in FILES_HF {
+        let path = dir_modello.join(nome_locale);
+        let bytes = fs::read(&path).map_err(|e| {
+            PapErrore::Generico(format!(
+                "Impossibile leggere {nome_locale} per la verifica di integrità: {e}"
+            ))
+        })?;
+        verifica_sha256(&bytes, sha256_atteso, nome_locale)?;
+    }
+
+    let (_, _, sha256_lib_atteso) = ort_release_filename()?;
+    let lib_bytes = fs::read(lib_path).map_err(|e| {
+        PapErrore::Generico(format!(
+            "Impossibile leggere libonnxruntime per la verifica di integrità: {e}"
+        ))
+    })?;
+    verifica_sha256(&lib_bytes, sha256_lib_atteso, "libonnxruntime")?;
+
     Ok(())
 }
 
@@ -556,6 +588,12 @@ pub fn init_session_pure(
             "libonnxruntime non scaricata. Chiama embeddings_download.".into(),
         ));
     }
+
+    // Fix #458 (review MEDIUM): la verifica SHA-256 avveniva solo al
+    // download. Ri-verifichiamo ORA, ad ogni avvio, PRIMA di impostare
+    // ORT_DYLIB_PATH o caricare la Session — fail-closed se un artefatto
+    // in cache è stato alterato dopo la verifica iniziale.
+    verifica_artefatti_cache_su_disco(&dir_modello, &lib_path)?;
 
     // Punta ort a libonnxruntime via env var. Sicuro perché siamo single-thread
     // qui (Tauri command sequenziati su mutex), e l'env var è letta solo al
@@ -958,6 +996,52 @@ mod test {
             msg.contains("Modello non scaricato"),
             "Errore deve menzionare 'Modello non scaricato', got: {msg}"
         );
+        assert!(!session_caricata(&rt), "Session deve restare non caricata");
+    }
+
+    // ─── Review MEDIUM: ri-verifica integrità ad ogni avvio, non solo al download ───
+
+    #[test]
+    fn verifica_artefatti_cache_su_disco_contenuto_manomesso_e_errore() {
+        // Simula un attacker con scrittura sulla data-dir (o una
+        // corruzione silenziosa): i file esistono ma il contenuto non
+        // corrisponde più all'hash pinnato. Deve fallire chiuso.
+        let dir = tempfile::tempdir().unwrap();
+        let dir_modello = dir.path().join("modello");
+        std::fs::create_dir_all(&dir_modello).unwrap();
+        std::fs::write(dir_modello.join("model.onnx"), b"contenuto-manomesso").unwrap();
+        std::fs::write(dir_modello.join("tokenizer.json"), b"contenuto-manomesso").unwrap();
+        let lib_path = dir.path().join("libonnxruntime.so");
+        std::fs::write(&lib_path, b"binario-manomesso").unwrap();
+
+        let r = verifica_artefatti_cache_su_disco(&dir_modello, &lib_path);
+        assert!(r.is_err());
+        assert!(r.unwrap_err().to_string().contains("integrità"));
+    }
+
+    #[test]
+    fn init_session_pure_rifiuta_cache_manomessa_prima_di_settare_env_var() {
+        // Fix #458 review: `init_session_pure` deve rifiutare fail-closed
+        // artefatti in cache che esistono su disco ma non superano la
+        // ri-verifica SHA-256 — non solo al primo download (embeddings_download),
+        // ma ad OGNI avvio dell'app, PRIMA di impostare ORT_DYLIB_PATH.
+        let dir = tempfile::tempdir().unwrap();
+        let vault = crate::vault::VaultState::new(dir.path().to_path_buf());
+        let rt = EmbeddingsState::new();
+
+        let dir_modello = percorso_modello(&vault);
+        std::fs::create_dir_all(&dir_modello).unwrap();
+        std::fs::write(dir_modello.join("model.onnx"), b"contenuto-manomesso").unwrap();
+        std::fs::write(dir_modello.join("tokenizer.json"), b"contenuto-manomesso").unwrap();
+
+        let lib_path = percorso_libonnxruntime(&vault);
+        std::fs::create_dir_all(lib_path.parent().unwrap()).unwrap();
+        std::fs::write(&lib_path, b"binario-manomesso").unwrap();
+
+        let r = init_session_pure(&rt, &vault);
+        assert!(r.is_err(), "Atteso errore per artefatto in cache manomesso");
+        let msg = r.unwrap_err().to_string();
+        assert!(msg.contains("integrità"), "Errore deve menzionare l'integrità: {msg}");
         assert!(!session_caricata(&rt), "Session deve restare non caricata");
     }
 
