@@ -90,7 +90,7 @@ zip = { version = "8.6", default-features = false, features = ["deflate"] }
 # tokenizer, libonnxruntime) PRIMA di estrarli/caricarli. Evita di
 # eseguire codice nativo (libonnxruntime) o dati non verificati se il
 # download è stato manomesso (MITM, mirror compromesso, ecc.).
-sha2 = "0.10"
+sha2 = "0.11"
 
 [dev-dependencies]
 tempfile = "3"
