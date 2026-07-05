@@ -628,63 +628,101 @@ fn valida_provider(name: &str) -> Result<(), PapErrore> {
     Ok(())
 }
 
-/// Fix #457: valida lo schema di un `base_url` custom fornito dall'utente
-/// per un provider AI (config salvata o smoke-test Ollama).
+/// Host locali consentiti per `http://` (letterali ESATTI, confronto
+/// case-insensitive già normalizzato a monte). Deliberatamente NON usiamo
+/// `Ipv4Addr::is_loopback()`/`Ipv6Addr::is_loopback()` sull'host parsato:
+/// accetterebbe silenziosamente forme alternative dello stesso indirizzo
+/// (decimale `2130706433`, ottale `0177.0.0.1`, ecc.) che WHATWG/`url`
+/// normalizzano a `127.0.0.1` — un validatore "intelligente" diventerebbe
+/// esso stesso un vettore di offuscamento. L'allowlist testuale stretta è
+/// volutamente noiosa da forzare.
+const HOST_LOCALI_CONSENTITI: &[&str] = &["localhost", "127.0.0.1", "::1"];
+
+/// Fix #457 (review CRITICAL): valida lo schema/host di un `base_url`
+/// custom fornito dall'utente per un provider AI (config salvata o
+/// smoke-test Ollama).
+///
+/// Usa `url::Url::parse` (conforme WHATWG) invece di string-splitting
+/// manuale: un parser manuale che cerca il primo `:`/`/` dopo lo schema
+/// interpreta MALE un URL con userinfo come `http://127.0.0.1@evil.com/`
+/// (vede host=127.0.0.1, ma il client HTTP si connette DAVVERO a
+/// evil.com, che riceve la API key in chiaro — vedi audit #457 follow-up).
 ///
 /// Regole:
 /// - stringa vuota/whitespace → Ok: significa "usa il default del
 ///   provider", non c'è nessun input da validare.
-/// - `https://<host>` → sempre accettato.
-/// - `http://<host>` → accettato SOLO se l'host è un loopback
-///   (`localhost`, `127.0.0.1`, `::1`): Ollama gira tipicamente in locale
-///   senza TLS. `http://` verso un host remoto trasmetterebbe la API key
-///   (se presente in header) in chiaro sulla rete.
-/// - qualunque altro schema (`file://`, `ftp://`, nessuno schema, ecc.) →
-///   rifiutato: `file://` permetterebbe di leggere file locali arbitrari
-///   attraverso il client HTTP, altri schemi non sono endpoint HTTP validi.
+/// - qualunque userinfo (`user:pass@host` o anche solo `user@host`) →
+///   SEMPRE rifiutato: non esiste un caso d'uso legittimo per un
+///   provider AI, ed è il principale vettore per ingannare un parser
+///   ingenuo sull'host reale.
+/// - `https://<host>` → accettato (host non vuoto).
+/// - `http://<host>` → accettato SOLO se l'host è uno dei letterali
+///   `HOST_LOCALI_CONSENTITI` (confronto ESATTO, case-insensitive):
+///   Ollama gira tipicamente in locale senza TLS. `http://` verso un
+///   host remoto trasmetterebbe la API key (se presente in header) in
+///   chiaro sulla rete.
+/// - qualunque altro schema (`file://`, `ftp://`, `javascript:`,
+///   nessuno schema, ecc.) → rifiutato: `file://` permetterebbe di
+///   leggere file locali arbitrari attraverso il client HTTP, altri
+///   schemi non sono endpoint HTTP validi.
 pub(crate) fn valida_base_url(url: &str) -> Result<(), PapErrore> {
     let trimmed = url.trim();
     if trimmed.is_empty() {
         return Ok(());
     }
-    let lower = trimmed.to_ascii_lowercase();
 
-    if let Some(resto) = lower.strip_prefix("https://") {
-        if resto.is_empty() {
-            return Err(PapErrore::Generico(
-                "base_url non valido: host mancante dopo https://".into(),
-            ));
-        }
-        return Ok(());
-    }
+    let parsed = url::Url::parse(trimmed)
+        .map_err(|_| PapErrore::Generico("base_url non valido: URL non analizzabile.".into()))?;
 
-    if let Some(resto) = lower.strip_prefix("http://") {
-        // Gli host IPv6 sono racchiusi tra `[...]` (es. `[::1]:11434`): il
-        // separatore `:` fa parte dell'indirizzo, quindi va estratto PRIMA
-        // di splittare su `:` per gli altri formati (host:porta).
-        let host = if let Some(resto_senza_parentesi) = resto.strip_prefix('[') {
-            resto_senza_parentesi
-                .split(']')
-                .next()
-                .unwrap_or("")
-        } else {
-            resto.split(['/', ':', '?', '#']).next().unwrap_or("")
-        };
-        if host == "localhost" || host == "127.0.0.1" || host == "::1" {
-            return Ok(());
-        }
+    // Fix #457 CRITICAL: rifiuta qualunque userinfo PRIMA di ispezionare
+    // l'host — altrimenti un validatore "furbo" costruito sopra l'host
+    // parsato correttamente potrebbe comunque essere aggirato da varianti
+    // future di questa funzione che tornassero a ispezionare la stringa
+    // grezza. Qui lo controlliamo direttamente sui campi strutturati.
+    if !parsed.username().is_empty() || parsed.password().is_some() {
         return Err(PapErrore::Generico(
-            "base_url non valido: http:// è consentito solo per host locali \
-             (localhost/127.0.0.1); usa https:// per host remoti."
-                .into(),
+            "base_url non valido: credenziali (user:pass@) non consentite nell'URL.".into(),
         ));
     }
 
-    Err(PapErrore::Generico(
-        "base_url non valido: schema non consentito. Richiesto https://, \
-         o http:// solo per host locali."
-            .into(),
-    ))
+    match parsed.scheme() {
+        "https" => {
+            if parsed.host_str().unwrap_or("").is_empty() {
+                return Err(PapErrore::Generico(
+                    "base_url non valido: host mancante dopo https://".into(),
+                ));
+            }
+            Ok(())
+        }
+        "http" => {
+            // A questo punto l'URL non ha userinfo (verificato sopra): il
+            // testo tra `http://` e la prima `/`/`?`/`#` è esattamente
+            // `host[:porta]` come scritto dall'utente, senza ambiguità.
+            // Confronto testuale ESATTO con l'allowlist (non semantico):
+            // vedi doc-comment di HOST_LOCALI_CONSENTITI sul perché.
+            let lower = trimmed.to_ascii_lowercase();
+            let resto = lower.strip_prefix("http://").unwrap_or("");
+            let host_grezzo = if let Some(dentro_parentesi) = resto.strip_prefix('[') {
+                dentro_parentesi.split(']').next().unwrap_or("")
+            } else {
+                resto.split(['/', ':', '?', '#']).next().unwrap_or("")
+            };
+            if HOST_LOCALI_CONSENTITI.contains(&host_grezzo) {
+                Ok(())
+            } else {
+                Err(PapErrore::Generico(
+                    "base_url non valido: http:// è consentito solo per host locali \
+                     (localhost/127.0.0.1); usa https:// per host remoti."
+                        .into(),
+                ))
+            }
+        }
+        _ => Err(PapErrore::Generico(
+            "base_url non valido: schema non consentito. Richiesto https://, \
+             o http:// solo per host locali."
+                .into(),
+        )),
+    }
 }
 
 pub(crate) fn config_lista_pure(
@@ -1521,6 +1559,84 @@ mod test {
     #[test]
     fn valida_base_url_https_senza_host_rifiutato() {
         assert!(valida_base_url("https://").is_err());
+    }
+
+    // ─── Review CRITICAL: bypass via userinfo (user:pass@host) ───
+
+    #[test]
+    fn valida_base_url_userinfo_ipv4_bypass_rifiutato() {
+        // Il validatore precedente vedeva host="127.0.0.1" (username),
+        // ma il client HTTP si connette DAVVERO a evil.com (authority
+        // reale dopo la @) — la API key sarebbe stata inviata in chiaro
+        // a evil.com. Deve essere rifiutato SEMPRE, non "accettato perché
+        // sembra localhost".
+        let r = valida_base_url("http://127.0.0.1:11434@evil.com/");
+        assert!(r.is_err());
+        assert!(r.unwrap_err().to_string().contains("credenziali"));
+    }
+
+    #[test]
+    fn valida_base_url_userinfo_localhost_bypass_rifiutato() {
+        let r = valida_base_url("http://localhost:1@evil.com/");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn valida_base_url_userinfo_ipv6_bypass_rifiutato() {
+        let r = valida_base_url("http://[::1]:80@evil.com/");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn valida_base_url_userinfo_su_host_locale_legittimo_rifiutato_comunque() {
+        // Anche se l'host DOPO la @ è realmente locale, le credenziali
+        // nell'URL non hanno un caso d'uso legittimo per un provider AI:
+        // rifiutiamo a prescindere per non lasciare aperta la sintassi.
+        let r = valida_base_url("http://user:pass@localhost/");
+        assert!(r.is_err());
+    }
+
+    // ─── Review CRITICAL: host camuffati (non letterali) sempre rifiutati ───
+
+    #[test]
+    fn valida_base_url_sottodominio_di_localhost_rifiutato() {
+        // "localhost.attacker.com" NON è "localhost": un confronto per
+        // suffisso/substring sarebbe stato un'altra falla.
+        let r = valida_base_url("http://localhost.attacker.com/");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn valida_base_url_ipv4_decimale_rifiutato() {
+        // 2130706433 == 127.0.0.1 in decimale a 32 bit: WHATWG/`url`
+        // normalizzerebbero silenziosamente a "127.0.0.1" se usassimo
+        // un controllo semantico (is_loopback()). L'allowlist testuale
+        // stretta lo rifiuta perché non è uno dei letterali consentiti.
+        let r = valida_base_url("http://2130706433/");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn valida_base_url_0000_rifiutato() {
+        // 0.0.0.0 non è loopback (non è nemmeno in HOST_LOCALI_CONSENTITI).
+        let r = valida_base_url("http://0.0.0.0/");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn valida_base_url_trailing_dot_rifiutato() {
+        // "localhost." (FQDN con punto finale) non è il letterale esatto
+        // "localhost": rifiutato per rigore, nessun uso legittimo lo richiede.
+        let r = valida_base_url("http://localhost./");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn valida_base_url_uppercase_host_accettato() {
+        // Case-insensitivity è normalizzazione DNS legittima (non un
+        // bypass): "LOCALHOST" e "localhost" sono lo stesso host.
+        assert!(valida_base_url("http://LOCALHOST:11434/").is_ok());
+        assert!(valida_base_url("http://LoCaLhOsT/").is_ok());
     }
 
     #[test]

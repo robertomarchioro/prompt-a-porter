@@ -72,6 +72,11 @@ ndarray = "0.17"
 # HTTP client per scaricare il modello ONNX da HuggingFace al primo uso.
 # Feature tls-rustls (no openssl, build più portabile in CI).
 ureq = { version = "2.10", default-features = false, features = ["tls"] }
+# Fix #457 (review): parsing URL conforme WHATWG invece di string-splitting
+# manuale — necessario per rifiutare correttamente userinfo (`user:pass@host`)
+# e host camuffati. Già presente in Cargo.lock come dipendenza transitiva
+# di ureq/altri crate; qui diventa dipendenza diretta.
+url = "2"
 # Tokenizer compatibile con tokenizer.json di HuggingFace per pre-processare
 # il testo prima dell'inference ort. default-features=false evita onig
 # (richiede C compiler), progressbar (TTY) e esaxx_fast. fancy-regex come
