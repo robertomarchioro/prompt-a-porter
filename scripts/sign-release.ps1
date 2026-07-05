@@ -114,12 +114,19 @@ if (-not $UpdaterPrivKeyPasswordExplicit) {
     $encPwdFile = Join-Path $env:USERPROFILE '.tauri\pap-updater.pwd.enc'
     if (Test-Path $encPwdFile) {
         try {
-            $secureFromFile = Get-Content -Path $encPwdFile -Raw | ConvertTo-SecureString
+            # Trim del BOM UTF-8 (U+FEFF) e di eventuali whitespace/newline finali:
+            # file scritti da versioni precedenti con `Out-File -Encoding utf8`
+            # (Windows PowerShell 5.1) hanno un BOM che fa fallire il parsing hex
+            # di ConvertTo-SecureString. Così leggiamo sia i file nuovi (no BOM)
+            # sia quelli vecchi. (#467)
+            $encStr = (Get-Content -Path $encPwdFile -Raw).Trim([char]0xFEFF).Trim()
+            $secureFromFile = $encStr | ConvertTo-SecureString
             $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureFromFile)
             $UpdaterPrivKeyPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
             [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
         } catch {
-            Write-Host "[WARN] impossibile decifrare $encPwdFile (creato da altro utente/macchina?). Ignorato."
+            Write-Host "[WARN] impossibile leggere/decifrare ${encPwdFile}: $($_.Exception.Message)"
+            Write-Host "       (file corrotto, oppure creato da un altro utente/macchina). Ignorato."
         }
     }
 }
