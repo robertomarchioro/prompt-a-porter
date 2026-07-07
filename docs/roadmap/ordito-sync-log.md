@@ -715,6 +715,7 @@ come esempi (coerente col gate coverage 80% del repo):
   client verso `papsync` attuale (push = spedire record).
   *(Valore anche senza P2P: sync bidirezionale corretto, audit firmato,
   time-travel entro la retention.)*
+  → Blueprint operativo: [`ordito/blueprint-F1.md`](./ordito/blueprint-F1.md).
 - **F2 — Trasporto cartella (T1)**: segmenti cifrati (VSK a epoche da master
   seed), viste firmate per-device, heartbeat, **snapshot a quorum + GC
   causale + stale-out 90gg** (estensione multi-peer della GC locale di F1);
