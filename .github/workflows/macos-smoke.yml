@@ -1,0 +1,75 @@
+# Smoke build macOS — SOLO manuale (workflow_dispatch).
+#
+# Scopo: verificare che il client Tauri compili e bundli su macos-14
+# (aarch64) PRIMA che il certificato Apple Developer sia disponibile.
+# La build è unsigned (nessun secret APPLE_*): gli artifact NON sono
+# distribuibili e infatti non vengono caricati su nessuna release —
+# restano come artifact di workflow (retention 7 giorni) per ispezione.
+#
+# Usa i secret TAURI_SIGNING_* (updater Ed25519) già presenti: con
+# createUpdaterArtifacts attivo in tauri.conf.json la build fallirebbe
+# senza chiave privata updater.
+#
+# Quando la pipeline macOS di release.yml sarà attiva e collaudata,
+# questo workflow può essere rimosso.
+
+name: macOS smoke build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+        with:
+          toolchain: stable
+          targets: aarch64-apple-darwin
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: apps/client/src-tauri
+
+      - name: Installa dipendenze pnpm
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri (unsigned, no release)
+        working-directory: apps/client
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm tauri build --target aarch64-apple-darwin --bundles app,dmg
+
+      - name: Elenca gli artifact prodotti
+        run: |
+          find apps/client/src-tauri/target/aarch64-apple-darwin/release/bundle \
+            -maxdepth 3 \( -name "*.app" -o -name "*.dmg" -o -name "*.tar.gz" -o -name "*.sig" \) -print
+
+      - name: Carica bundle come artifact di workflow
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-smoke-bundle
+          retention-days: 7
+          path: |
+            apps/client/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+            apps/client/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.tar.gz
