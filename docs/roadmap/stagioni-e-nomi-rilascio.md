@@ -145,6 +145,10 @@ Lista di partenza. Si pesca dall'alto verso il basso man mano che arrivano le re
 
 > Nota: la **H** è saltata di proposito (manca un sostantivo tessile italiano naturale con quella iniziale). Come in Ubuntu, alcune lettere si possono saltare senza forzare il gioco. L'alfabeto italiano omette già J, K, W, X, Y.
 
+### Nomi di componente ≠ codename
+
+**«Ordito»** è anche il nome del **motore di sync** (v. [`ordito-sync-log.md`](./ordito-sync-log.md), Decisione 7): i nomi di componente vivono in docs/architettura e nel racconto pubblico, mai in UI (dove la feature si chiama "Sincronizzazione dispositivi") e sono **fuori dal pool** dei codename. L'omonimia con «Onirico Ordito» (lettera O) è governata, non accidentale: se la release che debutta il motore sarà una cardine, quel codename ne è il candidato naturale. Attenzione redazionale al quasi-omonimo **"Ardito"** (vietato dal pool): mai usare "Ordito" e "Ardito" nella stessa frase.
+
 ---
 
 ## Manutenzione di questo documento

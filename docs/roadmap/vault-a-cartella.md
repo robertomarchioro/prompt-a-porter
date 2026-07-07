@@ -187,14 +187,14 @@ Schermata di scelta con pro/contro espliciti:
 - **Interazione con sync server team**: vault a cartella è **Personale-only** e
   mutuamente esclusivo col sync server. Da chiarire in UI (un vault non può
   essere insieme "a cartella" e sincronizzato col server team).
-  La mutua esclusività vale anche per il futuro sync multi-device
-  [Ordito](./ordito-sync-log.md): un vault a cartella non può essere
-  sincronizzato via oplog (i `.md` replicati dal file-syncer e l'oplog
-  trasporterebbero la stessa modifica su due canali → echo e due
-  conflict-resolver in disaccordo). La cartella di *trasporto* `.ordito/` di
-  un vault SQLite può invece stare su qualunque share: non è questa cartella.
-  Un'eventuale riconciliazione (`.md` come proiezione read-mostly) è un
-  design futuro separato (v. Punti aperti di Ordito).
+  La mutua esclusività vale anche per il sync multi-device
+  [Ordito](./ordito-sync-log.md), **in via permanente** (Decisione 5 di
+  Ordito, 2026-07-07): un vault a cartella non sarà mai sincronizzato via
+  oplog (i `.md` replicati dal file-syncer e l'oplog trasporterebbero la
+  stessa modifica su due canali → echo e due conflict-resolver in
+  disaccordo). La cartella di *trasporto* `.ordito/` di un vault SQLite può
+  invece stare su qualunque share: non è questa cartella. Riaprire questa
+  esclusione richiede una revisione esplicita della Decisione 5.
 - **Performance**: vault grandi → watcher con debounce + ingest incrementale
   per hash/mtime, non full-rescan ad ogni evento.
 

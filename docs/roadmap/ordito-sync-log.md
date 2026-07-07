@@ -1,12 +1,11 @@
 # Blueprint — "Ordito": log replicato per sync senza server e storage database-agnostic
 
 > **Stato**: design / ideazione. Nessun codice ancora.
-> **Revisione**: v2 (2026-07-06) — riscritto dopo review avversariale a 3 lenti
-> (correttezza distribuita, security, prodotto); 6 CRITICAL e 13 HIGH risolti
-> nel design. I due assi corretti: (a) ogni merge è ora una **funzione pura e
-> deterministica del log** (niente record emessi come effetto collaterale);
-> (b) compattazione ridisegnata come **strato snapshot con commitment
-> separato** che non tocca le catene firmate.
+> **Revisione**: v3 (2026-07-07) — i 7 punti aperti della v2 sono stati decisi
+> (v. §Decisioni chiuse in coda) e le conseguenze riportate nelle sezioni.
+> La v2 (2026-07-06) era la riscrittura post review avversariale a 3 lenti
+> (correttezza distribuita, security, prodotto): merge come **funzioni pure
+> del log** e compattazione a **snapshot con commitment separato**.
 > **Obiettivo utente**: (1) sincronizzare i propri vault tra più dispositivi in
 > modo intelligente **senza server centrale obbligatorio**; (2) rendere lo
 > strato dati **database-agnostic** per la versione Enterprise (on-prem e
@@ -14,8 +13,9 @@
 > **Scope**: fasi F1-F3 = SKU Personale (multi-device, stesso utente);
 > fase F4 = primo mattone dello SKU Enterprise v2.x.
 > **Nome**: *Ordito* — il filo portante del telaio su cui ogni dispositivo e
-> ogni backend tesse la propria trama (coerente con la convenzione tessile di
-> [`stagioni-e-nomi-rilascio.md`](./stagioni-e-nomi-rilascio.md)).
+> ogni backend tesse la propria trama. È il nome del **motore** (docs, sito,
+> release notes); in UI la feature si chiama sempre **"Sincronizzazione
+> dispositivi"** (v. Decisione 7).
 
 ## Perché (contesto e problemi del sync attuale)
 
@@ -31,9 +31,9 @@ Lo stato dell'arte nel repo (2026-07-06):
   grezzo in 25 file Rust, con tre lock-in *strutturali*: **SQLCipher**
   (cifratura file), **FTS5** (full-text), **sqlite-vec** (semantica).
 - `prompts-as-code.md` cita già il bet "CRDT local-first multi-device", mai
-  scelto. `vault-a-cartella.md` dichiara vault a cartella e sync server
-  mutuamente esclusivi: Ordito **non** cambia quella decisione (v. §T1 —
-  la cartella di trasporto è dedicata, NON è il vault a cartella).
+  scelto. `vault-a-cartella.md` dichiara vault a cartella e sync
+  **mutuamente esclusivi in via permanente** (Decisione 5): la cartella di
+  trasporto T1 è dedicata, NON è il vault a cartella.
 - Lo schema client ha già mezzi ingredienti: tombstone `DeletedAt`, contatore
   `Version`, `AuditLog` e `SyncChangelog` append-only.
 
@@ -52,9 +52,11 @@ Conseguenze:
    condivisa, relay muto).
 2. **Database-agnostic**: FTS5 e sqlite-vec smettono di essere un problema di
    portabilità perché sono **indici derivati** — ogni backend usa il suo
-   equivalente nativo (Postgres FTS + pgvector), rigenerandolo dal log.
-   ⚠️ Non del tutto "gratis": la rigenerazione degli **embeddings** richiede
-   modello/provider sul device che ricostruisce (v. §Proiezione).
+   equivalente nativo (Postgres FTS + pgvector). FTS si rigenera dal testo;
+   gli **embeddings viaggiano nello snapshot** come derivato opaco versionato
+   per modello (Decisione 2): il device nuovo ha la ricerca semantica subito
+   e ricalcola solo i prompt modificati dopo il taglio (o tutto, se usa un
+   modello diverso).
 3. **Audit trail a livello dispositivo**: ogni record è firmato dal device
    che l'ha prodotto. Nel caso personale la paternità è crittografica a
    livello device; nel caso team la paternità *utente* resta asserita dal
@@ -63,7 +65,8 @@ Conseguenze:
    problemi di #450, non la "risolve alla radice": la firma prova il device,
    non l'utente.
 4. **Time-travel e backup incrementale**: il log *è* la storia; l'export Git
-   di `prompts-as-code.md` diventa l'ennesima proiezione.
+   di `prompts-as-code.md` diventa l'ennesima proiezione. Nei vault senza
+   sync attivo la storia è limitata dalla retention locale (Decisione 1).
 
 Ispirazioni (tutte a concetti aperti / implementazioni permissive):
 Git (content-addressing, hash chain), CouchDB (checkpoint di replica per
@@ -228,11 +231,12 @@ determinabile ⇒ si tratta come conflitto reale** (variante creata) — mai
 scarto silenzioso di un Body divergente. I record che fungono da antenato a
 divergenze aperte sono protetti dalla compattazione.
 
-**Igiene dei conflitti** (accumulo silenzioso): la Vista conflitti aggrega
+**Igiene dei conflitti** (accumulo silenzioso): la **Vista conflitti** aggrega
 "N varianti da conflitto in attesa" a livello vault (non solo badge
 per-prompt); le varianti derivate identiche al Body ufficiale decadono
 automaticamente; sopra una soglia configurabile l'app propone una revisione
-guidata.
+guidata. La stessa vista ospita la **revisione al rientro di un'install
+stale** (Decisione 6).
 
 ### Set e chiavi composite (`PromptTags` e simili)
 
@@ -348,6 +352,11 @@ Ogni device appende **segmenti di log** come file immutabili in una cartella
    └─ ...
 ```
 
+- **Il log autoritativo vive DENTRO il vault** (tabelle `Oplog`/`OrditoApplied`/…
+  nel `.db` SQLCipher): i segmenti nella cartella di trasporto sono una
+  **replica rigenerabile** (Decisione 3). Cancellare la cartella non perde
+  nulla — si ri-pubblica dal log locale o si ri-fetcha dai peer. Il modello
+  mentale "il vault è un file, copialo e hai tutto" resta vero, log incluso.
 - **Nessun file mutabile condiviso.** La v1 prevedeva un `manifest.json` in
   radice: contraddiceva il design (scrittura condivisa → conflicted copy,
   bersaglio di manomissione). Ora ogni informazione di controllo è nella
@@ -363,28 +372,32 @@ Ogni device appende **segmenti di log** come file immutabili in una cartella
 - I segmenti sono **cifrati** (VSK a epoche, v. §Sicurezza): la cartella può
   stare su Dropbox senza esporre i prompt.
 - **La cartella di trasporto NON è il vault a cartella.** È una posizione
-  qualsiasi che contiene solo `.ordito/`. Il caso "vault a cartella
-  sincronizzato via Ordito" resta **fuori scope**: i `.md` replicati dal
-  file-syncer e l'oplog trasporterebbero la stessa modifica su due canali
-  (echo, doppio conflict-resolver — Syncthing vs HLC — con esiti divergenti).
-  La mutua esclusività dichiarata in `vault-a-cartella.md` resta valida;
-  un'eventuale riconciliazione (`.md` come proiezione read-mostly, ingest
-  idempotente per content-hash su un solo choke-point) è un design futuro
-  separato, v. §Punti aperti.
+  qualsiasi che contiene solo `.ordito/`. Il vault a cartella **non sarà mai
+  sincronizzato via Ordito** (Decisione 5, esclusione permanente): i `.md`
+  replicati dal file-syncer e l'oplog trasporterebbero la stessa modifica su
+  due canali (echo, doppio conflict-resolver — Syncthing vs HLC — con esiti
+  divergenti). Chi usa il vault a cartella sincronizza con i propri strumenti
+  (git, Syncthing) accettando i limiti documentati in `vault-a-cartella.md`.
 
 ### T2 — LAN diretta
 
-- Discovery **mDNS/DNS-SD** (`_pap-ordito._tcp`), come Syncthing.
+- Discovery **mDNS/DNS-SD** (`_pap-ordito._tcp`) via crate `mdns-sd`.
 - **Pairing**: l'identità del device è la sua chiave pubblica Ed25519 (+
   install_nonce). Accoppiamento con QR code o codice breve a 6 parole
   (verifica out-of-band del fingerprint, stile Syncthing/Signal). L'elenco
   device fidati vive nelle viste firmate e converge come il resto del log.
-- Canale: QUIC/TLS o Noise, con mutua autenticazione sulle chiavi device.
-- Riuso possibile: **Iroh** (Rust, MIT/Apache) fornisce QUIC P2P +
-  hole-punching; ⚠️ di default usa **relay hostati da n0**: se l'hole-punch
-  fallisce, il traffico (cifrato) passa da infrastruttura di terzi. Per
-  mantenere il claim "senza server" in senso stretto: relay self-hosted o
-  disabilitati (solo LAN). Alternativa minimale: TCP+Noise solo-LAN.
+- **Canale: TCP + Noise XX** via crate `snow` (implementazione consolidata
+  del Noise Protocol Framework), mutua autenticazione sulle chiavi device
+  (Decisione 4). Scope **solo-LAN**: il caso Internet è coperto in modo
+  asincrono da T1 (cartella) e T3 (relay muto). Framing, keep-alive e
+  riconnessione sono nostri e vanno testati (v. §Strategia di verifica).
+- **Iroh è stato valutato e retrocesso a eventuale T4 futuro** (P2P live
+  cross-Internet con hole-punching), da riaprire solo su domanda reale:
+  dipendenza pesante, relay di default hostati da n0 (in contrasto col claim
+  "senza server": andrebbero self-hostati o disabilitati), superficie della
+  review crittografica molto più larga — e comunque non copre T3 (i relay
+  Iroh instradano traffico live tra peer online insieme, non fanno
+  store-and-forward per device mai accesi insieme).
 
 ### T3 — Relay "muto" (store-and-forward, opzionale)
 
@@ -442,6 +455,12 @@ key-management corretto dopo la review.
   consumati (heartbeat). Un superstite offline da mesi risale la catena di
   envelope a suo nome. La frase di recupero va **ri-emessa** dopo un rekey
   da revoca (nuovo master): l'app lo impone con un flusso bloccante.
+- **Smaltimento del vault = crypto-shredding** (Decisione 3): "Elimina vault"
+  distrugge il master seed (dal vault e, su richiesta, dai device accoppiati)
+  → tutti i segmenti sparsi su trasporti terzi (Dropbox, NAS, relay)
+  diventano **permanentemente illeggibili**. Il flusso UI lo dichiara e
+  offre la pulizia manuale dei blob residui ("per rimuovere anche i file
+  cifrati, cancella la cartella X / il topic Y").
 - **Cosa la revoca NON fa (limiti dichiarati)**: (a) non protegge il passato
   — il revocato ha già letto ciò che aveva; (b) su T1 **non revoca l'accesso
   al filesystem**: il revocato può ancora cancellare o inquinare la cartella
@@ -494,11 +513,15 @@ La proiezione consuma record in qualunque ordine e converge:
    retry. L'apply non è "fatto" finché il flag non è consumato — mai
    divergenza silenziosa dell'indice.
 
-**Costo dichiarato della ricostruzione**: FTS si rigenera dal testo (gratis).
-Gli **embeddings richiedono il modello** (download + compute) o chiamate
-provider: un device nuovo che ricostruisce un vault grande paga questo costo.
-Alternativa da valutare in F2: includere i vettori nel log/snapshot come dato
-opaco versionato per modello (trade-off spazio vs compute, v. §Punti aperti).
+**Costo della ricostruzione** (aggiornato con la Decisione 2): FTS si
+rigenera dal testo (gratis). Gli **embeddings viaggiano nello snapshot**
+come derivato opaco marcato `(modello, versione)`: un device nuovo che parte
+dallo snapshot ha la ricerca semantica subito e ricalcola solo i prompt
+modificati dopo il taglio. Il ricalcolo completo resta necessario solo se il
+device usa un modello diverso da quello dichiarato nel blob (degradazione
+pulita al comportamento pre-decisione). Nello scenario E2E enterprise questa
+scelta è obbligata: il server non può calcolare embedding su dati che non
+legge — sono i client a fornirli via snapshot.
 
 ### Evoluzione dello schema: upcaster permanenti
 
@@ -568,20 +591,40 @@ prova di paternità). Quindi: niente squash in-place. La compattazione è uno
     install)` del record che l'ha prodotto — la paternità sopravvive al
     taglio (senza questo, uno snapshot potrebbe attribuire contenuti a chi
     non li ha mai scritti, senza possibilità di smentita);
+  - una sezione di **derivati opachi** (Decisione 2): i vettori embedding
+    correnti marcati `(modello, versione)`, come **cache non attestata** —
+    fuori dalle attestazioni di paternità, ricalcolabile e ignorabile da chi
+    usa un modello diverso. Un vettore corrotto altera solo i risultati di
+    ricerca fino al primo ricalcolo (rischio accettato nel trust model
+    personale; nel team mode il server ricalcola o rifiuta i blob);
   - la propria versione `schema` (upcastabile come i record).
-- **Controfirma a quorum**: i segmenti sotto il taglio diventano eliminabili
-  solo dopo che **≥K install fidate** (default: tutte quelle attive) hanno
-  verificato e controfirmato lo snapshot. Prima di allora lo snapshot
-  accelera solo il bootstrap dei nuovi device.
+- **Controfirma a quorum — K = tutte le install note non-stale** (Decisione
+  6): i segmenti sotto il taglio diventano eliminabili solo dopo che ogni
+  install attiva ha verificato e controfirmato lo snapshot. Prima di allora
+  lo snapshot accelera solo il bootstrap dei nuovi device. (Scartato il
+  quorum a maggioranza: con la flotta tipica da 2 device degenera e riapre
+  il finding S8.)
 - **GC causale dei tombstone** (fix del bug di resurrezione): un tombstone è
   rimovibile solo quando il suo HLC è sotto il **minimo cursore confermato di
   TUTTE le install note** (heartbeat firmati su T1, ACK su T2/T3) — non
   "il peer più arretrato visto di recente" (v1): un peer assente potrebbe
   avere in coda d'uscita upsert vecchi che, senza il tombstone, farebbero
-  risorgere il record ovunque. Install assente oltre N giorni → esclusa dal
-  calcolo ma marcata **stale**: al rientro DEVE scartare la propria coda
-  d'uscita non ancora pubblicata e fare resync da snapshot (regola dura,
-  comunicata in UI).
+  risorgere il record ovunque.
+- **Stale-out automatico — N = 90 giorni** (Decisione 6): un'install assente
+  da oltre 90 giorni viene esclusa dal calcolo della GC e marcata **stale**,
+  con preavvisi progressivi sugli altri device (che possono sempre
+  posticipare). Al rientro, l'install stale fa resync da snapshot e le sue
+  modifiche non pubblicate vanno in **revisione guidata** nella Vista
+  conflitti — mai scarto silenzioso: l'utente vede "N modifiche di questo
+  dispositivo non sono mai state sincronizzate" e sceglie cosa ri-applicare;
+  le ri-applicazioni sono record **nuovi con HLC corrente** (nessuna
+  resurrezione silenziosa: la prevenzione del finding C3 resta intatta).
+- **GC locale e retention (vault senza sync)** (Decisione 1): con l'oplog
+  sempre-on, un vault senza peer esegue in F1 la versione degenere della
+  compattazione — snapshot locale senza quorum (K=1) e retention di default
+  **~90 giorni** di storia; attivando il sync si passa al regime causale
+  pieno. La finestra di retention è un'impostazione visibile (sezione Dati)
+  con testo onesto: "la cronologia locale copre gli ultimi X giorni".
 - I record-antenato di divergenze `Body` aperte e gli envelope di rekey non
   consumati sono esclusi dal taglio.
 
@@ -604,9 +647,11 @@ prova di paternità). Quindi: niente squash in-place. La compattazione è uno
 | Due record con stesso `prev` e stessa install | **equivocation** (chiave riusata da restore/clone): allarme + quarantena del ramo con HLC minore; il restore corretto genera un nuovo install_nonce |
 | "Conflicted copy" creata da Dropbox in `.ordito/` | ignorata: fuori catena hash |
 | Restore di un backup vecchio del vault | nuova identità install (nonce); i record della vecchia install restano validi nel log altrui; il device riparte dai cursori |
-| Install stale (assente > N giorni, tombstone GC-ati) | al rientro: scarto della coda d'uscita non pubblicata + resync da snapshot (previene resurrezioni) |
+| Install stale (assente > 90gg) | preavvisi progressivi prima dello stale-out; al rientro: resync da snapshot + **revisione guidata** delle modifiche non pubblicate nella Vista conflitti (ri-applicazioni = record nuovi con HLC corrente; mai scarto silenzioso) |
+| Vault senza sync (peer singolo) | GC locale: snapshot senza quorum (K=1), retention di default ~90 giorni (Decisione 1) |
 | Purge dal cestino | locale alla proiezione; il tombstone resta finché la GC causale non lo prova consegnato a tutte le install note |
 | Record replayato su un altro vault | rifiutato: `vault` è nel payload firmato |
+| Eliminazione del vault | crypto-shredding del master seed → segmenti su trasporti terzi permanentemente illeggibili; pulizia dei blob offerta in UI |
 
 ## Strategia di verifica
 
@@ -619,9 +664,12 @@ come esempi (coerente col gate coverage 80% del repo):
   fusioni tag, numeri di versione. È il test che avrebbe catturato il
   finding "merge con effetti collaterali".
 - **Simulatore multi-peer** con clock sfasati, partizioni, code d'uscita
-  ritardate: scenari di resurrezione tombstone, install stale, equivocation.
+  ritardate: scenari di resurrezione tombstone, install stale (incl.
+  revisione al rientro), equivocation.
 - **Fuzz** sui segmenti (troncamento, bit-flip, conflicted copy, epoche VSK
   mancanti) → mai panico, sempre quarantena/refetch.
+- **Test del canale T2** (framing, keep-alive, riconnessione Noise): sono
+  codice nostro (Decisione 4), vanno coperti come il resto.
 - **Test di upcaster**: fixture di record per ogni schema storico, rigiocati
   a ogni release (regressione permanente).
 - **Golden dei merge domain-native**: casi 3-way su Body (con e senza
@@ -630,13 +678,13 @@ come esempi (coerente col gate coverage 80% del repo):
 
 ## Comprare vs inventare
 
-| Pezzo | Decisione proposta | Alternativa valutata |
+| Pezzo | Decisione | Alternativa valutata |
 |---|---|---|
 | Formato record + semantica merge (LWW-map, merge puri, conflitto→variante derivata) | **inventare** (è piccolo ed è il cuore differenziante) | cr-sqlite (Apache/MIT): CRDT generico per SQLite, ma niente field-policy custom né conflitto-come-variante; ElectricSQL/PowerSync: richiedono Postgres centrale (contro l'obiettivo 1) |
 | CRDT testo completo per il Body | **no** (LWW + variante derivata basta ed è più spiegabile) | Automerge/Yjs: potenti ma pesanti, merge char-level poco prevedibile per prompt |
 | HLC | **implementare** (≈100 righe dal paper; counter 32 bit) | — |
 | Riconciliazione range-based | **riusare/portare** negentropy (MIT, esiste in Rust e Go) | Merkle Search Trees (più complesso) |
-| Trasporto P2P (T2/T3) | valutare **Iroh** (Rust, MIT/Apache) — ⚠️ relay n0 di default: self-hosted o solo-LAN per il claim "senza server" | TCP+Noise minimale solo-LAN; libp2p (più grosso del necessario) |
+| Trasporto T2 | **deciso: TCP + Noise XX (`snow`) + `mdns-sd`, solo-LAN** (Decisione 4) | **Iroh** retrocesso a eventuale T4 domanda-driven (P2P live cross-Internet): dipendenza pesante, relay n0, non copre comunque T3; libp2p (più grosso del necessario) |
 | Serializzazione | CBOR (`ciborium` Rust / `fxamacker/cbor` Go) | JSON (verboso ma debuggabile — resta per export) |
 | Hash/firma | BLAKE3 + Ed25519 (`ed25519-dalek`, già nel design Fase 5) | — |
 | Key storage | `keyring` + **fallback file cifrato Argon2id** (spec F1) | solo keychain (bocciato: DPAPI #467, Linux headless) |
@@ -645,32 +693,36 @@ come esempi (coerente col gate coverage 80% del repo):
 
 | Area | Intervento | Sforzo |
 |---|---|---|
-| nuovo `ordito/` (crate o modulo Rust) | formato record, HLC, LWW-guard, append/apply, segmenti, upcaster registry | alto (cuore) |
+| nuovo `ordito/` (crate o modulo Rust) | formato record, HLC, LWW-guard, append/apply, segmenti, upcaster registry, **snapshot/GC locale + retention** (Decisione 1) | alto (cuore) |
 | **choke-point di mutazione** `apply_change(entity, id, old, new)` | UN punto che legge lo stato precedente, calcola il diff per-campo e appende al log in-TX; i 95 comandi Tauri vi migrano sopra | **alto** (la v1 diceva "medio/meccanico": falso — oggi `prompt_aggiorna` fa UPDATE full-row senza read-before-write e `sincronizza_tags` fa DELETE-all+re-INSERT; senza choke-point il field-level non è realizzabile) |
 | indici derivati (FTS/embeddings) | da rebuild-completo-in-TX a **incrementali fuori TX** con dirty-queue persistente | medio-alto (prerequisito F1: la TX di scrittura oggi è già pesante) |
 | `migrazione.rs` | tabelle `Oplog`, `OrditoApplied`, `OrditoPending`, `OrditoPeers`, dirty-queue (V016+) | basso |
 | `sync.ts` + `sync.rs` | il push mancante diventa "spedisci record"; pull = "applica record" | medio |
 | nuovo `ordito_cartella.rs` | trasporto T1: segmenti, viste firmate per-device, heartbeat, scansione | medio |
-| nuovo `ordito_lan.rs` | trasporto T2: mDNS, pairing, canale | medio-alto |
-| key storage (`keyring` + fallback) | device key, master seed, envelope rekey | medio (nuovo prerequisito) |
-| UI Svelte | "I miei dispositivi" (pairing, stato, revoca + avviso rimozione share); **Vista conflitti aggregata**; flusso ri-emissione recovery phrase | medio |
+| nuovo `ordito_lan.rs` | trasporto T2: `mdns-sd`, pairing, canale Noise XX (`snow`), framing/keep-alive/riconnessione | medio-alto |
+| key storage (`keyring` + fallback) | device key, master seed, envelope rekey, crypto-shredding | medio (nuovo prerequisito) |
+| UI Svelte | "I miei dispositivi" (pairing, stato, revoca + avviso rimozione share, preavvisi stale-out); **Vista conflitti aggregata** (varianti + revisione rientro stale); flusso ri-emissione recovery phrase; retention nella sezione Dati; flusso "Elimina vault" con crypto-shredding | medio-alto |
 | proiezione varianti-da-conflitto | derivazione pura (id da hash, label da HLC), 3-way con fallback | medio |
 | `apps/server` | (F4) staging+ACK, catena workspace ri-firmata, certificato device→utente, Postgres | alto (ma è LO step v2.0) |
 | repository trait | (F4) estrazione `PromptRepo`/`SearchIndex`/`EmbeddingStore`/… dalle funzioni `_pure` | alto, meccanico |
 
 ## Fasi (incrementali, ognuna utile da sola)
 
-- **F1 — Fondamenta**: choke-point `apply_change` + oplog in transazione;
-  HLC; indici derivati incrementali fuori TX; key storage con fallback;
-  property test di convergenza dal giorno 1. Ripara il push del client verso
-  `papsync` attuale (push = spedire record).
-  *(Valore anche senza P2P: sync bidirezionale corretto, audit firmato.)*
+- **F1 — Fondamenta**: choke-point `apply_change` + oplog **sempre-on** in
+  transazione (Decisione 1); HLC; indici derivati incrementali fuori TX;
+  key storage con fallback; **GC locale + retention ~90gg** per i vault
+  senza peer; property test di convergenza dal giorno 1. Ripara il push del
+  client verso `papsync` attuale (push = spedire record).
+  *(Valore anche senza P2P: sync bidirezionale corretto, audit firmato,
+  time-travel entro la retention.)*
 - **F2 — Trasporto cartella (T1)**: segmenti cifrati (VSK a epoche da master
-  seed), viste firmate per-device, heartbeat, **snapshot + GC causale**
-  (consegnati in F2, non "dopo": senza, il log cresce senza limite).
-  Primo sync multi-device **senza alcun server**.
-- **F3 — LAN P2P (T2) + conflitto→variante**: mDNS, pairing, riconciliazione
-  negentropy, varianti derivate + Vista conflitti, UseCount G-counter.
+  seed), viste firmate per-device, heartbeat, **snapshot a quorum + GC
+  causale + stale-out 90gg** (estensione multi-peer della GC locale di F1);
+  vettori embedding nello snapshot. Primo sync multi-device **senza alcun
+  server**.
+- **F3 — LAN P2P (T2) + conflitto→variante**: `mdns-sd`, pairing, canale
+  Noise, riconciliazione negentropy, varianti derivate + Vista conflitti
+  (incl. revisione rientro stale), UseCount G-counter.
   *(Il relay T3 è un'appendice opzionale di F3.)*
 - **F4 — Enterprise (v2.x)**: repository trait, proiezione Postgres,
   `papsync` peer autoritativo (staging/ACK, catena workspace, certificati
@@ -683,13 +735,14 @@ come esempi (coerente col gate coverage 80% del repo):
   transazione (produzione) e apply + LWW-guard nella stessa transazione
   (consumo). Gli indici derivati sono eventually-consistent via dirty-queue,
   mai dentro la TX critica.
-- **Crescita del log**: snapshot + GC causale entro F2. La GC causale è
-  *lenta per design* (aspetta la conferma di tutte le install note): la UI
-  deve mostrare quando un device assente sta bloccando la compattazione e
-  offrire la rimozione esplicita (che lo marca stale).
+- **Crescita del log**: contenuta per costruzione — retention locale ~90gg
+  nei vault senza sync (F1), snapshot a quorum + GC causale + stale-out 90gg
+  con sync attivo (F2). La UI mostra quando un device assente sta bloccando
+  la compattazione, coi preavvisi dello stale-out.
 - **Complessità percepita**: per l'utente il sync resta "accoppia i
-  dispositivi e funziona". Superfici nuove: "I miei dispositivi", Vista
-  conflitti, recovery phrase. Tutto il resto è invisibile.
+  dispositivi e funziona" — in UI si chiama **"Sincronizzazione
+  dispositivi"** (Decisione 7). Superfici nuove: "I miei dispositivi", Vista
+  conflitti, recovery phrase, retention. Tutto il resto è invisibile.
 - **Recupero chiavi**: la recovery phrase codifica il master seed e
   sopravvive alle rotazioni ordinarie; dopo un rekey da revoca va ri-emessa
   (flusso bloccante in UI).
@@ -697,11 +750,13 @@ come esempi (coerente col gate coverage 80% del repo):
   canale team. La migrazione del server al log è F4; niente doppio
   protocollo permanente.
 - **Review crittografica esterna** prima di dichiarare stabile il trasporto
-  cifrato (T1/T3), come già previsto per l'E2E di Fase 5.
+  cifrato (T1/T3) e il canale Noise (T2), come già previsto per l'E2E di
+  Fase 5.
 - **Performance primo sync**: da misurare in F2 con vault sintetici; ordine
   di grandezza atteso: il testo comprime bene (10k prompt ≈ decine di MB di
-  log; lo snapshot molto meno), il costo dominante è il re-embedding
-  (v. §Proiezione). Numeri reali nel blueprint di F2.
+  log; lo snapshot molto meno); i vettori nello snapshot pesano ~1,5 KB per
+  prompt (≈15 MB su 10k prompt) e azzerano il re-embedding al bootstrap.
+  Numeri reali nel blueprint di F2.
 
 ## Cosa NON fare
 
@@ -719,26 +774,66 @@ come esempi (coerente col gate coverage 80% del repo):
 - Non introdurre un ORM generico: trait per aggregato, mirati, quando serve
   la seconda implementazione (F4) — YAGNI prima.
 - Non inventare trasporti nuovi: cartella, LAN, relay muto coprono tutto.
-- Non usare la cartella del vault-a-cartella come cartella di trasporto T1
-  (doppio canale → echo e doppio conflict-resolver).
+- **Non sincronizzare mai un vault a cartella via Ordito** (Decisione 5,
+  permanente): doppio canale → echo e doppio conflict-resolver. E non usare
+  la cartella del vault-a-cartella come cartella di trasporto T1.
+- Non mettere "Ordito" in un pulsante o in un titolo di impostazioni: è il
+  nome del motore, non della feature (Decisione 7).
 
-## Punti aperti (da decidere prima di F1)
+## Decisioni chiuse (2026-07-07)
 
-1. **Oplog sempre-on o attivato col sync?** Sempre-on dà audit firmato e
-   time-travel anche ai vault solo-locali, ma scrive di più. Propensione:
-   sempre-on con snapshot aggressivo di default.
-2. **Vettori embedding nel log/snapshot** come dato opaco versionato per
-   modello (evita il re-embedding sul device nuovo) vs ricalcolo locale
-   (log più piccolo). Da decidere in F2 con numeri reali.
-3. **Vault cifrato + T1**: la cartella `.ordito/` vive fuori dal vault
-   SQLCipher (è cifrata per conto suo). Confermare che non violi il modello
-   mentale "tutto il vault è un file".
-4. **Iroh vs Noise fatto in casa** per T2: peso della dipendenza + questione
-   relay n0 (self-host? disabilitare?) vs costo di un canale proprio.
-5. **Vault a cartella sincronizzato via Ordito** (i `.md` come proiezione
-   read-mostly con ingest idempotente per content-hash): design futuro
-   separato, oggi esplicitamente fuori scope.
-6. **Quorum K per la controfirma snapshot** e default del periodo N di
-   stale-out delle install assenti.
-7. **Nome pubblico della feature**: "Ordito" come nome interno/protocollo;
-   per l'utente probabilmente solo "Sincronizzazione dispositivi".
+I 7 punti aperti della v2, decisi dall'autore dopo analisi guidata
+(contenuto, impatti, opzioni con pro/contro per ciascuno):
+
+1. **Oplog sempre-on con retention corta.** Ogni vault scrive l'oplog dalla
+   migrazione V016, firmato; nei vault senza sync la GC locale tiene la
+   storia entro ~90 giorni (parametro visibile), col sync attivo si passa al
+   regime causale pieno. Motivo: un solo code path di scrittura (i property
+   test coprono ogni vault reale), niente backfill all'attivazione del sync,
+   e il contro privacy/disco del sempre-on è risolto dalla retention.
+   Conseguenza: la GC locale (snapshot K=1) entra nello scope di **F1**.
+   - Scartato "attivato col sync": doppio code path da testare, backfill
+     sintetico, edge case di riattivazione, F1 svuotata di valore.
+2. **Vettori embedding nello snapshot** (non nel log, non ricalcolo puro):
+   blob opaco `(modello, versione)` nella sezione derivati, fuori dalle
+   attestazioni. Bootstrap con semantica immediata, log invariato, ~1,5 KB
+   per prompt solo nello snapshot; degradazione pulita a ricalcolo se il
+   modello differisce. Obbligata comunque nello scenario E2E enterprise.
+   - Scartato "nel log": gonfia la struttura eterna con vettori di stati
+     intermedi legati al modello del device scrivente.
+3. **Cartella `.ordito/` fuori dal vault, come replica rigenerabile.** Il
+   log autoritativo vive nel `.db` SQLCipher; i segmenti sono contenuto del
+   tubo, cancellabili senza perdita. Il modello "il vault è un file" esce
+   rafforzato; lo smaltimento del vault diventa **crypto-shredding** del
+   master seed (i blob remoti diventano illeggibili per sempre).
+   - Scartato "vault come cartella" (invita il `.db` su share SMB →
+     corruzione) e "T1 vietato ai vault cifrati" (ammazza il trasporto più
+     economico per il vault di default).
+4. **T2 = TCP + Noise XX (`snow`) + `mdns-sd`, solo-LAN.** Internet
+   asincrono via T1/T3. **Iroh retrocesso a eventuale T4** domanda-driven
+   (P2P live cross-Internet), con condizione di riapertura esplicita:
+   dipendenza pesante, relay n0 in contrasto col claim "senza server",
+   review crypto più larga, e comunque non copre T3.
+5. **Vault a cartella + Ordito: chiuso per sempre.** Esclusione permanente,
+   non più "design futuro separato". Chi usa il vault a cartella sincronizza
+   con i propri strumenti (git/Syncthing) accettando i limiti documentati.
+   Implicazione accettata: il bet "prompts-as-code" perde la combinazione
+   `.md`+sync intelligente; riaprirla richiederà una revisione esplicita di
+   questa decisione.
+6. **K = tutte le install non-stale; N = 90 giorni automatico.** Snapshot
+   eliminabile solo con controfirma di tutte le install attive (garanzia
+   anti-S8 piena); stale-out automatico a 90 giorni con preavvisi
+   progressivi; al rientro **revisione guidata** delle modifiche non
+   pubblicate nella Vista conflitti (ri-applicazioni = record nuovi con HLC
+   corrente; mai scarto silenzioso).
+   - Scartato "solo manuale" (crescita illimitata se il nudge viene
+     ignorato) e "maggioranza + 30gg" (con 2 device degenera e riapre S8;
+     30gg cade dentro le assenze normali).
+7. **Naming ibrido.** In UI sempre **"Sincronizzazione dispositivi"** (mai
+   "Ordito" in un pulsante o titolo); "Ordito" è il nome del **motore** in
+   docs di architettura, sito e release notes ("basata sul motore di sync
+   Ordito"), con voce breve nel glossario. Nota codename: nel pool di
+   `stagioni-e-nomi-rilascio.md` esiste «Onirico Ordito» (lettera O) —
+   l'omonimia è governata lì: se la release che debutta il motore sarà una
+   cardine, quel codename ne è il candidato naturale (omonimia deliberata).
+   Attenzione redazionale al quasi-omonimo vietato "Ardito".
