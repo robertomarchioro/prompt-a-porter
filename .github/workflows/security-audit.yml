@@ -38,10 +38,11 @@ jobs:
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          # Pin esatto 1.25.10 per fix GO-2026-4971 (panic in net.Listen
-          # con NUL byte su Windows). Setup-go con "1.25" può risolvere
-          # a 1.25.9 se 1.25.10 non è ancora nel manifests cache.
-          go-version: "1.25.10"
+          # Pin esatto 1.25.11 per fix GO-2026-5039 (net/textproto) e
+          # GO-2026-5037 (crypto/x509), raggiunte da http.ListenAndServe.
+          # Setup-go con "1.25" può risolvere a una patch precedente se
+          # l'ultima non è ancora nel manifests cache — pin sempre esatto.
+          go-version: "1.25.11"
           cache-dependency-path: apps/server/go.sum
 
       - name: Installa govulncheck
@@ -59,7 +60,7 @@ jobs:
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: "1.25.10"
+          go-version: "1.25.11"
 
       - name: Genera go.sum
         working-directory: apps/cli

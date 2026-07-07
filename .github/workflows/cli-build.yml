@@ -31,7 +31,7 @@ jobs:
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: "1.25.10"
+          go-version: "1.25.11"
           cache-dependency-path: apps/cli/go.sum
 
       - name: Tidy + vet
@@ -84,7 +84,7 @@ jobs:
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: "1.25.10"
+          go-version: "1.25.11"
           cache-dependency-path: apps/cli/go.sum
 
       - name: Resolve dependencies (genera go.sum se mancante)
