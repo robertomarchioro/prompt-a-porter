@@ -721,14 +721,17 @@ come esempi (coerente col gate coverage 80% del repo):
   causale + stale-out 90gg** (estensione multi-peer della GC locale di F1);
   vettori embedding nello snapshot. Primo sync multi-device **senza alcun
   server**.
+  → Blueprint operativo: [`ordito/blueprint-F2.md`](./ordito/blueprint-F2.md).
 - **F3 — LAN P2P (T2) + conflitto→variante**: `mdns-sd`, pairing, canale
   Noise, riconciliazione negentropy, varianti derivate + Vista conflitti
   (incl. revisione rientro stale), UseCount G-counter.
   *(Il relay T3 è un'appendice opzionale di F3.)*
+  → Blueprint operativo: [`ordito/blueprint-F3.md`](./ordito/blueprint-F3.md).
 - **F4 — Enterprise (v2.x)**: repository trait, proiezione Postgres,
   `papsync` peer autoritativo (staging/ACK, catena workspace, certificati
   device→utente, RBAC/SSO/approval sopra il log). Si apre solo col cliente
   (gate invariato di `v2.0-enterprise.md`).
+  → Blueprint operativo: [`ordito/blueprint-F4.md`](./ordito/blueprint-F4.md).
 
 ## Rischi e vincoli
 
