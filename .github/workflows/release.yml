@@ -14,13 +14,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # NOTE: target Windows (NSIS + portable) e Linux (deb + AppImage)
-          # attivi. macOS resta commentato (richiede Apple Developer cert
-          # per notarization, non ancora disponibile).
-          #
-          # - platform: macos-14
-          #   args: --target aarch64-apple-darwin
-          #   rust-target: aarch64-apple-darwin
+          # NOTE: target Windows (NSIS + portable), Linux (deb + AppImage)
+          # e macOS (app + dmg, Apple Silicon) attivi.
+          - platform: macos-14
+            # macOS: bundle .app + .dmg per aarch64. Firma Developer ID +
+            # notarizzazione avvengono QUI in CI via env APPLE_* (v. step
+            # tauri-action e docs/operativo/firma-macos.md); il box Windows
+            # di firma non tocca gli artifact darwin (sign-release.ps1 li
+            # lascia invariati: firma Ed25519 CI valida). Senza i secret
+            # APPLE_* la build esce unsigned (solo per test pre-cert).
+            args: "--target aarch64-apple-darwin --bundles app,dmg"
+            rust-target: aarch64-apple-darwin
           - platform: ubuntu-22.04
             # Linux: deb + AppImage (l'AppImage alimenta anche l'updater).
             # rpm escluso di proposito: `targets: "all"` in tauri.conf.json
@@ -99,6 +103,16 @@ jobs:
           # §"Tauri Updater key pair" per la procedura di generazione.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # v1.0 — firma macOS in CI (Developer ID Application + notarization
+          # via app-specific password). tauri-action firma e notarizza solo
+          # se questi secret sono valorizzati; assenti ⇒ build unsigned.
+          # Procedura completa: docs/operativo/firma-macos.md.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: apps/client
           tauriScript: pnpm tauri
@@ -142,8 +156,8 @@ jobs:
             **Linux:** la release include anche i pacchetti `.deb` e
             `.AppImage` (x86_64). L'AppImage supporta l'auto-update.
 
-            > **Nota:** il target macOS resta temporaneamente disabilitato
-            > (richiede un certificato Apple Developer per la notarization).
+            **macOS:** la release include l'app per Apple Silicon (`.dmg`),
+            firmata Developer ID e notarizzata in CI.
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
