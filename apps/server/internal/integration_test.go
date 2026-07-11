@@ -32,6 +32,8 @@ type testServerOptions struct {
 	allowedOrigins       []string
 	loginRateLimit       int
 	loginRateLimitWindow time.Duration
+	behindProxy          bool
+	trustedProxyCIDRs    []string
 }
 
 func setupTestServer(t *testing.T) (*chi.Mux, *database.DB, func()) {
@@ -88,6 +90,8 @@ func setupTestServerWithOptions(t *testing.T, opts testServerOptions) (*chi.Mux,
 		LoginRateLimit:       loginRateLimit,
 		LoginRateLimitWindow: loginRateLimitWindow,
 		Version:              "test",
+		BehindProxy:          opts.behindProxy,
+		TrustedProxyCIDRs:    opts.trustedProxyCIDRs,
 	})
 
 	cleanup := func() {
@@ -584,6 +588,91 @@ func TestSyncPushAuthorshipForzato(t *testing.T) {
 	}
 }
 
+// TestSyncPushCrossTenantWriteBypassRifiutato verifica che un utente del
+// workspace A non possa sovrascrivere un prompt/tag del workspace B
+// riusando lo stesso Id: Id è PRIMARY KEY globale su Prompts/Tags (vedi
+// schema.sql), non per-workspace, quindi SELECT/UPDATE filtrate solo per Id
+// (senza anche AND WorkspaceId=?) avrebbero permesso di leggere/sovrascrivere
+// la riga dell'altro tenant (CWE-639, Authorization Bypass Through
+// User-Controlled Key). Il controllo preesistente "tag.WorkspaceId !=
+// workspaceId" da solo NON basta: qui l'attaccante dichiara il proprio
+// WorkspaceId, l'attacco sta nel riuso dell'Id di una riga altrui.
+// Regressione per #482.
+func TestSyncPushCrossTenantWriteBypassRifiutato(t *testing.T) {
+	r, db, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// WS-B (admin di default): crea un prompt e un tag legittimi.
+	loginB := doLogin(t, r)
+	var wsB string
+	db.QueryRow("SELECT WorkspaceId FROM Users WHERE Email = 'admin@test.com'").Scan(&wsB)
+
+	now := models.NowUTC()
+	pushAs(t, r, loginB.Token, models.SyncPushRequest{
+		Prompts: []models.Prompt{{
+			Id: "prm-condiviso", WorkspaceId: wsB, AuthorUserId: loginB.User.Id,
+			Title: "Originale di WS-B", Body: "corpo originale", Visibility: "workspace",
+			Version: 1, CreatedAt: now, UpdatedAt: now,
+		}},
+		Tags: []models.Tag{{
+			Id: "tag-condiviso", WorkspaceId: wsB, Name: "originale-wsb",
+			CreatedAt: now, UpdatedAt: now,
+		}},
+	})
+
+	// WS-A (secondo admin, workspace separato) — l'attaccante.
+	if err := db.SeedAdmin("attaccante@test.com", "Password123!", "AttaccanteTeam"); err != nil {
+		t.Fatalf("seed attaccante: %v", err)
+	}
+	loginA := loginAs(t, r, "attaccante@test.com", "Password123!")
+	var wsA string
+	db.QueryRow("SELECT WorkspaceId FROM Users WHERE Email = 'attaccante@test.com'").Scan(&wsA)
+
+	// UpdatedAt futuro: se il bug fosse ancora presente, il record di WS-A
+	// "vincerebbe" anche il confronto per conflitto basato su timestamp e
+	// sovrascriverebbe comunque la riga di WS-B.
+	future := "2999-01-01 00:00:00"
+	pushAs(t, r, loginA.Token, models.SyncPushRequest{
+		Prompts: []models.Prompt{{
+			Id: "prm-condiviso", WorkspaceId: wsA, AuthorUserId: loginA.User.Id,
+			Title: "HACKED da WS-A", Body: "corpo attaccante", Visibility: "workspace",
+			Version: 1, CreatedAt: now, UpdatedAt: future,
+		}},
+		Tags: []models.Tag{{
+			Id: "tag-condiviso", WorkspaceId: wsA, Name: "hacked-da-wsa",
+			CreatedAt: now, UpdatedAt: future,
+		}},
+	})
+
+	var promptTitle, promptWs string
+	if err := db.QueryRow("SELECT Title, WorkspaceId FROM Prompts WHERE Id = 'prm-condiviso'").
+		Scan(&promptTitle, &promptWs); err != nil {
+		t.Fatalf("lettura prompt condiviso: %v", err)
+	}
+	if promptTitle != "Originale di WS-B" || promptWs != wsB {
+		t.Fatalf("il prompt di WS-B è stato sovrascritto da WS-A: title=%q workspace=%q", promptTitle, promptWs)
+	}
+
+	var tagName, tagWs string
+	if err := db.QueryRow("SELECT Name, WorkspaceId FROM Tags WHERE Id = 'tag-condiviso'").
+		Scan(&tagName, &tagWs); err != nil {
+		t.Fatalf("lettura tag condiviso: %v", err)
+	}
+	if tagName != "originale-wsb" || tagWs != wsB {
+		t.Fatalf("il tag di WS-B è stato sovrascritto da WS-A: name=%q workspace=%q", tagName, tagWs)
+	}
+
+	var promptCount, tagCount int
+	db.QueryRow("SELECT COUNT(*) FROM Prompts WHERE Id = 'prm-condiviso'").Scan(&promptCount)
+	db.QueryRow("SELECT COUNT(*) FROM Tags WHERE Id = 'tag-condiviso'").Scan(&tagCount)
+	if promptCount != 1 {
+		t.Fatalf("atteso esattamente 1 riga Prompts per l'Id condiviso, trovate %d", promptCount)
+	}
+	if tagCount != 1 {
+		t.Fatalf("atteso esattamente 1 riga Tags per l'Id condiviso, trovate %d", tagCount)
+	}
+}
+
 // TestLoginRateLimitFloodRitorna429 verifica che dopo aver esaurito la
 // quota per-IP, /auth/login risponda 429 invece di continuare a validare
 // credenziali (mitigazione brute-force, #451).
@@ -647,6 +736,59 @@ func TestLoginRateLimitPerIpIndipendente(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("secondo IP non deve essere penalizzato: atteso 200, ottenuto %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestLoginRateLimitDietroProxyUsaXForwardedFor verifica che, dietro
+// PAP_BEHIND_PROXY=1, il rate-limit su /auth/login chiavizzi sull'IP reale
+// del client letto da X-Forwarded-For (fidandosi solo dei CIDR indicati),
+// non su RemoteAddr — che dietro un reverse proxy è sempre l'IP del proxy
+// e farebbe condividere lo stesso bucket a tutti gli utenti (self-inflicted
+// DoS). Due IP reali diversi dietro lo stesso proxy (stesso RemoteAddr) non
+// devono condividere il bucket.
+func TestLoginRateLimitDietroProxyUsaXForwardedFor(t *testing.T) {
+	r, _, cleanup := setupTestServerWithOptions(t, testServerOptions{
+		loginRateLimit:       3,
+		loginRateLimitWindow: time.Minute,
+		behindProxy:          true,
+		trustedProxyCIDRs:    []string{"127.0.0.1/32"},
+	})
+	defer cleanup()
+
+	floodViaProxy := func(realClientIP string, n int) int {
+		var code int
+		for i := 0; i < n; i++ {
+			body, _ := json.Marshal(models.LoginRequest{Email: "admin@test.com", Password: "sbagliata"})
+			req := httptest.NewRequest("POST", "/auth/login", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Forwarded-For", realClientIP)
+			// Stesso RemoteAddr per entrambi i client: è il proxy fidato
+			// (127.0.0.1/32) davanti a entrambi.
+			req.RemoteAddr = "127.0.0.1:9999"
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+			code = rec.Code
+		}
+		return code
+	}
+
+	if got := floodViaProxy("203.0.113.50", 5); got != http.StatusTooManyRequests {
+		t.Fatalf("primo client reale (dietro proxy): atteso 429 dopo il flood, ottenuto %d", got)
+	}
+
+	// Un secondo client reale, dietro lo STESSO proxy (stesso RemoteAddr),
+	// non deve essere penalizzato dal flood del primo.
+	body, _ := json.Marshal(models.LoginRequest{Email: "admin@test.com", Password: "Password123!"})
+	req := httptest.NewRequest("POST", "/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Forwarded-For", "203.0.113.99")
+	req.RemoteAddr = "127.0.0.1:9999"
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("secondo client reale dietro lo stesso proxy non deve essere penalizzato: "+
+			"atteso 200, ottenuto %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -790,6 +932,29 @@ func TestCorsOriginInAllowListAccettata(t *testing.T) {
 	}
 }
 
+// TestCorsAllowListVuotaNonEAllowAll è una regressione mirata: go-chi/cors
+// tratta una AllowedOrigins vuota come "consenti tutte le origin" quando
+// AllowOriginFunc è nil (verificato su go-chi/cors@v1.2.2, vedi il
+// commento su corsOptions in internal/server/router.go). Usa
+// setupTestServer (nessuna PAP_ALLOWED_ORIGINS, il caso di default in
+// produzione), non una allow-list esplicita come gli altri test CORS sopra
+// — altrimenti il default insicuro passerebbe inosservato.
+func TestCorsAllowListVuotaNonEAllowAll(t *testing.T) {
+	r, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	req.Header.Set("Origin", "https://qualunque-sito.example.com")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("con allow-list vuota (default) nessuna origin deve ricevere "+
+			"Access-Control-Allow-Origin, ottenuto %q — la allow-list vuota si è "+
+			"comportata come allow-all", got)
+	}
+}
+
 // TestJwtAlgNoneRifiutato verifica che un token con alg="none" (o firmato
 // con un algoritmo diverso da HS256) sia rifiutato sia dal middleware HTTP
 // sia dall'handshake WebSocket (jwt.WithValidMethods, CWE-347).
@@ -818,13 +983,53 @@ func TestJwtAlgNoneRifiutato(t *testing.T) {
 	}
 }
 
-// wsDial apre una connessione WebSocket verso il path indicato di un
-// httptest.Server, passando il token secondo la strategia richiesta.
+// wsClientProtocolTokenPrefix specchia WS_PROTOCOLLO_TOKEN_PREFIX in
+// apps/client/src/lib/sync.ts (connettiWs, PR #478) e wsProtocolTokenPrefix
+// in internal/ws/hub.go: il client offre come sub-protocol
+// "pap.sync.token.<jwt>", non il token nudo. Va tenuto sincronizzato a
+// mano con le altre due costanti (pacchetti diversi, nessun modo di
+// condividerla senza un import ciclico/cross-modulo).
+const wsClientProtocolTokenPrefix = "pap.sync.token."
+
+// wsDialWithHeader apre una connessione WebSocket verso il path indicato di
+// un httptest.Server, passando il token via Sec-WebSocket-Protocol
+// esattamente nel formato del client (prefisso incluso).
 func wsDialWithHeader(t *testing.T, wsURL, token string) (*websocket.Conn, *http.Response, error) {
 	t.Helper()
 	header := http.Header{}
-	header.Set("Sec-WebSocket-Protocol", token)
+	header.Set("Sec-WebSocket-Protocol", wsClientProtocolTokenPrefix+token)
 	return websocket.DefaultDialer.Dial(wsURL, header)
+}
+
+// TestWsTokenViaSecWebSocketProtocolFormatoClienteEsatto è un test di
+// round-trip contro una regressione specifica: il client (apps/client/src/
+// lib/sync.ts, connettiWs) invia il token PREFISSATO
+// ("pap.sync.token.<jwt>"), non il JWT nudo, come valore di
+// Sec-WebSocket-Protocol. Se il server non toglie il prefisso prima del
+// parse, jwt.ParseWithClaims vede troppi segmenti "." e rifiuta OGNI
+// connessione WS con 401, anche con un token valido (#453/#478).
+func TestWsTokenViaSecWebSocketProtocolFormatoClienteEsatto(t *testing.T) {
+	r, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	login := doLogin(t, r)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+
+	header := http.Header{}
+	header.Set("Sec-WebSocket-Protocol", wsClientProtocolTokenPrefix+login.Token)
+
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err != nil {
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		t.Fatalf("connessione WS con token nel formato esatto del client fallita: %v (status %d)", err, status)
+	}
+	defer conn.Close()
 }
 
 // TestWsTokenViaSecWebSocketProtocol verifica il percorso di autenticazione
@@ -884,7 +1089,7 @@ func TestWsOrigineNonConsentitaRifiutata(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
 
 	header := http.Header{}
-	header.Set("Sec-WebSocket-Protocol", login.Token)
+	header.Set("Sec-WebSocket-Protocol", wsClientProtocolTokenPrefix+login.Token)
 	header.Set("Origin", "https://evil.example.com")
 
 	_, resp, err := websocket.DefaultDialer.Dial(wsURL, header)

@@ -58,6 +58,11 @@ func main() {
 	allowedOrigins := config.AllowedOriginsFromEnv()
 	hub := ws.NewHub(jwtSecret, allowedOrigins)
 
+	trustedProxyCIDRs, err := config.TrustedProxyCIDRsFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	authHandler := &auth.Handler{
 		DB:        db,
 		JwtSecret: jwtSecret,
@@ -75,6 +80,8 @@ func main() {
 		LoginRateLimit:       server.DefaultLoginRateLimit,
 		LoginRateLimitWindow: server.DefaultLoginRateLimitWindow,
 		Version:              "0.1.0",
+		BehindProxy:          behindProxy,
+		TrustedProxyCIDRs:    trustedProxyCIDRs,
 	})
 
 	log.Printf("PaP Sync Server avviato su :%s (modalità: %s)", port, mode)
@@ -103,7 +110,12 @@ func jwtSecretFromEnv() []byte {
 	secret := os.Getenv("PAP_JWT_SECRET")
 	if secret == "" {
 		b := make([]byte, minJwtSecretBytes)
-		rand.Read(b)
+		if _, err := rand.Read(b); err != nil {
+			// Senza entropia valida non c'è un fallback sicuro: un
+			// segreto JWT prevedibile permetterebbe di falsificare token
+			// (CWE-330, Use of Insufficiently Random Values).
+			log.Fatalf("Errore generazione PAP_JWT_SECRET casuale: %v", err)
+		}
 		generated := hex.EncodeToString(b)
 		log.Printf("ATTENZIONE: PAP_JWT_SECRET non impostato, generato casualmente (non persistente tra riavvii)")
 		return []byte(generated)

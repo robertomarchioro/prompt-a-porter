@@ -174,9 +174,22 @@ func (h *Handler) pushDelta(workspaceId, userId string, req *models.SyncPushRequ
 		if tag.WorkspaceId != workspaceId {
 			continue
 		}
-		var existing sql.NullString
-		err := tx.QueryRow("SELECT UpdatedAt FROM Tags WHERE Id = ?", tag.Id).Scan(&existing)
-		if err == sql.ErrNoRows {
+
+		// Id è PRIMARY KEY globale (non per-workspace, vedi schema.sql), e
+		// il controllo sopra verifica solo il WorkspaceId DICHIARATO dal
+		// client per il record in arrivo, non quello del record ESISTENTE
+		// con lo stesso Id. Senza leggere anche existingWorkspace, un
+		// utente del workspace A potrebbe indovinare/riusare l'Id di un
+		// tag del workspace B e farlo sovrascrivere silenziosamente da
+		// SELECT/UPDATE filtrate solo per Id (CWE-639, Authorization
+		// Bypass Through User-Controlled Key — cross-tenant write).
+		// Regressione per #482.
+		var existingWorkspace sql.NullString
+		var existingUpdated sql.NullString
+		err := tx.QueryRow("SELECT WorkspaceId, UpdatedAt FROM Tags WHERE Id = ?", tag.Id).
+			Scan(&existingWorkspace, &existingUpdated)
+		switch {
+		case err == sql.ErrNoRows:
 			_, err = tx.Exec(`INSERT INTO Tags (Id, WorkspaceId, Name, Color, CreatedAt, UpdatedAt, DeletedAt)
 				VALUES (?, ?, ?, ?, ?, ?, ?)`,
 				tag.Id, workspaceId, tag.Name, tag.Color, tag.CreatedAt, now, tag.DeletedAt)
@@ -184,18 +197,28 @@ func (h *Handler) pushDelta(workspaceId, userId string, req *models.SyncPushRequ
 				return 0, 0, err
 			}
 			accepted++
-		} else if err == nil {
-			if existing.String >= tag.UpdatedAt {
+		case err == nil && existingWorkspace.String != workspaceId:
+			// L'Id appartiene già a un tag di un ALTRO workspace: si
+			// rifiuta come conflitto (nessuna riga toccata), invece di
+			// lasciar fallire l'INSERT per violazione della PK globale o,
+			// peggio, sovrascrivere per errore la riga dell'altro tenant.
+			conflicts++
+			continue
+		case err == nil:
+			if existingUpdated.String >= tag.UpdatedAt {
 				conflicts++
 				continue
 			}
-			_, err = tx.Exec(`UPDATE Tags SET Name=?, Color=?, UpdatedAt=?, DeletedAt=? WHERE Id=?`,
-				tag.Name, tag.Color, now, tag.DeletedAt, tag.Id)
+			// AND WorkspaceId=? è difesa in profondità: a questo punto è
+			// già garantito da existingWorkspace, ma un WHERE Id=? da solo
+			// è esattamente il pattern che ha causato #482.
+			_, err = tx.Exec(`UPDATE Tags SET Name=?, Color=?, UpdatedAt=?, DeletedAt=? WHERE Id=? AND WorkspaceId=?`,
+				tag.Name, tag.Color, now, tag.DeletedAt, tag.Id, workspaceId)
 			if err != nil {
 				return 0, 0, err
 			}
 			accepted++
-		} else {
+		default:
 			return 0, 0, err
 		}
 
@@ -206,11 +229,19 @@ func (h *Handler) pushDelta(workspaceId, userId string, req *models.SyncPushRequ
 		if p.WorkspaceId != workspaceId || p.Visibility != "workspace" {
 			continue
 		}
+
+		// Stesso problema di isolamento tra tenant dei Tags sopra: Id è
+		// PRIMARY KEY globale su Prompts, quindi va letto anche il
+		// WorkspaceId del record esistente (se c'è) per distinguere "non
+		// esiste ancora" da "esiste ma è di un altro workspace" (CWE-639,
+		// regressione per #482).
+		var existingWorkspace sql.NullString
 		var existingUpdated sql.NullString
 		var existingAuthor sql.NullString
-		err := tx.QueryRow("SELECT UpdatedAt, AuthorUserId FROM Prompts WHERE Id = ?", p.Id).
-			Scan(&existingUpdated, &existingAuthor)
-		if err == sql.ErrNoRows {
+		err := tx.QueryRow("SELECT WorkspaceId, UpdatedAt, AuthorUserId FROM Prompts WHERE Id = ?", p.Id).
+			Scan(&existingWorkspace, &existingUpdated, &existingAuthor)
+		switch {
+		case err == sql.ErrNoRows:
 			// L'autore di un prompt nuovo è sempre l'utente autenticato che
 			// esegue il push, mai il valore fornito dal client: senza
 			// questo un client malevolo potrebbe attribuire la paternità a
@@ -232,19 +263,27 @@ func (h *Handler) pushDelta(workspaceId, userId string, req *models.SyncPushRequ
 			}
 			accepted++
 			h.logChange(tx, workspaceId, "prompt", inserted.Id, "upsert", inserted, userId)
-		} else if err == nil {
+		case err == nil && existingWorkspace.String != workspaceId:
+			// L'Id appartiene già a un prompt di un ALTRO workspace:
+			// rifiutato come conflitto, nessuna riga toccata.
+			conflicts++
+			continue
+		case err == nil:
 			if existingUpdated.String >= p.UpdatedAt {
 				conflicts++
 				continue
 			}
+			// AND WorkspaceId=? è difesa in profondità (vedi Tags sopra):
+			// a questo punto è già garantito da existingWorkspace, ma un
+			// WHERE Id=? da solo è esattamente il pattern di #482.
 			_, err = tx.Exec(`UPDATE Prompts SET
 				Title=?, Description=?, Body=?, Visibility=?, TargetModel=?,
 				IsFavorite=?, UseCount=?, LastUsedAt=?, Version=?,
 				UpdatedAt=?, UpdatedByUserId=?, DeletedAt=?
-				WHERE Id=?`,
+				WHERE Id=? AND WorkspaceId=?`,
 				p.Title, p.Description, p.Body, p.Visibility, p.TargetModel,
 				p.IsFavorite, p.UseCount, p.LastUsedAt, p.Version,
-				now, userId, p.DeletedAt, p.Id)
+				now, userId, p.DeletedAt, p.Id, workspaceId)
 			if err != nil {
 				return 0, 0, err
 			}
@@ -256,7 +295,7 @@ func (h *Handler) pushDelta(workspaceId, userId string, req *models.SyncPushRequ
 			logged := p
 			logged.AuthorUserId = existingAuthor.String
 			h.logChange(tx, workspaceId, "prompt", logged.Id, "upsert", logged, userId)
-		} else {
+		default:
 			return 0, 0, err
 		}
 	}

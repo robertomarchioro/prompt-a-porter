@@ -34,6 +34,19 @@ const (
 	// wsWriteWait è il timeout per ogni singola scrittura (ping o
 	// broadcast) sulla connessione.
 	wsWriteWait = 10 * time.Second
+
+	// wsProtocolTokenPrefix è il prefisso che precede il JWT nel valore
+	// dell'header Sec-WebSocket-Protocol. Deve combaciare ESATTAMENTE con
+	// la costante WS_PROTOCOLLO_TOKEN_PREFIX in apps/client/src/lib/sync.ts
+	// (connettiWs, PR #478): il client invia
+	// `${WS_PROTOCOLLO_TOKEN_PREFIX}${token}` come sub-protocol offerto,
+	// non il token nudo — un prefisso serve a rendere il valore
+	// riconoscibile come "questo sub-protocol trasporta un JWT" anche se
+	// in futuro venissero offerti altri sub-protocol. Senza togliere
+	// questo prefisso prima del parse, jwt.ParseWithClaims riceve una
+	// stringa con troppi segmenti "." e rifiuta ogni connessione (401 su
+	// ogni client).
+	wsProtocolTokenPrefix = "pap.sync.token."
 )
 
 type client struct {
@@ -92,17 +105,21 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 // extractToken cerca il token JWT nella richiesta di upgrade WebSocket. In
 // ordine di preferenza:
 //  1. Header Sec-WebSocket-Protocol (il client invia il token come valore
-//     del subprotocol, es. new WebSocket(url, [token])): è il metodo
-//     raccomandato perché non finisce nei log di accesso/URL come farebbe
-//     un query param.
+//     del subprotocol, prefissato con wsProtocolTokenPrefix (vedi sotto):
+//     è il metodo raccomandato perché non finisce nei log di accesso/URL
+//     come farebbe un query param.
 //  2. Header Authorization: Bearer <token>.
-//  3. Query param ?token=... (DEPRECATO): mantenuto solo perché il client
-//     desktop attuale (apps/client/src/lib/sync.ts, connettiWs) si connette
-//     ancora così. Va rimosso quando il client verrà aggiornato per usare
-//     Sec-WebSocket-Protocol.
+//  3. Query param ?token=... (DEPRECATO): il client desktop
+//     (apps/client/src/lib/sync.ts, connettiWs) lo invia ancora oggi in
+//     parallelo all'header, come fallback per finestra di transizione
+//     (vedi PR #478, TODO(#453) nel client) — quel fallback verrà rimosso
+//     lato client una volta che questo supporto header è in produzione.
+//     Va considerato codice morto lato server non appena il client smette
+//     di inviarlo, ma non nuoce mantenerlo nel frattempo.
 func extractToken(r *http.Request) string {
 	if proto := r.Header.Get("Sec-WebSocket-Protocol"); proto != "" {
 		candidate := strings.TrimSpace(strings.Split(proto, ",")[0])
+		candidate = strings.TrimPrefix(candidate, wsProtocolTokenPrefix)
 		if candidate != "" {
 			return candidate
 		}
