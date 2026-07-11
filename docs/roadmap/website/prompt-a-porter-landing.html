@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Prompt-à-porter — Passerella</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0B0B0C; --bg2:#121314; --panel:#17171A; --panel2:#1D1D21;
+    --ink:#EFEDF2; --muted:#8A8792; --faint:#837F70; --line:#26262B;
+    --violet:#8470D5; --violet-br:#9B86F0; --amber:#D8A463; --amber-soft:#E8C79A;
+    --green:#6FBF73;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{background:var(--bg);color:var(--ink);}
+  body{font-family:"Inter",sans-serif;width:100%;max-width:100%;-webkit-font-smoothing:antialiased;overflow-x:hidden;}
+  .serif{font-family:"Newsreader",serif;font-weight:300;}
+  .mono{font-family:"JetBrains Mono",monospace;}
+  .label{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);}
+  a{color:inherit;text-decoration:none;}
+  .wrap{max-width:1240px;margin:0 auto;padding:0 80px;}
+
+  /* topbar */
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:30px 80px;max-width:1240px;margin:0 auto;position:relative;z-index:5;}
+  .brand{display:flex;align-items:center;gap:13px;}
+  .brand .mk{width:30px;height:30px;border-radius:8px;background:linear-gradient(150deg,var(--violet),#6E56CF);display:flex;align-items:center;justify-content:center;font-family:"Newsreader",serif;font-size:18px;color:#fff;box-shadow:0 0 24px rgba(132,112,213,.5);}
+  .brand .nm{font-family:"Newsreader",serif;font-size:19px;letter-spacing:.01em;}
+  .nav{display:flex;gap:34px;align-items:center;}
+  .nav a{font-size:13px;color:var(--muted);transition:color .18s;}
+  .nav a:hover{color:var(--violet-br);}
+  .nav .dl{color:var(--ink);border:1px solid var(--line);padding:9px 18px;border-radius:8px;font-size:13px;}
+  .nav .dl:hover{border-color:var(--violet-br);color:var(--violet-br);}
+
+  /* hero */
+  .stage{position:relative;padding:38px 0 80px;text-align:center;overflow:hidden;}
+  .spot{position:absolute;left:50%;top:90px;transform:translateX(-50%);width:1200px;height:980px;background:radial-gradient(ellipse 50% 45% at 50% 30%,rgba(132,112,213,.32),rgba(132,112,213,.05) 55%,transparent 72%);pointer-events:none;z-index:0;}
+  .stage .inner{position:relative;z-index:2;}
+  .eyebrow{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--line);background:rgba(255,255,255,.02);border-radius:100px;padding:8px 16px 8px 10px;margin-bottom:30px;}
+  .eyebrow kbd{font-family:"JetBrains Mono",monospace;font-size:11px;background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:3px 7px;color:var(--violet-br);}
+  .eyebrow .t{font-size:12.5px;color:var(--muted);letter-spacing:.02em;}
+  h1.head{font-family:"Newsreader",serif;font-weight:300;font-size:104px;line-height:.92;letter-spacing:-.04em;}
+  h1.head em{font-style:italic;color:var(--violet-br);}
+  .sub{font-family:"Newsreader",serif;font-weight:300;font-size:26px;line-height:1.4;color:#CFCBD8;margin:26px auto 0;max-width:640px;}
+  .sub b{color:var(--ink);font-weight:400;font-style:italic;}
+  .hero-cta{display:flex;gap:14px;justify-content:center;align-items:center;margin-top:34px;}
+  .hero-cta .btn{display:inline-flex;align-items:center;gap:10px;font-size:14.5px;font-weight:500;padding:15px 26px;border-radius:10px;border:1px solid transparent;transition:.2s;}
+  .hero-cta .btn-primary{background:linear-gradient(160deg,var(--violet),#6E56CF);color:#fff;box-shadow:0 12px 30px -10px rgba(132,112,213,.7);}
+  .hero-cta .btn-primary:hover{filter:brightness(1.08);}
+  .hero-cta .btn-primary .ico{font-size:15px;line-height:1;}
+  .hero-cta .btn-ghost{color:var(--ink);border-color:var(--line);background:rgba(255,255,255,.02);}
+  .hero-cta .btn-ghost:hover{border-color:var(--violet-br);color:var(--violet-br);}
+  .hero-cta .meta{font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--muted);margin-left:6px;}
+
+  /* rotating showcase */
+  .showcase{margin:38px auto 0;width:1180px;}
+  .viewport{position:relative;height:540px;}
+  .scene{position:absolute;inset:0;display:none;align-items:center;justify-content:center;}
+  .scene.on{display:flex;}
+
+  /* scene controls */
+  .sc-controls{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:28px;}
+  .sc-arrow{width:38px;height:38px;flex:none;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:17px;line-height:1;cursor:pointer;transition:.2s;display:flex;align-items:center;justify-content:center;}
+  .sc-arrow:hover{border-color:var(--violet-br);color:var(--violet-br);}
+  .sc-progress{width:240px;height:2px;background:var(--line);border-radius:2px;margin:18px auto 0;overflow:hidden;}
+  .sc-progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--violet),var(--violet-br));}
+  @media (prefers-reduced-motion: reduce){ .sc-progress{display:none;} }
+  .tabline{display:flex;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:100px;padding:5px;}
+  .tab{font-size:12.5px;color:var(--muted);padding:9px 18px;border-radius:100px;cursor:pointer;transition:.25s;display:flex;align-items:center;gap:8px;white-space:nowrap;}
+  .tab .n{font-family:"JetBrains Mono",monospace;font-size:10px;opacity:.6;}
+  .tab.on{background:linear-gradient(160deg,var(--violet),#6E56CF);color:#fff;}
+  .tab.on .n{opacity:.85;}
+  .sc-cap{margin-top:22px;font-size:14.5px;color:var(--muted);min-height:22px;transition:opacity .4s;}
+  .sc-cap b{color:var(--amber-soft);font-weight:500;}
+
+  /* === command palette === */
+  .cmdk{width:660px;background:linear-gradient(180deg,#161619,#141417);border:1px solid #2E2C36;border-radius:16px;box-shadow:0 50px 110px -30px rgba(0,0,0,.85),0 0 0 1px rgba(132,112,213,.18),0 0 70px -20px rgba(132,112,213,.4);overflow:hidden;text-align:left;}
+  .cmdk-search{display:flex;align-items:center;gap:13px;padding:19px 22px;border-bottom:1px solid var(--line);}
+  .cmdk-search svg{width:18px;height:18px;stroke:var(--muted);fill:none;stroke-width:1.8;flex:none;}
+  .cmdk-search .ph{font-size:16px;color:var(--muted);}
+  .cmdk-search .caret{width:2px;height:19px;background:var(--violet-br);margin-left:-3px;animation:blink 1.1s steps(1) infinite;}
+  @keyframes blink{50%{opacity:0;}}
+  .cmdk-search .esc{margin-left:auto;font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:3px 7px;}
+  .cmdk-lab{font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);padding:14px 22px 8px;}
+  .cmdk-item{display:flex;align-items:center;gap:16px;padding:11px 22px;}
+  .cmdk-item .b{flex:1;min-width:0;}
+  .cmdk-item .t{font-size:14.5px;color:var(--ink);font-weight:500;}
+  .cmdk-item .d{font-size:12.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cmdk-item .d em{color:var(--violet-br);font-style:normal;}
+  .cmdk-item .bd{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--amber);background:rgba(216,164,99,.12);border:1px solid rgba(216,164,99,.25);border-radius:5px;padding:3px 8px;flex:none;}
+  .cmdk-item.active{background:linear-gradient(90deg,rgba(132,112,213,.16),rgba(132,112,213,.04));box-shadow:inset 2px 0 0 var(--violet-br);}
+  .cmdk-foot{display:flex;gap:18px;padding:12px 22px;border-top:1px solid var(--line);background:rgba(0,0,0,.2);}
+  .cmdk-foot span{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px;}
+  .cmdk-foot kbd{font-family:"JetBrains Mono",monospace;font-size:10px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:2px 6px;color:#B7B3C0;}
+
+  /* === full app window === */
+  .appwin{width:1180px;height:500px;background:var(--bg2);border:1px solid var(--line);border-radius:14px;box-shadow:0 50px 110px -30px rgba(0,0,0,.85);overflow:hidden;text-align:left;display:flex;flex-direction:column;font-size:12px;}
+  .a-title{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:#161618;border-bottom:1px solid var(--line);}
+  .a-title .l{display:flex;align-items:center;gap:9px;}
+  .a-title .pp{width:18px;height:18px;border-radius:5px;background:linear-gradient(150deg,var(--violet),#6E56CF);display:flex;align-items:center;justify-content:center;font-family:"Newsreader",serif;font-size:11px;color:#fff;}
+  .a-title .tt{font-size:12px;color:var(--ink);}
+  .a-title .ver{font-family:"JetBrains Mono",monospace;font-size:9.5px;color:var(--violet-br);border:1px solid rgba(132,112,213,.35);border-radius:100px;padding:2px 8px;}
+  .a-title .r{display:flex;gap:14px;color:var(--muted);font-size:13px;}
+  .a-body{flex:1;display:grid;grid-template-columns:204px 250px 1fr 196px;min-height:0;}
+  .a-col{border-right:1px solid var(--line);overflow:hidden;}
+  .a-col:last-child{border-right:0;}
+
+  /* sidebar */
+  .sb{padding:0;background:#141416;}
+  .sb .ws{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);}
+  .sb .ws .av{width:18px;height:18px;border-radius:5px;background:linear-gradient(150deg,#3BA776,#2E8C63);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;}
+  .sb .ws .nm{font-size:12px;color:var(--ink);flex:1;}
+  .sb .ws .ch{color:var(--faint);font-size:9px;}
+  .sb .grp{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.16em;color:var(--faint);padding:14px 14px 6px;}
+  .sb .it{display:flex;align-items:center;gap:9px;padding:6px 14px;color:var(--muted);font-size:12px;}
+  .sb .it .ic{width:13px;color:var(--faint);font-size:11px;}
+  .sb .it .ct{margin-left:auto;font-size:10px;color:var(--faint);}
+  .sb .it.on{color:var(--ink);background:#1E1E22;box-shadow:inset 2px 0 0 var(--violet-br);}
+  .sb .it .dotp{width:6px;height:6px;border-radius:50%;background:var(--violet);}
+  .sb .it .dott{width:6px;height:6px;border-radius:50%;background:var(--amber);}
+  .sb .foot{margin-top:10px;border-top:1px solid var(--line);padding:10px 14px;display:flex;flex-direction:column;gap:8px;}
+  .sb .foot .it{padding:0;color:var(--muted);}
+
+  /* list */
+  .lst{display:flex;flex-direction:column;background:var(--bg2);}
+  .lst .hd{display:flex;align-items:center;justify-content:space-between;padding:11px 14px 9px;}
+  .lst .hd .ti{font-size:13px;color:var(--ink);}
+  .lst .hd .cnt{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--faint);}
+  .lst .sr{display:flex;align-items:center;gap:8px;margin:0 14px 9px;padding:7px 10px;background:#161618;border:1px solid var(--line);border-radius:7px;color:var(--faint);font-size:11px;}
+  .lst .new{display:flex;align-items:center;justify-content:center;gap:5px;margin:0 14px 10px;padding:7px;background:linear-gradient(160deg,var(--violet),#6E56CF);color:#fff;border-radius:7px;font-size:11.5px;font-weight:500;}
+  .lst .row{padding:9px 14px;border-left:2px solid transparent;display:flex;align-items:center;gap:8px;}
+  .lst .row .dt{width:6px;height:6px;border-radius:50%;background:var(--violet);flex:none;}
+  .lst .row .tx{flex:1;min-width:0;}
+  .lst .row .tx .nm{font-size:12px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .lst .row .st{color:var(--amber);font-size:10px;}
+  .lst .row .tm{font-size:9.5px;color:var(--faint);font-family:"JetBrains Mono",monospace;}
+  .lst .row.on{background:#1A1A1E;border-left-color:var(--violet-br);}
+
+  /* editor */
+  .ed{display:flex;flex-direction:column;background:#141416;overflow:hidden;}
+  .ed .eh{padding:14px 18px 0;}
+  .ed .eh .ti{display:flex;align-items:center;justify-content:space-between;}
+  .ed .eh h3{font-family:"Newsreader",serif;font-weight:400;font-size:21px;color:var(--ink);}
+  .ed .eh .acts{display:flex;align-items:center;gap:11px;color:var(--muted);font-size:12px;}
+  .ed .eh .comp{background:linear-gradient(160deg,var(--violet),#6E56CF);color:#fff;font-size:11px;font-weight:500;padding:6px 13px;border-radius:7px;}
+  .ed .eh .ds{font-size:11.5px;color:var(--muted);margin-top:7px;}
+  .ed .meta{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap;align-items:center;}
+  .ed .meta .pill{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:100px;padding:3px 9px;}
+  .ed .meta .pill .g{color:var(--green);}
+  .ed .meta .pill .f{color:var(--amber);}
+  .ed .meta .x{font-size:10px;color:var(--faint);font-family:"JetBrains Mono",monospace;}
+  .ed .tabs{display:flex;gap:18px;padding:13px 18px 0;border-bottom:1px solid var(--line);margin-top:13px;}
+  .ed .tabs span{font-size:11.5px;color:var(--muted);padding-bottom:9px;}
+  .ed .tabs span.on{color:var(--ink);box-shadow:inset 0 -2px 0 var(--violet-br);}
+  .ed .toolbar{display:flex;gap:13px;padding:9px 18px;border-bottom:1px solid var(--line);color:var(--faint);font-size:12px;}
+  .ed .code{flex:1;display:flex;font-family:"JetBrains Mono",monospace;font-size:11.5px;line-height:2;overflow:hidden;padding:12px 0;}
+  .ed .code .gut{color:var(--faint);text-align:right;padding:0 12px;user-select:none;}
+  .ed .code .src{color:#C8C4D0;padding-right:18px;}
+  .ed .code .tok{background:rgba(216,164,99,.16);color:var(--amber);border-radius:3px;padding:0 3px;}
+  .ed .code .b{color:var(--ink);}
+  .ed .sbar{display:flex;align-items:center;gap:12px;padding:7px 18px;border-top:1px solid var(--line);font-family:"JetBrains Mono",monospace;font-size:9.5px;color:var(--faint);}
+  .ed .sbar .dot{width:5px;height:5px;border-radius:50%;background:var(--green);}
+
+  /* metadata */
+  .mt{background:var(--bg2);padding:13px 14px;display:flex;flex-direction:column;gap:14px;overflow:hidden;}
+  .mt .grp .h{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.14em;color:var(--faint);margin-bottom:8px;}
+  .mt .fld{font-size:11px;color:var(--ink);background:#161618;border:1px solid var(--line);border-radius:6px;padding:6px 9px;display:flex;align-items:center;justify-content:space-between;}
+  .mt .fld+.fld{margin-top:7px;}
+  .mt .tag{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--violet-br);background:rgba(132,112,213,.12);border-radius:100px;padding:3px 9px;}
+  .mt .sug{display:flex;gap:6px;flex-wrap:wrap;}
+  .mt .sug span{font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:100px;padding:3px 8px;}
+  .mt .seg{display:flex;align-items:center;justify-content:space-between;font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--amber);background:rgba(216,164,99,.1);border:1px solid rgba(216,164,99,.2);border-radius:6px;padding:5px 9px;}
+  .mt .seg+.seg{margin-top:6px;}
+  .mt .seg .ty{color:var(--faint);}
+  .mt .hb{display:flex;align-items:center;justify-content:space-between;}
+  .mt .hb .ct{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--violet-br);}
+
+  .a-status{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:#161618;border-top:1px solid var(--line);font-family:"JetBrains Mono",monospace;font-size:9.5px;color:var(--faint);}
+  .a-status .l,.a-status .r{display:flex;align-items:center;gap:8px;}
+  .a-status .kb{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:2px 6px;color:var(--violet-br);}
+  .a-status .dot{width:5px;height:5px;border-radius:50%;background:var(--green);}
+
+  /* === feature focus card === */
+  .feat{width:1080px;display:grid;grid-template-columns:1fr 1fr;gap:46px;align-items:center;text-align:left;min-height:480px;}
+  .feat .fc-copy .k{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--violet-br);}
+  .feat .fc-copy h3{font-family:"Newsreader",serif;font-weight:300;font-size:50px;line-height:1.02;letter-spacing:-.02em;margin:14px 0 18px;}
+  .feat .fc-copy h3 em{font-style:italic;color:var(--amber-soft);}
+  .feat .fc-copy p{font-size:16px;line-height:1.7;color:#B9B5C2;max-width:420px;}
+  .feat .fc-copy p code{font-family:"JetBrains Mono",monospace;font-size:13px;background:rgba(216,164,99,.12);color:var(--amber);padding:1px 5px;border-radius:4px;}
+  .feat .fc-copy .row2{display:flex;gap:36px;margin-top:24px;align-items:baseline;}
+  .feat .fc-copy .row2 .s .v{font-family:"Newsreader",serif;font-size:30px;color:var(--violet-br);white-space:nowrap;}
+  .feat .fc-copy .row2 .s .l{font-size:11px;color:var(--muted);margin-top:2px;}
+
+  /* segnaposti card */
+  .segcard{background:linear-gradient(180deg,#161619,#141417);border:1px solid #2E2C36;border-radius:14px;box-shadow:0 40px 90px -30px rgba(0,0,0,.8);overflow:hidden;}
+  .segcard .sh{display:flex;align-items:center;gap:9px;padding:14px 18px;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink);}
+  .segcard .sh .bk{color:var(--muted);}
+  .segcard .sub2{display:flex;align-items:center;justify-content:space-between;padding:12px 18px 4px;}
+  .segcard .sub2 .l{font-family:"JetBrains Mono",monospace;font-size:9.5px;letter-spacing:.16em;color:var(--faint);}
+  .segcard .sub2 .c{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--violet-br);}
+  .segrow{display:grid;grid-template-columns:88px 1fr;align-items:center;gap:12px;padding:7px 18px;}
+  .segrow .lbl{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--muted);text-align:right;}
+  .segrow .inp{background:#1B1B1F;border:1px solid var(--line);border-radius:7px;padding:8px 11px;font-size:12px;color:var(--ink);}
+  .segrow.filled .inp{border-color:var(--violet);color:var(--ink);}
+  .segrow .inp.ph{color:var(--faint);font-style:italic;}
+  .segcard .prev{margin:12px 18px 0;border-top:1px solid var(--line);padding-top:12px;}
+  .segcard .prev .l{font-family:"JetBrains Mono",monospace;font-size:9.5px;letter-spacing:.16em;color:var(--faint);margin-bottom:8px;}
+  .segcard .prev .box{background:#1B1B1F;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-family:"JetBrains Mono",monospace;font-size:11.5px;line-height:1.8;color:#C8C4D0;}
+  .segcard .prev .box .tok{background:rgba(216,164,99,.16);color:var(--amber);border-radius:3px;padding:0 3px;}
+  .segcard .prev .box .fill{background:rgba(132,112,213,.18);color:var(--violet-br);border-radius:3px;padding:0 3px;}
+  .segcard .cf{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:13px 18px;margin-top:12px;border-top:1px solid var(--line);}
+  .segcard .cf .ci{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;}
+  .segcard .cf .ci kbd{font-family:"JetBrains Mono",monospace;font-size:9.5px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:2px 6px;color:var(--violet-br);}
+
+  /* cronologia card */
+  .vercard{background:linear-gradient(180deg,#161619,#141417);border:1px solid #2E2C36;border-radius:14px;box-shadow:0 40px 90px -30px rgba(0,0,0,.8);overflow:hidden;}
+  .vercard .vh{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid var(--line);}
+  .vercard .vh .t{font-size:13px;color:var(--ink);}
+  .vercard .vh .chips{display:flex;gap:6px;}
+  .vercard .vh .chips span{font-family:"JetBrains Mono",monospace;font-size:10px;border:1px solid var(--line);border-radius:5px;padding:3px 8px;color:var(--muted);}
+  .vercard .vh .chips span.on{border-color:var(--violet-br);color:var(--violet-br);background:rgba(132,112,213,.1);}
+  .vbody{display:grid;grid-template-columns:160px 1fr;}
+  .vbody .tl{border-right:1px solid var(--line);padding:12px 0;}
+  .vbody .tl .v{display:flex;align-items:center;gap:9px;padding:8px 16px;font-size:11.5px;color:var(--muted);position:relative;}
+  .vbody .tl .v .d{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--faint);}
+  .vbody .tl .v.cur{color:var(--ink);}
+  .vbody .tl .v.cur .d{border-color:var(--violet-br);background:var(--violet-br);}
+  .vbody .tl .v .vt{font-family:"JetBrains Mono",monospace;font-size:9.5px;color:var(--faint);margin-left:auto;}
+  .vbody .diff{padding:12px 16px;font-family:"JetBrains Mono",monospace;font-size:11.5px;line-height:1.95;}
+  .vbody .diff .ln{display:flex;gap:10px;}
+  .vbody .diff .ln .s{width:12px;color:var(--faint);}
+  .vbody .diff .add{background:rgba(111,191,115,.1);}
+  .vbody .diff .add .s,.vbody .diff .add{color:var(--green);}
+  .vbody .diff .del{background:rgba(216,99,99,.1);}
+  .vbody .diff .del .s,.vbody .diff .del{color:#D77;}
+  .vbody .diff .ctx{color:#9C98A6;}
+  .vbody .diff .tok{background:rgba(216,164,99,.16);color:var(--amber);border-radius:3px;padding:0 3px;}
+
+  /* import feature */
+  .impcard{width:434px;background:linear-gradient(180deg,#161619,#141417);border:1px solid #2E2C36;border-radius:14px;box-shadow:0 40px 90px -30px rgba(0,0,0,.8);overflow:hidden;}
+  .impcard .imp-h{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink);}
+  .impcard .imp-h .badge{font-family:"JetBrains Mono",monospace;font-size:9.5px;color:var(--violet-br);background:rgba(132,112,213,.14);border:1px solid rgba(132,112,213,.3);border-radius:5px;padding:3px 8px;}
+  .impcard .imp-sources{display:flex;gap:10px;padding:16px 18px 0;}
+  .impcard .src-chip{flex:1;display:flex;align-items:center;gap:7px;font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--violet-br);background:rgba(132,112,213,.08);border:1px dashed rgba(132,112,213,.45);border-radius:8px;padding:9px 11px;}
+  .impcard .src-chip .ic{font-size:13px;}
+  .impcard .src-chip .v{margin-left:auto;color:var(--faint);font-size:9.5px;}
+  .impcard .imp-arrow{text-align:center;font-family:"JetBrains Mono",monospace;font-size:9.5px;letter-spacing:.14em;color:var(--faint);padding:9px 0 5px;text-transform:uppercase;}
+  .impcard .imp-body{margin:0 18px;background:#1B1B1F;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-family:"JetBrains Mono",monospace;font-size:11.5px;line-height:1.8;color:#C8C4D0;}
+  .impcard .imp-body .il.imported{color:var(--violet-br);background:rgba(132,112,213,.12);border-radius:3px;padding:0 4px;}
+  .impcard .imp-body .il.blank{height:9px;}
+  .impcard .imp-body .tok{background:rgba(216,164,99,.16);color:var(--amber);border-radius:3px;padding:0 3px;}
+  .impcard .imp-foot{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;margin-top:14px;border-top:1px solid var(--line);font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.14em;color:var(--faint);}
+  .impcard .imp-foot .n{color:var(--violet-br);}
+
+  /* wardrobe — giorno / sera */
+  .wardrobe{display:flex;align-items:center;gap:16px;justify-content:center;}
+  .wardrobe .mini{width:208px;border-radius:13px;overflow:hidden;box-shadow:0 34px 70px -30px rgba(0,0,0,.7);}
+  .wardrobe .mini.day{background:#FAFAF8;border:1px solid #E6E1D6;}
+  .wardrobe .mini.night{background:#141417;border:1px solid #2C2A32;}
+  .wardrobe .m-tag{font-family:"JetBrains Mono",monospace;font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;padding:11px 13px;border-bottom:1px solid;}
+  .wardrobe .day .m-tag{color:#A36A2E;border-color:#ECE5D6;background:#F3EEE2;}
+  .wardrobe .night .m-tag{color:var(--amber);border-color:#2C2A32;background:#1A1A1E;}
+  .wardrobe .m-ui{padding:12px;}
+  .wardrobe .m-search{display:flex;align-items:center;gap:8px;font-size:11px;border-radius:7px;padding:8px 10px;margin-bottom:9px;}
+  .wardrobe .day .m-search{background:#fff;border:1.5px solid #6E56CF;color:#8a8578;}
+  .wardrobe .night .m-search{background:#1B1B1F;border:1.5px solid var(--violet);color:var(--faint);}
+  .wardrobe .m-row{display:flex;align-items:center;justify-content:space-between;font-size:11px;padding:7px 9px;border-radius:6px;margin-bottom:3px;}
+  .wardrobe .day .m-row{color:#2a2620;}
+  .wardrobe .night .m-row{color:var(--ink);}
+  .wardrobe .day .m-row.on{background:#F1ECE0;}
+  .wardrobe .night .m-row.on{background:rgba(132,112,213,.16);box-shadow:inset 2px 0 0 var(--violet-br);}
+  .wardrobe .m-row .mb{font-family:"JetBrains Mono",monospace;font-size:8.5px;border-radius:4px;padding:2px 6px;}
+  .wardrobe .day .m-row .mb{color:#A36A2E;background:#EFE3CE;}
+  .wardrobe .night .m-row .mb{color:var(--amber);background:rgba(216,164,99,.12);}
+  .wardrobe .toggle{flex:none;width:54px;height:30px;border-radius:100px;background:linear-gradient(90deg,#EFE3CE,#1A1A1E);display:flex;align-items:center;justify-content:space-between;padding:0 8px;position:relative;border:1px solid #4a4744;box-shadow:0 6px 18px -6px rgba(0,0,0,.6);}
+  .wardrobe .toggle .sun{font-size:12px;color:#A36A2E;}
+  .wardrobe .toggle .moon{font-size:11px;color:var(--amber);}
+  .wardrobe .toggle .knob{position:absolute;top:50%;left:4px;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.45);}
+
+  /* manifesto — si abbina con */
+  .manifesto{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#15151A;text-align:center;position:relative;overflow:hidden;}
+  .manifesto::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 70% 130% at 50% 50%,rgba(132,112,213,.13),transparent 72%);pointer-events:none;}
+  .manifesto .in{position:relative;max-width:1240px;margin:0 auto;padding:78px 80px;display:grid;grid-template-columns:1.02fr .98fr;gap:64px;align-items:center;text-align:left;}
+  .manifesto .kick{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:var(--violet-br);display:inline-flex;align-items:center;gap:16px;}
+  .manifesto .kick::before,.manifesto .kick::after{content:"";width:34px;height:1px;background:linear-gradient(90deg,transparent,var(--violet-br));}
+  .manifesto .kick::after{background:linear-gradient(90deg,var(--violet-br),transparent);}
+  .manifesto .slogan{font-family:"Newsreader",serif;font-weight:300;font-size:58px;line-height:1.02;letter-spacing:-.025em;color:var(--ink);}
+  .manifesto .slogan em{font-style:italic;color:var(--violet-br);}
+  .manifesto .tech{font-family:"JetBrains Mono",monospace;font-size:16px;line-height:1.6;letter-spacing:.04em;color:var(--amber-soft);margin-top:28px;padding-top:24px;border-top:1px solid var(--line);display:block;max-width:460px;}
+  .manifesto .tech b{color:var(--amber-soft);font-weight:400;}
+  .manifesto .m-art{display:flex;justify-content:center;position:relative;}
+  .manifesto .m-art::before{content:"";position:absolute;width:84%;height:84%;left:50%;top:50%;transform:translate(-50%,-50%);background:radial-gradient(ellipse 60% 60% at 50% 50%,rgba(132,112,213,.42),transparent 70%);filter:blur(12px);pointer-events:none;}
+  .manifesto .m-art .cmdk{position:relative;width:520px;transform:rotate(-2deg);}
+  /* palette in versione light */
+  .manifesto .m-art .cmdk{background:#FCFAF5;border:1px solid #CEC6B4;box-shadow:0 50px 90px -34px rgba(40,30,20,.5),0 0 0 1px rgba(110,86,207,.12);}
+  .manifesto .m-art .cmdk-search{border-bottom:1px solid #E6DECF;}
+  .manifesto .m-art .cmdk-search svg{stroke:#8A8578;}
+  .manifesto .m-art .cmdk-search .ph{color:#8A8578;}
+  .manifesto .m-art .cmdk-search .caret{background:#6E56CF;}
+  .manifesto .m-art .cmdk-search .esc{color:#8A8578;border-color:#D8D0BF;}
+  .manifesto .m-art .cmdk-lab{color:#9A938A;}
+  .manifesto .m-art .cmdk-item .t{color:#1C1A17;}
+  .manifesto .m-art .cmdk-item .d{color:#857F73;}
+  .manifesto .m-art .cmdk-item .d em{color:#6E56CF;}
+  .manifesto .m-art .cmdk-item .bd{color:#A36A2E;background:#EFE3CE;border:1px solid #E2D2B4;}
+  .manifesto .m-art .cmdk-item.active{background:#F1ECE0;box-shadow:inset 2px 0 0 #6E56CF;}
+  .manifesto .m-art .cmdk-foot{border-top:1px solid #E6DECF;background:rgba(0,0,0,.02);}
+  .manifesto .m-art .cmdk-foot span{color:#8A8578;}
+  .manifesto .m-art .cmdk-foot kbd{background:#EEE8DC;border-color:#D8D0BF;color:#5D5749;}
+
+  /* problem */
+  .sec{padding:108px 0;}
+  .problem{display:grid;grid-template-columns:1fr 1.12fr;gap:80px;align-items:start;}
+  .problem h2{font-family:"Newsreader",serif;font-weight:300;font-size:52px;line-height:1.04;letter-spacing:-.02em;}
+  .problem h2 em{font-style:italic;color:var(--amber-soft);}
+  .problem .body p{font-size:17px;line-height:1.8;color:#B9B5C2;}
+  .problem .body p+p{margin-top:22px;}
+  .problem .body .lead{font-family:"Newsreader",serif;font-weight:300;font-size:21px;line-height:1.5;color:var(--ink);}
+  .problem .body .lead em{font-style:italic;color:var(--violet-br);}
+
+  /* collezione */
+  .colhead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px;}
+  .colhead h2{font-family:"Newsreader",serif;font-weight:300;font-size:52px;letter-spacing:-.02em;}
+  .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:18px;}
+  .card{--ac:var(--violet-br);--sw1:#8470D5;--sw2:#463A82;--tint:rgba(132,112,213,.09);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;min-height:248px;background:linear-gradient(180deg,var(--tint),var(--bg2) 62%);transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;}
+  .card:hover{transform:translateY(-5px);box-shadow:0 30px 60px -32px rgba(0,0,0,.75);border-color:var(--ac);}
+  .card .swatch{position:relative;overflow:hidden;background:linear-gradient(135deg,var(--sw1),var(--sw2));}
+  .card.big .swatch{height:122px;}
+  .card.sm .swatch{height:96px;}
+  .card .swatch::after{content:"";position:absolute;inset:0;}
+  .card .swatch .hang{position:absolute;top:12px;left:16px;width:34px;height:34px;border:2px solid rgba(255,255,255,.35);border-radius:50%;}
+  .card .swatch .hang::after{content:"";position:absolute;top:-12px;left:50%;width:2px;height:14px;background:rgba(255,255,255,.35);transform:translateX(-50%);}
+  .card.big{grid-column:span 3;}
+  .card.sm{grid-column:span 2;}
+  .card .body{padding:22px 24px 26px;flex:1;display:flex;flex-direction:column;}
+  .card h3{font-family:"Newsreader",serif;font-weight:400;font-size:25px;line-height:1.12;margin:0 0 11px;color:var(--ink);}
+  .card:hover h3{color:var(--ac);}
+  .card p{font-size:14px;line-height:1.65;color:var(--muted);}
+  /* segnaposti tokens sempre ambra (regola: viola=brand/azione, ambra=segnaposti) */
+  .card p code{font-family:"JetBrains Mono",monospace;font-size:12px;background:rgba(216,164,99,.12);color:var(--amber);padding:1px 5px;border-radius:4px;}
+  /* cartellino capo sullo swatch */
+  .card .swatch .sku{position:absolute;top:13px;right:14px;font-family:"JetBrains Mono",monospace;font-size:9.5px;letter-spacing:.16em;color:rgba(255,255,255,.82);border:1px solid rgba(255,255,255,.34);border-radius:100px;padding:3px 10px;backdrop-filter:blur(2px);}
+  /* garment colours */
+  .card.cc-violet{--ac:#9B86F0;--sw1:#8470D5;--sw2:#473B86;--tint:rgba(132,112,213,.10);}
+  .card.cc-amber{--ac:#E0B380;--sw1:#D8A463;--sw2:#7C5A2C;--tint:rgba(216,164,99,.09);}
+  .card.cc-rose{--ac:#E1998A;--sw1:#CF7A63;--sw2:#7C3D30;--tint:rgba(207,122,99,.09);}
+  .card.cc-sage{--ac:#93C3AE;--sw1:#6FA892;--sw2:#365C4E;--tint:rgba(111,168,146,.09);}
+  .card.cc-blue{--ac:#9CB2E6;--sw1:#6E86CF;--sw2:#384C7C;--tint:rgba(110,134,207,.09);}
+
+  /* tessuti reali — armocromia stagione (gioiello/autunno) */
+  /* VELLUTO — viola: pelo verticale + riflesso morbido */
+  .card.cc-violet .swatch{background:linear-gradient(118deg,rgba(255,255,255,.20),transparent 44%),radial-gradient(120% 80% at 30% 0%,rgba(255,255,255,.14),transparent 55%),linear-gradient(135deg,#7E64D8,#3F3079);}
+  .card.cc-violet .swatch::after{background:repeating-linear-gradient(90deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px);opacity:.55;}
+  /* TWEED DI LANA — ocra: trama incrociata + fiammature */
+  .card.cc-amber .swatch{background:linear-gradient(135deg,#C99A57,#6B4C24);}
+  .card.cc-amber .swatch::after{background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 4px),repeating-linear-gradient(90deg,rgba(0,0,0,.16) 0 1px,transparent 1px 4px),radial-gradient(rgba(255,255,255,.55) .6px,transparent .7px);background-size:auto,auto,8px 8px;opacity:.5;}
+  /* LINO — terracotta: tessitura a crochet irregolare */
+  .card.cc-rose .swatch{background:linear-gradient(135deg,#CC7E63,#76392B);}
+  .card.cc-rose .swatch::after{background:repeating-linear-gradient(0deg,rgba(255,255,255,.12) 0 1px,transparent 1px 3px),repeating-linear-gradient(90deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px);opacity:.6;}
+  /* TWILL DI COTONE — salvia: diagonale fitta */
+  .card.cc-sage .swatch{background:linear-gradient(135deg,#6FA890,#33564A);}
+  .card.cc-sage .swatch::after{background:repeating-linear-gradient(63deg,rgba(255,255,255,.12) 0 2px,rgba(0,0,0,.12) 2px 5px);opacity:.5;}
+  /* SETA — blu: bande di riflesso ampie */
+  .card.cc-blue .swatch{background:linear-gradient(52deg,rgba(255,255,255,.22),transparent 26%,rgba(255,255,255,.12) 58%,transparent 78%),linear-gradient(135deg,#6E84CC,#33457A);}
+  .card.cc-blue .swatch::after{background:repeating-linear-gradient(52deg,rgba(255,255,255,.05) 0 11px,rgba(0,0,0,.06) 11px 22px);opacity:.5;}
+
+  /* launch ribbon — nuova stagione */
+  .ribbon{position:relative;z-index:6;background:linear-gradient(90deg,#17151F,#221C3A 42%,#2A2140 58%,#17151F);border-bottom:1px solid var(--line);}
+  .ribbon .rin{max-width:1240px;margin:0 auto;padding:11px 80px;display:flex;align-items:center;gap:18px;font-size:13px;}
+  .ribbon .flag{font-family:"JetBrains Mono",monospace;font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:#15121C;background:var(--amber-soft);border-radius:100px;padding:4px 11px;flex:none;font-weight:600;}
+  .ribbon .msg{color:#E6E2F0;flex:1;min-width:0;}
+  .ribbon .msg b{color:#fff;font-weight:600;}
+  .ribbon .msg .code{font-family:"Newsreader",serif;font-style:italic;color:var(--violet-br);}
+  .ribbon .msg .sep{color:var(--faint);margin:0 9px;}
+  .ribbon .go{font-size:12.5px;color:var(--amber-soft);white-space:nowrap;transition:.2s;flex:none;}
+  .ribbon .go:hover{color:#fff;}
+
+  /* season debut — Arioso Atelier v1.0 */
+  .season{position:relative;overflow:hidden;border-top:1px solid var(--line);background:radial-gradient(120% 80% at 82% 0%,rgba(132,112,213,.16),transparent 55%),var(--bg);}
+  .season .sin{max-width:1240px;margin:0 auto;padding:104px 80px;display:grid;grid-template-columns:0.94fr 1.06fr;gap:72px;align-items:center;}
+  .season .plate{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:var(--violet-br);display:flex;align-items:center;gap:14px;}
+  .season .plate::before{content:"";width:40px;height:1px;background:var(--violet-br);}
+  .season h2{font-family:"Newsreader",serif;font-weight:300;font-size:82px;line-height:.94;letter-spacing:-.03em;margin:26px 0 0;}
+  .season h2 em{font-style:italic;color:var(--violet-br);}
+  .season .verline{display:flex;align-items:baseline;gap:16px;margin-top:22px;flex-wrap:wrap;}
+  .season .verline .v{font-family:"JetBrains Mono",monospace;font-size:13px;letter-spacing:.06em;color:var(--ink);border:1px solid var(--line);border-radius:100px;padding:6px 14px;}
+  .season .verline .v b{color:var(--amber-soft);font-weight:500;}
+  .season .verline .from{font-size:13px;color:var(--muted);}
+  .season .verline .from em{font-style:italic;font-family:"Newsreader",serif;font-size:16px;color:#B9B5C2;}
+  .season .lede{font-family:"Newsreader",serif;font-weight:300;font-size:22px;line-height:1.5;color:#CFCBD8;margin-top:28px;max-width:500px;}
+  .season .lede em{font-style:italic;color:var(--violet-br);}
+  .season .scta{display:flex;gap:14px;align-items:center;margin-top:34px;}
+  .season .scta .b1{font-size:14px;font-weight:500;padding:14px 24px;border-radius:10px;background:linear-gradient(160deg,var(--violet),#6E56CF);color:#fff;transition:.2s;}
+  .season .scta .b1:hover{filter:brightness(1.08);}
+  .season .scta .note{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.04em;color:var(--muted);}
+  /* card debutto */
+  .season .card-launch{border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,var(--panel),var(--bg2));box-shadow:0 50px 100px -40px rgba(0,0,0,.7);overflow:hidden;}
+  .season .cl-top{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--line);}
+  .season .cl-top .tag{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);}
+  .season .cl-top .stamp{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.14em;color:var(--amber);border:1px solid rgba(216,164,99,.32);border-radius:100px;padding:4px 11px;}
+  .season .cl-list{padding:8px 8px;}
+  .season .cl-row{display:flex;gap:15px;align-items:flex-start;padding:15px 16px;border-radius:12px;}
+  .season .cl-row+.cl-row{border-top:1px solid var(--line);}
+  .season .cl-row .ic{width:30px;height:30px;flex:none;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;background:rgba(132,112,213,.14);color:var(--violet-br);}
+  .season .cl-row .tx .t{font-size:14.5px;color:var(--ink);font-weight:500;}
+  .season .cl-row .tx .d{font-size:12.5px;color:var(--muted);line-height:1.55;margin-top:3px;}
+  .season .cl-row .d code{font-family:"JetBrains Mono",monospace;font-size:12px;background:rgba(216,164,99,.12);color:var(--amber);padding:1px 5px;border-radius:4px;}
+  .season .cl-foot{display:flex;align-items:center;gap:10px;padding:14px 22px;border-top:1px solid var(--line);background:rgba(0,0,0,.18);font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.06em;color:var(--faint);}
+  .season .cl-foot .dot{width:6px;height:6px;border-radius:50%;background:#6FBF73;flex:none;}
+  @media (max-width:980px){ .season .sin{grid-template-columns:1fr;gap:44px;padding:72px 48px;} .season h2{font-size:clamp(52px,10vw,82px);} }
+
+  /* footer — la maison */
+  .footer{border-top:1px solid var(--line);background:var(--bg2);}
+  .footer .ft-in{max-width:1240px;margin:0 auto;padding:78px 80px 0;}
+  .ft-top{display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr;gap:48px;}
+  .ft-brand .ft-mark{display:flex;align-items:center;gap:12px;}
+  .ft-brand .ft-mark .mk{width:30px;height:30px;border-radius:8px;background:linear-gradient(150deg,var(--violet),#6E56CF);display:flex;align-items:center;justify-content:center;font-family:"Newsreader",serif;font-size:18px;color:#fff;box-shadow:0 0 24px rgba(132,112,213,.4);}
+  .ft-brand .ft-mark .nm{font-family:"Newsreader",serif;font-size:21px;letter-spacing:.01em;}
+  .ft-brand .ft-tag{font-family:"Newsreader",serif;font-weight:300;font-size:20px;line-height:1.4;color:#CFCBD8;margin-top:22px;max-width:330px;}
+  .ft-brand .ft-tag em{font-style:italic;color:var(--violet-br);}
+  .ft-brand .ft-cta{display:flex;gap:12px;margin-top:26px;}
+  .ft-brand .ft-cta a{font-size:13px;font-weight:500;padding:11px 18px;border-radius:9px;transition:.2s;}
+  .ft-brand .ft-cta .p{background:linear-gradient(160deg,var(--violet),#6E56CF);color:#fff;}
+  .ft-brand .ft-cta .p:hover{filter:brightness(1.08);}
+  .ft-brand .ft-cta .g{border:1px solid var(--line);color:var(--ink);}
+  .ft-brand .ft-cta .g:hover{border-color:var(--violet-br);color:var(--violet-br);}
+  .ft-col h4{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:18px;}
+  .ft-col a{display:block;font-size:14px;color:#B7B3C0;padding:7px 0;transition:.18s;}
+  .ft-col a:hover{color:var(--violet-br);}
+  /* care label */
+  .ft-label{margin-top:64px;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:16px 22px;display:flex;align-items:center;gap:22px;flex-wrap:wrap;}
+  .ft-label .stitch{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--faint);}
+  .ft-label .care{display:flex;gap:18px;flex-wrap:wrap;flex:1;}
+  .ft-label .care span{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.08em;color:var(--amber-soft);display:flex;align-items:center;gap:7px;}
+  .ft-label .care span::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--amber);}
+  .ft-bottom{display:flex;align-items:center;justify-content:space-between;padding:30px 0 40px;margin-top:30px;border-top:1px solid var(--line);}
+  .ft-bottom .cp{font-size:12.5px;color:var(--muted);}
+  .ft-sign{display:flex;align-items:center;gap:14px;}
+  .ft-sign .by{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);}
+  .ft-sign .name{font-family:"Newsreader",serif;font-style:italic;font-weight:400;font-size:26px;color:var(--ink);letter-spacing:.01em;}
+  .ft-sign .name:hover{color:var(--violet-br);}
+  .ft-sign .name.claude{color:#D97757;display:inline-flex;align-items:center;gap:7px;}
+  .ft-sign .name.claude:hover{color:#C96442;}
+  .ft-sign .spark{width:17px;height:17px;flex:none;}
+  .ft-sign .dot{color:var(--faint);}
+
+  /* problem before/after visual */
+  .problem{display:block;}
+  .prob-head{display:grid;grid-template-columns:1fr 1.12fr;gap:80px;align-items:start;}
+  .prob-visual{margin-top:60px;display:grid;grid-template-columns:1fr 56px 1fr;gap:0;align-items:stretch;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:linear-gradient(180deg,var(--panel),var(--bg2));}
+  .pv-side{padding:26px 28px 30px;min-height:200px;}
+  .pv-side.after{border-left:1px solid var(--line);background:linear-gradient(180deg,rgba(132,112,213,.07),transparent);}
+  .pv-tag{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);}
+  .pv-tag.on{color:var(--violet-br);}
+  .pv-mess{position:relative;margin-top:20px;display:flex;flex-wrap:wrap;gap:9px;}
+  .pv-mess .chip{font-family:"JetBrains Mono",monospace;font-size:11.5px;color:#9C98A6;background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:7px 11px;}
+  .pv-mess .chip:nth-child(1){transform:rotate(-2.5deg);} .pv-mess .chip:nth-child(2){transform:rotate(1.5deg);} .pv-mess .chip:nth-child(3){transform:rotate(-1deg);} .pv-mess .chip:nth-child(4){transform:rotate(2deg);} .pv-mess .chip:nth-child(5){transform:rotate(-1.5deg);} .pv-mess .chip:nth-child(6){transform:rotate(1deg);}
+  .pv-arrow{display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:20px;}
+  .pv-tidy{margin-top:20px;display:flex;flex-direction:column;gap:7px;}
+  .pv-tidy .r{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--ink);background:var(--bg2);border:1px solid var(--line);border-left:2px solid transparent;border-radius:7px;padding:9px 12px;}
+  .pv-tidy .r.on{border-left-color:var(--violet-br);background:rgba(132,112,213,.08);}
+  .pv-tidy .r i{font-family:"JetBrains Mono",monospace;font-style:normal;font-size:9.5px;color:var(--amber);background:rgba(216,164,99,.12);border-radius:4px;padding:2px 7px;}
+
+  /* hero CTA secondary */
+  .hero-cta .alt{font-size:12.5px;color:var(--muted);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line);transition:.2s;}
+  .hero-cta .alt:hover{color:var(--violet-br);text-decoration-color:var(--violet-br);}
+
+  /* A3 — responsive scaling under 1280 */
+  @media (max-width:1280px){ .showcase{zoom:.9;} }
+  @media (max-width:1140px){ .showcase{zoom:.78;} .topbar{padding:26px 48px;} .wrap{padding:0 48px;} }
+  @media (max-width:980px){
+    .showcase{zoom:.62;}
+    .prob-head{grid-template-columns:1fr;gap:26px;}
+    .manifesto .in{grid-template-columns:1fr;gap:40px;}
+    .ft-top{grid-template-columns:1fr 1fr;gap:36px;}
+    h1.head{font-size:clamp(56px,11vw,104px);}
+  }
+  @media (max-width:720px){
+    .showcase{zoom:.48;}
+    .nav{display:none;}
+    .ft-top{grid-template-columns:1fr;}
+    .prob-visual{grid-template-columns:1fr;}
+    .prob-visual .pv-arrow{transform:rotate(90deg);padding:6px 0;}
+    .pv-side.after{border-left:0;border-top:1px solid var(--line);}
+  }
+</style>
+</head>
+<body>
+  <div class="ribbon">
+    <div class="rin">
+      <span class="flag">Nuova stagione</span>
+      <span class="msg"><span class="code">Arioso Atelier</span> è in negozio: la <b>prima stagione</b> di Prompt-à-porter esce dalla beta.<span class="sep">·</span>Autunno-Inverno 2026 · v1.0</span>
+      <a class="go" href="#stagione">Scopri il debutto →</a>
+    </div>
+  </div>
+  <header class="topbar">
+    <div class="brand"><span class="mk serif">P</span><span class="nm">Prompt&nbsp;a&nbsp;Porter</span></div>
+    <nav class="nav"><a href="#collezione">La collezione</a><a href="#come-funziona">Come funziona</a><a href="https://github.com/robertomarchioro/prompt-a-porter">GitHub</a><a class="dl" href="https://github.com/robertomarchioro/prompt-a-porter/releases">Scarica</a></nav>
+  </header>
+
+  <main>
+    <section class="stage">
+      <div class="spot"></div>
+      <div class="inner">
+        <div class="eyebrow"><kbd>Ctrl + Shift + P</kbd><span class="t">richiama la tua collezione, in qualsiasi app</span></div>
+        <h1 class="head serif">Prompt-<em>à</em>-porter</h1>
+        <p class="sub">La tua collezione di prompt AI. Versionati, su misura, <b>a un tasto di distanza</b> — ovunque tu stia scrivendo.</p>
+
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="https://github.com/robertomarchioro/prompt-a-porter/releases"><span class="ico">⊞</span> Scarica per Windows</a>
+          <a class="btn btn-ghost" href="https://github.com/robertomarchioro/prompt-a-porter">Vedi su GitHub</a>
+          <a class="alt" href="https://github.com/robertomarchioro/prompt-a-porter/releases">Altre piattaforme →</a>
+        </div>
+        <p class="hero-cta" style="justify-content:center;margin-top:14px"><span class="meta">gratis · local-first · v1.0</span></p>
+
+        <div class="showcase" id="come-funziona">
+          <div class="viewport" id="vp">
+            <!-- SCENE 1 — palette -->
+            <div class="scene on" data-scene="0">
+              <div class="cmdk">
+                <div class="cmdk-search">
+                  <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+                  <span class="ph">Cerca prompt, tag o azione…</span><span class="caret"></span><span class="esc">esc</span>
+                </div>
+                <div class="cmdk-lab">Recenti</div>
+                <div class="cmdk-item active"><div class="b"><div class="t">Riassumi articolo in N punti</div><div class="d">Distilla un testo lungo in <em>N</em> punti chiave + TL;DR + verdetto.</div></div><span class="bd">privato</span></div>
+                <div class="cmdk-item"><div class="b"><div class="t">Commit message da diff</div><div class="d">Genera un messaggio Conventional Commits da un diff.</div></div><span class="bd">privato</span></div>
+                <div class="cmdk-item"><div class="b"><div class="t">Email professionale parametrica</div><div class="d">Email con tono e contenuto variabili.</div></div><span class="bd">privato</span></div>
+                <div class="cmdk-item"><div class="b"><div class="t">Code review strutturata</div><div class="d">Review per severità. Importa il ruolo <em>engineer</em>.</div></div><span class="bd">privato</span></div>
+                <div class="cmdk-item"><div class="b"><div class="t">Traduzione tecnica con glossario</div><div class="d">Traduce rispettando un glossario di termini.</div></div><span class="bd">privato</span></div>
+                <div class="cmdk-item"><div class="b"><div class="t">Brainstorm con criteri</div><div class="d">Genera idee valutate su criteri scelti da te.</div></div><span class="bd">privato</span></div>
+                <div class="cmdk-foot"><span><kbd>esc</kbd> chiudi</span><span><kbd>↑</kbd><kbd>↓</kbd> naviga</span><span><kbd>↵</kbd> seleziona</span><span style="margin-left:auto"><kbd>⌃</kbd><kbd>↵</kbd> compila e incolla</span></div>
+              </div>
+            </div>
+
+            <!-- SCENE 2 — full app -->
+            <div class="scene" data-scene="1">
+              <div class="appwin">
+                <div class="a-title">
+                  <div class="l"><span class="pp serif">P</span><span class="tt">Prompt a Porter</span><span class="ver">v0.8 redesign shell</span></div>
+                  <div class="r"><span>◐</span><span>?</span><span>⚙</span></div>
+                </div>
+                <div class="a-body">
+                  <!-- sidebar -->
+                  <div class="a-col sb">
+                    <div class="ws"><span class="av">P</span><span class="nm">Personale</span><span class="ch">▾</span></div>
+                    <div class="grp">VISTE</div>
+                    <div class="it on"><span class="ic">◷</span>Recenti</div>
+                    <div class="it"><span class="ic">★</span>Preferiti<span class="ct">3</span></div>
+                    <div class="it"><span class="ic">▦</span>Tutti i prompt<span class="ct">17</span></div>
+                    <div class="it"><span class="ic">🗑</span>Cestino<span class="ct">0</span></div>
+                    <div class="grp">VISIBILITÀ</div>
+                    <div class="it"><span class="dotp"></span>Privati<span class="ct">15</span></div>
+                    <div class="it"><span class="dotp"></span>Team<span class="ct">2</span></div>
+                    <div class="grp">CARTELLE <span style="float:right">7</span></div>
+                    <div class="grp">TAG <span style="float:right">8</span></div>
+                    <div class="foot">
+                      <div class="it"><span class="ic">▤</span>Insight</div>
+                      <div class="it"><span class="ic">⚠</span>Regressioni</div>
+                    </div>
+                  </div>
+                  <!-- list -->
+                  <div class="a-col lst">
+                    <div class="hd"><span class="ti">Recenti</span><span class="cnt">17</span></div>
+                    <div class="sr">⌕ Cerca prompt…</div>
+                    <div class="new">+ Nuovo</div>
+                    <div class="row on"><span class="dt"></span><div class="tx"><div class="nm">Riassumi articolo in N punti</div></div><span class="tm">1M fa</span></div>
+                    <div class="row"><span class="dt"></span><div class="tx"><div class="nm">Commit message da diff</div></div><span class="tm">1M fa</span></div>
+                    <div class="row"><span class="dt"></span><div class="tx"><div class="nm">Email professionale parametrica</div></div><span class="st">★</span></div>
+                    <div class="row"><span class="dt"></span><div class="tx"><div class="nm">Code review strutturata</div></div><span class="st">★</span></div>
+                    <div class="row"><span class="dt"></span><div class="tx"><div class="nm">Traduzione tecnica con glossario</div></div><span class="tm">1M fa</span></div>
+                  </div>
+                  <!-- editor -->
+                  <div class="a-col ed">
+                    <div class="eh">
+                      <div class="ti"><h3 class="serif">Riassumi articolo in N punti</h3><div class="acts"><span>★</span><span>⑂</span><span>↓</span><span class="comp">Compila</span></div></div>
+                      <div class="ds">Distilla un testo lungo in N punti chiave + TL;DR + verdetto.</div>
+                      <div class="meta">
+                        <span class="pill"><span class="g">●</span> Privato</span>
+                        <span class="pill"><span class="f">▣</span> Produttività</span>
+                        <span class="pill">gpt-4-mini</span>
+                        <span class="x">Usato 31×</span><span class="x">· Aggiornato 37g fa</span>
+                      </div>
+                    </div>
+                    <div class="tabs"><span class="on">Editor</span><span>Anteprima</span><span>Diagnosi</span><span>Test golden</span><span>Cronologia</span><span>Import &amp; Var.</span></div>
+                    <div class="toolbar"><span>B</span><span><i>I</i></span><span>H1</span><span>H2</span><span>≔</span><span>❝</span><span>&lt;/&gt;</span><span>🔗</span></div>
+                    <div class="code">
+                      <div class="gut">1<br>2<br>3<br>4<br>5<br>6<br>7</div>
+                      <div class="src">Riassumi il seguente testo in italiano.<br><br><span class="b">Vincoli:</span><br>- Esattamente <span class="tok">{{numero_punti}}</span> punti chiave (bullet).<br>- Ordine per importanza decrescente.<br><br>Testo: <span class="tok">{{articolo}}</span></div>
+                    </div>
+                    <div class="sbar"><span class="dot"></span>salvato<span>L:10 C:1</span><span>267 char</span><span>~67 tok</span></div>
+                  </div>
+                  <!-- metadata -->
+                  <div class="a-col mt">
+                    <div class="grp" style="padding:0"><div class="h" style="font-family:'JetBrains Mono';font-size:9px;letter-spacing:.14em;color:var(--faint)">METADATI</div></div>
+                    <div class="grp"><div class="h">VISIBILITÀ</div><div class="fld">Privato <span style="color:var(--faint)">▾</span></div></div>
+                    <div class="grp"><div class="h">MODELLO TARGET</div><div class="fld">gpt-4-mini</div></div>
+                    <div class="grp"><div class="h">TAG</div><span class="tag">● produttività</span></div>
+                    <div class="grp"><div class="h">SEGNAPOSTI RILEVATI <span style="color:var(--violet-br)">2</span></div><div class="seg">{{numero_punti}}<span class="ty">testo</span></div><div class="seg">{{articolo}}<span class="ty">testo</span></div></div>
+                    <div class="grp"><div class="hb"><div class="h" style="margin:0">VARIANTI A/B</div><span class="ct" style="font-family:'JetBrains Mono';font-size:10px;color:var(--violet-br)">0</span></div></div>
+                  </div>
+                </div>
+                <div class="a-status">
+                  <div class="l"><span class="dot"></span>vault locale<span>· Riassumi articolo in N punti</span></div>
+                  <div class="r"><span>salvato 907h fa</span><span class="kb">Ctrl+Shift+P</span><span>cerca</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCENE 3 — segnaposti feature -->
+            <div class="scene" data-scene="2">
+              <div class="feat">
+                <div class="fc-copy">
+                  <div class="k">FEATURE · SEGNAPOSTI</div>
+                  <h3 class="serif">Compila e <em>incolla</em>, senza copia-incolla.</h3>
+                  <p>Il prompt è un capo, i <code>{{segnaposti}}</code> sono le misure. Riempi i campi, premi <code>⌃↵</code> e il testo compilato finisce dritto nel campo in cui stavi scrivendo.</p>
+                  <div class="row2">
+                    <div class="s"><div class="v serif">0 → 4</div><div class="l">campi compilati al volo</div></div>
+                    <div class="s"><div class="v serif">1 tasto</div><div class="l">compila e incolla</div></div>
+                  </div>
+                </div>
+                <div class="segcard">
+                  <div class="sh"><span class="bk">←</span> Brainstorm con criteri</div>
+                  <div class="sub2"><span class="l">SEGNAPOSTI</span><span class="c">2 di 4 compilati</span></div>
+                  <div class="segrow filled"><span class="lbl">obiettivo</span><div class="inp">nomi per il prodotto</div></div>
+                  <div class="segrow filled"><span class="lbl">contesto</span><div class="inp">app desktop, target dev</div></div>
+                  <div class="segrow"><span class="lbl">numero</span><div class="inp ph">numero</div></div>
+                  <div class="segrow"><span class="lbl">criteri</span><div class="inp ph">criteri</div></div>
+                  <div class="prev">
+                    <div class="l">ANTEPRIMA</div>
+                    <div class="box">Genera idee per: <span class="fill">nomi per il prodotto</span>.<br>Contesto: <span class="fill">app desktop, target dev</span><br>Vincoli: esattamente <span class="tok">{{numero}}</span> idee, valuta su <span class="tok">{{criteri}}</span>.</div>
+                  </div>
+                  <div class="cf"><span class="ci"><kbd>esc</kbd> indietro</span><span class="ci"><kbd>⌃</kbd><kbd>↵</kbd> compila e incolla</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCENE 4 — cronologia feature -->
+            <div class="scene" data-scene="3">
+              <div class="feat">
+                <div class="fc-copy">
+                  <div class="k">FEATURE · CRONOLOGIA</div>
+                  <h3 class="serif">Ogni modifica è una <em>versione</em>.</h3>
+                  <p>Ogni salvataggio crea uno snapshot. Confronta due versioni con un diff in stile git, e torna indietro quando l'ultima modifica ha rovinato il prompt che funzionava.</p>
+                  <div class="row2">
+                    <div class="s"><div class="v serif">v12</div><div class="l">snapshot su questo prompt</div></div>
+                    <div class="s"><div class="v serif">1 click</div><div class="l">ripristina qualsiasi versione</div></div>
+                  </div>
+                </div>
+                <div class="vercard">
+                  <div class="vh"><span class="t">Cronologia — Riassumi articolo</span><div class="chips"><span class="on">v7</span><span>v6</span><span>diff</span></div></div>
+                  <div class="vbody">
+                    <div class="tl">
+                      <div class="v cur"><span class="d"></span>v7 · attuale<span class="vt">oggi</span></div>
+                      <div class="v"><span class="d"></span>v6<span class="vt">3g</span></div>
+                      <div class="v"><span class="d"></span>v5<span class="vt">1M</span></div>
+                      <div class="v"><span class="d"></span>v4<span class="vt">1M</span></div>
+                      <div class="v"><span class="d"></span>v3<span class="vt">2M</span></div>
+                      <div class="v"><span class="d"></span>v2<span class="vt">2M</span></div>
+                      <div class="v"><span class="d"></span>v1<span class="vt">3M</span></div>
+                    </div>
+                    <div class="diff">
+                      <div class="ln ctx"><span class="s"></span>Riassumi il seguente testo.</div>
+                      <div class="ln del"><span class="s">-</span>- Massimo 5 punti.</div>
+                      <div class="ln add"><span class="s">+</span>- Esattamente <span class="tok">{{numero_punti}}</span> punti (bullet).</div>
+                      <div class="ln add"><span class="s">+</span>- Ordine per importanza decrescente.</div>
+                      <div class="ln ctx"><span class="s"></span>Per ogni punto, una frase.</div>
+                      <div class="ln del"><span class="s">-</span>Tono: neutro.</div>
+                      <div class="ln add"><span class="s">+</span>Tono: <span class="tok">{{tono}}</span>.</div>
+                      <div class="ln ctx"><span class="s"></span>Chiudi con un TL;DR.</div>
+                      <div class="ln ctx"><span class="s"></span>Testo: <span class="tok">{{articolo}}</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCENE 5 — import -->
+            <div class="scene" data-scene="4">
+              <div class="feat">
+                <div class="fc-copy">
+                  <div class="k">FEATURE · IMPORT</div>
+                  <h3 class="serif">Un blocco, <em>dieci capi</em>.</h3>
+                  <p>Definisci una volta il ruolo o lo stile, poi cucilo dove vuoi con <code>{{import "ruolo-engineer"}}</code>. Cambi il blocco sorgente e tutti i prompt che lo indossano si aggiornano.</p>
+                  <div class="row2">
+                    <div class="s"><div class="v serif">1 → ∞</div><div class="l">una sorgente, molti prompt</div></div>
+                    <div class="s"><div class="v serif">0</div><div class="l">duplicati da mantenere</div></div>
+                  </div>
+                </div>
+                <div class="impcard">
+                  <div class="imp-h"><span class="t">Code review strutturata</span><span class="badge">composto</span></div>
+                  <div class="imp-sources">
+                    <div class="src-chip"><span class="ic">⊕</span> ruolo-engineer<span class="v">v4</span></div>
+                    <div class="src-chip"><span class="ic">⊕</span> stile-conciso<span class="v">v2</span></div>
+                    <div class="src-chip"><span class="ic">⊕</span> formato-md<span class="v">v1</span></div>
+                  </div>
+                  <div class="imp-arrow">cuce in ↓</div>
+                  <div class="imp-body">
+                    <div class="il imported">{{import "ruolo-engineer"}}</div>
+                    <div class="il imported">{{import "stile-conciso"}}</div>
+                    <div class="il imported">{{import "formato-md"}}</div>
+                    <div class="il blank"></div>
+                    <div class="il">Analizza il diff per <span class="tok">{{severità}}</span> e cita</div>
+                    <div class="il">sempre le righe interessate. Raggruppa</div>
+                    <div class="il">i rilievi per file e per gravità.</div>
+                  </div>
+                  <div class="imp-foot"><span>IMPORT COMPOSTI</span><span class="n">2</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCENE 6 — tema giorno/sera -->
+            <div class="scene" data-scene="5">
+              <div class="feat">
+                <div class="fc-copy">
+                  <div class="k">FEATURE · GUARDAROBA</div>
+                  <h3 class="serif">Abito da giorno,<br /><em>abito da sera</em>.</h3>
+                  <p>Tema chiaro per le ore di luce, tema scuro per le sessioni notturne. La stessa collezione, due mise — si cambia con un tocco.</p>
+                  <div class="row2">
+                    <div class="s"><div class="v serif">2 mise</div><div class="l">chiaro e scuro</div></div>
+                    <div class="s"><div class="v serif">1 tocco</div><div class="l">per cambiare</div></div>
+                  </div>
+                </div>
+                <div class="wardrobe">
+                  <div class="mini day">
+                    <div class="m-tag">Abito da giorno</div>
+                    <div class="m-ui">
+                      <div class="m-search"><span class="mag">⌕</span> Cerca prompt…</div>
+                      <div class="m-row on">Riassumi articolo<span class="mb">privato</span></div>
+                      <div class="m-row">Commit message<span class="mb">privato</span></div>
+                      <div class="m-row">Code review<span class="mb">privato</span></div>
+                      <div class="m-row">Email cliente<span class="mb">privato</span></div>
+                      <div class="m-row">Brainstorm idee<span class="mb">privato</span></div>
+                    </div>
+                  </div>
+                  <div class="toggle"><span class="sun">☀</span><span class="moon">☾</span><span class="knob"></span></div>
+                  <div class="mini night">
+                    <div class="m-tag">Abito da sera</div>
+                    <div class="m-ui">
+                      <div class="m-search"><span class="mag">⌕</span> Cerca prompt…</div>
+                      <div class="m-row on">Riassumi articolo<span class="mb">privato</span></div>
+                      <div class="m-row">Commit message<span class="mb">privato</span></div>
+                      <div class="m-row">Code review<span class="mb">privato</span></div>
+                      <div class="m-row">Email cliente<span class="mb">privato</span></div>
+                      <div class="m-row">Brainstorm idee<span class="mb">privato</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sc-controls">
+            <button class="sc-arrow" id="scPrev" type="button" aria-label="Scena precedente">‹</button>
+            <div class="tabline" id="tabs">
+              <div class="tab on" data-go="0">La palette</div>
+              <div class="tab" data-go="1">La libreria</div>
+              <div class="tab" data-go="2">Compila e incolla</div>
+              <div class="tab" data-go="3">Cronologia</div>
+              <div class="tab" data-go="4">Import</div>
+              <div class="tab" data-go="5">Giorno · Sera</div>
+            </div>
+            <button class="sc-arrow" id="scNext" type="button" aria-label="Scena successiva">›</button>
+          </div>
+          <div class="sc-progress" id="prog"><i></i></div>
+          <p class="sc-cap" id="cap">Premi <b>⌃⇧P</b> ovunque e richiama la tua collezione, senza cambiare finestra.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="manifesto">
+      <div class="in">
+        <div class="m-copy">
+          <h2 class="slogan">Se ci puoi scrivere,<br />ci puoi <em>incollare il tuo prompt</em>.</h2>
+          <p class="tech" style="font-size: 22px">Si abbina con qualsiasi campo di testo, in ogni editor, applicazione o sito web.</p>
+        </div>
+        <div class="m-art">
+          <div class="cmdk">
+            <div class="cmdk-search">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+              <span class="ph">Cerca prompt, tag o azione…</span><span class="caret"></span><span class="esc">esc</span>
+            </div>
+            <div class="cmdk-lab">Recenti</div>
+            <div class="cmdk-item active"><div class="b"><div class="t">Riassumi articolo in N punti</div><div class="d">Distilla un testo lungo in <em>N</em> punti + TL;DR.</div></div><span class="bd">privato</span></div>
+            <div class="cmdk-item"><div class="b"><div class="t">Commit message da diff</div><div class="d">Conventional Commits da un diff.</div></div><span class="bd">privato</span></div>
+            <div class="cmdk-item"><div class="b"><div class="t">Email professionale parametrica</div><div class="d">Tono e contenuto variabili.</div></div><span class="bd">privato</span></div>
+            <div class="cmdk-foot"><span><kbd>esc</kbd> chiudi</span><span><kbd>↑</kbd><kbd>↓</kbd> naviga</span><span style="margin-left:auto"><kbd>⌃</kbd><kbd>↵</kbd> compila e incolla</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap sec">
+      <div class="problem">
+        <div class="prob-head">
+          <h2 class="serif">I tuoi prompt valgono.
+Ma sono in fondo al cassetto.</h2>
+          <div class="body">
+            <p>File di testo sparsi. Note in app diverse. Screenshot di conversazioni. Prompt copiati e incollati che ogni volta vanno adattati a mano. Quando trovi quello buono, finisce nel buco nero degli appunti insieme ai calzini che ti ha regalato a Natale tua suocera.</p>
+            <p class="lead">Prompt a Porter è il tuo guardaroba: ogni prompt al suo posto, <em>pronto da indossare</em> con un tasto. Senza ricuciture, senza ricordarsi dove l'avevi lasciato.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap sec" style="padding-top:0" id="collezione">
+      <div class="colhead"><h2 class="serif">La collezione</h2><span class="label">Cinque capi · una stagione</span></div>
+      <div class="grid">
+        <article class="card big cc-violet"><div class="swatch"><span class="hang"></span><span class="sku">VER</span></div><div class="body"><h3 class="serif">Ogni modifica, in vetrina</h3><p>Ogni save crea una versione. Diff stile git. Torna indietro quando l'ultima modifica ha rovinato tutto.</p></div></article>
+        <article class="card big cc-amber"><div class="swatch"><span class="hang"></span><span class="sku">TPL</span></div><div class="body"><h3 class="serif">Capi su misura</h3><p><code>{{nome}}</code> per variabili ad-hoc, <code>{{globale autore}}</code> dal vault. Il prompt diventa template, il template diventa abito su misura.</p></div></article>
+        <article class="card sm cc-rose"><div class="swatch"><span class="hang"></span><span class="sku">SRCH</span></div><div class="body"><h3 class="serif">Cerca al buio dell'armadio</h3><p>Ricerca per significato, non per parola. Modello ONNX MiniLM embedded — niente cloud, niente quote.</p></div></article>
+        <article class="card sm cc-sage"><div class="swatch"><span class="hang"></span><span class="sku">A/B</span></div><div class="body"><h3 class="serif">Prova prima di comprare</h3><p>Varianti A/B dello stesso prompt, confrontate fianco a fianco. Scegli con i golden test.</p></div></article>
+        <article class="card sm cc-blue"><div class="swatch"><span class="hang"></span><span class="sku">IMP</span></div><div class="body"><h3 class="serif">Un tono, dieci tagli</h3><p><code>{{import "ruolo"}}</code> per riusare blocchi. Definisci lo stile una volta, riusalo ovunque. Sartoria modulare.</p></div></article>
+      </div>
+    </section>
+
+    <section class="season" id="stagione">
+      <div class="sin">
+        <div class="s-copy">
+          <div class="plate">Autunno-Inverno 2026 · Debutto</div>
+          <h2 class="serif">Arioso <em>Atelier</em></h2>
+          <div class="verline">
+            <span class="v">v<b>1.0</b></span>
+            <span class="from">subentra a <em>«Ago e Filo»</em>, il codename di laboratorio</span>
+          </div>
+          <p class="lede">Il capo era ancora <em>in cucitura</em>. Con la 1.0 l'ago si posa: Prompt-à-porter smette di essere in beta e apre la sua prima stagione in negozio.</p>
+          <div class="scta">
+            <a class="b1" href="https://github.com/robertomarchioro/prompt-a-porter/releases">Scarica la 1.0 per Windows</a>
+            <span class="note">gratis · local-first · AGPL 3.0</span>
+          </div>
+        </div>
+        <div class="card-launch">
+          <div class="cl-top">
+            <span class="tag">Nella collezione di debutto</span>
+            <span class="stamp">v1.0 · AI 2026</span>
+          </div>
+          <div class="cl-list">
+            <div class="cl-row"><span class="ic">↓</span><div class="tx"><div class="t">Installazione senza attriti</div><div class="d">Setup per-utente su Windows, nessun avviso, aggiornamenti automatici e silenziosi in background.</div></div></div>
+            <div class="cl-row"><span class="ic">✒</span><div class="tx"><div class="t">Editor rifinito su misura</div><div class="d">Vista Sorgente e Compilato affiancate, varianti create al volo, import e export Markdown con front-matter.</div></div></div>
+            <div class="cl-row"><span class="ic">⊕</span><div class="tx"><div class="t">Prompt componibili evoluti</div><div class="d"><code>{{import "x" with k=v}}</code> con variabili scopate e pinning a una versione storica.</div></div></div>
+            <div class="cl-row"><span class="ic">◉</span><div class="tx"><div class="t">Solida da indossare tutti i giorni</div><div class="d">Accessibilità di base, suite di regressione verde e documentazione utente completa.</div></div></div>
+          </div>
+          <div class="cl-foot"><span class="dot"></span>Penelope ha finito la tela — la prima release stabile della linea Personale.</div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div class="ft-in">
+        <div class="ft-top">
+          <div class="ft-brand">
+            <div class="ft-mark"><span class="mk serif">P</span><span class="nm">Prompt-à-porter</span></div>
+            <p class="ft-tag">La tua collezione di prompt AI. <em>Pronti da indossare.</em></p>
+            <div class="ft-cta"><a class="p" href="https://github.com/robertomarchioro/prompt-a-porter/releases">Scarica per Windows</a><a class="g" href="https://github.com/robertomarchioro/prompt-a-porter">Vedi su GitHub</a></div>
+          </div>
+          <nav class="ft-col">
+            <h4>La collezione</h4>
+            <a href="#come-funziona">Versioni &amp; diff</a>
+            <a href="#come-funziona">Segnaposti</a>
+            <a href="#come-funziona">Ricerca semantica</a>
+            <a href="#come-funziona">Varianti A/B</a>
+            <a href="#come-funziona">Import composti</a>
+          </nav>
+          <nav class="ft-col">
+            <h4>Atelier</h4>
+            <a href="#come-funziona">Come funziona</a>
+            <a href="#come-funziona">La palette ⌃⇧P</a>
+            <a href="#collezione">Local-first</a>
+            <a href="https://github.com/robertomarchioro/prompt-a-porter/releases">Changelog</a>
+          </nav>
+          <nav class="ft-col">
+            <h4>La casa</h4>
+            <a href="https://github.com/robertomarchioro/prompt-a-porter">GitHub</a>
+            <a href="https://github.com/robertomarchioro/prompt-a-porter/tree/main/docs">Documentazione</a>
+            <a href="https://github.com/robertomarchioro/prompt-a-porter/blob/main/LICENSE">Licenza AGPL 3.0</a>
+            <a href="https://github.com/robertomarchioro/prompt-a-porter/issues">Segnala un problema</a>
+          </nav>
+        </div>
+
+        <div class="ft-label">
+          <span class="stitch">Etichetta di manutenzione</span>
+          <div class="care">
+            <span>100% locale</span>
+            <span>no cloud</span>
+            <span>nessun account</span>
+            <span>lavabile in git</span>
+            <span>AGPL 3.0</span>
+          </div>
+        </div>
+
+        <div class="ft-bottom">
+          <span class="cp">© 2026 Prompt-à-porter · Edizione locale · Stagione AW26</span>
+          <div class="ft-sign"><span class="by">Disegnato da</span><a class="name" href="https://github.com/robertomarchioro">Roberto</a><span class="by">cucito da</span><span class="name claude"><svg class="spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0c1 7 4 10 12 12-8 2-11 5-12 12-1-7-4-10-12-12 8-2 11-5 12-12Z" fill="currentColor"/></svg>Claude</span></div>
+        </div>
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    (function(){
+      const caps = [
+        'Premi <b>⌃⇧P</b> ovunque e richiama la tua collezione, senza cambiare finestra.',
+        'Tutti i tuoi prompt in un posto solo. Versioni, segnaposti, tag — <b>tutto in locale</b>.',
+        'Riempi i <b>segnaposti</b> e il prompt compilato finisce dritto nel campo di testo.',
+        'Ogni salvataggio è uno snapshot. <b>Diff git-style</b> e ritorno a qualsiasi versione.',
+        'Cuci insieme i tuoi prompt: <b>importa ruoli e stili</b> e riusali in tutta la collezione.',
+        'Tema chiaro o scuro — <b>abito da giorno o da sera</b>, la collezione è sempre la stessa.'
+      ];
+      const scenes = [...document.querySelectorAll('.scene')];
+      const tabs = [...document.querySelectorAll('.tab')];
+      const cap = document.getElementById('cap');
+      const prog = document.getElementById('prog').firstElementChild;
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const DUR = [4200, 5400, 5400, 5400, 5400, 5400];
+      let i = 0, tickTimer = null, elapsed = 0, paused = false;
+
+      function paint(n){
+        scenes.forEach((s,k)=>s.classList.toggle('on', k===n));
+        tabs.forEach((t,k)=>t.classList.toggle('on', k===n));
+        cap.style.opacity = 0;
+        setTimeout(()=>{ cap.innerHTML = caps[n]; cap.style.opacity = 1; }, 200);
+      }
+      function go(n){ i = (n + scenes.length) % scenes.length; paint(i); restart(); }
+      function restart(){
+        clearInterval(tickTimer); elapsed = 0; prog.style.width = '0';
+        if(reduce) return;            // niente autoplay con reduced-motion
+        tickTimer = setInterval(()=>{
+          if(paused) return;
+          elapsed += 100;
+          const frac = Math.min(elapsed / DUR[i], 1);
+          prog.style.width = (frac * 100) + '%';
+          if(frac >= 1){ go(i + 1); }
+        }, 100);
+      }
+      tabs.forEach(t=>t.addEventListener('click', ()=>go(+t.dataset.go)));
+      document.getElementById('scPrev').addEventListener('click', ()=>go(i - 1));
+      document.getElementById('scNext').addEventListener('click', ()=>go(i + 1));
+      const vp = document.getElementById('vp');
+      vp.addEventListener('mouseenter', ()=>{ paused = true; });
+      vp.addEventListener('mouseleave', ()=>{ paused = false; });
+      paint(0); restart();
+    })();
+  </script>
+</body>
+</html>
