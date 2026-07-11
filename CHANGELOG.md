@@ -1,5 +1,13 @@
 # Changelog — Prompt a Porter
 
+## v0.8.36 — App macOS universale (supporto Mac Intel) (2026-07-11)
+
+> Patch mirato: la v0.8.35, prima release con app macOS, girava solo su Apple Silicon e su Mac **Intel** veniva rifiutata con "non è supportato su questo Mac".
+
+### Fix
+
+- **App macOS come binario universale** (arm64 + Intel x86_64): un solo `.dmg` che gira nativo su tutti i Mac, non più solo Apple Silicon. L'auto-update copre entrambe le architetture. (La versione minima di macOS non era in causa: resta 10.13.)
+
 ## v0.8.35 — Hardening di sicurezza: backlog sync-server + batch LOW (2026-07-11)
 
 > Chiusura del backlog di sicurezza aperto dalla review 2026-07-05: 8 issue in 4 gruppi (`/gh-triage`), risolte in 4 PR con review adversariale obbligatoria su ogni gruppo. Le review hanno intercettato **4 difetti gravi in cui il fix stesso non proteggeva davvero** — corretti prima del merge — e fatto emergere **2 vulnerabilità pre-esistenti** non nel piano iniziale (un write bypass cross-tenant e un bug che rompeva silenziosamente il WebSocket in produzione).
