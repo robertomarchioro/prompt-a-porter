@@ -41,6 +41,7 @@ import {
   rispostaErroreValidazione,
 } from "./lib/mcp-errors.js";
 import { compila, estraiSegnaposti } from "./lib/template.js";
+import { avvolgiContenutoNonFidato } from "./lib/untrusted-framing.js";
 
 // ─── Vault path discovery ───
 
@@ -298,19 +299,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: "text",
-              text: JSON.stringify(
-                risultati.map((p) => ({
-                  id: p.id,
-                  title: p.title,
-                  description: p.description,
-                  visibility: p.visibility,
-                  target_model: p.target_model,
-                  use_count: p.use_count,
-                  last_used_at: p.last_used_at,
-                  version: p.version,
-                })),
-                null,
-                2,
+              // #462: title/description provengono dal vault utente →
+              // avvolti in <untrusted_vault_content> per difesa da
+              // prompt-injection indiretta.
+              text: avvolgiContenutoNonFidato(
+                JSON.stringify(
+                  risultati.map((p) => ({
+                    id: p.id,
+                    title: p.title,
+                    description: p.description,
+                    visibility: p.visibility,
+                    target_model: p.target_model,
+                    use_count: p.use_count,
+                    last_used_at: p.last_used_at,
+                    version: p.version,
+                  })),
+                  null,
+                  2,
+                ),
               ),
             },
           ],
@@ -334,14 +340,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: "text",
-              text: JSON.stringify(
-                {
-                  ...p,
-                  is_favorite: p.is_favorite !== 0,
-                  segnaposti: estraiSegnaposti(p.body),
-                },
-                null,
-                2,
+              // #462: include title/description/body dal vault →
+              // avvolti in <untrusted_vault_content> per difesa da
+              // prompt-injection indiretta (il body è il payload più
+              // sensibile, spesso incollato direttamente in un prompt).
+              text: avvolgiContenutoNonFidato(
+                JSON.stringify(
+                  {
+                    ...p,
+                    is_favorite: p.is_favorite !== 0,
+                    segnaposti: estraiSegnaposti(p.body),
+                  },
+                  null,
+                  2,
+                ),
               ),
             },
           ],
@@ -359,15 +371,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: "text",
-              text: JSON.stringify(
-                risultati.map((p) => ({
-                  id: p.id,
-                  title: p.title,
-                  last_used_at: p.last_used_at,
-                  use_count: p.use_count,
-                })),
-                null,
-                2,
+              // #462: title proviene dal vault utente → avvolto in
+              // <untrusted_vault_content> per difesa da prompt-injection
+              // indiretta.
+              text: avvolgiContenutoNonFidato(
+                JSON.stringify(
+                  risultati.map((p) => ({
+                    id: p.id,
+                    title: p.title,
+                    last_used_at: p.last_used_at,
+                    use_count: p.use_count,
+                  })),
+                  null,
+                  2,
+                ),
               ),
             },
           ],
@@ -397,8 +414,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: "text",
+              // #462: `compilato` è il body del prompt (dal vault utente),
+              // compilato con i segnaposti — è il payload più esposto a
+              // prompt-injection indiretta perché tipicamente viene
+              // incollato direttamente in un altro prompt. La nota sui
+              // segnaposti mancanti è metadato del server, resta fuori
+              // dal tag di contenuto non fidato.
               text:
-                compilato +
+                avvolgiContenutoNonFidato(compilato) +
                 (segnapostiNonCompilati.length > 0
                   ? `\n\n[NOTA: segnaposti non compilati: ${segnapostiNonCompilati.join(", ")}]`
                   : ""),

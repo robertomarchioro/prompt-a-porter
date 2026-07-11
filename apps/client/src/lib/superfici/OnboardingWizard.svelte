@@ -44,8 +44,8 @@
   // Issue #281: modale di conferma per "Salta tour".
   let confermaSaltaTourAperta = $state(false);
 
-  // Issue #270: criterio reale lato backend (vault.rs PASSWORD_MIN_LEN = 8).
-  const PASSWORD_MIN_LEN = 8;
+  // Issue #270 / #462: criterio reale lato backend (vault.rs PASSWORD_MIN_LEN = 12).
+  const PASSWORD_MIN_LEN = 12;
 
   let errore = $state("");
   let caricamento = $state(false);
@@ -301,7 +301,7 @@
                 bind:valore={password}
                 type="password"
                 placeholder="Password del vault"
-                invalido={errore !== "" && password.length < 8}
+                invalido={errore !== "" && password.length < PASSWORD_MIN_LEN}
               />
             </Field>
             <StrengthMeter {password} />

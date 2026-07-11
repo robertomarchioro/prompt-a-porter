@@ -56,6 +56,68 @@ fn log_dir(app: &tauri::AppHandle) -> Result<PathBuf, PapErrore> {
         .map_err(|e| PapErrore::Generico(format!("app_log_dir() fallito: {e}")))
 }
 
+/// #462 (security review, LOW): lo ZIP di export del debug log NON deve
+/// finire in `std::env::temp_dir()` (`/tmp` è world-readable su sistemi
+/// Unix multi-utente, ed era comunque un nome di file prevedibile). Usiamo
+/// `app_data_dir()` — già per-utente sia su Unix che su Windows — in una
+/// sottocartella dedicata, e su Unix restringiamo i permessi a 0600 come
+/// fatto in `preferenze.rs::salva_pure`.
+fn export_dir(app: &tauri::AppHandle) -> Result<PathBuf, PapErrore> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| PapErrore::Generico(format!("app_data_dir() fallito: {e}")))?
+        .join("debug-exports");
+    fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+/// Crea (o sovrascrive) il file ZIP di export già con permessi 0600 su
+/// Unix, invece di creare il file con i permessi di default (spesso 0644,
+/// leggibili da altri utenti locali) e restringerli solo a fine scrittura.
+///
+/// Fix MEDIUM (review PR #481): `File::create` + `restringi_permessi_owner`
+/// alla fine lasciava una finestra TOCTOU — tra la creazione del file e lo
+/// `set_permissions` finale, il file esisteva con i permessi di default
+/// mentre veniva scritto (ZipWriter + contenuto dei log). Aprire il file
+/// già in modalità 0600 elimina la finestra.
+fn crea_file_export(path: &Path) -> std::io::Result<File> {
+    #[cfg(unix)]
+    {
+        use std::fs::OpenOptions;
+        use std::os::unix::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)
+    }
+    #[cfg(not(unix))]
+    {
+        File::create(path)
+    }
+}
+
+/// Applica permessi 0600 (solo owner) su Unix. No-op su altre piattaforme.
+/// Best-effort: un fallimento viene loggato ma non interrompe l'export.
+/// Belt-and-suspenders dopo `crea_file_export`: su Unix è già ridondante
+/// (il file nasce 0600), ma resta utile come rete di sicurezza se in
+/// futuro il file venisse creato altrove senza passare da quella funzione.
+fn restringi_permessi_owner(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(e) = fs::set_permissions(path, fs::Permissions::from_mode(0o600)) {
+            log::warn!("set_permissions 0600 su {} fallito: {e}", path.display());
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
+}
+
 fn iso_mtime(meta: &fs::Metadata) -> String {
     use std::time::{Duration, UNIX_EPOCH};
     let modified = meta.modified().ok();
@@ -166,7 +228,8 @@ pub fn debug_log_pulisci(app: tauri::AppHandle) -> Result<(), PapErrore> {
 }
 
 /// Crea uno ZIP con il file log corrente + i rotati + un file `metadata.txt`
-/// (versione app, OS, timestamp) in `std::env::temp_dir()`.
+/// (versione app, OS, timestamp) in `app_data_dir()/debug-exports` (Unix:
+/// permessi 0600, solo owner — vedi `export_dir`/`restringi_permessi_owner`).
 ///
 /// Ritorna il path assoluto al file ZIP creato; il frontend può poi
 /// proporre "salva con nome" o aprire il file manager su quel path.
@@ -184,9 +247,9 @@ pub fn debug_log_esporta_zip(app: tauri::AppHandle) -> Result<String, PapErrore>
         // ':' sostituiti con '-' per compatibilità filename Windows
         format_iso_utc(s).replace(':', "-")
     };
-    let zip_path = std::env::temp_dir().join(format!("pap-debug-log-{timestamp}.zip"));
+    let zip_path = export_dir(&app)?.join(format!("pap-debug-log-{timestamp}.zip"));
 
-    let file = File::create(&zip_path)
+    let file = crea_file_export(&zip_path)
         .map_err(|e| PapErrore::Generico(format!("Create ZIP fallito: {e}")))?;
     let mut zip = ZipWriter::new(BufWriter::new(file));
     let opts: SimpleFileOptions =
@@ -229,6 +292,7 @@ pub fn debug_log_esporta_zip(app: tauri::AppHandle) -> Result<String, PapErrore>
 
     zip.finish()
         .map_err(|e| PapErrore::Generico(format!("Zip finish fallito: {e}")))?;
+    restringi_permessi_owner(&zip_path);
     log::info!("Debug log esportato: {}", zip_path.display());
     Ok(zip_path.to_string_lossy().to_string())
 }
@@ -425,5 +489,71 @@ mod test {
         assert_eq!(r.level, "ERROR");
         assert_eq!(r.target, "pap_lib::vault");
         assert_eq!(r.message, "");
+    }
+
+    // ─── #462: export ZIP non più in /tmp con nome prevedibile ───
+
+    #[cfg(unix)]
+    #[test]
+    fn restringi_permessi_owner_applica_0600() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("export-test.zip");
+        fs::write(&path, b"contenuto zip finto").unwrap();
+
+        // Prima del fix il file poteva restare con i permessi di default
+        // dell'umask (spesso 0644, leggibile da altri utenti su /tmp).
+        restringi_permessi_owner(&path);
+
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "il file esportato deve essere leggibile solo dall'owner");
+    }
+
+    #[test]
+    fn restringi_permessi_owner_file_inesistente_non_panica() {
+        // Best-effort: un path inesistente logga un warning ma non deve
+        // panicare né interrompere il chiamante.
+        restringi_permessi_owner(Path::new("/nonexistent/dir/xyz.zip"));
+    }
+
+    /// Fix MEDIUM (review PR #481): il file deve nascere già 0600, non
+    /// solo essere ristretto a export completato — niente finestra TOCTOU
+    /// tra creazione e scrittura in cui è leggibile con i permessi di
+    /// default dell'umask.
+    #[cfg(unix)]
+    #[test]
+    fn crea_file_export_nasce_gia_0600() {
+        use std::io::Write as _;
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("export-test.zip");
+
+        let mut file = crea_file_export(&path).unwrap();
+        // I permessi devono essere già 0600 SUBITO dopo l'apertura,
+        // prima ancora di scrivere qualunque byte.
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(
+            mode, 0o600,
+            "il file deve nascere 0600 fin dalla creazione, non solo a fine scrittura"
+        );
+
+        file.write_all(b"contenuto").unwrap();
+        let mode_dopo_scrittura = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode_dopo_scrittura, 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn crea_file_export_tronca_file_preesistente() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("export-test.zip");
+        fs::write(&path, b"contenuto vecchio lungo").unwrap();
+
+        let file = crea_file_export(&path).unwrap();
+        drop(file);
+
+        assert_eq!(fs::metadata(&path).unwrap().len(), 0);
     }
 }

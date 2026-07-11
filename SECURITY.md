@@ -2,12 +2,9 @@
 
 ## Versioni supportate
 
-| Versione | Supportata |
-|----------|------------|
-| 0.1.x    | sì         |
-| < 0.1    | no         |
+Progetto in rilascio continuo (release ad ogni ciclo di fix/feature): **solo l'ultima release pubblicata su [GitHub Releases](https://github.com/robertomarchioro/prompt-a-porter/releases/latest) riceve fix di sicurezza.** Le versioni precedenti non sono supportate: aggiorna alla latest prima di segnalare o attenderti un fix.
 
-Durante la fase beta, solo l'ultima minor release riceve fix di sicurezza. Dopo la 1.0, manterremo backport sulle ultime due major in linea con politiche standard FOSS.
+Dopo la 1.0, valuteremo un backport sulle ultime due minor in linea con politiche standard FOSS, se il volume di segnalazioni lo giustificherà.
 
 ## Segnalazione di vulnerabilità
 

@@ -2,6 +2,10 @@ package main
 
 import (
 	"database/sql"
+	"net/url"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -246,6 +250,108 @@ func TestDefaultVaultPathNonVuoto(t *testing.T) {
 	p := defaultVaultPath()
 	if p == "" || !strings.HasSuffix(p, "pap-vault.db") {
 		t.Errorf("defaultVaultPath inatteso: %q", p)
+	}
+}
+
+// #462: un path contenente `?` o `#` non deve alterare i parametri della
+// query DSN (`mode=ro`) — il carattere va percent-encoded nel path, non
+// interpretato come separatore di query/fragment.
+func TestReadonlyDSN(t *testing.T) {
+	tests := []struct {
+		nome string
+		path string
+		want string
+	}{
+		{
+			nome: "path semplice senza caratteri speciali",
+			path: "/home/user/pap-vault.db",
+			want: "file:/home/user/pap-vault.db?mode=ro",
+		},
+		{
+			nome: "path con ? viene percent-encoded, non tronca la query",
+			path: "/home/user/weird?dir/pap-vault.db",
+			want: "file:/home/user/weird%3Fdir/pap-vault.db?mode=ro",
+		},
+		{
+			nome: "path con # viene percent-encoded, non tronca in fragment",
+			path: "/home/user/weird#dir/pap-vault.db",
+			want: "file:/home/user/weird%23dir/pap-vault.db?mode=ro",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.nome, func(t *testing.T) {
+			got := readonlyDSN(tt.path)
+			if got != tt.want {
+				t.Errorf("readonlyDSN(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+// #462: separatore Windows normalizzato a "/" — filepath.ToSlash è un
+// no-op su GOOS non-Windows (dove "\" è un carattere di path legittimo,
+// non un separatore), quindi il caso ha senso solo in build/CI Windows.
+func TestReadonlyDSNSeparatoriWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("normalizzazione dei separatori valida solo su GOOS=windows")
+	}
+	got := readonlyDSN(`C:\Users\bob\pap-vault.db`)
+	want := "file:C:/Users/bob/pap-vault.db?mode=ro"
+	if got != want {
+		t.Errorf("readonlyDSN = %q, want %q", got, want)
+	}
+}
+
+// #462: verifica end-to-end che un vault il cui path contiene un `?`
+// venga effettivamente aperto in lettura sul file corretto, e non su un
+// path troncato/diverso silenziosamente creato altrove.
+func TestOpenVaultPathConCaratteriSpeciali(t *testing.T) {
+	dir := t.TempDir()
+	sotto := filepath.Join(dir, "weird?dir")
+	if err := os.MkdirAll(sotto, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	vaultFile := filepath.Join(sotto, "pap-vault.db")
+
+	// Crea il file DB in scrittura prima (mode=ro richiede che esista già).
+	// Il path va percent-encoded qui allo stesso modo di `readonlyDSN`:
+	// altrimenti il '?' del path di test triggererebbe lo stesso bug che
+	// questo test vuole dimostrare risolto, anche nella sola fixture.
+	dsnScrittura := "file:" + (&url.URL{Path: filepath.ToSlash(vaultFile)}).EscapedPath()
+	dbw, err := sql.Open("sqlite", dsnScrittura)
+	if err != nil {
+		t.Fatalf("open scrittura: %v", err)
+	}
+	if _, err := dbw.Exec("CREATE TABLE marker(x)"); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	if err := dbw.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	db, err := openVault(vaultFile)
+	if err != nil {
+		t.Fatalf("openVault(%q): %v", vaultFile, err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close db: %v", err)
+		}
+	}()
+
+	var nome string
+	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table'").Scan(&nome)
+	if err != nil {
+		t.Fatalf("query marker: %v", err)
+	}
+	if nome != "marker" {
+		t.Errorf("tabella attesa 'marker', trovata %q", nome)
+	}
+
+	// Nessun file spurio deve essere stato creato al di fuori della
+	// directory attesa (regressione del bug: path troncato al primo '?').
+	if _, err := os.Stat(filepath.Join(dir, "weird")); err == nil {
+		t.Errorf("file spurio 'weird' creato: il path è stato troncato al carattere '?'")
 	}
 }
 
