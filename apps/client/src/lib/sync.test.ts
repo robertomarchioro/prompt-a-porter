@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { validaServerUrl } from "./sync";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { validaServerUrl, syncAvvia, syncFerma } from "./sync";
 
 describe("validaServerUrl (fix #455)", () => {
   it("accetta un URL https:// valido", () => {
@@ -46,5 +46,81 @@ describe("validaServerUrl (fix #455)", () => {
       expect(e).toBeInstanceOf(Error);
       expect((e as Error).message).toContain("https://");
     }
+  });
+});
+
+// Fix #455 (review HIGH-1): il token deve viaggiare SOLO come
+// sub-protocollo WebSocket (Sec-WebSocket-Protocol), mai in query string.
+describe("connettiWs (fix #455 HIGH-1 — token via Sec-WebSocket-Protocol)", () => {
+  class MockWebSocket {
+    static ultimaChiamata: { url: string; protocols?: string | string[] } | null =
+      null;
+    url: string;
+    protocols?: string | string[];
+    onopen: (() => void) | null = null;
+    onmessage: ((e: MessageEvent) => void) | null = null;
+    onclose: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+
+    constructor(url: string, protocols?: string | string[]) {
+      this.url = url;
+      this.protocols = protocols;
+      MockWebSocket.ultimaChiamata = { url, protocols };
+    }
+
+    close() {
+      /* noop nel mock */
+    }
+  }
+
+  beforeEach(() => {
+    MockWebSocket.ultimaChiamata = null;
+    vi.stubGlobal("WebSocket", MockWebSocket as unknown as typeof WebSocket);
+  });
+
+  afterEach(() => {
+    syncFerma();
+    vi.unstubAllGlobals();
+  });
+
+  it("la URL passata al costruttore WebSocket non contiene mai 'token='", async () => {
+    await syncAvvia({
+      serverUrl: "https://sync.example.com",
+      email: "utente@esempio.it",
+      token: "tok-jwt-xyz",
+      intervalloSec: 3600,
+      abilitato: true,
+    });
+
+    const chiamata = MockWebSocket.ultimaChiamata;
+    expect(chiamata).not.toBeNull();
+    expect(chiamata!.url).not.toContain("token=");
+    expect(chiamata!.url).toBe("wss://sync.example.com/ws");
+  });
+
+  it("il token viaggia SOLO nel sub-protocollo, con il prefisso atteso dal server (#480)", async () => {
+    await syncAvvia({
+      serverUrl: "https://sync.example.com",
+      email: "utente@esempio.it",
+      token: "tok-jwt-xyz",
+      intervalloSec: 3600,
+      abilitato: true,
+    });
+
+    const chiamata = MockWebSocket.ultimaChiamata;
+    expect(chiamata!.protocols).toEqual(["pap.sync.token.tok-jwt-xyz"]);
+  });
+
+  it("wss:// e' derivato correttamente anche se serverUrl usa HTTPS in maiuscolo", async () => {
+    await syncAvvia({
+      serverUrl: "HTTPS://sync.example.com",
+      email: "utente@esempio.it",
+      token: "tok-jwt-xyz",
+      intervalloSec: 3600,
+      abilitato: true,
+    });
+
+    const chiamata = MockWebSocket.ultimaChiamata;
+    expect(chiamata!.url).toBe("wss://sync.example.com/ws");
   });
 });
