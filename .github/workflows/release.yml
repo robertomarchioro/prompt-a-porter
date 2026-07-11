@@ -161,8 +161,8 @@ jobs:
             **Linux:** la release include anche i pacchetti `.deb` e
             `.AppImage` (x86_64). L'AppImage supporta l'auto-update.
 
-            **macOS:** la release include l'app per Apple Silicon (`.dmg`),
-            firmata Developer ID e notarizzata in CI.
+            **macOS:** la release include l'app come binario universale
+            (`.dmg`, arm64 + Intel x86_64), firmata Developer ID e notarizzata in CI.
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
