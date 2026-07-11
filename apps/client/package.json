@@ -23,8 +23,8 @@
     "@codemirror/lang-markdown": "^6",
     "@codemirror/language": "^6.12.4",
     "@codemirror/search": "^6",
-    "@codemirror/state": "^6.7.0",
-    "@codemirror/view": "^6.43.4",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.6",
     "@fontsource/inter": "^5.1",
     "@fontsource/jetbrains-mono": "^5.1",
     "@tauri-apps/api": "^2.11.1",
@@ -42,16 +42,16 @@
     "paneforge": "^1.0.2"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@tauri-apps/cli": "^2.11.4",
     "@testing-library/svelte": "^5.4.2",
     "@vitest/coverage-v8": "4.1.9",
     "jsdom": "^29.1.1",
     "svelte": "^5.56.4",
-    "svelte-check": "^4.7.1",
+    "svelte-check": "^4.7.2",
     "tslib": "^2.8.0",
     "typescript": "^6.0.3",
-    "vite": "^8.1.0",
+    "vite": "^8.1.4",
     "vitest": "^4.1.9"
   }
 }
