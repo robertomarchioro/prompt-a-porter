@@ -1,6 +1,19 @@
 # Changelog — Prompt a Porter
 
-## v0.8.34 — Security review: hardening client, MCP e pipeline di rilascio (2026-07-05)
+## v0.8.35 — Hardening di sicurezza: backlog sync-server + batch LOW (2026-07-11)
+
+> Chiusura del backlog di sicurezza aperto dalla review 2026-07-05: 8 issue in 4 gruppi (`/gh-triage`), risolte in 4 PR con review adversariale obbligatoria su ogni gruppo. Le review hanno intercettato **4 difetti gravi in cui il fix stesso non proteggeva davvero** — corretti prima del merge — e fatto emergere **2 vulnerabilità pre-esistenti** non nel piano iniziale (un write bypass cross-tenant e un bug che rompeva silenziosamente il WebSocket in produzione).
+
+### Sicurezza
+
+- **Server di sync: hardening completo** (#450, #451, #452, #453, #454): la paternità dei prompt (`AuthorUserId`) è ora forzata lato server e non più accettata dal client (impediva di falsificare l'autore altrui); rate-limiting sul login con equalizzazione dei tempi (anti user-enumeration) e tetto sulla dimensione dei body; CORS ristretto a una allow-list esplicita (con deny-all reale di default, non solo dichiarato); WebSocket blindato (limite di lettura, ping/pong, token via header invece che in URL, algoritmo JWT fissato a HS256); avvio TLS-only salvo dichiarazione esplicita di reverse-proxy.
+- **Server di sync: write bypass cross-tenant** (#482): un utente di un workspace poteva sovrascrivere prompt e tag di *un altro* workspace indovinandone l'Id, perché l'aggiornamento filtrava solo per Id e non per workspace (CWE-639). Ora un Id appartenente a un altro tenant viene rifiutato come conflitto, senza toccare la riga. Vulnerabilità pre-esistente emersa durante la review.
+- **Client di sync: token nel vault cifrato** (#455): il token di sincronizzazione non è più scritto in chiaro in `preferenze.json` ma custodito nel vault SQLCipher; il client accetta ora solo endpoint `https://`/`wss://` e trasmette il token via `Sec-WebSocket-Protocol` invece che nella query string (dove finiva nei log dei proxy).
+- **Server MCP: difesa da prompt-injection indiretta** (#462): i contenuti del vault restituiti al modello sono ora incorniciati in `<untrusted_vault_content>` con neutralizzazione del delimitatore, così un prompt malevolo non può chiudere la cornice in anticipo e iniettare istruzioni.
+- **Passphrase di firma fuori dalla process list** (#466): la passphrase della chiave updater non è più passata come argomento della riga di comando (visibile ad altri processi via `/proc/*/cmdline` o `Win32_Process`), ma tramite variabile d'ambiente del solo processo di firma.
+- **Batch di irrigidimenti minori** (#462): password del vault minima a 12 caratteri per i nuovi vault; export dei log di debug fuori da `/tmp` e creato già con permessi `0600`; CSP con `object-src 'none'` e `base-uri 'self'`; DSN SQLite della CLI costruito in modo sicuro; `apps/cli/go.sum` versionato (lock supply-chain); `SECURITY.md` allineato alla policy "ultima release".
+
+
 
 > Security review dell'intero progetto, risolta in 3 gruppi (client, server MCP, CI/script). La review adversariale sulle PR ha intercettato due difetti critici in cui il fix stesso non proteggeva davvero — corretti prima del merge.
 
