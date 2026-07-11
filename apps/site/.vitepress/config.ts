@@ -3,19 +3,13 @@ import { defineConfig } from "vitepress";
 // VitePress legge i .md direttamente da docs/ (root del monorepo).
 // Sidebar e navbar filtrano cosa esporre nel sito pubblico.
 //
-// `vue.template.compilerOptions.delimiters` ridefinisce i delimitatori
-// Vue da `{{ }}` a `<% %>` cosi' che la sintassi PaP `{{nome}}`,
-// `{{global ...}}`, `{{import "..."}}` resti testo letterale nei
-// documenti (e non venga interpretata come Vue interpolation).
+// Sintassi PaP `{{nome}}`, `{{global ...}}`, `{{import "..."}}` nei docs:
+// va SEMPRE scritta dentro backtick (code span/blocco) — VitePress applica
+// v-pre automatico al codice, quindi resta testo letterale. NON ridefinire
+// i delimitatori Vue globali (`vue.template.compilerOptions.delimiters`):
+// si applicano anche agli SFC del default theme e ne rompono le
+// interpolazioni (search box, outline, edit link → mustache letterali).
 export default defineConfig({
-  vue: {
-    template: {
-      compilerOptions: {
-        delimiters: ["<%", "%>"],
-      },
-    },
-  },
-
   title: "Prompt a Porter",
   description:
     "Libreria locale per prompt AI — template parametrici, vault cifrato, sync opzionale",
@@ -42,6 +36,19 @@ export default defineConfig({
   // Vue.
   markdown: {
     html: false,
+    config(md) {
+      // VitePress applica v-pre ai blocchi di codice recintati ma NON ai
+      // code span inline: un `{{nome}}` inline verrebbe interpretato come
+      // interpolazione Vue (build error o testo vuoto). Forziamo v-pre su
+      // tutti gli inline code — è la ragione per cui NON servono delimitatori
+      // Vue custom (che romperebbero il default theme, vedi sopra).
+      const renderInlineCode =
+        md.renderer.rules.code_inline ??
+        ((tokens, idx, options, _env, self) =>
+          `<code${self.renderAttrs(tokens[idx])}>${md.utils.escapeHtml(tokens[idx].content)}</code>`)
+      md.renderer.rules.code_inline = (tokens, idx, options, env, self) =>
+        renderInlineCode(tokens, idx, options, env, self).replace(/^<code/, "<code v-pre")
+    },
   },
 
   // Mappa ogni `README.md` a `index.html` cosi' i path delle sezioni
@@ -58,6 +65,9 @@ export default defineConfig({
     /\/(architettura|operativo|roadmap|contribuire)\//,
   ],
 
+  // Nota: i font Google e i meta og: della landing sono nel frontmatter di
+  // docs/index.md (head per-pagina), NON qui — l'head globale finirebbe
+  // iniettato su ogni pagina di documentazione.
   head: [
     ["link", { rel: "icon", href: "/prompt-a-porter/favicon.ico" }],
     ["meta", { name: "theme-color", content: "#646cff" }],

@@ -7,6 +7,9 @@
   "scripts": {
     "dev": "pnpm --filter @pap/client dev",
     "build": "pnpm --filter @pap/client build",
+    "site:dev": "pnpm --filter @pap/site docs:dev",
+    "site:build": "pnpm --filter @pap/site docs:build",
+    "site:preview": "pnpm --filter @pap/site docs:preview",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "check": "pnpm -r check"
