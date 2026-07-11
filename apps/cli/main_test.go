@@ -333,7 +333,11 @@ func TestOpenVaultPathConCaratteriSpeciali(t *testing.T) {
 	if err != nil {
 		t.Fatalf("openVault(%q): %v", vaultFile, err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close db: %v", err)
+		}
+	}()
 
 	var nome string
 	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table'").Scan(&nome)
