@@ -19,8 +19,18 @@ pub struct Preferenze {
     pub sync_server_url: String,
     #[serde(default)]
     pub sync_email: String,
-    #[serde(default)]
-    pub sync_token: String,
+    // Fix #455 (review HIGH-2): `sync_token` NON fa più parte di questa
+    // struct. Viveva qui in chiaro (poi instradato verso il vault in un
+    // giro precedente di questo stesso fix), ma accoppiarlo al round-trip
+    // generico di `preferenze_carica`/`preferenze_salva` costringeva OGNI
+    // salvataggio di preferenze (tema, editor, debug-log, ...) a richiedere
+    // il vault aperto. Il token ha ora comandi Tauri dedicati
+    // (`sync::sync_token_carica` / `sync::sync_token_salva`, in `sync.rs`)
+    // che parlano direttamente col vault (`SyncMeta.LastSyncToken`) senza
+    // passare da qui. La migrazione one-shot del token legacy da un
+    // `preferenze.json` pre-fix usa `estrai_token_legacy`/`rimuovi_token_legacy`
+    // qui sotto (via JSON grezzo, non via questa struct: il campo non deve
+    // MAI più farne parte, nemmeno per errore futuro).
     #[serde(default = "default_sync_intervallo")]
     pub sync_intervallo_sec: u32,
     #[serde(default)]
@@ -140,7 +150,6 @@ impl Default for Preferenze {
             crea_prompt_esempio: true,
             sync_server_url: String::new(),
             sync_email: String::new(),
-            sync_token: String::new(),
             sync_intervallo_sec: 60,
             sync_abilitato: false,
             ricerca_semantica_abilitata: false,
@@ -168,8 +177,16 @@ impl PreferenzeState {
         Self { data_dir }
     }
 
-    fn file_path(&self) -> PathBuf {
+    pub(crate) fn file_path(&self) -> PathBuf {
         self.data_dir.join("preferenze.json")
+    }
+
+    /// Fix #455 (HIGH-2): esposto a `sync::sync_token_carica_impl`, che
+    /// deve poter riscrivere `preferenze.json` (via `rimuovi_token_legacy`)
+    /// durante la migrazione one-shot del token legacy, senza duplicare
+    /// qui la logica di localizzazione del file.
+    pub(crate) fn data_dir(&self) -> &Path {
+        &self.data_dir
     }
 }
 
@@ -187,10 +204,10 @@ pub fn salva_pure(data_dir: &Path, preferenze: &Preferenze) -> Result<(), PapErr
     let json = serde_json::to_string_pretty(preferenze)?;
     let path = data_dir.join("preferenze.json");
     fs::write(&path, json)?;
-    // SECURITY: preferenze.json contiene `sync_token` in chiaro. Su Unix
-    // restringiamo i permessi a 0600 (solo owner) per ridurre l'esposizione
-    // su sistemi multi-utente. Su Windows l'AppData è già per-utente.
-    // TODO: spostare i segreti nel keychain OS (crate `keyring`).
+    // SECURITY: nessun segreto vive più in questa struct dal fix #455
+    // (`sync_token` ha comandi dedicati che parlano col vault cifrato, vedi
+    // `sync.rs`). Manteniamo comunque i permessi 0600 su Unix come difesa
+    // in profondità. Su Windows l'AppData è già per-utente.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -212,6 +229,51 @@ pub fn preferenze_salva(
     state: State<'_, PreferenzeState>,
 ) -> Result<(), PapErrore> {
     salva_pure(&state.data_dir, &preferenze)
+}
+
+// ─────────── Fix #455 (HIGH-2): migrazione one-shot token legacy ───────────
+//
+// Helper usati da `sync::sync_token_carica_impl` per spostare un
+// `sync_token` scritto in chiaro da una build precedente al fix. Lavorano
+// sul JSON grezzo (non sulla struct `Preferenze`, che non ha più questo
+// campo) per due motivi: (1) rende strutturalmente impossibile che il
+// campo torni a farne parte per errore in futuro, (2) preserva senza
+// modifiche qualunque altro campo presente nel file, anche quelli non (più)
+// noti alla struct corrente.
+
+/// Legge il valore grezzo di `sync_token` da un `preferenze.json` legacy.
+/// `None` se il file non esiste, non è JSON valido, non ha il campo, o il
+/// campo è una stringa vuota/whitespace.
+pub(crate) fn estrai_token_legacy(path: &Path) -> Option<String> {
+    let json = fs::read_to_string(path).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&json).ok()?;
+    let token = value.get("sync_token")?.as_str()?.trim();
+    if token.is_empty() {
+        None
+    } else {
+        Some(token.to_string())
+    }
+}
+
+/// Rimuove `sync_token` da `preferenze.json`, se presente, preservando
+/// invariati tutti gli altri campi. Da chiamare SOLO dopo che il token è
+/// stato effettivamente salvato nel vault (altrimenti si perde).
+pub(crate) fn rimuovi_token_legacy(data_dir: &Path) -> Result<(), PapErrore> {
+    let path = data_dir.join("preferenze.json");
+    let json = fs::read_to_string(&path)?;
+    let mut value: serde_json::Value = serde_json::from_str(&json)?;
+    if let Some(obj) = value.as_object_mut() {
+        obj.remove("sync_token");
+    }
+    fs::write(&path, serde_json::to_string_pretty(&value)?)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(e) = fs::set_permissions(&path, fs::Permissions::from_mode(0o600)) {
+            log::warn!("set_permissions 0600 su preferenze.json fallito: {e}");
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -241,7 +303,6 @@ mod test {
             crea_prompt_esempio: false,
             sync_server_url: "https://sync.example.com".to_string(),
             sync_email: "test@example.com".to_string(),
-            sync_token: String::new(),
             sync_intervallo_sec: 120,
             sync_abilitato: true,
             ricerca_semantica_abilitata: true,
@@ -314,7 +375,6 @@ mod test {
             crea_prompt_esempio: false,
             sync_server_url: "https://sync.example.com".to_string(),
             sync_email: "test@example.com".to_string(),
-            sync_token: String::new(),
             sync_intervallo_sec: 120,
             sync_abilitato: true,
             ricerca_semantica_abilitata: true,
@@ -370,5 +430,115 @@ mod test {
         assert_eq!(prefs.ricerca_alpha, 0.5);
         assert_eq!(prefs.idle_unload_secondi, 300);
         assert!(prefs.updater_abilitato);
+    }
+
+    // ─────────── Fix #455 (HIGH-2): sync_token FUORI da questa struct ───────────
+
+    #[test]
+    fn preferenze_salva_regressione_hi2_toggle_non_correlato_non_richiede_vault() {
+        // Regressione HIGH-2: `preferenze_salva` NON prende più uno
+        // `State<'_, VaultState>` — un toggle non correlato al sync (qui,
+        // il tema) deve persistere SEMPRE, incluso lo scenario che prima
+        // rompeva tutto: vault chiuso + un `sync_token` (ormai fantasma,
+        // non fa più parte della struct) circolante nella cache lato UI.
+        let dir = tempfile::tempdir().unwrap();
+        let pref_state = PreferenzeState::new(dir.path().to_path_buf());
+
+        let mut prefs = Preferenze::default();
+        prefs.tema = "light".to_string();
+        // Nessun `VaultState` in scope: se questa funzione lo richiedesse
+        // ancora, il codice non compilerebbe nemmeno.
+        salva_pure(pref_state.data_dir(), &prefs).unwrap();
+
+        let letto = carica_pure(&pref_state.file_path()).unwrap();
+        assert_eq!(letto.tema, "light");
+    }
+
+    #[test]
+    fn preferenze_non_ha_piu_il_campo_sync_token() {
+        // Round-trip di un JSON che contiene ancora `sync_token` (scritto
+        // da una build pre-fix): deve essere ignorato silenziosamente
+        // (serde di default ignora campi sconosciuti) e MAI ricomparire
+        // nel JSON scritto da `salva_pure`.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("preferenze.json");
+        fs::write(
+            &path,
+            r#"{
+                "profilo": "personale",
+                "hotkey": "Ctrl+Shift+P",
+                "tema": "dark",
+                "tono": "zinc",
+                "lingua": "it",
+                "onboarding_completato": true,
+                "crea_prompt_esempio": false,
+                "sync_token": "tok-legacy-in-chiaro"
+            }"#,
+        )
+        .unwrap();
+        let prefs = carica_pure(&path).unwrap();
+        salva_pure(dir.path(), &prefs).unwrap();
+        let json = fs::read_to_string(&path).unwrap();
+        assert!(!json.contains("sync_token"));
+        assert!(!json.contains("tok-legacy-in-chiaro"));
+    }
+
+    // ─────────── Fix #455: migrazione one-shot (helper puri, no vault) ───────────
+
+    #[test]
+    fn estrai_token_legacy_file_inesistente_torna_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("preferenze.json");
+        assert_eq!(estrai_token_legacy(&path), None);
+    }
+
+    #[test]
+    fn estrai_token_legacy_campo_assente_torna_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("preferenze.json");
+        salva_pure(dir.path(), &Preferenze::default()).unwrap();
+        assert_eq!(estrai_token_legacy(&path), None);
+    }
+
+    #[test]
+    fn estrai_token_legacy_campo_presente_lo_ritorna() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("preferenze.json");
+        fs::write(&path, r#"{"sync_token":"tok-legacy-in-chiaro"}"#).unwrap();
+        assert_eq!(
+            estrai_token_legacy(&path),
+            Some("tok-legacy-in-chiaro".to_string())
+        );
+    }
+
+    #[test]
+    fn estrai_token_legacy_stringa_vuota_torna_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("preferenze.json");
+        fs::write(&path, r#"{"sync_token":""}"#).unwrap();
+        assert_eq!(estrai_token_legacy(&path), None);
+    }
+
+    #[test]
+    fn rimuovi_token_legacy_toglie_solo_quel_campo() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("preferenze.json");
+        fs::write(
+            &path,
+            r#"{"profilo":"personale","sync_token":"tok-legacy-in-chiaro","campo_futuro":"z"}"#,
+        )
+        .unwrap();
+        rimuovi_token_legacy(dir.path()).unwrap();
+        let json = fs::read_to_string(&path).unwrap();
+        assert!(!json.contains("sync_token"));
+        // Campi non noti alla struct corrente sopravvivono (JSON grezzo).
+        assert!(json.contains("campo_futuro"));
+        assert!(json.contains("personale"));
+    }
+
+    #[test]
+    fn rimuovi_token_legacy_file_inesistente_e_errore() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(rimuovi_token_legacy(dir.path()).is_err());
     }
 }

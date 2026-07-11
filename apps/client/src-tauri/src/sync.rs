@@ -1,8 +1,89 @@
+use rusqlite::{Connection, OptionalExtension};
 use serde::Deserialize;
 use tauri::State;
 
 use crate::errore::PapErrore;
 use crate::vault::VaultState;
+
+/// Fix #455: unico workspace supportato oggi (coerente con `ws-personale`
+/// usato in tutto il resto del backend, vedi `libreria::assicura_dati_base`).
+/// `SyncMeta` è per-workspace (PK `WorkspaceId`) in previsione di un
+/// eventuale multi-workspace futuro, ma finché esiste un solo workspace
+/// personale il token vive tutto in questa riga.
+const WORKSPACE_ID_DEFAULT: &str = "ws-personale";
+
+/// Fix #455 (security review MEDIUM): legge il `sync_token` dal vault
+/// cifrato (tabella `SyncMeta`, schema V001, mai usata prima d'ora) invece
+/// che da `preferenze.json` in chiaro. `None` se non è mai stato
+/// configurato nessun token, o se il valore salvato è una stringa vuota.
+pub(crate) fn sync_token_carica_pure(conn: &Connection) -> Result<Option<String>, PapErrore> {
+    let token: Option<Option<String>> = conn
+        .query_row(
+            "SELECT LastSyncToken FROM SyncMeta WHERE WorkspaceId = ?1",
+            [WORKSPACE_ID_DEFAULT],
+            |r| r.get::<_, Option<String>>(0),
+        )
+        .optional()?;
+    Ok(token.flatten().filter(|t| !t.is_empty()))
+}
+
+/// Fix #455: salva/aggiorna il `sync_token` nel vault cifrato. Upsert sulla
+/// riga `SyncMeta` del workspace personale — non esiste ancora nessun
+/// comando che la crei, quindi il primo salvataggio la inserisce.
+/// `token` vuoto è un caso d'uso legittimo: rappresenta un logout esplicito
+/// (ripulisce il valore salvato senza eliminare la riga).
+pub(crate) fn sync_token_salva_pure(conn: &Connection, token: &str) -> Result<(), PapErrore> {
+    conn.execute(
+        "INSERT INTO SyncMeta (WorkspaceId, LastSyncToken) VALUES (?1, ?2)
+         ON CONFLICT(WorkspaceId) DO UPDATE SET LastSyncToken = excluded.LastSyncToken",
+        rusqlite::params![WORKSPACE_ID_DEFAULT, token],
+    )?;
+    Ok(())
+}
+
+/// Fix #455 (review HIGH-2): comando Tauri DEDICATO al `sync_token`,
+/// disaccoppiato dal round-trip generico `preferenze_carica`/`preferenze_salva`
+/// — un salvataggio di preferenze non correlate (tema, editor, debug-log,
+/// ...) non deve più richiedere il vault aperto solo perché portava con sé
+/// anche il token. Include la migrazione one-shot del token legacy da un
+/// `preferenze.json` pre-fix (comportamento invariato, solo rilocato qui).
+/// Richiede il vault aperto: `PapErrore::VaultChiuso` altrimenti (comando
+/// pensato per funzionare solo a vault sbloccato, come da spec).
+#[tauri::command]
+pub fn sync_token_carica(
+    state: State<'_, crate::preferenze::PreferenzeState>,
+    vault: State<'_, VaultState>,
+) -> Result<Option<String>, PapErrore> {
+    sync_token_carica_impl(&state, &vault)
+}
+
+/// Logica testabile di `sync_token_carica` (pattern `_impl` usato altrove,
+/// es. `vault::vault_cifrato_impl`).
+pub(crate) fn sync_token_carica_impl(
+    pref_state: &crate::preferenze::PreferenzeState,
+    vault: &VaultState,
+) -> Result<Option<String>, PapErrore> {
+    let path = pref_state.file_path();
+    if let Some(token_legacy) = crate::preferenze::estrai_token_legacy(&path) {
+        // Migrazione one-shot: propaga VaultChiuso pulito se il vault non è
+        // aperto, SENZA toccare il file — il token resta nel file legacy
+        // (unico posto dove esiste) e si ritenta al prossimo load a vault
+        // aperto, invece di rischiare di perderlo.
+        vault.with_conn(|conn| sync_token_salva_pure(conn, &token_legacy))?;
+        crate::preferenze::rimuovi_token_legacy(pref_state.data_dir())?;
+        return Ok(Some(token_legacy));
+    }
+    vault.with_conn(sync_token_carica_pure)
+}
+
+/// Fix #455 (review HIGH-2): comando Tauri dedicato al salvataggio del
+/// `sync_token` — richiede il vault aperto (nessun caso "best-effort" qui:
+/// a differenza del vecchio `preferenze_salva`, questo comando esiste SOLO
+/// per il token, quindi l'errore pulito `VaultChiuso` è sempre corretto).
+#[tauri::command]
+pub fn sync_token_salva(token: String, state: State<'_, VaultState>) -> Result<(), PapErrore> {
+    state.with_conn(|conn| sync_token_salva_pure(conn, &token))
+}
 
 #[derive(Debug, Deserialize)]
 pub struct SyncDelta {
@@ -295,5 +376,167 @@ mod test {
             .query_row("SELECT COUNT(*) FROM PromptTags", [], |r| r.get(0))
             .unwrap();
         assert_eq!(count, 1, "INSERT OR IGNORE non deve duplicare");
+    }
+
+    // ─────────── Fix #455: sync_token nel vault (SyncMeta) ───────────
+
+    #[test]
+    fn sync_token_carica_pure_nessun_token_torna_none() {
+        let conn = db_test();
+        assert_eq!(super::sync_token_carica_pure(&conn).unwrap(), None);
+    }
+
+    #[test]
+    fn sync_token_salva_e_carica_pure_roundtrip() {
+        let conn = db_test();
+        super::sync_token_salva_pure(&conn, "tok-abc123").unwrap();
+        assert_eq!(
+            super::sync_token_carica_pure(&conn).unwrap(),
+            Some("tok-abc123".to_string())
+        );
+    }
+
+    #[test]
+    fn sync_token_salva_pure_upsert_sovrascrive() {
+        let conn = db_test();
+        super::sync_token_salva_pure(&conn, "vecchio").unwrap();
+        super::sync_token_salva_pure(&conn, "nuovo").unwrap();
+        assert_eq!(
+            super::sync_token_carica_pure(&conn).unwrap(),
+            Some("nuovo".to_string())
+        );
+        let righe: i64 = conn
+            .query_row("SELECT COUNT(*) FROM SyncMeta", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(righe, 1, "upsert non deve duplicare la riga");
+    }
+
+    #[test]
+    fn sync_token_salva_pure_stringa_vuota_pulisce() {
+        let conn = db_test();
+        super::sync_token_salva_pure(&conn, "tok-da-cancellare").unwrap();
+        super::sync_token_salva_pure(&conn, "").unwrap();
+        assert_eq!(super::sync_token_carica_pure(&conn).unwrap(), None);
+    }
+
+    #[test]
+    fn sync_token_salva_pure_scrive_sul_workspace_personale() {
+        let conn = db_test();
+        super::sync_token_salva_pure(&conn, "tok-riservato").unwrap();
+        let workspace_id: String = conn
+            .query_row(
+                "SELECT WorkspaceId FROM SyncMeta WHERE LastSyncToken = 'tok-riservato'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(workspace_id, "ws-personale");
+    }
+
+    // ─────── Fix #455 (HIGH-2): sync_token_carica_impl (comando dedicato) ───────
+
+    use crate::errore::PapErrore;
+    use crate::preferenze::PreferenzeState;
+    use crate::vault::VaultState;
+
+    /// Vault temporaneo NON cifrato ma già aperto (niente password richiesta
+    /// nei test): basta ad esercitare `with_conn`/`SyncMeta`, che non
+    /// dipendono dalla cifratura.
+    fn vault_temp_aperto() -> (tempfile::TempDir, VaultState) {
+        crate::embeddings_store::registra_auto_extension();
+        let dir = tempfile::tempdir().unwrap();
+        let state = VaultState::new(dir.path().to_path_buf());
+        crate::vault::vault_crea_aperto_impl(&state).unwrap();
+        (dir, state)
+    }
+
+    #[test]
+    fn sync_token_carica_impl_nessun_file_nessun_token_vault_aperto() {
+        let dir = tempfile::tempdir().unwrap();
+        let pref_state = PreferenzeState::new(dir.path().to_path_buf());
+        let (_vdir, vault) = vault_temp_aperto();
+
+        assert_eq!(super::sync_token_carica_impl(&pref_state, &vault).unwrap(), None);
+    }
+
+    #[test]
+    fn sync_token_carica_impl_vault_chiuso_senza_legacy_e_errore_pulito() {
+        let dir = tempfile::tempdir().unwrap();
+        let pref_state = PreferenzeState::new(dir.path().to_path_buf());
+        let vault = VaultState::new(dir.path().join("vault-non-aperto"));
+
+        let r = super::sync_token_carica_impl(&pref_state, &vault);
+        assert!(matches!(r, Err(PapErrore::VaultChiuso)));
+    }
+
+    #[test]
+    fn sync_token_carica_impl_ritorna_il_valore_gia_salvato_nel_vault() {
+        let dir = tempfile::tempdir().unwrap();
+        let pref_state = PreferenzeState::new(dir.path().to_path_buf());
+        let (_vdir, vault) = vault_temp_aperto();
+
+        vault
+            .with_conn(|conn| super::sync_token_salva_pure(conn, "tok-dal-vault"))
+            .unwrap();
+
+        assert_eq!(
+            super::sync_token_carica_impl(&pref_state, &vault).unwrap(),
+            Some("tok-dal-vault".to_string())
+        );
+    }
+
+    #[test]
+    fn sync_token_carica_impl_migra_token_legacy_da_preferenze_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let pref_state = PreferenzeState::new(dir.path().to_path_buf());
+        let (_vdir, vault) = vault_temp_aperto();
+
+        // Simula un preferenze.json scritto da una build precedente al
+        // fix #455, con il token ancora in chiaro.
+        std::fs::write(
+            pref_state.file_path(),
+            r#"{"sync_token":"tok-legacy-in-chiaro"}"#,
+        )
+        .unwrap();
+
+        let token = super::sync_token_carica_impl(&pref_state, &vault).unwrap();
+        assert_eq!(token, Some("tok-legacy-in-chiaro".to_string()));
+
+        // Il file deve essere ripulito...
+        let json = std::fs::read_to_string(pref_state.file_path()).unwrap();
+        assert!(!json.contains("tok-legacy-in-chiaro"));
+
+        // ...e il token vive ora nel vault.
+        let dal_vault = vault.with_conn(super::sync_token_carica_pure).unwrap();
+        assert_eq!(dal_vault, Some("tok-legacy-in-chiaro".to_string()));
+    }
+
+    #[test]
+    fn sync_token_carica_impl_migrazione_con_vault_chiuso_e_errore_pulito_file_intatto() {
+        let dir = tempfile::tempdir().unwrap();
+        let pref_state = PreferenzeState::new(dir.path().to_path_buf());
+        let vault = VaultState::new(dir.path().join("vault-non-aperto"));
+
+        std::fs::write(
+            pref_state.file_path(),
+            r#"{"sync_token":"tok-legacy-in-chiaro"}"#,
+        )
+        .unwrap();
+
+        let r = super::sync_token_carica_impl(&pref_state, &vault);
+        assert!(matches!(r, Err(PapErrore::VaultChiuso)));
+
+        // Il file NON deve essere toccato: il token resta l'unica copia
+        // esistente, si ritenta la migrazione al prossimo load a vault aperto.
+        let json = std::fs::read_to_string(pref_state.file_path()).unwrap();
+        assert!(json.contains("tok-legacy-in-chiaro"));
+    }
+
+    #[test]
+    fn sync_token_salva_impl_via_comando_richiede_vault_aperto() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = VaultState::new(dir.path().join("vault-non-aperto"));
+        let r = vault.with_conn(|conn| super::sync_token_salva_pure(conn, "x"));
+        assert!(matches!(r, Err(PapErrore::VaultChiuso)));
     }
 }

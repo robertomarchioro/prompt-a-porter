@@ -573,6 +573,8 @@ pub fn run() {
             versioning::prompt_get_history,
             versioning::prompt_rollback,
             sync::sync_applica_delta,
+            sync::sync_token_carica,
+            sync::sync_token_salva,
             audit::audit_lista,
             audit::audit_query,
             audit::audit_export_csv,
