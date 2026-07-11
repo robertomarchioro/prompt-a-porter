@@ -21,15 +21,18 @@ jobs:
             # (universal-apple-darwin = lipo di aarch64 + x86_64), così gira
             # nativo sia su Apple Silicon sia su Mac Intel. Un solo .dmg per
             # tutti; tauri-action emette entry updater sia darwin-aarch64 sia
-            # darwin-x86_64 verso lo stesso artifact. Serve avere ENTRAMBI i
-            # rust-target installati (v. campo rust-target).
+            # darwin-x86_64 verso lo stesso artifact.
+            # NB: il secondo target (x86_64) NON si installa via `rust-target`
+            # (la lista comma-separata è ignorata dall'action e finirebbe
+            # comunque sulla toolchain sbagliata) → lo aggiunge lo step
+            # dedicato "Aggiungi target x86_64" più sotto, nella dir del pin.
             # Firma Developer ID + notarizzazione avvengono QUI in CI via env
             # APPLE_* (v. step tauri-action e docs/operativo/firma-macos.md);
             # il box Windows di firma non tocca gli artifact darwin
             # (sign-release.ps1 li lascia invariati: firma Ed25519 CI valida).
             # Senza i secret APPLE_* la build esce unsigned (test pre-cert).
             args: "--target universal-apple-darwin --bundles app,dmg"
-            rust-target: "aarch64-apple-darwin,x86_64-apple-darwin"
+            rust-target: aarch64-apple-darwin
           - platform: ubuntu-22.04
             # Linux: deb + AppImage (l'AppImage alimenta anche l'updater).
             # rpm escluso di proposito: `targets: "all"` in tauri.conf.json
@@ -88,6 +91,16 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.rust-target }}
+
+      # Binario universale macOS: aggiungi x86_64 ALLA toolchain pinnata.
+      # DEVE girare in apps/client/src-tauri, dove rust-toolchain.toml
+      # (channel 1.96.0) è attivo — altrimenti il target va sulla `stable`
+      # e la build fallisce con "Target x86_64-apple-darwin is not installed".
+      # Verificato col workflow macos-smoke prima di v0.8.36.
+      - name: Aggiungi target x86_64 per il binario universale (macOS)
+        if: matrix.platform == 'macos-14'
+        working-directory: apps/client/src-tauri
+        run: rustup target add x86_64-apple-darwin
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
