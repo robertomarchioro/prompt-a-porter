@@ -45,10 +45,13 @@ jobs:
           toolchain: stable
           targets: aarch64-apple-darwin
 
-      # Il campo `targets` con lista comma-separata non installa il secondo
-      # target a questo pin dell'action → aggiungo x86_64 esplicitamente per
-      # il binario universale (aarch64 è già installato sopra).
-      - name: Aggiungi target x86_64 (universal)
+      # x86_64 per il binario universale. DEVE girare in apps/client/src-tauri:
+      # lì è attivo il pin di rust-toolchain.toml (channel 1.96.0), quindi il
+      # target viene aggiunto ALLA toolchain che la build usa davvero. Aggiunto
+      # alla root finirebbe sulla `stable` sbagliata (la build resterebbe senza
+      # x86_64 → "Target x86_64-apple-darwin is not installed").
+      - name: Aggiungi target x86_64 alla toolchain pinnata (universal)
+        working-directory: apps/client/src-tauri
         run: rustup target add x86_64-apple-darwin
 
       - name: Cache cargo
