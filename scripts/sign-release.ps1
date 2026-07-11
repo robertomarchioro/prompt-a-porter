@@ -524,15 +524,30 @@ if ($doUpdaterReSign) {
             if (Test-Path $sigPath) { Remove-Item $sigPath -Force }
 
             Write-Host "Re-sign Ed25519: $(Split-Path $file -Leaf)..."
-            $tauriArgs = @('signer', 'sign', '-f', $UpdaterPrivKey)
-            if (-not [string]::IsNullOrEmpty($UpdaterPrivKeyPassword)) {
-                $tauriArgs += @('-p', $UpdaterPrivKeyPassword)
+            # NOTA (#466): la passphrase NON viene passata come argomento
+            # CLI a `tauri` (finirebbe in chiaro nella process list, es.
+            # /proc/*/cmdline su Linux o Get-CimInstance Win32_Process su
+            # Windows). `tauri signer sign` supporta la env var
+            # TAURI_SIGNING_PRIVATE_KEY_PASSWORD (vedi `tauri signer sign
+            # --help`): la settiamo solo per il processo corrente,
+            # immediatamente prima dell'invocazione, e la rimuoviamo subito
+            # dopo nel blocco finally (mai esportata, mai loggata).
+            $tauriArgs = @('signer', 'sign', '-f', $UpdaterPrivKey, $file)
+            $tauriOutput = $null
+            $tauriExit = $null
+            try {
+                if (-not [string]::IsNullOrEmpty($UpdaterPrivKeyPassword)) {
+                    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $UpdaterPrivKeyPassword
+                }
+                # Cattura stderr (tauri scrive errori su stderr): 2>&1 li
+                # ridireziona su stdout cosi' diventano visibili.
+                $tauriOutput = & tauri @tauriArgs 2>&1
+                $tauriExit = $LASTEXITCODE
+            } finally {
+                if (Test-Path Env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) {
+                    Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+                }
             }
-            $tauriArgs += $file
-            # Cattura stderr (tauri scrive errori su stderr): 2>&1 li
-            # ridireziona su stdout cosi' diventano visibili.
-            $tauriOutput = & tauri @tauriArgs 2>&1
-            $tauriExit = $LASTEXITCODE
             if ($tauriExit -ne 0 -or -not (Test-Path $sigPath)) {
                 Write-Host ""
                 Write-Host "  [tauri output completo]:"
@@ -543,9 +558,12 @@ if ($doUpdaterReSign) {
                 Write-Host "  - Chiave $UpdaterPrivKey corrotta o non valida"
                 Write-Host "  - Tauri CLI version incompatibile (verifica: tauri -V vs sintassi 'signer sign')"
                 Write-Host ""
-                Write-Host "  Debug manuale (testa la chiave su un file dummy):"
+                Write-Host "  Debug manuale (testa la chiave su un file dummy, passphrase via env,"
+                Write-Host "  MAI come argomento -p):"
                 Write-Host "    echo test > test.txt"
-                Write-Host "    tauri signer sign -f '$UpdaterPrivKey' -p '<password>' test.txt"
+                Write-Host "    `$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = '<password>'"
+                Write-Host "    tauri signer sign -f '$UpdaterPrivKey' test.txt"
+                Write-Host "    Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
                 Write-Host ""
                 throw "tauri signer sign FALLITO per $file (exit $tauriExit)"
             }
