@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -80,12 +81,33 @@ func vaultPath() string {
 	return defaultVaultPath()
 }
 
+// readonlyDSN costruisce il DSN `file:<path>?mode=ro` per modernc/sqlite
+// tramite net/url invece dell'interpolazione diretta (`fmt.Sprintf`).
+//
+// #462 (security review, LOW): un path contenente `?` o `#` interpolato
+// alla lettera in `file:%s?mode=ro` viene interpretato da SQLite come
+// inizio della query string (o come fragment), troncando il path reale
+// e alterando i parametri — nel caso peggiore SQLite apre/crea in
+// silenzio un file diverso da quello atteso invece di fallire. `net/url`
+// percent-encoda i caratteri riservati del path prima di appendere la
+// query, così il path resta letterale qualunque carattere contenga.
+//
+// I separatori vengono normalizzati a `/` (filepath.ToSlash) perché le
+// URI SQLite richiedono sempre `/` come separatore di path, anche su
+// Windows (https://www.sqlite.org/uri.html).
+func readonlyDSN(path string) string {
+	normalizzato := filepath.ToSlash(path)
+	u := &url.URL{Path: normalizzato}
+	query := url.Values{"mode": {"ro"}}
+	return "file:" + u.EscapedPath() + "?" + query.Encode()
+}
+
 func openVault(path string) (*sql.DB, error) {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("vault non trovato: %s\nImposta PAP_VAULT_PATH o crea il vault dal client desktop", path)
 	}
 	// modernc/sqlite usa "sqlite" come driver name. Mode read-only via DSN query.
-	dsn := fmt.Sprintf("file:%s?mode=ro", path)
+	dsn := readonlyDSN(path)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("apertura vault: %w", err)
