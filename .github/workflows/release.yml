@@ -15,16 +15,21 @@ jobs:
       matrix:
         include:
           # NOTE: target Windows (NSIS + portable), Linux (deb + AppImage)
-          # e macOS (app + dmg, Apple Silicon) attivi.
+          # e macOS (app + dmg, binario UNIVERSALE arm64+x86_64) attivi.
           - platform: macos-14
-            # macOS: bundle .app + .dmg per aarch64. Firma Developer ID +
-            # notarizzazione avvengono QUI in CI via env APPLE_* (v. step
-            # tauri-action e docs/operativo/firma-macos.md); il box Windows
-            # di firma non tocca gli artifact darwin (sign-release.ps1 li
-            # lascia invariati: firma Ed25519 CI valida). Senza i secret
-            # APPLE_* la build esce unsigned (solo per test pre-cert).
-            args: "--target aarch64-apple-darwin --bundles app,dmg"
-            rust-target: aarch64-apple-darwin
+            # macOS: bundle .app + .dmg come binario UNIVERSALE
+            # (universal-apple-darwin = lipo di aarch64 + x86_64), così gira
+            # nativo sia su Apple Silicon sia su Mac Intel. Un solo .dmg per
+            # tutti; tauri-action emette entry updater sia darwin-aarch64 sia
+            # darwin-x86_64 verso lo stesso artifact. Serve avere ENTRAMBI i
+            # rust-target installati (v. campo rust-target).
+            # Firma Developer ID + notarizzazione avvengono QUI in CI via env
+            # APPLE_* (v. step tauri-action e docs/operativo/firma-macos.md);
+            # il box Windows di firma non tocca gli artifact darwin
+            # (sign-release.ps1 li lascia invariati: firma Ed25519 CI valida).
+            # Senza i secret APPLE_* la build esce unsigned (test pre-cert).
+            args: "--target universal-apple-darwin --bundles app,dmg"
+            rust-target: "aarch64-apple-darwin,x86_64-apple-darwin"
           - platform: ubuntu-22.04
             # Linux: deb + AppImage (l'AppImage alimenta anche l'updater).
             # rpm escluso di proposito: `targets: "all"` in tauri.conf.json
