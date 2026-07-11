@@ -15,15 +15,23 @@ jobs:
       matrix:
         include:
           # NOTE: target Windows (NSIS + portable), Linux (deb + AppImage)
-          # e macOS (app + dmg, Apple Silicon) attivi.
+          # e macOS (app + dmg, binario UNIVERSALE arm64+x86_64) attivi.
           - platform: macos-14
-            # macOS: bundle .app + .dmg per aarch64. Firma Developer ID +
-            # notarizzazione avvengono QUI in CI via env APPLE_* (v. step
-            # tauri-action e docs/operativo/firma-macos.md); il box Windows
-            # di firma non tocca gli artifact darwin (sign-release.ps1 li
-            # lascia invariati: firma Ed25519 CI valida). Senza i secret
-            # APPLE_* la build esce unsigned (solo per test pre-cert).
-            args: "--target aarch64-apple-darwin --bundles app,dmg"
+            # macOS: bundle .app + .dmg come binario UNIVERSALE
+            # (universal-apple-darwin = lipo di aarch64 + x86_64), così gira
+            # nativo sia su Apple Silicon sia su Mac Intel. Un solo .dmg per
+            # tutti; tauri-action emette entry updater sia darwin-aarch64 sia
+            # darwin-x86_64 verso lo stesso artifact.
+            # NB: il secondo target (x86_64) NON si installa via `rust-target`
+            # (la lista comma-separata è ignorata dall'action e finirebbe
+            # comunque sulla toolchain sbagliata) → lo aggiunge lo step
+            # dedicato "Aggiungi target x86_64" più sotto, nella dir del pin.
+            # Firma Developer ID + notarizzazione avvengono QUI in CI via env
+            # APPLE_* (v. step tauri-action e docs/operativo/firma-macos.md);
+            # il box Windows di firma non tocca gli artifact darwin
+            # (sign-release.ps1 li lascia invariati: firma Ed25519 CI valida).
+            # Senza i secret APPLE_* la build esce unsigned (test pre-cert).
+            args: "--target universal-apple-darwin --bundles app,dmg"
             rust-target: aarch64-apple-darwin
           - platform: ubuntu-22.04
             # Linux: deb + AppImage (l'AppImage alimenta anche l'updater).
@@ -83,6 +91,16 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.rust-target }}
+
+      # Binario universale macOS: aggiungi x86_64 ALLA toolchain pinnata.
+      # DEVE girare in apps/client/src-tauri, dove rust-toolchain.toml
+      # (channel 1.96.0) è attivo — altrimenti il target va sulla `stable`
+      # e la build fallisce con "Target x86_64-apple-darwin is not installed".
+      # Verificato col workflow macos-smoke prima di v0.8.36.
+      - name: Aggiungi target x86_64 per il binario universale (macOS)
+        if: matrix.platform == 'macos-14'
+        working-directory: apps/client/src-tauri
+        run: rustup target add x86_64-apple-darwin
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
@@ -156,8 +174,8 @@ jobs:
             **Linux:** la release include anche i pacchetti `.deb` e
             `.AppImage` (x86_64). L'AppImage supporta l'auto-update.
 
-            **macOS:** la release include l'app per Apple Silicon (`.dmg`),
-            firmata Developer ID e notarizzata in CI.
+            **macOS:** la release include l'app come binario universale
+            (`.dmg`, arm64 + Intel x86_64), firmata Developer ID e notarizzata in CI.
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}

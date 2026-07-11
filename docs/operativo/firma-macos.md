@@ -11,17 +11,24 @@
 ## Cosa produce la pipeline
 
 Per ogni tag `v*`, il job `macos-14` della matrix di `release.yml` builda
-`--target aarch64-apple-darwin --bundles app,dmg` e, con i secret `APPLE_*`
-presenti:
+`--target universal-apple-darwin --bundles app,dmg` (binario **universale**
+arm64+x86_64, funziona sia su Apple Silicon sia su Mac Intel) e, con i
+secret `APPLE_*` presenti:
 
 1. importa il certificato nel keychain effimero del runner;
 2. firma l'app con l'identity **Developer ID Application** (codesign);
 3. invia l'app al servizio notarile Apple e attende il responso
    (`Notarizing Finished with status Accepted` nei log — è il verdetto
    autoritativo: Gatekeeper aprirà l'app senza avvisi);
-4. carica sulla release draft: `…_aarch64.dmg`,
-   `…_aarch64.app.tar.gz` (+ `.sig` Ed25519 per l'updater) e le entry
-   `darwin-aarch64`/`darwin-aarch64-app` in `latest.json`.
+4. carica sulla release draft il `.dmg` e l'`.app.tar.gz` universali
+   (+ `.sig` Ed25519 per l'updater) e le entry `darwin-aarch64` **e**
+   `darwin-x86_64` in `latest.json` (entrambe verso lo stesso artifact,
+   così l'auto-update copre Intel e Apple Silicon).
+
+> **Storia**: fino a v0.8.35 la pipeline compilava solo `aarch64`
+> (Apple Silicon); su Mac Intel l'app veniva rifiutata con "non è
+> supportato su questo Mac". Dal fix del 2026-07-11 (v0.8.36) il target è
+> universale.
 
 Tempi: la build è ~10 min; la coda notarile Apple è variabile (dai 5 minuti
 alle ore — il primo run ha impiegato ~2h30). Non è un errore: il job aspetta.
