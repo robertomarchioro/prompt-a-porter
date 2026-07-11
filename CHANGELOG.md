@@ -13,6 +13,10 @@
 - **Passphrase di firma fuori dalla process list** (#466): la passphrase della chiave updater non è più passata come argomento della riga di comando (visibile ad altri processi via `/proc/*/cmdline` o `Win32_Process`), ma tramite variabile d'ambiente del solo processo di firma.
 - **Batch di irrigidimenti minori** (#462): password del vault minima a 12 caratteri per i nuovi vault; export dei log di debug fuori da `/tmp` e creato già con permessi `0600`; CSP con `object-src 'none'` e `base-uri 'self'`; DSN SQLite della CLI costruito in modo sicuro; `apps/cli/go.sum` versionato (lock supply-chain); `SECURITY.md` allineato alla policy "ultima release".
 
+### Manutenzione
+
+- **Aggiornamento dipendenze** (#470, #471, #483): patch/minor su tauri (2.11.5), rand (0.10.2), sha2 (0.11.0) e il gruppo npm (vite 8.1.4, CodeMirror, svelte-check, zod, tsx, tra gli altri).
+
 
 
 > Security review dell'intero progetto, risolta in 3 gruppi (client, server MCP, CI/script). La review adversariale sulle PR ha intercettato due difetti critici in cui il fix stesso non proteggeva davvero — corretti prima del merge.

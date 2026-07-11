@@ -3259,7 +3259,7 @@ dependencies = [
 
 [[package]]
 name = "pap"
-version = "0.8.34"
+version = "0.8.35"
 dependencies = [
  "argon2",
  "criterion",
