@@ -16,7 +16,12 @@ use crate::util_random::riempi_random;
 
 const SALT_LEN: usize = 16;
 const KEY_LEN: usize = 32;
-const PASSWORD_MIN_LEN: usize = 8;
+// #462 (security review, LOW): il vault è un artefatto portabile (file
+// esportabile/copiabile), quindi la password minima passa da 8 a 12
+// caratteri alla creazione. L'apertura di un vault esistente (vault_unlock)
+// NON applica questo minimo: password già create con 8+ caratteri restano
+// valide per lo sblocco.
+const PASSWORD_MIN_LEN: usize = 12;
 const ARGON2_MEMORY_KIB: u32 = 32_768; // 32 MiB
 const ARGON2_TIME_COST: u32 = 3;
 const ARGON2_PARALLELISM: u32 = 4;
@@ -803,6 +808,28 @@ mod test {
         assert!(!state.esiste());
     }
 
+    /// #462: alza il minimo da 8 a 12 — una password di 11 caratteri
+    /// (accettata prima del fix) deve ora essere rifiutata alla creazione.
+    #[test]
+    fn crea_impl_password_11_caratteri_ora_rifiutata() {
+        let (_dir, state) = vault_temp();
+        let password_11 = "a".repeat(11);
+        assert_eq!(password_11.len(), 11);
+        let r = vault_crea_impl(&password_11, &state);
+        assert!(matches!(r, Err(PapErrore::PasswordTroppoCorta)));
+        assert!(!state.esiste());
+    }
+
+    /// #462: una password di esattamente 12 caratteri è il nuovo minimo valido.
+    #[test]
+    fn crea_impl_password_12_caratteri_accettata() {
+        let (_dir, state) = vault_temp();
+        let password_12 = "a".repeat(12);
+        assert_eq!(password_12.len(), 12);
+        vault_crea_impl(&password_12, &state).unwrap();
+        assert!(state.esiste());
+    }
+
     #[test]
     fn crea_impl_happy_path() {
         let (_dir, state) = vault_temp();
@@ -848,6 +875,39 @@ mod test {
         // crea_impl deve rimuoverlo e procedere
         vault_crea_impl("password_ok_123", &state).unwrap();
         assert!(state.esiste());
+    }
+
+    /// #462: l'apertura di un vault esistente NON deve applicare il nuovo
+    /// minimo di 12 caratteri — un vault creato in passato (o via disco,
+    /// bypassando `vault_crea_impl`) con una password più corta di 8
+    /// caratteri deve continuare a sbloccarsi normalmente.
+    #[test]
+    fn unlock_impl_password_legacy_corta_di_8_caratteri_funziona() {
+        let (_dir, state) = vault_temp();
+
+        let password_legacy = "corta8ch"; // 8 caratteri, sotto il nuovo minimo
+        assert_eq!(password_legacy.len(), 8);
+
+        let salt = genera_salt().unwrap();
+        let chiave = deriva_chiave(password_legacy, &salt, 4096, 1, 1).unwrap();
+        let conn = Connection::open(state.db_path()).unwrap();
+        applica_chiave(&conn, &chiave).unwrap();
+        migrazione::esegui_migrazioni(&conn).unwrap();
+
+        let meta = VaultMeta {
+            salt_hex: bytes_a_hex(&salt),
+            db_nome: "pap-vault.db".to_string(),
+            creato_a: timestamp_iso(),
+            argon2_memory_kib: 4096,
+            argon2_time_cost: 1,
+            argon2_parallelism: 1,
+            cifrato: true,
+        };
+        salva_meta(&state.meta_path(), &meta).unwrap();
+        drop(conn);
+
+        vault_unlock_impl(password_legacy, &state).unwrap();
+        assert!(state.aperto());
     }
 
     #[test]

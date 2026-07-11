@@ -41,7 +41,7 @@ impl fmt::Display for PapErrore {
             Self::VaultGiaAperto => write!(f, "Il vault è già aperto"),
             Self::VaultNonEsiste => write!(f, "Il vault non esiste"),
             Self::PasswordErrata => write!(f, "Password errata"),
-            Self::PasswordTroppoCorta => write!(f, "La password deve avere almeno 8 caratteri"),
+            Self::PasswordTroppoCorta => write!(f, "La password deve avere almeno 12 caratteri"),
             Self::Db(_) => write!(f, "Errore interno: database non accessibile."),
             Self::Io(_) => write!(f, "Errore interno: impossibile leggere i dati del vault."),
             Self::Json(_) => write!(f, "Errore interno: dati non leggibili."),
@@ -111,7 +111,7 @@ mod test {
         assert_eq!(PapErrore::PasswordErrata.to_string(), "Password errata");
         assert_eq!(
             PapErrore::PasswordTroppoCorta.to_string(),
-            "La password deve avere almeno 8 caratteri"
+            "La password deve avere almeno 12 caratteri"
         );
     }
 

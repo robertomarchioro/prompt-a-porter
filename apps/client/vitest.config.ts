@@ -1,7 +1,11 @@
 import { defineConfig } from "vitest/config";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
 import path from "path";
 
 export default defineConfig({
+  // #462: plugin Svelte necessario per compilare i componenti .svelte
+  // importati dai test di regressione (es. DiffViewer.test.ts).
+  plugins: [svelte()],
   test: {
     include: ["src/**/*.test.ts"],
     coverage: {
@@ -31,5 +35,10 @@ export default defineConfig({
     alias: {
       $lib: path.resolve(__dirname, "src/lib"),
     },
+    // #462: forza la condizione "browser" così @sveltejs/vite-plugin-svelte
+    // compila i componenti in client-mode invece di SSR-mode sotto Vitest —
+    // altrimenti `mount()` di @testing-library/svelte fallisce con
+    // "lifecycle_function_unavailable" (mount non è disponibile server-side).
+    conditions: ["browser"],
   },
 });

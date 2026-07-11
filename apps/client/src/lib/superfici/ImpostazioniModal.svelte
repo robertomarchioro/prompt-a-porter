@@ -1274,9 +1274,9 @@
       errorePassword = "Compila vecchia e nuova password.";
       return;
     }
-    if (nuovaPassword.length < 8) {
+    if (nuovaPassword.length < 12) {
       errorePassword =
-        "La nuova password deve essere lunga almeno 8 caratteri.";
+        "La nuova password deve essere lunga almeno 12 caratteri.";
       return;
     }
     if (nuovaPassword !== confermaPassword) {
@@ -1627,7 +1627,7 @@
               />
               <input
                 type="password"
-                placeholder="Nuova password (≥ 8 caratteri)"
+                placeholder="Nuova password (≥ 12 caratteri)"
                 bind:value={nuovaPassword}
                 autocomplete="new-password"
               />
