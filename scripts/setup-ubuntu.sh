@@ -222,8 +222,24 @@ else
     fi
     read -r -p "Password per cifrare la chiave (vuoto = no password): " -s KEY_PWD
     echo ""
+    # NOTA (#466): la passphrase NON viene passata a `tauri` come
+    # argomento -p (finirebbe in chiaro in /proc/*/cmdline, leggibile da
+    # altri processi dello stesso utente). A differenza di `signer sign`,
+    # `signer generate` NON legge la password dalla env var
+    # TAURI_SIGNING_PRIVATE_KEY_PASSWORD (verificato: se settata senza -p
+    # genera silenziosamente una chiave NON protetta) — quindi qui non
+    # possiamo fare la stessa scorciatoia di sign-release.ps1. L'unica
+    # via sicura e' il prompt interattivo nativo della CLI (letto da
+    # /dev/tty, mai da argv/env): se e' stata scelta una password sopra,
+    # va reinserita quando richiesto qui sotto.
+    # Comportamento verificato su @tauri-apps/cli 2.11.x: da riverificare
+    # a ogni bump del CLI, una regressione qui genererebbe silenziosamente
+    # una chiave NON protetta.
     if [[ -n "$KEY_PWD" ]]; then
-      tauri signer generate -w "$KEY_PATH" -p "$KEY_PWD"
+      echo "[ATTENZIONE] reinserisci ESATTAMENTE la stessa passphrase digitata sopra:"
+      echo "             se differisce, chiave e keyring saranno disallineati e la firma fallira'."
+      echo "[INFO] tauri chiedera' ora la password: reinseriscila (la stessa appena digitata sopra)."
+      tauri signer generate -w "$KEY_PATH"
     else
       tauri signer generate -w "$KEY_PATH" -p ""
     fi
