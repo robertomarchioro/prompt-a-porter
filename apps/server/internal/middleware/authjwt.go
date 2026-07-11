@@ -25,9 +25,13 @@ func JwtAuth(secret []byte) func(http.Handler) http.Handler {
 			}
 
 			claims := &auth.Claims{}
+			// jwt.WithValidMethods forza l'algoritmo HS256: senza questo
+			// vincolo un token con alg="none" o firmato con un algoritmo
+			// diverso da quello atteso potrebbe bypassare la verifica
+			// (CWE-347, algorithm confusion / JWT alg=none attack).
 			token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
 				return secret, nil
-			})
+			}, jwt.WithValidMethods([]string{"HS256"}))
 			if err != nil || !token.Valid {
 				http.Error(w, `{"error":"token non valido o scaduto"}`, http.StatusUnauthorized)
 				return

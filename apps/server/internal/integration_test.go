@@ -12,18 +12,34 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/gorilla/websocket"
 
 	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/auth"
 	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/database"
-	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/middleware"
 	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/models"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/server"
 	syncpkg "github.com/robertomarchioro/prompt-a-porter/apps/server/internal/sync"
 	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/ws"
 )
 
 const testSecret = "test-secret-32-bytes-long-enough"
 
+// testServerOptions permette ai singoli test di personalizzare la
+// configurazione del router (allow-list CORS, rate-limit) senza duplicare
+// tutto il setup di setupTestServer.
+type testServerOptions struct {
+	allowedOrigins       []string
+	loginRateLimit       int
+	loginRateLimitWindow time.Duration
+}
+
 func setupTestServer(t *testing.T) (*chi.Mux, *database.DB, func()) {
+	t.Helper()
+	return setupTestServerWithOptions(t, testServerOptions{})
+}
+
+func setupTestServerWithOptions(t *testing.T, opts testServerOptions) (*chi.Mux, *database.DB, func()) {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -43,7 +59,17 @@ func setupTestServer(t *testing.T) (*chi.Mux, *database.DB, func()) {
 	}
 
 	jwtSecret := []byte(testSecret)
-	hub := ws.NewHub(jwtSecret)
+
+	loginRateLimit := opts.loginRateLimit
+	if loginRateLimit == 0 {
+		loginRateLimit = server.DefaultLoginRateLimit
+	}
+	loginRateLimitWindow := opts.loginRateLimitWindow
+	if loginRateLimitWindow == 0 {
+		loginRateLimitWindow = server.DefaultLoginRateLimitWindow
+	}
+
+	hub := ws.NewHub(jwtSecret, opts.allowedOrigins)
 
 	authH := &auth.Handler{
 		DB:        db,
@@ -56,17 +82,13 @@ func setupTestServer(t *testing.T) (*chi.Mux, *database.DB, func()) {
 		Hub: hub,
 	}
 
-	r := chi.NewRouter()
-	r.Post("/auth/login", authH.Login)
-
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.JwtAuth(jwtSecret))
-		r.Post("/auth/refresh", authH.Refresh)
-		r.Get("/sync/pull", syncH.Pull)
-		r.Post("/sync/push", syncH.Push)
+	r := server.NewRouter(authH, syncH, hub, jwtSecret, server.Config{
+		AllowedOrigins:       opts.allowedOrigins,
+		TLSAttivo:            false,
+		LoginRateLimit:       loginRateLimit,
+		LoginRateLimitWindow: loginRateLimitWindow,
+		Version:              "test",
 	})
-
-	r.Get("/ws", hub.HandleWs)
 
 	cleanup := func() {
 		db.Close()
@@ -508,5 +530,403 @@ func TestSeedAdminIdempotente(t *testing.T) {
 	db.QueryRow("SELECT COUNT(*) FROM Users WHERE Email = 'admin@test.com'").Scan(&count)
 	if count != 1 {
 		t.Fatalf("atteso 1 admin, trovati %d", count)
+	}
+}
+
+// TestSyncPushAuthorshipForzato verifica che un client non possa attribuire
+// un prompt nuovo a un utente arbitrario: l'AuthorUserId salvato e
+// restituito dal pull deve sempre essere quello autenticato che ha eseguito
+// il push, mai il valore (eventualmente spoofato) inviato nel body.
+// Regressione per #450.
+func TestSyncPushAuthorshipForzato(t *testing.T) {
+	r, db, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	login := doLogin(t, r)
+
+	var wsId string
+	db.QueryRow("SELECT WorkspaceId FROM Users WHERE Email = 'admin@test.com'").Scan(&wsId)
+
+	now := models.NowUTC()
+	pushAs(t, r, login.Token, models.SyncPushRequest{
+		Prompts: []models.Prompt{{
+			Id: "prm-spoof", WorkspaceId: wsId,
+			AuthorUserId: "usr-vittima-spoofata",
+			Title:        "Prompt con autore spoofato", Body: "x", Visibility: "workspace",
+			Version: 1, CreatedAt: now, UpdatedAt: now,
+		}},
+	})
+
+	req := httptest.NewRequest("GET", "/sync/pull?since=1970-01-01+00:00:00", nil)
+	req.Header.Set("Authorization", "Bearer "+login.Token)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	var delta models.SyncDelta
+	json.NewDecoder(rec.Body).Decode(&delta)
+
+	if len(delta.Prompts) != 1 {
+		t.Fatalf("atteso 1 prompt, ottenuti %d", len(delta.Prompts))
+	}
+	if delta.Prompts[0].AuthorUserId != login.User.Id {
+		t.Fatalf("AuthorUserId atteso %q (utente autenticato), ottenuto %q (spoofato dal client)",
+			login.User.Id, delta.Prompts[0].AuthorUserId)
+	}
+
+	var changelogAuthor string
+	err := db.QueryRow(`SELECT ChangedBy FROM SyncChangelog WHERE EntityId = 'prm-spoof' ORDER BY Id DESC LIMIT 1`).
+		Scan(&changelogAuthor)
+	if err != nil {
+		t.Fatalf("lettura changelog: %v", err)
+	}
+	if changelogAuthor != login.User.Id {
+		t.Fatalf("ChangedBy nel changelog atteso %q, ottenuto %q", login.User.Id, changelogAuthor)
+	}
+}
+
+// TestLoginRateLimitFloodRitorna429 verifica che dopo aver esaurito la
+// quota per-IP, /auth/login risponda 429 invece di continuare a validare
+// credenziali (mitigazione brute-force, #451).
+func TestLoginRateLimitFloodRitorna429(t *testing.T) {
+	r, _, cleanup := setupTestServerWithOptions(t, testServerOptions{
+		loginRateLimit:       3,
+		loginRateLimitWindow: time.Minute,
+	})
+	defer cleanup()
+
+	var lastCode int
+	for i := 0; i < 5; i++ {
+		body, _ := json.Marshal(models.LoginRequest{Email: "admin@test.com", Password: "sbagliata"})
+		req := httptest.NewRequest("POST", "/auth/login", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = "203.0.113.9:12345"
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		lastCode = rec.Code
+	}
+
+	if lastCode != http.StatusTooManyRequests {
+		t.Fatalf("dopo aver esaurito la quota atteso 429, ottenuto %d", lastCode)
+	}
+}
+
+// TestLoginRateLimitPerIpIndipendente verifica che il rate-limit sia
+// per-IP e non globale: un altro IP non deve essere penalizzato dal flood
+// generato da un primo IP.
+func TestLoginRateLimitPerIpIndipendente(t *testing.T) {
+	r, _, cleanup := setupTestServerWithOptions(t, testServerOptions{
+		loginRateLimit:       3,
+		loginRateLimitWindow: time.Minute,
+	})
+	defer cleanup()
+
+	flood := func(remoteAddr string, n int) int {
+		var code int
+		for i := 0; i < n; i++ {
+			body, _ := json.Marshal(models.LoginRequest{Email: "admin@test.com", Password: "sbagliata"})
+			req := httptest.NewRequest("POST", "/auth/login", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.RemoteAddr = remoteAddr
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+			code = rec.Code
+		}
+		return code
+	}
+
+	if got := flood("198.51.100.1:1", 5); got != http.StatusTooManyRequests {
+		t.Fatalf("primo IP: atteso 429 dopo il flood, ottenuto %d", got)
+	}
+
+	body, _ := json.Marshal(models.LoginRequest{Email: "admin@test.com", Password: "Password123!"})
+	req := httptest.NewRequest("POST", "/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "198.51.100.2:1"
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("secondo IP non deve essere penalizzato: atteso 200, ottenuto %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestLoginBodyTroppoGrandeRitorna413 verifica che http.MaxBytesReader
+// protegga /auth/login da payload enormi (#451).
+func TestLoginBodyTroppoGrandeRitorna413(t *testing.T) {
+	r, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	hugePassword := strings.Repeat("a", 2<<20) // 2 MiB, ben oltre il limite di 1 KiB
+	body, _ := json.Marshal(models.LoginRequest{Email: "admin@test.com", Password: hugePassword})
+	req := httptest.NewRequest("POST", "/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("atteso 413, ottenuto %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestSyncPushBodyTroppoGrandeRitorna413 verifica lo stesso limite su
+// /sync/push, che accetta payload più grandi ma non illimitati (#451).
+func TestSyncPushBodyTroppoGrandeRitorna413(t *testing.T) {
+	r, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	login := doLogin(t, r)
+
+	hugeBody := models.Prompt{
+		Id: "prm-huge", WorkspaceId: "ws", AuthorUserId: "usr",
+		Title: "x", Body: strings.Repeat("a", 11<<20), Visibility: "workspace",
+		Version: 1, CreatedAt: models.NowUTC(), UpdatedAt: models.NowUTC(),
+	}
+	data, _ := json.Marshal(models.SyncPushRequest{Prompts: []models.Prompt{hugeBody}})
+	req := httptest.NewRequest("POST", "/sync/push", bytes.NewReader(data))
+	req.Header.Set("Authorization", "Bearer "+login.Token)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("atteso 413, ottenuto %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestLoginUtenteInesistenteTempoEquivalente verifica che il ramo "utente
+// non trovato" esegua comunque una verifica Argon2id (equalizzazione dei
+// tempi, #451): non è un test di timing rigoroso (fragile in CI), ma
+// verifica che il comportamento funzionale resti 401 e che l'hash dummy sia
+// effettivamente valido (VerifyPassword non deve panicare/errare).
+func TestLoginUtenteInesistenteTempoEquivalente(t *testing.T) {
+	r, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	body, _ := json.Marshal(models.LoginRequest{Email: "fantasma@test.com", Password: "qualsiasi-password-lunga-a-piacere"})
+	req := httptest.NewRequest("POST", "/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("atteso 401, ottenuto %d", rec.Code)
+	}
+}
+
+// TestHealthNonEspornClientCount verifica che /health non esponga più il
+// conteggio dei client WebSocket connessi senza autenticazione (parte
+// server di #462).
+func TestHealthNonEspornClientCount(t *testing.T) {
+	r, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("atteso 200, ottenuto %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "clients") {
+		t.Fatalf("/health non deve esporre il conteggio client: %s", rec.Body.String())
+	}
+}
+
+// TestSecurityHeadersPresenti verifica che il middleware di sicurezza
+// aggiunga gli header di difesa in profondità su tutte le risposte (parte
+// server di #462).
+func TestSecurityHeadersPresenti(t *testing.T) {
+	r, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("X-Content-Type-Options atteso nosniff, ottenuto %q", got)
+	}
+	if got := rec.Header().Get("X-Frame-Options"); got != "DENY" {
+		t.Fatalf("X-Frame-Options atteso DENY, ottenuto %q", got)
+	}
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Fatalf("HSTS non deve essere impostato quando il server non serve TLS direttamente, ottenuto %q", got)
+	}
+}
+
+// TestCorsOriginNonInAllowListRifiutata verifica che una origin non
+// autorizzata non riceva l'header Access-Control-Allow-Origin (#452).
+func TestCorsOriginNonInAllowListRifiutata(t *testing.T) {
+	r, _, cleanup := setupTestServerWithOptions(t, testServerOptions{
+		allowedOrigins: []string{"https://app.autorizzata.example.com"},
+	})
+	defer cleanup()
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	req.Header.Set("Origin", "https://evil.example.com")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("origin non autorizzata non deve ricevere Access-Control-Allow-Origin, ottenuto %q", got)
+	}
+}
+
+// TestCorsOriginInAllowListAccettata verifica il percorso positivo: una
+// origin nella allow-list riceve l'header CORS corrispondente (#452).
+func TestCorsOriginInAllowListAccettata(t *testing.T) {
+	r, _, cleanup := setupTestServerWithOptions(t, testServerOptions{
+		allowedOrigins: []string{"https://app.autorizzata.example.com"},
+	})
+	defer cleanup()
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	req.Header.Set("Origin", "https://app.autorizzata.example.com")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://app.autorizzata.example.com" {
+		t.Fatalf("origin autorizzata deve ricevere Access-Control-Allow-Origin, ottenuto %q", got)
+	}
+}
+
+// TestJwtAlgNoneRifiutato verifica che un token con alg="none" (o firmato
+// con un algoritmo diverso da HS256) sia rifiutato sia dal middleware HTTP
+// sia dall'handshake WebSocket (jwt.WithValidMethods, CWE-347).
+func TestJwtAlgNoneRifiutato(t *testing.T) {
+	r, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	claims := jwt.MapClaims{
+		"userId":      "usr-attaccante",
+		"workspaceId": "ws-vittima",
+		"role":        "Admin",
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodNone, claims)
+	tokenStr, err := token.SignedString(jwt.UnsafeAllowNoneSignatureType)
+	if err != nil {
+		t.Fatalf("errore firma token alg=none: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/sync/pull", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenStr)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("token alg=none deve essere rifiutato: atteso 401, ottenuto %d", rec.Code)
+	}
+}
+
+// wsDial apre una connessione WebSocket verso il path indicato di un
+// httptest.Server, passando il token secondo la strategia richiesta.
+func wsDialWithHeader(t *testing.T, wsURL, token string) (*websocket.Conn, *http.Response, error) {
+	t.Helper()
+	header := http.Header{}
+	header.Set("Sec-WebSocket-Protocol", token)
+	return websocket.DefaultDialer.Dial(wsURL, header)
+}
+
+// TestWsTokenViaSecWebSocketProtocol verifica il percorso di autenticazione
+// raccomandato via header Sec-WebSocket-Protocol (#453).
+func TestWsTokenViaSecWebSocketProtocol(t *testing.T) {
+	r, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	login := doLogin(t, r)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+
+	conn, resp, err := wsDialWithHeader(t, wsURL, login.Token)
+	if err != nil {
+		t.Fatalf("connessione WS con token via header fallita: %v (status %v)", err, resp)
+	}
+	defer conn.Close()
+}
+
+// TestWsTokenMancanteRifiutato verifica che senza alcun token la richiesta
+// di upgrade venga rifiutata con 401 (#453).
+func TestWsTokenMancanteRifiutato(t *testing.T) {
+	r, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+
+	_, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err == nil {
+		t.Fatal("connessione senza token doveva fallire")
+	}
+	if resp == nil || resp.StatusCode != http.StatusUnauthorized {
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		t.Fatalf("atteso 401, ottenuto %d", status)
+	}
+}
+
+// TestWsOrigineNonConsentitaRifiutata verifica che CheckOrigin rifiuti
+// l'handshake da una origin browser non presente nella allow-list (#453).
+func TestWsOrigineNonConsentitaRifiutata(t *testing.T) {
+	r, _, cleanup := setupTestServerWithOptions(t, testServerOptions{
+		allowedOrigins: []string{"https://app.autorizzata.example.com"},
+	})
+	defer cleanup()
+
+	login := doLogin(t, r)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+
+	header := http.Header{}
+	header.Set("Sec-WebSocket-Protocol", login.Token)
+	header.Set("Origin", "https://evil.example.com")
+
+	_, resp, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err == nil {
+		t.Fatal("connessione da origin non autorizzata doveva fallire")
+	}
+	if resp == nil || resp.StatusCode != http.StatusForbidden {
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		t.Fatalf("atteso 403 (CheckOrigin), ottenuto %d", status)
+	}
+}
+
+// TestWsMessaggioOversizeChiudeConnessione verifica che conn.SetReadLimit
+// faccia chiudere la connessione quando il client invia un messaggio oltre
+// il limite consentito (#453).
+func TestWsMessaggioOversizeChiudeConnessione(t *testing.T) {
+	r, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	login := doLogin(t, r)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+
+	conn, _, err := wsDialWithHeader(t, wsURL, login.Token)
+	if err != nil {
+		t.Fatalf("connessione WS fallita: %v", err)
+	}
+	defer conn.Close()
+
+	oversize := make([]byte, 8192) // > maxWsMessageBytes (4096)
+	if err := conn.WriteMessage(websocket.TextMessage, oversize); err != nil {
+		t.Fatalf("scrittura messaggio oversize fallita lato client: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_, _, err = conn.ReadMessage()
+	if err == nil {
+		t.Fatal("il server doveva chiudere la connessione per messaggio oltre il limite")
 	}
 }

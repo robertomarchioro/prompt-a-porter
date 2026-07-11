@@ -9,16 +9,18 @@ import (
 	"os"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	chiMiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
-
 	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/auth"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/config"
 	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/database"
-	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/middleware"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/server"
 	syncHandler "github.com/robertomarchioro/prompt-a-porter/apps/server/internal/sync"
 	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/ws"
 )
+
+// minJwtSecretBytes è la lunghezza minima accettata per PAP_JWT_SECRET: un
+// segreto HMAC più corto è vulnerabile a brute-force offline e rende i JWT
+// falsificabili (CWE-326, Inadequate Encryption Strength).
+const minJwtSecretBytes = 32
 
 func main() {
 	port := envOr("PAP_PORT", "8443")
@@ -27,6 +29,15 @@ func main() {
 	adminPassword := os.Getenv("PAP_ADMIN_PASSWORD")
 	wsName := envOr("PAP_WORKSPACE_NAME", "Team")
 	jwtSecret := jwtSecretFromEnv()
+
+	certPath := os.Getenv("PAP_TLS_CERT")
+	keyPath := os.Getenv("PAP_TLS_KEY")
+	behindProxy := os.Getenv("PAP_BEHIND_PROXY") == "1"
+
+	mode, err := decideServeMode(certPath, keyPath, behindProxy)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	db, err := database.Open(dbPath)
 	if err != nil {
@@ -44,7 +55,8 @@ func main() {
 		}
 	}
 
-	hub := ws.NewHub(jwtSecret)
+	allowedOrigins := config.AllowedOriginsFromEnv()
+	hub := ws.NewHub(jwtSecret, allowedOrigins)
 
 	authHandler := &auth.Handler{
 		DB:        db,
@@ -57,38 +69,25 @@ func main() {
 		Hub: hub,
 	}
 
-	r := chi.NewRouter()
-
-	r.Use(chiMiddleware.Recoverer)
-	r.Use(middleware.Logger)
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Authorization", "Content-Type"},
-		ExposedHeaders:   []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
-
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","version":"0.1.0","clients":%d}`, hub.ClientCount())
+	r := server.NewRouter(authHandler, syncH, hub, jwtSecret, server.Config{
+		AllowedOrigins:       allowedOrigins,
+		TLSAttivo:            mode == serveModeTLS,
+		LoginRateLimit:       server.DefaultLoginRateLimit,
+		LoginRateLimitWindow: server.DefaultLoginRateLimitWindow,
+		Version:              "0.1.0",
 	})
 
-	r.Post("/auth/login", authHandler.Login)
+	log.Printf("PaP Sync Server avviato su :%s (modalità: %s)", port, mode)
 
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.JwtAuth(jwtSecret))
-
-		r.Post("/auth/refresh", authHandler.Refresh)
-		r.Get("/sync/pull", syncH.Pull)
-		r.Post("/sync/push", syncH.Push)
-	})
-
-	r.Get("/ws", hub.HandleWs)
-
-	log.Printf("PaP Sync Server avviato su :%s", port)
-	if err := http.ListenAndServe(":"+port, r); err != nil {
+	switch mode {
+	case serveModeTLS:
+		err = http.ListenAndServeTLS(":"+port, certPath, keyPath, r)
+	case serveModeProxyHTTP:
+		log.Printf("ATTENZIONE: server avviato in HTTP semplice (PAP_BEHIND_PROXY=1): " +
+			"assicurati che il reverse proxy davanti termini il TLS")
+		err = http.ListenAndServe(":"+port, r)
+	}
+	if err != nil {
 		log.Fatalf("Errore server: %v", err)
 	}
 }
@@ -102,12 +101,62 @@ func envOr(key, fallback string) string {
 
 func jwtSecretFromEnv() []byte {
 	secret := os.Getenv("PAP_JWT_SECRET")
-	if secret != "" {
-		return []byte(secret)
+	if secret == "" {
+		b := make([]byte, minJwtSecretBytes)
+		rand.Read(b)
+		generated := hex.EncodeToString(b)
+		log.Printf("ATTENZIONE: PAP_JWT_SECRET non impostato, generato casualmente (non persistente tra riavvii)")
+		return []byte(generated)
 	}
-	b := make([]byte, 32)
-	rand.Read(b)
-	generated := hex.EncodeToString(b)
-	log.Printf("ATTENZIONE: PAP_JWT_SECRET non impostato, generato casualmente (non persistente tra riavvii)")
-	return []byte(generated)
+
+	if err := validateJwtSecret(secret); err != nil {
+		log.Fatal(err)
+	}
+	return []byte(secret)
+}
+
+func validateJwtSecret(secret string) error {
+	if len(secret) < minJwtSecretBytes {
+		return fmt.Errorf(
+			"PAP_JWT_SECRET troppo corto (%d byte, minimo %d): un segreto debole rende i JWT falsificabili via brute-force",
+			len(secret), minJwtSecretBytes)
+	}
+	return nil
+}
+
+// serveMode descrive come il server accetta connessioni in ingresso.
+type serveMode string
+
+const (
+	// serveModeTLS: il server termina TLS direttamente con PAP_TLS_CERT /
+	// PAP_TLS_KEY.
+	serveModeTLS serveMode = "TLS diretto"
+	// serveModeProxyHTTP: il server gira in HTTP semplice perché un
+	// reverse proxy davanti (nginx/traefik/...) termina il TLS.
+	serveModeProxyHTTP serveMode = "HTTP dietro reverse proxy"
+)
+
+// decideServeMode determina la modalità di ascolto del server, rifiutando
+// di default l'avvio in HTTP in chiaro esposto direttamente (CWE-319,
+// Cleartext Transmission of Sensitive Information: qui transitano
+// credenziali e JWT). Il server accetta HTTP semplice solo se l'operatore
+// dichiara esplicitamente che un reverse proxy davanti termina il TLS
+// (PAP_BEHIND_PROXY=1).
+func decideServeMode(certPath, keyPath string, behindProxy bool) (serveMode, error) {
+	hasCert := certPath != ""
+	hasKey := keyPath != ""
+
+	if hasCert != hasKey {
+		return "", fmt.Errorf("configurazione TLS incompleta: PAP_TLS_CERT e PAP_TLS_KEY vanno impostate entrambe o nessuna delle due")
+	}
+	if hasCert && hasKey {
+		return serveModeTLS, nil
+	}
+	if behindProxy {
+		return serveModeProxyHTTP, nil
+	}
+	return "", fmt.Errorf(
+		"nessun certificato TLS configurato (PAP_TLS_CERT/PAP_TLS_KEY) e PAP_BEHIND_PROXY non impostato a 1: " +
+			"il server rifiuta di avviarsi in HTTP in chiaro esposto direttamente. " +
+			"Configura TLS oppure imposta PAP_BEHIND_PROXY=1 se un reverse proxy termina TLS davanti al server")
 }

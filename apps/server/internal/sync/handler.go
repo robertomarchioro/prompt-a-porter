@@ -8,9 +8,15 @@ import (
 
 	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/auth"
 	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/database"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/httpx"
 	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/models"
 	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/ws"
 )
+
+// maxPushBodyBytes limita il body di /sync/push: un delta di sync può
+// contenere molti prompt/tag, ma 10 MiB coprono ampiamente l'uso reale e
+// impediscono a un client di esaurire memoria del server (CWE-400).
+const maxPushBodyBytes = 10 << 20 // 10 MiB
 
 type Handler struct {
 	DB  *database.DB
@@ -124,8 +130,7 @@ func (h *Handler) Push(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.SyncPushRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"richiesta non valida"}`, http.StatusBadRequest)
+	if !httpx.DecodeJSONLimited(w, r, maxPushBodyBytes, &req, `{"error":"richiesta non valida"}`) {
 		return
 	}
 
@@ -202,20 +207,31 @@ func (h *Handler) pushDelta(workspaceId, userId string, req *models.SyncPushRequ
 			continue
 		}
 		var existingUpdated sql.NullString
-		err := tx.QueryRow("SELECT UpdatedAt FROM Prompts WHERE Id = ?", p.Id).Scan(&existingUpdated)
+		var existingAuthor sql.NullString
+		err := tx.QueryRow("SELECT UpdatedAt, AuthorUserId FROM Prompts WHERE Id = ?", p.Id).
+			Scan(&existingUpdated, &existingAuthor)
 		if err == sql.ErrNoRows {
+			// L'autore di un prompt nuovo è sempre l'utente autenticato che
+			// esegue il push, mai il valore fornito dal client: senza
+			// questo un client malevolo potrebbe attribuire la paternità a
+			// un altro utente (authorship spoofing, CWE-290 Authentication
+			// Bypass by Assuming a Trusted Role). Anche il changelog deve
+			// riportare l'autore corretto, non quello del client.
+			inserted := p
+			inserted.AuthorUserId = userId
 			_, err = tx.Exec(`INSERT INTO Prompts
 				(Id, WorkspaceId, AuthorUserId, Title, Description, Body, Visibility,
 				 TargetModel, IsFavorite, UseCount, LastUsedAt, Version,
 				 CreatedAt, UpdatedAt, UpdatedByUserId, DeletedAt)
 				VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-				p.Id, workspaceId, p.AuthorUserId, p.Title, p.Description, p.Body,
-				p.Visibility, p.TargetModel, p.IsFavorite, p.UseCount, p.LastUsedAt,
-				p.Version, p.CreatedAt, now, userId, p.DeletedAt)
+				inserted.Id, workspaceId, inserted.AuthorUserId, inserted.Title, inserted.Description, inserted.Body,
+				inserted.Visibility, inserted.TargetModel, inserted.IsFavorite, inserted.UseCount, inserted.LastUsedAt,
+				inserted.Version, inserted.CreatedAt, now, userId, inserted.DeletedAt)
 			if err != nil {
 				return 0, 0, err
 			}
 			accepted++
+			h.logChange(tx, workspaceId, "prompt", inserted.Id, "upsert", inserted, userId)
 		} else if err == nil {
 			if existingUpdated.String >= p.UpdatedAt {
 				conflicts++
@@ -233,11 +249,16 @@ func (h *Handler) pushDelta(workspaceId, userId string, req *models.SyncPushRequ
 				return 0, 0, err
 			}
 			accepted++
+
+			// L'update non modifica AuthorUserId in DB (non è nella SET
+			// sopra): il changelog deve riflettere l'autore reale esistente,
+			// non quello (eventualmente spoofato) inviato dal client.
+			logged := p
+			logged.AuthorUserId = existingAuthor.String
+			h.logChange(tx, workspaceId, "prompt", logged.Id, "upsert", logged, userId)
 		} else {
 			return 0, 0, err
 		}
-
-		h.logChange(tx, workspaceId, "prompt", p.Id, "upsert", p, userId)
 	}
 
 	for _, pt := range req.PromptTags {
