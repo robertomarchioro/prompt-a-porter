@@ -1,8 +1,45 @@
+use rusqlite::{Connection, OptionalExtension};
 use serde::Deserialize;
 use tauri::State;
 
 use crate::errore::PapErrore;
 use crate::vault::VaultState;
+
+/// Fix #455: unico workspace supportato oggi (coerente con `ws-personale`
+/// usato in tutto il resto del backend, vedi `libreria::assicura_dati_base`).
+/// `SyncMeta` è per-workspace (PK `WorkspaceId`) in previsione di un
+/// eventuale multi-workspace futuro, ma finché esiste un solo workspace
+/// personale il token vive tutto in questa riga.
+const WORKSPACE_ID_DEFAULT: &str = "ws-personale";
+
+/// Fix #455 (security review MEDIUM): legge il `sync_token` dal vault
+/// cifrato (tabella `SyncMeta`, schema V001, mai usata prima d'ora) invece
+/// che da `preferenze.json` in chiaro. `None` se non è mai stato
+/// configurato nessun token, o se il valore salvato è una stringa vuota.
+pub(crate) fn sync_token_carica_pure(conn: &Connection) -> Result<Option<String>, PapErrore> {
+    let token: Option<Option<String>> = conn
+        .query_row(
+            "SELECT LastSyncToken FROM SyncMeta WHERE WorkspaceId = ?1",
+            [WORKSPACE_ID_DEFAULT],
+            |r| r.get::<_, Option<String>>(0),
+        )
+        .optional()?;
+    Ok(token.flatten().filter(|t| !t.is_empty()))
+}
+
+/// Fix #455: salva/aggiorna il `sync_token` nel vault cifrato. Upsert sulla
+/// riga `SyncMeta` del workspace personale — non esiste ancora nessun
+/// comando che la crei, quindi il primo salvataggio la inserisce.
+/// `token` vuoto è un caso d'uso legittimo: rappresenta un logout esplicito
+/// (ripulisce il valore salvato senza eliminare la riga).
+pub(crate) fn sync_token_salva_pure(conn: &Connection, token: &str) -> Result<(), PapErrore> {
+    conn.execute(
+        "INSERT INTO SyncMeta (WorkspaceId, LastSyncToken) VALUES (?1, ?2)
+         ON CONFLICT(WorkspaceId) DO UPDATE SET LastSyncToken = excluded.LastSyncToken",
+        rusqlite::params![WORKSPACE_ID_DEFAULT, token],
+    )?;
+    Ok(())
+}
 
 #[derive(Debug, Deserialize)]
 pub struct SyncDelta {
@@ -295,5 +332,60 @@ mod test {
             .query_row("SELECT COUNT(*) FROM PromptTags", [], |r| r.get(0))
             .unwrap();
         assert_eq!(count, 1, "INSERT OR IGNORE non deve duplicare");
+    }
+
+    // ─────────── Fix #455: sync_token nel vault (SyncMeta) ───────────
+
+    #[test]
+    fn sync_token_carica_pure_nessun_token_torna_none() {
+        let conn = db_test();
+        assert_eq!(super::sync_token_carica_pure(&conn).unwrap(), None);
+    }
+
+    #[test]
+    fn sync_token_salva_e_carica_pure_roundtrip() {
+        let conn = db_test();
+        super::sync_token_salva_pure(&conn, "tok-abc123").unwrap();
+        assert_eq!(
+            super::sync_token_carica_pure(&conn).unwrap(),
+            Some("tok-abc123".to_string())
+        );
+    }
+
+    #[test]
+    fn sync_token_salva_pure_upsert_sovrascrive() {
+        let conn = db_test();
+        super::sync_token_salva_pure(&conn, "vecchio").unwrap();
+        super::sync_token_salva_pure(&conn, "nuovo").unwrap();
+        assert_eq!(
+            super::sync_token_carica_pure(&conn).unwrap(),
+            Some("nuovo".to_string())
+        );
+        let righe: i64 = conn
+            .query_row("SELECT COUNT(*) FROM SyncMeta", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(righe, 1, "upsert non deve duplicare la riga");
+    }
+
+    #[test]
+    fn sync_token_salva_pure_stringa_vuota_pulisce() {
+        let conn = db_test();
+        super::sync_token_salva_pure(&conn, "tok-da-cancellare").unwrap();
+        super::sync_token_salva_pure(&conn, "").unwrap();
+        assert_eq!(super::sync_token_carica_pure(&conn).unwrap(), None);
+    }
+
+    #[test]
+    fn sync_token_salva_pure_scrive_sul_workspace_personale() {
+        let conn = db_test();
+        super::sync_token_salva_pure(&conn, "tok-riservato").unwrap();
+        let workspace_id: String = conn
+            .query_row(
+                "SELECT WorkspaceId FROM SyncMeta WHERE LastSyncToken = 'tok-riservato'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(workspace_id, "ws-personale");
     }
 }

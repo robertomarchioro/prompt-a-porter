@@ -87,11 +87,38 @@ function aggiornaStato(partial: Partial<SyncState>) {
   notifica();
 }
 
+/**
+ * Fix #455 (security review MEDIUM): il server di sync riceve password
+ * di login e token — mai in chiaro sulla rete. Accettiamo solo `https://`.
+ * Non esiste un concetto di "dev mode" nel client (a differenza, per
+ * esempio, dei provider AI locali come Ollama in `provider_ai.rs`, che
+ * girano legittimamente in `http://localhost`): il server di sync è
+ * sempre remoto, quindi nessuna eccezione per localhost/http qui.
+ */
+export function validaServerUrl(url: string): void {
+  const messaggio =
+    "L'URL del server di sync deve iniziare con https:// (connessione cifrata obbligatoria).";
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(messaggio);
+  }
+  if (parsed.protocol !== "https:") {
+    throw new Error(messaggio);
+  }
+}
+
+function messaggioErrore(e: unknown): string {
+  return e instanceof Error ? e.message : "Errore sconosciuto";
+}
+
 export async function syncLogin(
   serverUrl: string,
   email: string,
   password: string,
 ): Promise<{ token: string; user: { id: string; displayName: string; role: string } }> {
+  validaServerUrl(serverUrl);
   const url = serverUrl.replace(/\/+$/, "");
   const res = await fetch(`${url}/auth/login`, {
     method: "POST",
@@ -109,6 +136,11 @@ export async function syncLogin(
 }
 
 export async function syncConfigura(config: SyncConfig) {
+  // Fix #455: rifiuta config con serverUrl non-https PRIMA di salvarla o
+  // usarla, con un messaggio utente chiaro invece di un fetch/WS falliti
+  // silenziosamente più avanti.
+  validaServerUrl(config.serverUrl);
+
   _config = config;
 
   await invoke("preferenze_salva", {
@@ -131,6 +163,12 @@ export async function syncAvvia(config: SyncConfig) {
     aggiornaStato({ stato: "non_configurato" });
     return;
   }
+  try {
+    validaServerUrl(config.serverUrl);
+  } catch (e) {
+    aggiornaStato({ stato: "error", errore: messaggioErrore(e) });
+    return;
+  }
   aggiornaStato({ stato: "idle", errore: null });
   avviaPolling(config.intervalloSec);
   connettiWs();
@@ -149,6 +187,16 @@ export async function syncOra() {
 async function eseguiSync() {
   if (!_config) return;
   if (_stato.stato === "syncing") return;
+
+  // Fix #455: ultima linea di difesa prima del fetch — anche se tutti gli
+  // ingressi validano già l'URL, `_config` può restare popolato da una
+  // chiamata precedente e questa funzione gira anche dal timer di polling.
+  try {
+    validaServerUrl(_config.serverUrl);
+  } catch (e) {
+    aggiornaStato({ stato: "error", errore: messaggioErrore(e) });
+    return;
+  }
 
   aggiornaStato({ stato: "syncing" });
 
@@ -200,16 +248,43 @@ function fermaPolling() {
   }
 }
 
+/**
+ * Fix #455: prefisso del sub-protocollo WebSocket usato per veicolare il
+ * token — la API `WebSocket` del browser non permette header custom, il
+ * secondo parametro del costruttore (`Sec-WebSocket-Protocol`) è l'unico
+ * canale disponibile per farlo senza metterlo in query string.
+ */
+const WS_PROTOCOLLO_TOKEN_PREFIX = "pap.sync.token.";
+
 function connettiWs() {
   chiudiWs();
   if (!_config?.serverUrl || !_config?.token) return;
 
-  const wsUrl = _config.serverUrl
-    .replace(/\/+$/, "")
-    .replace(/^http/, "ws");
+  // Fix #455: niente WS verso un serverUrl non validato (coerente con
+  // fetch()/syncLogin — vedi validaServerUrl).
+  try {
+    validaServerUrl(_config.serverUrl);
+  } catch {
+    return;
+  }
+
+  const wsUrl = _config.serverUrl.replace(/\/+$/, "").replace(/^https/, "wss");
 
   try {
-    _ws = new WebSocket(`${wsUrl}/ws?token=${_config.token}`);
+    // Fix #455 (security review MEDIUM): il token non deve mai finire in
+    // query string (log del server/proxy, history del browser). Lo
+    // inviamo come sub-protocollo via `Sec-WebSocket-Protocol` (secondo
+    // argomento di `WebSocket`).
+    //
+    // TODO(#453): il fallback `?token=` in query string resta SOLO finché
+    // il server (apps/server/internal/ws/hub.go, branch
+    // fix/sync-server-hardening) non legge il token da
+    // Sec-WebSocket-Protocol — serve a non rompere la connessione durante
+    // la finestra in cui questa PR e quella lato server non sono ancora
+    // entrambe mergiate. Da rimuovere quando #453 è chiuso.
+    _ws = new WebSocket(`${wsUrl}/ws?token=${encodeURIComponent(_config.token)}`, [
+      `${WS_PROTOCOLLO_TOKEN_PREFIX}${_config.token}`,
+    ]);
 
     _ws.onmessage = (event) => {
       try {

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::errore::PapErrore;
+use crate::vault::VaultState;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Preferenze {
@@ -19,6 +20,14 @@ pub struct Preferenze {
     pub sync_server_url: String,
     #[serde(default)]
     pub sync_email: String,
+    /// Fix #455: NON deve mai essere persistito in chiaro in
+    /// preferenze.json. Il valore "vero" vive nel vault cifrato
+    /// (`SyncMeta.LastSyncToken`, vedi `sync::sync_token_carica_pure` /
+    /// `sync::sync_token_salva_pure`). Il campo resta nella struct per
+    /// compatibilità con l'API esistente verso il frontend (`preferenze_carica`
+    /// / `preferenze_salva`): i comandi Tauri (non le funzioni `_pure` qui
+    /// sotto, usate anche nei test) lo instradano da/verso il vault e lo
+    /// azzerano SEMPRE prima di scrivere su disco.
     #[serde(default)]
     pub sync_token: String,
     #[serde(default = "default_sync_intervallo")]
@@ -187,10 +196,10 @@ pub fn salva_pure(data_dir: &Path, preferenze: &Preferenze) -> Result<(), PapErr
     let json = serde_json::to_string_pretty(preferenze)?;
     let path = data_dir.join("preferenze.json");
     fs::write(&path, json)?;
-    // SECURITY: preferenze.json contiene `sync_token` in chiaro. Su Unix
-    // restringiamo i permessi a 0600 (solo owner) per ridurre l'esposizione
-    // su sistemi multi-utente. Su Windows l'AppData è già per-utente.
-    // TODO: spostare i segreti nel keychain OS (crate `keyring`).
+    // SECURITY: manteniamo comunque i permessi 0600 su Unix come difesa in
+    // profondità, anche se dal fix #455 `sync_token` non è più il segreto
+    // in chiaro che c'era qui (spostato nel vault cifrato, vedi comando
+    // `preferenze_salva`). Su Windows l'AppData è già per-utente.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -202,15 +211,85 @@ pub fn salva_pure(data_dir: &Path, preferenze: &Preferenze) -> Result<(), PapErr
 }
 
 #[tauri::command]
-pub fn preferenze_carica(state: State<'_, PreferenzeState>) -> Result<Preferenze, PapErrore> {
-    carica_pure(&state.file_path())
+pub fn preferenze_carica(
+    state: State<'_, PreferenzeState>,
+    vault: State<'_, VaultState>,
+) -> Result<Preferenze, PapErrore> {
+    preferenze_carica_impl(&state, &vault)
+}
+
+/// Fix #455: logica testabile di `preferenze_carica`. Oltre a leggere
+/// `preferenze.json`, gestisce il `sync_token`:
+/// - se il file contiene ancora un token legacy in chiaro (build
+///   precedenti a questo fix) E il vault è aperto, lo migra subito nel
+///   vault (`SyncMeta.LastSyncToken`) e riscrive il file senza il segreto
+///   (migrazione one-shot, best-effort: se il vault è chiuso il file resta
+///   intatto e si riprova al prossimo load a vault aperto);
+/// - altrimenti, se il vault è aperto, popola `sync_token` con il valore
+///   corrente letto dal vault (il file su disco non lo contiene più).
+///   A vault chiuso il campo torna vuoto: nessun segreto disponibile senza
+///   sbloccare, comportamento pulito invece di un errore che romperebbe
+///   il caricamento di TUTTE le altre preferenze.
+pub(crate) fn preferenze_carica_impl(
+    state: &PreferenzeState,
+    vault: &VaultState,
+) -> Result<Preferenze, PapErrore> {
+    let path = state.file_path();
+    let mut prefs = carica_pure(&path)?;
+
+    if !prefs.sync_token.is_empty() {
+        let token_legacy = std::mem::take(&mut prefs.sync_token);
+        if vault
+            .with_conn(|conn| crate::sync::sync_token_salva_pure(conn, &token_legacy))
+            .is_ok()
+        {
+            // `prefs.sync_token` è già vuoto qui: il file scritto adesso
+            // non contiene più il segreto in chiaro.
+            salva_pure(&state.data_dir, &prefs)?;
+        }
+        // Il chiamante riceve comunque il valore corrente (vive nel vault
+        // se la migrazione è riuscita, altrimenti è rimasto nel file: il
+        // vault era chiuso, si riprova al prossimo load a vault aperto).
+        prefs.sync_token = token_legacy;
+    } else if let Ok(Some(token)) = vault.with_conn(crate::sync::sync_token_carica_pure) {
+        prefs.sync_token = token;
+    }
+
+    Ok(prefs)
 }
 
 #[tauri::command]
 pub fn preferenze_salva(
     preferenze: Preferenze,
     state: State<'_, PreferenzeState>,
+    vault: State<'_, VaultState>,
 ) -> Result<(), PapErrore> {
+    preferenze_salva_impl(preferenze, &state, &vault)
+}
+
+/// Fix #455: logica testabile di `preferenze_salva`. Il `sync_token`
+/// ricevuto dal chiamante NON viene mai scritto su `preferenze.json`:
+/// - se non vuoto (nuovo login/token aggiornato), va salvato nel vault
+///   cifrato — richiede il vault aperto, altrimenti errore pulito
+///   (`PapErrore::VaultChiuso`) PRIMA di toccare il disco, così un
+///   salvataggio fallito non perde né il token né le altre preferenze;
+/// - se vuoto (es. logout esplicito, o semplicemente nessun token nella
+///   chiamata corrente), il tentativo di ripulire il vault è best-effort:
+///   non blocchiamo il salvataggio di preferenze non correlate (tema,
+///   editor, ...) solo perché il vault è chiuso in quel momento.
+pub(crate) fn preferenze_salva_impl(
+    mut preferenze: Preferenze,
+    state: &PreferenzeState,
+    vault: &VaultState,
+) -> Result<(), PapErrore> {
+    let token = std::mem::take(&mut preferenze.sync_token);
+
+    if !token.is_empty() {
+        vault.with_conn(|conn| crate::sync::sync_token_salva_pure(conn, &token))?;
+    } else {
+        let _ = vault.with_conn(|conn| crate::sync::sync_token_salva_pure(conn, &token));
+    }
+
     salva_pure(&state.data_dir, &preferenze)
 }
 
@@ -370,5 +449,140 @@ mod test {
         assert_eq!(prefs.ricerca_alpha, 0.5);
         assert_eq!(prefs.idle_unload_secondi, 300);
         assert!(prefs.updater_abilitato);
+    }
+
+    // ─────────── Fix #455: sync_token instradato verso il vault ───────────
+
+    /// Vault temporaneo NON cifrato ma già aperto (niente password richiesta
+    /// nei test): basta ad esercitare `with_conn`/`SyncMeta`, che non
+    /// dipendono dalla cifratura.
+    fn vault_temp_aperto() -> (tempfile::TempDir, VaultState) {
+        crate::embeddings_store::registra_auto_extension();
+        let dir = tempfile::tempdir().unwrap();
+        let state = VaultState::new(dir.path().to_path_buf());
+        crate::vault::vault_crea_aperto_impl(&state).unwrap();
+        (dir, state)
+    }
+
+    #[test]
+    fn preferenze_salva_impl_con_token_su_vault_aperto_va_nel_vault_non_su_disco() {
+        let dir = tempfile::tempdir().unwrap();
+        let pref_state = PreferenzeState::new(dir.path().to_path_buf());
+        let (_vdir, vault) = vault_temp_aperto();
+
+        let mut prefs = Preferenze::default();
+        prefs.sync_token = "tok-segreto".to_string();
+        preferenze_salva_impl(prefs, &pref_state, &vault).unwrap();
+
+        // Il file su disco non deve MAI contenere il token in chiaro.
+        let json = fs::read_to_string(pref_state.file_path()).unwrap();
+        assert!(!json.contains("tok-segreto"));
+
+        // Il valore vero vive nel vault.
+        let dal_vault = vault.with_conn(crate::sync::sync_token_carica_pure).unwrap();
+        assert_eq!(dal_vault, Some("tok-segreto".to_string()));
+    }
+
+    #[test]
+    fn preferenze_salva_impl_con_token_su_vault_chiuso_e_errore_pulito() {
+        let dir = tempfile::tempdir().unwrap();
+        let pref_state = PreferenzeState::new(dir.path().to_path_buf());
+        let vault = VaultState::new(dir.path().join("vault-non-aperto"));
+
+        let mut prefs = Preferenze::default();
+        prefs.sync_token = "tok-segreto".to_string();
+        let r = preferenze_salva_impl(prefs, &pref_state, &vault);
+        assert!(matches!(r, Err(PapErrore::VaultChiuso)));
+
+        // Nessuna scrittura su disco: né il token né il resto delle
+        // preferenze devono essere persistiti se il salvataggio fallisce.
+        assert!(!pref_state.file_path().exists());
+    }
+
+    #[test]
+    fn preferenze_salva_impl_senza_token_su_vault_chiuso_non_fallisce() {
+        // Salvare tema/tono/editor con vault chiuso deve continuare a
+        // funzionare: nessun nuovo segreto da proteggere, non è
+        // responsabilità di questo comando forzare l'unlock del vault.
+        let dir = tempfile::tempdir().unwrap();
+        let pref_state = PreferenzeState::new(dir.path().to_path_buf());
+        let vault = VaultState::new(dir.path().join("vault-non-aperto"));
+
+        let mut prefs = Preferenze::default();
+        prefs.tema = "light".to_string();
+        preferenze_salva_impl(prefs, &pref_state, &vault).unwrap();
+
+        let letto = carica_pure(&pref_state.file_path()).unwrap();
+        assert_eq!(letto.tema, "light");
+        assert_eq!(letto.sync_token, "");
+    }
+
+    #[test]
+    fn preferenze_carica_impl_ripopola_sync_token_dal_vault_se_aperto() {
+        let dir = tempfile::tempdir().unwrap();
+        let pref_state = PreferenzeState::new(dir.path().to_path_buf());
+        let (_vdir, vault) = vault_temp_aperto();
+
+        vault
+            .with_conn(|conn| crate::sync::sync_token_salva_pure(conn, "tok-dal-vault"))
+            .unwrap();
+        salva_pure(&dir.path().to_path_buf(), &Preferenze::default()).unwrap();
+
+        let prefs = preferenze_carica_impl(&pref_state, &vault).unwrap();
+        assert_eq!(prefs.sync_token, "tok-dal-vault");
+    }
+
+    #[test]
+    fn preferenze_carica_impl_vault_chiuso_torna_token_vuoto() {
+        let dir = tempfile::tempdir().unwrap();
+        let pref_state = PreferenzeState::new(dir.path().to_path_buf());
+        let vault = VaultState::new(dir.path().join("vault-non-aperto"));
+        salva_pure(&dir.path().to_path_buf(), &Preferenze::default()).unwrap();
+
+        let prefs = preferenze_carica_impl(&pref_state, &vault).unwrap();
+        assert_eq!(prefs.sync_token, "");
+    }
+
+    #[test]
+    fn preferenze_carica_impl_migra_token_legacy_da_file_a_vault() {
+        let dir = tempfile::tempdir().unwrap();
+        let pref_state = PreferenzeState::new(dir.path().to_path_buf());
+        let (_vdir, vault) = vault_temp_aperto();
+
+        // Simula un preferenze.json scritto da una build precedente al fix
+        // #455, con il token ancora in chiaro sul file.
+        let mut legacy = Preferenze::default();
+        legacy.sync_token = "tok-legacy-in-chiaro".to_string();
+        salva_pure(&dir.path().to_path_buf(), &legacy).unwrap();
+
+        let prefs = preferenze_carica_impl(&pref_state, &vault).unwrap();
+        assert_eq!(prefs.sync_token, "tok-legacy-in-chiaro");
+
+        // Il file deve essere stato ripulito: il token non c'è più in chiaro.
+        let json = fs::read_to_string(pref_state.file_path()).unwrap();
+        assert!(!json.contains("tok-legacy-in-chiaro"));
+
+        // ...e vive ora nel vault.
+        let dal_vault = vault.with_conn(crate::sync::sync_token_carica_pure).unwrap();
+        assert_eq!(dal_vault, Some("tok-legacy-in-chiaro".to_string()));
+    }
+
+    #[test]
+    fn preferenze_carica_impl_migrazione_rimandata_se_vault_chiuso() {
+        let dir = tempfile::tempdir().unwrap();
+        let pref_state = PreferenzeState::new(dir.path().to_path_buf());
+        let vault = VaultState::new(dir.path().join("vault-non-aperto"));
+
+        let mut legacy = Preferenze::default();
+        legacy.sync_token = "tok-legacy-in-chiaro".to_string();
+        salva_pure(&dir.path().to_path_buf(), &legacy).unwrap();
+
+        // Vault chiuso: la migrazione non può avvenire ora. Il caricamento
+        // NON deve fallire (le altre preferenze restano leggibili) e il
+        // token resta nel file, in attesa del prossimo load a vault aperto.
+        let prefs = preferenze_carica_impl(&pref_state, &vault).unwrap();
+        assert_eq!(prefs.sync_token, "tok-legacy-in-chiaro");
+        let json = fs::read_to_string(pref_state.file_path()).unwrap();
+        assert!(json.contains("tok-legacy-in-chiaro"));
     }
 }
