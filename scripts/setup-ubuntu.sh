@@ -232,7 +232,12 @@ else
     # via sicura e' il prompt interattivo nativo della CLI (letto da
     # /dev/tty, mai da argv/env): se e' stata scelta una password sopra,
     # va reinserita quando richiesto qui sotto.
+    # Comportamento verificato su @tauri-apps/cli 2.11.x: da riverificare
+    # a ogni bump del CLI, una regressione qui genererebbe silenziosamente
+    # una chiave NON protetta.
     if [[ -n "$KEY_PWD" ]]; then
+      echo "[ATTENZIONE] reinserisci ESATTAMENTE la stessa passphrase digitata sopra:"
+      echo "             se differisce, chiave e keyring saranno disallineati e la firma fallira'."
       echo "[INFO] tauri chiedera' ora la password: reinseriscila (la stessa appena digitata sopra)."
       tauri signer generate -w "$KEY_PATH"
     else

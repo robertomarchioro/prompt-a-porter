@@ -532,12 +532,25 @@ if ($doUpdaterReSign) {
             # --help`): la settiamo solo per il processo corrente,
             # immediatamente prima dell'invocazione, e la rimuoviamo subito
             # dopo nel blocco finally (mai esportata, mai loggata).
+            # Se $UpdaterPrivKeyPassword e' vuota (nessuna password risolta
+            # dalla precedenza -UpdaterPrivKeyPassword/DPAPI, righe 96-132),
+            # NON basta "non settare" la env: se nel processo e' gia'
+            # presente un residuo (es. legacy User-scope pre-#446, o settata
+            # a mano nella sessione corrente) `tauri` la userebbe in
+            # silenzio, bypassando la precedenza risolta sopra. Va rimossa
+            # esplicitamente in quel caso.
             $tauriArgs = @('signer', 'sign', '-f', $UpdaterPrivKey, $file)
             $tauriOutput = $null
             $tauriExit = $null
             try {
                 if (-not [string]::IsNullOrEmpty($UpdaterPrivKeyPassword)) {
                     $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $UpdaterPrivKeyPassword
+                } elseif (Test-Path Env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) {
+                    # Non lasciare che un residuo (legacy User-scope o
+                    # settato a mano nella sessione) venga usato
+                    # implicitamente da tauri quando la password risolta
+                    # e' intenzionalmente vuota.
+                    Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
                 }
                 # Cattura stderr (tauri scrive errori su stderr): 2>&1 li
                 # ridireziona su stdout cosi' diventano visibili.
