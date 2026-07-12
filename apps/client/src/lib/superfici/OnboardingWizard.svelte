@@ -11,6 +11,7 @@
   import StrengthMeter from "$lib/components/StrengthMeter.svelte";
   import HotkeyInput from "$lib/components/HotkeyInput.svelte";
   import Modale from "$lib/components/Modale.svelte";
+  import { nomeOS } from "$lib/util/os";
   import demoVault from "../../../../../docs/demo/demo-vault.json";
 
   // Forma del risultato di vault_import_json (mirrors import_export.rs::ImportReport).
@@ -35,7 +36,7 @@
   // #404: nome del vault scelto dall'utente, mostrato nello switcher in alto.
   let nomeVault = $state("Personale");
   let creaPromptEsempio = $state(true);
-  // Issue #282: avvio automatico con Windows — OFF di default.
+  // Issue #282: avvio automatico con l'OS — OFF di default.
   let avvioAutomatico = $state(false);
   let avvioPortable = $state(false);
   // Issue #269: tema light di default al primo avvio.
@@ -382,15 +383,15 @@
         {#if !avvioPortable}
           <div class="avvio-automatico">
             <div class="esempio-testo">
-              <strong class="esempio-titolo">Avvia con Windows</strong>
+              <strong class="esempio-titolo">Avvia con {nomeOS}</strong>
               <p class="subtle">
-                Prompt a Porter parte in background all'avvio del PC — la hotkey
-                è subito disponibile. Puoi disattivarlo in Impostazioni.
+                Prompt a Porter parte in background all'avvio del computer — la
+                hotkey è subito disponibile. Puoi disattivarlo in Impostazioni.
               </p>
             </div>
             <Switch
               bind:attivo={avvioAutomatico}
-              etichetta="Avvia automaticamente con Windows"
+              etichetta="Avvia automaticamente con {nomeOS}"
               privato
             />
           </div>
