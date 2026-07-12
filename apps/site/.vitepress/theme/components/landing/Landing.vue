@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import LaunchRibbon from './LaunchRibbon.vue'
 import TopBar from './TopBar.vue'
 import HeroStage from './HeroStage.vue'
 import ShowcaseCarousel from './ShowcaseCarousel.vue'
@@ -12,7 +11,6 @@ import SiteFooter from './SiteFooter.vue'
 
 <template>
   <div class="pap-landing">
-    <LaunchRibbon />
     <TopBar />
     <main>
       <HeroStage />

@@ -404,25 +404,6 @@
 .pap-landing .card.cc-blue .swatch { background: linear-gradient(52deg, rgba(255,255,255,.22), transparent 26%, rgba(255,255,255,.12) 58%, transparent 78%), linear-gradient(135deg, #6e84cc, #33457a); }
 .pap-landing .card.cc-blue .swatch::after { background: repeating-linear-gradient(52deg, rgba(255,255,255,.05) 0 11px, rgba(0,0,0,.06) 11px 22px); opacity: .5; }
 
-/* launch ribbon — nuova stagione */
-.pap-landing .ribbon { position: relative; z-index: 6; background: linear-gradient(90deg, #17151f, #221c3a 42%, #2a2140 58%, #17151f); border-bottom: 1px solid var(--line); }
-.pap-landing .ribbon .rin { max-width: 1240px; margin: 0 auto; padding: 11px 80px; display: flex; align-items: center; gap: 18px; font-size: 13px; }
-.pap-landing .ribbon .flag { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: #15121c; background: var(--amber-soft); border-radius: 100px; padding: 4px 11px; flex: none; font-weight: 600; }
-.pap-landing .ribbon .msg { color: #e6e2f0; flex: 1; min-width: 0; }
-.pap-landing .ribbon .msg b { color: #fff; font-weight: 600; }
-.pap-landing .ribbon .msg .code { font-family: "Newsreader", serif; font-style: italic; color: var(--violet-br); }
-.pap-landing .ribbon .msg .sep { color: var(--faint-txt); margin: 0 9px; }
-.pap-landing .ribbon .go { font-size: 12.5px; color: var(--amber-soft); white-space: nowrap; transition: .2s; flex: none; }
-.pap-landing .ribbon .go:hover { color: #fff; }
-/* su schermi stretti la frase lunga lascia il posto alla versione corta */
-.pap-landing .ribbon .msg-s { display: none; color: #e6e2f0; white-space: nowrap; }
-.pap-landing .ribbon .msg-s .code { font-family: "Newsreader", serif; font-style: italic; color: var(--violet-br); }
-@media (max-width: 900px) {
-  .pap-landing .ribbon .rin { padding: 9px 16px; gap: 10px; justify-content: center; flex-wrap: wrap; row-gap: 5px; }
-  .pap-landing .ribbon .msg { display: none; }
-  .pap-landing .ribbon .msg-s { display: inline; }
-}
-
 /* season debut — Arioso Atelier v1.0 */
 .pap-landing .season { position: relative; overflow: hidden; border-top: 1px solid var(--line); background: radial-gradient(120% 80% at 82% 0%, rgba(132,112,213,.16), transparent 55%), var(--bg); }
 .pap-landing .season .sin { max-width: 1240px; margin: 0 auto; padding: 104px 80px; display: grid; grid-template-columns: 0.94fr 1.06fr; gap: 72px; align-items: center; }
