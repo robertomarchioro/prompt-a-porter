@@ -2,8 +2,10 @@
 import ShowcaseCarousel from './ShowcaseCarousel.vue'
 import { GITHUB, RELEASES } from './links'
 import { useNomeOsVisitatore } from './os'
+import { useLinkDownload } from './download'
 
 const osNome = useNomeOsVisitatore()
+const linkDownload = useLinkDownload()
 </script>
 
 <template>
@@ -15,7 +17,7 @@ const osNome = useNomeOsVisitatore()
       <p class="sub">La tua collezione di prompt AI. Versionati, su misura, <b>a un tasto di distanza</b> — ovunque tu stia scrivendo.</p>
 
       <div class="hero-cta">
-        <a class="btn btn-primary" :href="RELEASES"><span class="ico">{{ osNome === 'Windows' ? '⊞' : '↓' }}</span> {{ osNome ? `Scarica per ${osNome}` : "Scarica l'app" }}</a>
+        <a class="btn btn-primary" :href="linkDownload"><span class="ico">{{ osNome === 'Windows' ? '⊞' : '↓' }}</span> {{ osNome ? `Scarica per ${osNome}` : "Scarica l'app" }}</a>
         <a class="btn btn-ghost" :href="GITHUB">Vedi su GitHub</a>
         <a class="alt" :href="RELEASES">Altre piattaforme →</a>
       </div>

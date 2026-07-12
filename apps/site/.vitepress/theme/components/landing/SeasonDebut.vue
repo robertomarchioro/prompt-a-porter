@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { RELEASES } from './links'
 import { useNomeOsVisitatore } from './os'
+import { useLinkDownload } from './download'
 
 const osNome = useNomeOsVisitatore()
+const linkDownload = useLinkDownload()
 </script>
 
 <template>
@@ -17,7 +18,7 @@ const osNome = useNomeOsVisitatore()
         </div>
         <p class="lede">Il capo era ancora <em>in cucitura</em>. Con la 1.0 l'ago si posa: Prompt-à-porter smette di essere in beta e apre la sua prima stagione in negozio.</p>
         <div class="scta">
-          <a class="b1" :href="RELEASES">{{ osNome ? `Scarica la 1.0 per ${osNome}` : 'Scarica la 1.0' }}</a>
+          <a class="b1" :href="linkDownload">{{ osNome ? `Scarica la 1.0 per ${osNome}` : 'Scarica la 1.0' }}</a>
           <span class="note">gratis · local-first · AGPL 3.0</span>
         </div>
       </div>

@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { withBase } from 'vitepress'
 import { AUTHOR, DOCS, GITHUB, ISSUES, LICENSE, RELEASES } from './links'
 import { useNomeOsVisitatore } from './os'
+import { useLinkDownload } from './download'
 
 const osNome = useNomeOsVisitatore()
+const linkDownload = useLinkDownload()
 </script>
 
 <template>
@@ -10,9 +13,9 @@ const osNome = useNomeOsVisitatore()
     <div class="ft-in">
       <div class="ft-top">
         <div class="ft-brand">
-          <div class="ft-mark"><span class="mk serif">P</span><span class="nm">Prompt-à-porter</span></div>
+          <div class="ft-mark"><img class="mk" :src="withBase('/icons/icon-64.png')" alt="" width="30" height="30" /><span class="nm">Prompt-à-porter</span></div>
           <p class="ft-tag">La tua collezione di prompt AI. <em>Pronti da indossare.</em></p>
-          <div class="ft-cta"><a class="p" :href="RELEASES">{{ osNome ? `Scarica per ${osNome}` : "Scarica l'app" }}</a><a class="g" :href="GITHUB">Vedi su GitHub</a></div>
+          <div class="ft-cta"><a class="p" :href="linkDownload">{{ osNome ? `Scarica per ${osNome}` : "Scarica l'app" }}</a><a class="g" :href="GITHUB">Vedi su GitHub</a></div>
         </div>
         <nav class="ft-col">
           <h4>La collezione</h4>

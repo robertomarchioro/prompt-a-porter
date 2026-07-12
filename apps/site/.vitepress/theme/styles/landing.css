@@ -38,7 +38,7 @@
 /* topbar */
 .pap-landing .topbar { display: flex; align-items: center; justify-content: space-between; padding: 30px 80px; max-width: 1240px; margin: 0 auto; position: relative; z-index: 5; }
 .pap-landing .brand { display: flex; align-items: center; gap: 13px; }
-.pap-landing .brand .mk { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(150deg, var(--violet), #6e56cf); display: flex; align-items: center; justify-content: center; font-family: "Newsreader", serif; font-size: 18px; color: #fff; box-shadow: 0 0 24px rgba(132,112,213,.5); }
+.pap-landing .brand .mk { width: 30px; height: 30px; border-radius: 8px; display: block; box-shadow: 0 0 24px rgba(132,112,213,.5); }
 .pap-landing .brand .nm { font-family: "Newsreader", serif; font-size: 19px; letter-spacing: .01em; }
 .pap-landing .nav { display: flex; gap: 34px; align-items: center; }
 .pap-landing .nav a { font-size: 13px; color: var(--muted); transition: color .18s; }
@@ -430,7 +430,7 @@
 .pap-landing .footer .ft-in { max-width: 1240px; margin: 0 auto; padding: 78px 80px 0; }
 .pap-landing .ft-top { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 48px; }
 .pap-landing .ft-brand .ft-mark { display: flex; align-items: center; gap: 12px; }
-.pap-landing .ft-brand .ft-mark .mk { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(150deg, var(--violet), #6e56cf); display: flex; align-items: center; justify-content: center; font-family: "Newsreader", serif; font-size: 18px; color: #fff; box-shadow: 0 0 24px rgba(132,112,213,.4); }
+.pap-landing .ft-brand .ft-mark .mk { width: 30px; height: 30px; border-radius: 8px; display: block; box-shadow: 0 0 24px rgba(132,112,213,.4); }
 .pap-landing .ft-brand .ft-mark .nm { font-family: "Newsreader", serif; font-size: 21px; letter-spacing: .01em; }
 .pap-landing .ft-brand .ft-tag { font-family: "Newsreader", serif; font-weight: 300; font-size: 20px; line-height: 1.4; color: #cfcbd8; margin-top: 22px; max-width: 330px; }
 .pap-landing .ft-brand .ft-tag em { font-style: italic; color: var(--violet-br); }
