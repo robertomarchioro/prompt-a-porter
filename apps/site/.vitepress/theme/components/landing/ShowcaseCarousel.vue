@@ -32,6 +32,11 @@ const CAPS = [
   'Tema chiaro o scuro — <b>abito da giorno o da sera</b>, la collezione è sempre la stessa.',
 ]
 
+// U+FE0E forza la presentazione testuale: senza, Safari iOS renderizza
+// ▶ come emoji blu (screenshot in docs/roadmap/website/ux).
+const ICONA_PLAY = '▶︎'
+const ICONA_PAUSA = '❙❙'
+
 const DUR_MS = [4200, 5400, 5400, 5400, 5400, 5400]
 const TICK_MS = 100
 const CAP_FADE_MS = 200
@@ -163,7 +168,7 @@ onBeforeUnmount(() => {
         :aria-label="playing ? 'Metti in pausa la vetrina' : 'Riavvia la vetrina'"
         :aria-pressed="!playing"
         @click="togglePlay"
-      >{{ playing ? '❙❙' : '▶' }}</button>
+      >{{ playing ? ICONA_PAUSA : ICONA_PLAY }}</button>
       <div class="tabline">
         <button
           v-for="(scene, k) in SCENES"
