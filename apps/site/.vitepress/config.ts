@@ -69,7 +69,14 @@ export default defineConfig({
   // docs/index.md (head per-pagina), NON qui — l'head globale finirebbe
   // iniettato su ogni pagina di documentazione.
   head: [
-    ["link", { rel: "icon", href: "/prompt-a-porter/favicon.ico" }],
+    // Icone { P } definitive (palette viola) — asset in docs/public/icons/,
+    // copiati dal handoff docs/roadmap/icons/violet/. Il site.webmanifest ha
+    // path relativi: i file devono restare tutti nella stessa cartella.
+    ["link", { rel: "icon", href: "/prompt-a-porter/icons/favicon.ico", sizes: "any" }],
+    ["link", { rel: "icon", type: "image/png", sizes: "32x32", href: "/prompt-a-porter/icons/icon-32.png" }],
+    ["link", { rel: "icon", type: "image/png", sizes: "16x16", href: "/prompt-a-porter/icons/icon-16.png" }],
+    ["link", { rel: "apple-touch-icon", sizes: "180x180", href: "/prompt-a-porter/icons/apple-touch-icon.png" }],
+    ["link", { rel: "manifest", href: "/prompt-a-porter/icons/site.webmanifest" }],
     ["meta", { name: "theme-color", content: "#646cff" }],
   ],
 
