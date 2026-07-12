@@ -1,36 +1,32 @@
-# Icone Prompt a Porter
+# Icone Prompt-à-porter
 
-Glifo: **Lucide `braces`** (ISC license, compatibile GPL 2.0).
-Icona app: braces bianche su sfondo ambra con gradiente.
+Segno: **`{ P }`** — graffe del prompt (JetBrains Mono, opacità 72%) che
+vestono la P couture (Newsreader serif), su squircle viola con gradiente
+`#8470D5 → #6E56CF`. Asset definitivi dal handoff design in
+`docs/roadmap/icons/` (palette `violet/`, la primaria).
 
-## Sorgenti SVG
+## Provenienza dei file
 
-- `app-icon.svg` — Icona app 1024×1024 (sfondo ambra + braces bianche)
-- `tray-icon.svg` — Icona tray 32×32 (monocromatica, sfondo trasparente)
+- `32x32.png`, `128x128.png`, `128x128@2x.png`, `icon.png`, `icon.icns`,
+  `icon.ico` — copiati **così come sono** da
+  `docs/roadmap/icons/violet/tauri/` (rasterizzazioni finali con
+  centratura ottica; non rigenerarli).
+- `64x64.png`, `Square*Logo.png`, `StoreLogo.png`, `android/`, `ios/` —
+  generati con `pnpm tauri icon docs/roadmap/icons/violet/icon-1024.png`
+  dalla stessa sorgente 1024.
 
-## Generare i PNG
-
-### Metodo 1: Tool HTML (consigliato)
-
-1. Apri `genera-icone.html` nel browser
-2. Clicca "Scarica" su ogni dimensione per salvare i PNG
-3. Salva `icon.png` (1024×1024) in questa directory
-
-### Metodo 2: Tauri CLI
-
-Dopo aver ottenuto `icon.png` (1024×1024):
+## Rigenerare (solo i derivati)
 
 ```bash
-pnpm tauri icon icons/icon.png
+cd apps/client
+pnpm tauri icon ../../docs/roadmap/icons/violet/icon-1024.png
+# poi ricopiare sopra i 6 file finali da docs/roadmap/icons/violet/tauri/
 ```
 
-Genera automaticamente: `32x32.png`, `128x128.png`, `128x128@2x.png`, `icon.icns`, `icon.ico`.
+## Note
 
-## File necessari
-
-- `icon.png` — 1024×1024 sorgente
-- `32x32.png` — tray icon / favicon
-- `128x128.png` — icona app
-- `128x128@2x.png` — icona app retina
-- `icon.icns` — macOS
-- `icon.ico` — Windows
+- La tray icon usa a runtime l'icona di default della finestra
+  (compilata da `bundle.icon` in tauri.conf.json): nessun asset
+  dedicato.
+- Per i dettagli di design (token, costruzione del segno, palette ambra
+  alternativa) vedi `docs/roadmap/icons/README.md`.
