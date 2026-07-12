@@ -8,8 +8,11 @@ import SceneImport from './scenes/SceneImport.vue'
 import SceneWardrobe from './scenes/SceneWardrobe.vue'
 
 // Vincoli dall'handoff: autoplay con setInterval (rAF si ferma nei tab in
-// background), switch scena via display (classe .on), pausa su hover,
-// niente autoplay con prefers-reduced-motion (navigazione manuale attiva).
+// background), switch scena via display (classe .on), niente autoplay con
+// prefers-reduced-motion (navigazione manuale attiva).
+// Handoff UX Fix 5A: l'auto-avanzamento si ferma DEFINITIVAMENTE alla prima
+// interazione (hover/focus/tocco) e riparte solo dal play esplicito;
+// controlli pausa/play + contatore "n/6" + puntini di posizione.
 const SCENES = [
   { component: SceneCmdk, tab: 'La palette' },
   { component: SceneLibrary, tab: 'La libreria' },
@@ -34,16 +37,15 @@ const TICK_MS = 100
 const CAP_FADE_MS = 200
 
 const current = ref(0)
-// Pausa autoplay sia su hover (mouse) sia su focus (tastiera — WCAG 2.2.2).
-const hovered = ref(false)
-const focused = ref(false)
-const paused = computed(() => hovered.value || focused.value)
+const reduceMotion = ref(false)
+// Stop permanente su prima interazione; il play esplicito lo revoca.
+const userStopped = ref(false)
+const playing = computed(() => !reduceMotion.value && !userStopped.value)
 const progressPct = ref(0)
 const capHtml = ref(CAPS[0])
 const capVisible = ref(true)
 
 let elapsedMs = 0
-let reduceMotion = false
 let reduceMq: MediaQueryList | undefined
 let tickTimer: ReturnType<typeof setInterval> | undefined
 let capTimer: ReturnType<typeof setTimeout> | undefined
@@ -67,9 +69,8 @@ function restart(): void {
   clearInterval(tickTimer)
   elapsedMs = 0
   progressPct.value = 0
-  if (reduceMotion) return
+  if (!playing.value) return
   tickTimer = setInterval(() => {
-    if (paused.value) return
     elapsedMs += TICK_MS
     const frac = Math.min(elapsedMs / DUR_MS[current.value], 1)
     progressPct.value = frac * 100
@@ -77,14 +78,54 @@ function restart(): void {
   }, TICK_MS)
 }
 
-function onReduceMotionChange(event: MediaQueryListEvent): void {
-  reduceMotion = event.matches
+function ferma(): void {
+  if (userStopped.value) return
+  userStopped.value = true
+  clearInterval(tickTimer)
+  progressPct.value = 0
+}
+
+function togglePlay(): void {
+  userStopped.value = !userStopped.value
   restart()
+}
+
+// Il focusin ferma l'autoplay, MA non quando arriva dal bottone play:
+// su click del mouse focusin precede click, e ferma() + togglePlay()
+// si annullerebbero a vicenda (il "pausa" non pauserebbe mai).
+function onFocusIn(event: FocusEvent): void {
+  const target = event.target as HTMLElement | null
+  if (target?.classList.contains('sc-play')) return
+  ferma()
+}
+
+function onReduceMotionChange(event: MediaQueryListEvent): void {
+  reduceMotion.value = event.matches
+  restart()
+}
+
+// Swipe orizzontale su mobile (handoff UX Fix 1). Soglia 40px per non
+// confondere lo scroll verticale con il cambio scena.
+const SWIPE_MIN_PX = 40
+let touchStartX = 0
+let touchStartY = 0
+
+function onTouchStart(event: TouchEvent): void {
+  ferma()
+  touchStartX = event.changedTouches[0].clientX
+  touchStartY = event.changedTouches[0].clientY
+}
+
+function onTouchEnd(event: TouchEvent): void {
+  const dx = event.changedTouches[0].clientX - touchStartX
+  const dy = event.changedTouches[0].clientY - touchStartY
+  if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy)) return
+  go(current.value + (dx < 0 ? 1 : -1))
 }
 
 onMounted(() => {
   reduceMq = window.matchMedia('(prefers-reduced-motion: reduce)')
-  reduceMotion = reduceMq.matches
+  reduceMotion.value = reduceMq.matches
   reduceMq.addEventListener('change', onReduceMotionChange)
   restart()
 })
@@ -97,8 +138,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="showcase" id="come-funziona" @focusin="focused = true" @focusout="focused = false">
-    <div class="viewport" @mouseenter="hovered = true" @mouseleave="hovered = false">
+  <div class="showcase" id="come-funziona" @focusin="onFocusIn">
+    <div
+      class="viewport"
+      @mouseenter="ferma"
+      @touchstart.passive="onTouchStart"
+      @touchend.passive="onTouchEnd"
+    >
       <div
         v-for="(scene, k) in SCENES"
         :key="scene.tab"
@@ -111,6 +157,13 @@ onBeforeUnmount(() => {
 
     <div class="sc-controls">
       <button class="sc-arrow" type="button" aria-label="Scena precedente" @click="go(current - 1)">‹</button>
+      <button
+        class="sc-arrow sc-play"
+        type="button"
+        :aria-label="playing ? 'Metti in pausa la vetrina' : 'Riavvia la vetrina'"
+        :aria-pressed="!playing"
+        @click="togglePlay"
+      >{{ playing ? '❙❙' : '▶' }}</button>
       <div class="tabline">
         <button
           v-for="(scene, k) in SCENES"
@@ -122,9 +175,22 @@ onBeforeUnmount(() => {
           v-text="scene.tab"
         ></button>
       </div>
+      <span class="sc-count" aria-live="polite">{{ current + 1 }} / {{ SCENES.length }}</span>
       <button class="sc-arrow" type="button" aria-label="Scena successiva" @click="go(current + 1)">›</button>
     </div>
-    <div class="sc-progress"><i :style="{ width: progressPct + '%' }"></i></div>
+    <div class="sc-dots" role="group" aria-label="Posizione nella vetrina">
+      <button
+        v-for="(scene, k) in SCENES"
+        :key="scene.tab"
+        class="sc-dot"
+        :class="{ on: k === current }"
+        type="button"
+        :aria-current="k === current || undefined"
+        :aria-label="`Vai alla scena ${k + 1}: ${scene.tab}`"
+        @click="go(k)"
+      ></button>
+    </div>
+    <div class="sc-progress" :class="{ still: !playing }"><i :style="{ width: progressPct + '%' }"></i></div>
     <p class="sc-cap" :style="{ opacity: capVisible ? 1 : 0 }" v-html="capHtml"></p>
   </div>
 </template>

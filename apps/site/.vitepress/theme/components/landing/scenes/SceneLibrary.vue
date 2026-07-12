@@ -4,7 +4,7 @@
     In produzione va sostituito con uno screenshot/registrazione reale dell'app.
     v-pre: i token {{…}} sono testo letterale, non interpolazioni Vue.
   -->
-  <div class="appwin">
+  <div class="appwin only-desktop">
     <div class="a-title">
       <div class="l"><span class="pp serif">P</span><span class="tt">Prompt a Porter</span><span class="ver">v1.0 Arioso Atelier</span></div>
       <div class="r"><span>◐</span><span>?</span><span>⚙</span></div>
@@ -76,5 +76,18 @@
       <div class="l"><span class="dot"></span>vault locale<span>· Riassumi articolo in N punti</span></div>
       <div class="r"><span>salvato 2m fa</span><span class="kb">Ctrl+Shift+P</span><span>cerca</span></div>
     </div>
+  </div>
+
+  <!-- Variante mobile (≤900px, handoff UX Fix 1): la finestra 4-colonne
+       non si scala — al suo posto una card verticale con l'essenza della
+       libreria, testo ≥ 13px e righe da 44px. -->
+  <div class="m-lib only-mobile">
+    <div class="mh">La tua libreria</div>
+    <div class="msr">⌕ Cerca prompt, tag o azione…</div>
+    <div class="mrow on"><div><div class="mnm">Riassumi articolo in N punti</div><div class="mmeta">privato · v7 · usato 31×</div></div><span class="mstar">★</span></div>
+    <div class="mrow"><div><div class="mnm">Commit message da diff</div><div class="mmeta">privato · v4</div></div></div>
+    <div class="mrow"><div><div class="mnm">Email professionale parametrica</div><div class="mmeta">privato · v9</div></div><span class="mstar">★</span></div>
+    <div class="mrow"><div><div class="mnm">Code review strutturata</div><div class="mmeta">composto · v6</div></div></div>
+    <div class="mfoot"><span class="dot"></span>17 prompt · vault locale, niente cloud</div>
   </div>
 </template>
