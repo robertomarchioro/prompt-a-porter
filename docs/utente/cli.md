@@ -1,91 +1,103 @@
-# CLI `pap` — Reference
+# La CLI `pap`
 
-> Come cercare, leggere e compilare prompt dal vault direttamente da terminale con la CLI `pap`. **Stato**: Beta (Fase 2 Step 8), read-only.
+> Come cercare, leggere e compilare i prompt del vault direttamente dal terminale con la CLI `pap`, in sola lettura.
 
-`pap` è il CLI di Prompt a Porter per cercare, leggere e compilare prompt dal vault locale direttamente da terminale. Single binary, multipiattaforma, zero dipendenze runtime.
+Il vault non vive solo dentro l'app. Se passi la giornata nel terminale — script, pipe, sessioni SSH — la CLI `pap` porta i prompt dove stai già lavorando: cerchi un prompt, ne guardi il contenuto, lo compili con i tuoi valori e lo passi in pipe al comando successivo, senza mai aprire il client desktop.
 
-## Comandi MVP
+`pap` è un singolo eseguibile, multipiattaforma, senza dipendenze da installare a fianco. Legge lo stesso file di vault del client desktop, quindi quello che vedi nell'app è esattamente quello che trovi da terminale — nessuna sincronizzazione, nessuna copia.
+
+Una promessa importante: la CLI è **in sola lettura**. Non crea, non modifica e non cancella nulla, perché apre il vault in modalità read-only a livello di database. Per scrivere prompt c'è il client desktop; la CLI serve a consumarli.
+
+## I comandi
+
+I comandi coprono il ciclo tipico «trovo → guardo → compilo»:
 
 | Comando | Scopo |
 |---|---|
-| `pap version` | Mostra versione + path del vault risolto |
-| `pap search [query]` | Cerca prompt via FTS5, filtra per modello target o tag |
-| `pap get <id>` | Mostra il dettaglio di un prompt (titolo, body, tag, segnaposti) |
-| `pap recent` | Lista i prompt usati più di recente |
-| `pap render <id> --var k=v` | Compila il template sostituendo i `{{segnaposti}}` |
-| `pap completion <shell>` | Genera script di tab-completion per la shell |
+| `pap version` | Mostra la versione della CLI e il percorso del vault che verrà usato |
+| `pap search [query]` | Cerca prompt nel vault, con filtri per modello target o tag |
+| `pap get <id>` | Mostra il dettaglio di un prompt (titolo, corpo, tag, segnaposti) |
+| `pap recent` | Elenca i prompt usati più di recente |
+| `pap render <id> --var k=v` | Compila un prompt sostituendo i `{{segnaposti}}` con i valori forniti |
+| `pap completion <shell>` | Genera lo script di tab-completion per bash, zsh, fish o PowerShell |
 
-## Limitazioni MVP
+`search` e `recent` accettano `--limit` (abbreviato `-n`, default 10, massimo 100). `search` accetta anche `--target` per filtrare per modello target e `--tag` per filtrare per tag (match esatto). Se lanci `pap search` senza query ottieni i prompt più recenti, come `pap recent`.
 
-- **Read-only**. Niente `new`, `import`, `export`, `login` in questo step. Arriveranno quando il server di sync esporrà API HTTP complete (sub-step successivo).
-- **Solo vault non cifrati**. Per vault SQLCipher servirà l'estensione SQLite dedicata; rimandato.
-- **Single workspace personale**. Multi-workspace via server di sync arriverà in Fase 5.
+## Dove `pap` cerca il vault
 
-## Vault discovery
+La CLI risolve da sola il percorso del vault, usando la posizione standard del client desktop per ogni piattaforma:
 
-Il CLI cerca il file `pap-vault.db` in (per piattaforma):
-
-- **Linux**: `~/.local/share/com.pap.client/pap-vault.db`
+- **Linux**: `~/.local/share/com.pap.client/pap-vault.db` (rispetta `XDG_DATA_HOME` se impostata)
 - **macOS**: `~/Library/Application Support/com.pap.client/pap-vault.db`
 - **Windows**: `%APPDATA%\com.pap.client\pap-vault.db`
 
-Override via env var:
+Se il tuo vault è altrove, la variabile d'ambiente `PAP_VAULT_PATH` ha la precedenza su tutto:
 
 ```bash
 PAP_VAULT_PATH=/path/custom/pap-vault.db pap search "email"
 ```
 
-Verifica il path che `pap` userà:
+In caso di dubbio, `pap version` stampa il percorso che verrà effettivamente usato:
 
 ```bash
 pap version
 ```
 
-## Output formats
+## I formati di output
 
-Tutti i comandi che producono output strutturato (`search`, `get`, `recent`) accettano `--format`:
+I comandi che elencano o mostrano prompt (`search`, `get`, `recent`) accettano `--format`, così scegli tu se l'output è per i tuoi occhi o per uno script:
 
 | Valore | Descrizione |
 |---|---|
-| `table` (default) | Tabella ASCII con `text/tabwriter` |
-| `json` | JSON indented standard |
+| `table` (default) | Tabella a colonne allineate, pensata per la lettura a schermo |
+| `json` | JSON indentato standard |
 | `yaml` | YAML standard |
-| `plain` | Una riga per result, formato `id<TAB>title` (shell-friendly) |
+| `plain` | Una riga per risultato, formato `id<TAB>titolo` — comodo con `cut`, `awk`, `head` |
 
-`pap render` produce solo il testo compilato puro su stdout (per `\| pipe`); avvisi di segnaposti non compilati vanno su stderr.
+Con `pap get --format plain` ottieni invece il solo corpo del prompt, senza metadati: utile quando vuoi il testo grezzo in pipe.
+
+`pap render` fa eccezione: su stdout produce **solo il testo compilato**, così puoi metterlo in pipe senza sorprese; gli eventuali avvisi (segnaposti non compilati, ecc.) vanno su stderr.
 
 ## Esempi
 
 ### Cercare prompt
 
+Questi esempi mostrano le combinazioni più comuni di query e filtri:
+
 ```bash
-# Recenti
+# Senza query: i prompt più recenti
 pap search
 
-# Per query
+# Ricerca full-text
 pap search "email business"
 
 # Filtra per modello target
 pap search "code review" --target claude-sonnet
 
-# Filtra per tag
+# Filtra per tag, limitando i risultati
 pap search --tag bug --limit 5
 
 # Output JSON per scripting
 pap search "email" --format json | jq '.[].id'
 ```
 
-### Mostrare dettaglio
+Il risultato è una tabella con ID, titolo, visibilità, modello target, contatore d'uso e tag. L'ID nella prima colonna è quello che passerai a `get` e `render`.
+
+### Mostrare il dettaglio
+
+Dato un ID, `get` mostra tutto quello che il vault sa del prompt, inclusi i segnaposti trovati nel corpo:
 
 ```bash
 pap get prm-abc123
 pap get prm-abc123 --format yaml
 ```
 
-### Compilare un template
+### Compilare un prompt
+
+`render` sostituisce i `{{segnaposti}}` del corpo con i valori che fornisci, inline o da file:
 
 ```bash
-# Variabili inline
+# Variabili inline (--var è ripetibile)
 pap render prm-abc123 --var nome=Mario --var azienda=Bluenergy
 
 # Variabili da file YAML
@@ -96,31 +108,33 @@ data: 2026-05-04
 EOF
 pap render prm-abc123 --var-file vars.yaml
 
-# Combinare con pipe
+# Il testo compilato in pipe, dritto negli appunti
 pap render prm-abc123 --var-file vars.yaml | xclip -selection clipboard
 
-# Override da CLI sopra var-file
+# Un --var passato a riga di comando vince sul valore nel var-file
 pap render prm-abc123 --var-file vars.yaml --var nome=Carlo
 ```
 
 Da `v0.8.32` `pap render` espande anche i **segnaposti globali** `{{global nome}}`, leggendo i valori dal vault, prima di applicare i `--var`.
 
-Avvisi su stderr (l'output su stdout non è mai silenziosamente incompleto):
+Se qualcosa resta incompleto, `pap` te lo dice su stderr (l'output su stdout non è mai silenziosamente incompleto):
 
 - segnaposti rimasti senza valore;
 - globali non trovati nel vault;
-- `{{import}}` presenti nel body: la CLI **non li espande** (usa il client desktop per compilarli).
+- `{{import}}` presenti nel corpo: la CLI **non li espande** (usa il client desktop per compilarli).
 
-### Recenti
+### Prompt recenti
 
 ```bash
 pap recent --limit 20
 pap recent --format plain | head -5 | awk '{print $1}'
 ```
 
+Il secondo esempio estrae gli ID dei 5 prompt usati più di recente: un buon punto di partenza per script che lavorano «sul prompt di ieri».
+
 ## Tab-completion
 
-Il comando `completion` (auto-aggiunto da Cobra) genera lo script per la shell:
+Il comando `completion` genera lo script di completamento per la tua shell; installalo una volta e da lì in poi `Tab` completa comandi e flag.
 
 ### Bash
 
@@ -174,45 +188,50 @@ go install .
 | Codice | Significato |
 |---|---|
 | `0` | Successo |
-| `1` | Errore generico (vault non trovato, prompt non trovato, query SQL fallita, ecc.) |
+| `1` | Errore (vault non trovato, prompt non trovato, query fallita, ecc.) |
 
-Il messaggio di errore va su stderr; il CLI non stampa stack trace per default (uso da terminale pulito). Per debug più verbose, settare `--verbose` (rimandato).
+Il messaggio di errore va su stderr, in una riga, senza stack trace: pensato per essere letto da un umano o intercettato da uno script.
 
 ## Sicurezza
 
-- Il CLI gira con i permessi dell'utente. Apre il vault SQLite in modalità **read-only** (DSN `?mode=ro`).
-- Niente comunicazione di rete in MVP.
-- Niente telemetria. Niente log esterni.
-- Per workspace altamente sensibili attendere il supporto SQLCipher.
-
-## Roadmap
-
-- **Sub-step**: comandi write (`new`, `import`, `export`) tramite API server o IPC con client desktop.
-- **Sub-step**: `login` per workspace team con JWT + config persistente in `~/.config/pap/config.toml`.
-- **Sub-step**: supporto vault cifrati.
-- **Fase 4**: `pap test <id>` per regression testing dei prompt (golden examples).
+- La CLI gira con i permessi dell'utente e apre il vault in modalità **read-only** a livello di database: non può scrivere nemmeno per errore.
+- Nessuna comunicazione di rete: tutto avviene sul file locale.
+- Niente telemetria, niente log esterni.
 
 ## Troubleshooting
 
 ### "Vault non trovato"
 
-Il file `pap-vault.db` non esiste al path atteso. Verifica con:
+Il file `pap-vault.db` non esiste al percorso atteso. Verifica con:
 
 ```bash
-pap version  # mostra il path risolto
+pap version  # mostra il percorso risolto
 ```
 
 Soluzioni:
 
 1. Apri il client desktop almeno una volta per inizializzare il vault.
-2. Se hai installato il vault in posizione custom, override con `PAP_VAULT_PATH`.
+2. Se il vault è in posizione custom, imposta `PAP_VAULT_PATH`.
 
 ### "database is locked"
 
-Il vault è aperto in scrittura dal client desktop. Per ora chiudi il client desktop prima di lanciare il CLI. Future versioni supporteranno coabitazione (read-only su WAL mode).
+Il vault è aperto in scrittura dal client desktop. Chiudi il client desktop e rilancia il comando.
 
 ### Tab-completion non funziona
 
 1. Ricarica la shell (`exec $SHELL` o nuovo terminale).
 2. Verifica che il file di completion sia in una directory presente nei path di completion della shell.
 3. Bash: serve `bash-completion` installato e abilitato (`source /etc/bash_completion`).
+
+## Limiti noti
+
+- La CLI è in **sola lettura**: creare, modificare, importare ed esportare prompt si fa dal client desktop.
+- I **vault cifrati** non sono supportati: la CLI apre solo vault non cifrati.
+- Lavora sul **vault personale locale**: un solo workspace.
+- `pap render` non espande gli `{{import}}`: i prompt componibili vanno compilati dal client desktop.
+
+## Vedi anche
+
+- [`mcp.md`](./mcp.md) — l'altra via per leggere il vault da fuori: gli assistenti AI via Model Context Protocol.
+- [`glossario-sintassi.md`](./glossario-sintassi.md) — la sintassi dei segnaposti che `pap render` compila.
+- [`formato-export-json.md`](./formato-export-json.md) — per portare i dati fuori dal vault in modo strutturato e documentato.

@@ -28,6 +28,9 @@ export default defineConfig({
     "contribuire/**",
     "operativo/**",
     "roadmap/**",
+    // Ricette d'esempio: fuori tema per il sito del prodotto (scelta
+    // 2026-07-12); restano leggibili su GitHub.
+    "utente/casi-uso/**",
   ],
 
   // Disabilita parsing di tag HTML inline cosi' che frammenti come
@@ -56,13 +59,14 @@ export default defineConfig({
   // senza dover duplicare in `index.md`.
   rewrites: {
     "utente/README.md": "utente/index.md",
-    "utente/casi-uso/README.md": "utente/casi-uso/index.md",
     "test/README.md": "test/index.md",
   },
   ignoreDeadLinks: [
     // Link interni a doc tecniche (architettura/operativo/roadmap/contribuire)
-    // non inclusi nel sito pubblico utente. Restano accessibili su GitHub.
+    // e alle ricette casi-uso, non inclusi nel sito pubblico utente.
+    // Restano accessibili su GitHub.
     /\/(architettura|operativo|roadmap|contribuire)\//,
+    /casi-uso/,
   ],
 
   // Nota: i font Google e i meta og: della landing sono nel frontmatter di
@@ -85,7 +89,6 @@ export default defineConfig({
 
     nav: [
       { text: "Guida", link: "/utente/getting-started" },
-      { text: "Casi d'uso", link: "/utente/casi-uso/" },
       { text: "Sintassi", link: "/utente/glossario-sintassi" },
       { text: "Test", link: "/test/" },
       {
@@ -104,20 +107,6 @@ export default defineConfig({
             { text: "Glossario sintassi", link: "/utente/glossario-sintassi" },
             { text: "Scorciatoie tastiera", link: "/utente/scorciatoie-tastiera" },
             { text: "Troubleshooting", link: "/utente/troubleshooting" },
-          ],
-        },
-        {
-          text: "Casi d'uso",
-          collapsed: false,
-          items: [
-            { text: "Indice ricette", link: "/utente/casi-uso/" },
-            { text: "Email professionale", link: "/utente/casi-uso/email-professionale" },
-            { text: "Code review", link: "/utente/casi-uso/code-review" },
-            { text: "Summarize articolo", link: "/utente/casi-uso/summarize-articolo" },
-            { text: "Riscrittura tono", link: "/utente/casi-uso/riscrittura-tono" },
-            { text: "Brainstorm idee", link: "/utente/casi-uso/brainstorm-idee" },
-            { text: "Traduzione tecnica", link: "/utente/casi-uso/traduzione-tecnica" },
-            { text: "Commit message", link: "/utente/casi-uso/commit-message" },
           ],
         },
         {

@@ -1,15 +1,12 @@
 # Aggiornamenti automatici
 
-> Come Prompt a Porter mantiene il software aggiornato e che controllo hai tu sul processo.
->
-> **Disponibile da**: v0.8.10.
+> Come Prompt a Porter gestisce gli aggiornamenti del software e che controllo hai tu sul processo.
 
-## In breve
+Molte app desktop si aggiornano da sole, quando vogliono loro. Prompt a Porter fa una scelta diversa: **il controllo aggiornamenti parte solo quando lo chiedi tu**. All'avvio l'app non contatta internet, non scarica nulla in background, non applica update silenziosi al riavvio successivo. Se preferisci restare su una versione per mesi, nessuno te lo impedisce.
 
-- Prompt a Porter **non si aggiorna da solo all'avvio**. Il controllo aggiornamenti parte solo quando lo chiedi esplicitamente.
-- I file di update arrivano direttamente da **GitHub Releases** (mai da server di terze parti).
-- Ogni aggiornamento è **firmato digitalmente**: l'app verifica la firma prima di applicarlo. Se la firma non corrisponde, l'update viene rifiutato.
-- Niente telemetria. Niente identificativi utente. Niente tracking degli aggiornamenti.
+Quando decidi di aggiornare, l'app fa le cose per bene: i file arrivano direttamente da **GitHub Releases** (mai da server di terze parti) e ogni aggiornamento è **firmato digitalmente**. L'app verifica la firma prima di applicare qualsiasi cosa; se la firma non corrisponde, l'update viene rifiutato, senza eccezioni.
+
+E come per il resto del prodotto: niente telemetria, niente identificativi utente, niente tracking degli aggiornamenti.
 
 ## Come funziona
 
@@ -31,10 +28,10 @@ Se confermi, l'app scarica il nuovo binario, verifica anche quella firma, e appl
 
 ## Come disabilitare il check
 
-In **Impostazioni → Sistema → Aggiornamenti** c'è un toggle "Abilita verifica aggiornamenti". Se lo disattivi:
+In **Impostazioni → Sistema → Aggiornamenti** c'è il toggle "Abilita verifica aggiornamenti". Se lo disattivi:
 
 - Il bottone "Verifica aggiornamenti" sparisce.
-- L'app non contatta mai GitHub Releases per i meta updates.
+- L'app non contatta mai GitHub Releases per i metadati di update.
 - Resti sulla versione installata fino a quando non aggiorni manualmente (vedi sotto).
 
 ## Aggiornamento manuale
@@ -54,7 +51,7 @@ Per gli installer, fai doppio click e segui la procedura. I tuoi dati (vault, pr
 
 ## Privacy
 
-Sull'aggiornamento automatico vale la regola del prodotto: **i dati restano sul tuo computer**.
+Sull'aggiornamento vale la regola del prodotto: **i dati restano sul tuo computer**.
 
 - L'app non invia user-agent identificabili oltre lo standard del runtime HTTPS.
 - Non c'è fingerprinting del sistema.
@@ -65,18 +62,19 @@ Sull'aggiornamento automatico vale la regola del prodotto: **i dati restano sul 
 
 Ogni file scaricato dall'updater è verificato in due passaggi:
 
-1. **Firma Ed25519 del manifesto** `latest.json` confrontata con la chiave pubblica del progetto, embedded nel binario installato.
+1. **Firma Ed25519 del manifesto** `latest.json` confrontata con la chiave pubblica del progetto, incorporata nel binario installato.
 2. **Firma Ed25519 del binario stesso** indicato nel manifesto.
 
 Se una delle due verifiche fallisce, l'update viene rifiutato con errore. Niente "applica comunque" — niente bypass.
 
-Inoltre il binario Windows è firmato **Authenticode** dalla CA Certum: Windows lo riconosce come pubblisher fidato e la prima esecuzione non mostra avvisi SmartScreen aggressivi.
+Inoltre il binario Windows è firmato **Authenticode** dalla CA Certum: Windows lo riconosce come publisher fidato e la prima esecuzione non mostra avvisi SmartScreen aggressivi.
 
 ## Troubleshooting
 
 ### "Errore di rete durante il controllo aggiornamenti"
 
 Probabili cause:
+
 - Connessione internet assente o intermittente.
 - Firewall aziendale che blocca `github.com` o `objects.githubusercontent.com`.
 - DNS pubblico in fallimento.
@@ -87,7 +85,7 @@ Probabili cause:
 
 L'app ha scaricato `latest.json` o il binario ma la firma non corrisponde alla chiave attesa.
 
-**Cosa fare**: **non bypassare** mai questo errore. Significa che qualcosa è andato storto fra GitHub e te (corruzione download, MITM, etc.). Fai update manuale dalla pagina release ufficiale.
+**Cosa fare**: **non bypassare** mai questo errore. Significa che qualcosa è andato storto fra GitHub e te (corruzione del download, intercettazione, ecc.). Fai update manuale dalla pagina release ufficiale.
 
 ### "Update interrotto a metà"
 
@@ -109,12 +107,12 @@ I tuoi dati restano: il vault è nella cartella dati dell'app (vedi [`getting-st
 
 Capita nei primi giorni dopo il rilascio di una versione nuova (Microsoft "Reputation Building"): il nostro certificato è valido, ma la specifica versione del file non ha ancora abbastanza scaricamenti per essere classificata come "trusted" da SmartScreen.
 
-**Cosa fare**: clicca "Maggiori informazioni" → verifica che il pubblisher sia "Open Source Developer, Roberto Marchioro" → "Esegui comunque". L'avviso sparisce dopo che il file ha qualche centinaio di download.
+**Cosa fare**: clicca "Maggiori informazioni" → verifica che il publisher sia "Open Source Developer, Roberto Marchioro" → "Esegui comunque". L'avviso sparisce dopo che il file ha qualche centinaio di download.
 
 ## FAQ
 
 **D: L'app si aggiorna da sola di notte?**
-R: No. Niente check automatici, niente background download. Tutto su tuo comando.
+R: No. Niente check automatici, niente download in background. Tutto su tuo comando.
 
 **D: Posso usare PaP offline per sempre?**
 R: Sì. Disabilita il check aggiornamenti e non lanciarlo mai manualmente. L'app funziona senza internet (eccetto i provider AI cloud che configuri tu, opzionali).
@@ -131,10 +129,7 @@ R: No: il vault è in una cartella separata (`%APPDATA%\com.pap.client\`). Gli u
 **D: Posso aggiornare PaP installato in modalità portable?**
 R: Per la versione portable serve sostituzione manuale: scarica la nuova `.zip`, sovrascrivi i file della cartella. Il check aggiornamenti dell'updater è disponibile anche in portable, ma il "Applica" richiede privilegi di scrittura nella cartella dove hai estratto il portable.
 
-## Manutenzione di questo documento
-
-- Quando la chiave di firma viene ruotata: aggiornare §FAQ "cosa succede se cambia la chiave".
-
 ## Vedi anche
 
-- [`authenticode-signing.md`](../architettura/decisioni/authenticode-signing.md) — dettagli tecnici: firma Ed25519, garanzie di sicurezza, policy applicata.
+- [`getting-started.md`](./getting-started.md) — dove vivono i tuoi dati, che restano intatti a ogni aggiornamento.
+- [`troubleshooting.md`](./troubleshooting.md) — soluzioni agli altri problemi comuni dell'app.

@@ -1,41 +1,44 @@
-# Cluster — Utente
+# Documentazione utente
 
-> Documentazione per **chi usa** Prompt a Porter, sia il client desktop che gli strumenti integrati.
+> La guida per **chi usa** Prompt a Porter: il client desktop e gli strumenti che gli girano intorno.
+
+Queste pagine raccontano Prompt a Porter dal punto di vista di chi lo usa ogni giorno: come si installa, come si scrivono e organizzano i prompt, come si portano i dati dentro e fuori, come si collega il vault al terminale e agli assistenti AI. Non serve alcuna conoscenza del codice: dove c'è un percorso da seguire nell'app, lo trovi scritto passo per passo.
+
+Se è la prima volta che apri l'app, parti dalla guida al primo utilizzo e tieni a portata di mano il glossario della sintassi: sono le due pagine che ripagano subito. Tutto il resto puoi leggerlo quando la funzione ti serve davvero — ogni pagina è autonoma e spiega da sola il contesto.
 
 ## Inizio rapido
 
 Se sei un nuovo utente, parti da qui:
 
 - [`getting-started.md`](./getting-started.md) — installazione, onboarding, primo prompt, prima compilazione (5 minuti).
-- [`glossario-sintassi.md`](./glossario-sintassi.md) — reference della sintassi del body: segnaposti, globali, import, codici linter.
-- [`scorciatoie-tastiera.md`](./scorciatoie-tastiera.md) — tabella completa delle hotkey.
-- [`casi-uso/`](./casi-uso/README.md) — 7 ricette concrete (email, code review, summarize, riscrittura tono, brainstorm, traduzione, commit message).
-- [`troubleshooting.md`](./troubleshooting.md) — FAQ e soluzioni ai problemi più comuni.
+- [`glossario-sintassi.md`](./glossario-sintassi.md) — la sintassi del corpo dei prompt: segnaposti, globali, import, codici del linter.
+- [`scorciatoie-tastiera.md`](./scorciatoie-tastiera.md) — tutte le scorciatoie da tastiera, area per area.
+- [`troubleshooting.md`](./troubleshooting.md) — risposte ai problemi più comuni.
 
 ## Documenti
 
 | Doc | Descrizione |
 |---|---|
-| [`getting-started.md`](./getting-started.md) | Guida al primo utilizzo: installazione, onboarding, primo prompt e prima compilazione |
-| [`glossario-sintassi.md`](./glossario-sintassi.md) | Reference sintassi body: segnaposti `{{nome}}`, globali `{{global ...}}`, import `{{import ...}}`, codici linter |
-| [`scorciatoie-tastiera.md`](./scorciatoie-tastiera.md) | Tabelle complete delle scorciatoie attive (shell, palette, modali, editor CodeMirror) |
-| [`casi-uso/`](./casi-uso/README.md) | Ricette pratiche con prompt completi pronti all'uso |
-| [`troubleshooting.md`](./troubleshooting.md) | FAQ + soluzioni a problemi noti (installazione, hotkey, editor, sync, backup) |
-| [`cli.md`](./cli.md) | Reference della CLI `pap` (Go + cobra): 5 comandi read-only per accedere al vault dal terminale, output in `table`/`json`/`yaml`/`plain`, completion bash/zsh/fish/powershell |
-| [`mcp.md`](./mcp.md) | Integrazione Model Context Protocol: setup Claude Desktop, Cursor, custom client; 4 tool esposti (`pap_search`, `pap_get`, `pap_list_recent`, `pap_render`); trasporto stdio; troubleshooting |
-| [`formato-export-json.md`](./formato-export-json.md) | Schema del formato di export JSON v1: campi obbligatori/opzionali, modalità conflitti import (skip/overwrite/rename), garanzie round-trip lossless |
-| [`ricerca-semantica.md`](./ricerca-semantica.md) | Ricerca ibrida (FTS + embedding), modello scelto, alpha bilanciamento, idle-unload, performance e privacy |
-| [`linting-regole.md`](./linting-regole.md) | Catalogo completo delle 12 regole di linting con esempi pratici (LEN/PH/PII/STY/IMP) |
-| [`cartelle.md`](./cartelle.md) | Modello dati e UX cartelle (anticipa permessi Fase 4) |
-| [`prompt-componibili.md`](./prompt-componibili.md) | Sintassi `{{import "..."}}`, esempi, anti-pattern, depth limits e cicli |
-| [`varianti-prompt.md`](./varianti-prompt.md) | A/B testing dei prompt: come creare varianti B/C/Z, navigazione, differenza con i fork (Fase 4) |
-| [`fork-prompt.md`](./fork-prompt.md) | Clone indipendente con tracciabilità: quando fare fork, banner "Fork di X", chain (Fase 4) |
-| [`rating-prompt.md`](./rating-prompt.md) | Rating discreto post-uso 👎/😐/👍, aggregato nella tab Valutazioni, traiettoria nel tempo (Fase 4) |
-| [`regression-testing.md`](./regression-testing.md) | Golden examples + provider AI (Ollama/Anthropic/OpenAI) + similarity functions + drift report — differenziatore strategico (Fase 4) |
-| [`auto-update.md`](./auto-update.md) | Aggiornamenti automatici: policy on-demand, firma Ed25519 + Authenticode, privacy, troubleshooting, FAQ |
+| [`getting-started.md`](./getting-started.md) | Il percorso dei primi cinque minuti: installazione, onboarding, primo prompt e prima compilazione |
+| [`glossario-sintassi.md`](./glossario-sintassi.md) | La sintassi del corpo dei prompt: segnaposti `{{nome}}`, globali `{{global ...}}`, import `{{import ...}}` e i codici del linter |
+| [`scorciatoie-tastiera.md`](./scorciatoie-tastiera.md) | Le scorciatoie da tastiera, area per area: finestra principale, palette, modali, editor |
+| [`troubleshooting.md`](./troubleshooting.md) | Risposte ai problemi più comuni: installazione, hotkey, editor, backup |
+| [`cli.md`](./cli.md) | Il vault dal terminale: cercare, leggere e compilare prompt con la CLI `pap`, con output pensato anche per gli script |
+| [`mcp.md`](./mcp.md) | Collegare il vault a Claude Desktop, Cursor e altri assistenti AI via Model Context Protocol |
+| [`formato-export-json.md`](./formato-export-json.md) | Il formato di export JSON documentato campo per campo: schema, gestione dei conflitti in import, garanzia anti lock-in |
+| [`markdown-import-export.md`](./markdown-import-export.md) | Import ed export dei prompt come file Markdown, compatibili con Obsidian e Foam |
+| [`ricerca-semantica.md`](./ricerca-semantica.md) | Trovare i prompt per significato, non solo per parola: come attivare la ricerca ibrida, bilanciarla e cosa comporta per la privacy |
+| [`linting-regole.md`](./linting-regole.md) | Il catalogo delle regole del linter, con esempi pratici per ogni regola |
+| [`cartelle.md`](./cartelle.md) | Organizzare il vault in cartelle: come funzionano e come usarle bene |
+| [`prompt-componibili.md`](./prompt-componibili.md) | Riusare prompt dentro altri prompt con `{{import "..."}}`: sintassi, esempi, limiti e anti-pattern |
+| [`varianti-prompt.md`](./varianti-prompt.md) | Confrontare versioni alternative dello stesso prompt (A/B) senza perdere l'originale, e la differenza con i fork |
+| [`fork-prompt.md`](./fork-prompt.md) | Duplicare un prompt mantenendo traccia dell'originale: quando conviene un fork e come si riconosce |
+| [`rating-prompt.md`](./rating-prompt.md) | Valutare i prompt dopo l'uso e seguire come cambiano le valutazioni nel tempo |
+| [`regression-testing.md`](./regression-testing.md) | Test golden: verificare che un prompt continui a dare buoni risultati anche dopo le modifiche |
+| [`auto-update.md`](./auto-update.md) | Come si aggiorna l'app: controllo solo su tua richiesta, firme verificate, privacy e troubleshooting |
 
 ## Integrazioni avanzate
 
 - **Riga di comando**: vedi [`cli.md`](./cli.md). La CLI `pap` legge lo stesso vault del client.
-- **Agenti AI** (Claude Desktop, Cursor, ...): vedi [`mcp.md`](./mcp.md).
+- **Assistenti AI** (Claude Desktop, Cursor, ...): vedi [`mcp.md`](./mcp.md).
 - **Backup / migrazione**: vedi [`formato-export-json.md`](./formato-export-json.md) (JSON) e [`markdown-import-export.md`](./markdown-import-export.md) (Markdown / Obsidian / Foam).

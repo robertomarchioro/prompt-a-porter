@@ -1,96 +1,98 @@
-# Rating dei prompt
+# Valutazione dei prompt
 
-> Come valutare un prompt dopo l'uso (👎 / 😐 / 👍) e leggere l'aggregato nella tab Valutazioni per capire quali prompt funzionano nel tempo. Disponibile da `v0.4.0`.
+> Come dare un voto rapido a un prompt dopo averlo usato (👎 / 😐 / 👍) e
+> leggere l'aggregato nella tab Valutazioni per capire quali prompt reggono
+> nel tempo.
 
-Dopo aver compilato e copiato un prompt dalla Command Palette o dal
-Compilatore, puoi lasciare un **feedback discreto** a 3 valori
-(👎 / 😐 / 👍). Il rating è **append-only** con timestamp: ogni
-voto è una riga separata, così emerge la traiettoria nel tempo (un
-prompt molto usato che inizia a prendere voti bassi è candidato a
-refactor).
+Un prompt sembra buono finché non lo usi davvero, ripetutamente. Con l'uso
+scopri che una formulazione che leggevi con soddisfazione produce, nella
+pratica, output che devi sempre ritoccare — oppure, al contrario, che un
+prompt scritto in fretta funziona ogni volta. Ma questa conoscenza vive
+nella tua testa e svanisce: fra due settimane non ricordi più quali prompt
+ti hanno deluso e quali no.
 
-## Come dare un rating
+La valutazione cattura quel giudizio nel momento in cui lo hai, con il
+minimo attrito. Dopo aver compilato e copiato un prompt, puoi lasciare un
+**feedback a tre valori** — 👎 negativo, 😐 neutro, 👍 positivo — con un
+clic. Niente stelle, niente commenti obbligatori: un pollice, e via.
 
-1. Compila il prompt (Command Palette `Ctrl+Shift+P` o detail pane →
-   "Compila").
-2. Sotto l'output compilato, la modale mostra il blocco espandibile
-   **"Valuta il risultato"** con tre bottoni: **Negativo** / **Neutro**
-   / **Positivo** (icone 👎 😐 👍).
-3. Click su un bottone registra il voto e mostra la conferma
-   "— grazie!" inline accanto al titolo del blocco.
-4. Prima di votare puoi espandere il campo **"Aggiungi nota"**
-   (collassato di default) per annotare cosa ha funzionato o meno.
-5. Se chiudi la modale senza votare non viene registrato nulla — il
-   rating è sempre opzionale.
+La cosa importante è che i voti non si sovrascrivono: ogni voto è una riga a
+sé, con la sua data. Così non ottieni una media piatta, ma una **traiettoria**.
+Un prompt molto usato che comincia a raccogliere voti bassi è un candidato
+al refactor — e te ne accorgi guardando la tendenza, non un singolo numero.
 
-Errori di rete/DB sono silenziosi: il rating è non-bloccante per la
-UX di "compila & usa".
+## Come dare un voto
 
-## Aggregato visibile nella tab "Valutazioni"
+1. Compila il prompt: dalla Command Palette (`Ctrl+Shift+P`) oppure dal
+   pannello di dettaglio con il bottone **Compila**.
+2. Sotto l'output compilato, la modale mostra il blocco **"Valuta il
+   risultato"** con tre bottoni: **Negativo**, **Neutro**, **Positivo**
+   (👎 😐 👍).
+3. Clicca il bottone che corrisponde al tuo giudizio: il voto viene
+   registrato e accanto al titolo del blocco compare la conferma
+   "— grazie!".
+4. Puoi accompagnare il voto con una nota. I voti **Neutro** e **Positivo**
+   si salvano subito, ma restano affiancati da un campo nota opzionale se
+   vuoi annotare qualcosa. Il voto **Negativo** apre invece la modale
+   **"Cosa non ha funzionato?"** con una textarea: scrivi cosa è andato
+   storto, oppure premi **"Salta e registra voto"** per registrare il
+   pollice verso senza spiegazioni.
+5. Se chiudi la modale senza cliccare alcun bottone, non viene registrato
+   nulla: il voto è sempre facoltativo.
 
-Il detail pane della Libreria ospita la tab **Valutazioni** con
-l'aggregato dei voti:
+Se qualcosa va storto nel salvataggio (rete, disco), l'errore resta
+silenzioso: la valutazione non deve mai intralciare il flusso di "compila e
+usa".
 
-- **Media firmata** a 2 decimali (es. `+0.75`) su N voti.
-- **Barre di distribuzione** Positivi / Neutri / Negativi con
-  conteggio per fascia.
+## Leggere l'aggregato
 
-Senza voti la tab mostra uno stato vuoto con l'invito a valutare
-dalla modale Compila. Nella riga dei metadata il detail pane mostra
-solo il chip di utilizzo `Usato N×`.
+I singoli voti diventano utili quando li guardi insieme. Il pannello di
+dettaglio della Libreria ha la tab **Valutazioni**, che riassume tutti i
+voti di un prompt:
 
-## Convenzioni dei 3 valori
+- una **media firmata** a due decimali (per esempio `+0.75`) sul numero
+  totale di voti;
+- le **barre di distribuzione** Positivi / Neutri / Negativi, ciascuna col
+  proprio conteggio.
 
-- **👍 (+1)**: l'output del modello rispetta l'intento del prompt
-  (con il modello scelto).
-- **😐 (0)**: parziale — funziona ma serve editing manuale.
-- **👎 (−1)**: il prompt non ha funzionato come atteso.
+Se un prompt non ha ancora voti, la tab mostra uno stato vuoto che ti invita
+a valutarlo dalla modale di compilazione. Nella riga dei metadati del
+pannello di dettaglio compare intanto il numero di utilizzi, come chip
+**Usato N×**.
 
-I valori sono volutamente discreti per ridurre il bias culturale (5
-stelle ha il problema "italiani 3 = ok, americani 5 = ok").
+## Cosa significano i tre valori
 
-## Schema dati
+I tre livelli hanno un significato preciso, riferito al modello con cui hai
+usato il prompt:
 
-Vedi `docs/architettura/schema-dati.md` § V013. Riassunto:
+- **👍 positivo (+1)** — l'output rispetta l'intento del prompt, così com'è.
+- **😐 neutro (0)** — parziale: funziona, ma serve un ritocco manuale.
+- **👎 negativo (−1)** — il prompt non ha prodotto quello che ti aspettavi.
 
-| Campo | Note |
-|---|---|
-| `Rating` | INTEGER `CHECK IN (-1, 0, 1)` |
-| `Note` | TEXT opzionale (whitespace-only → NULL) |
-| `UsedWithModel` | TEXT opzionale, popolato dal Compilatore con `target_model` del prompt |
-| `CreatedAt` | DEFAULT `datetime('now')` |
+La scala è volutamente ridotta a tre valori. Le scale a cinque stelle
+soffrono di un bias culturale (per qualcuno "3 su 5" è già un buon voto, per
+altri solo "5" lo è): tre livelli netti — no, così così, sì — riducono
+l'ambiguità e rendono i voti confrontabili.
 
-Append-only: nessun UPDATE. L'utente che cambia idea aggiunge un
-nuovo voto, e l'aggregato media le entry più recenti.
+## Ordinare i prompt per qualità
 
-## Comandi Tauri esposti
+Le valutazioni non restano confinate nella loro tab: alimentano un
+ordinamento della Libreria. Nel menu dell'ordine c'è l'opzione **"Migliori"**,
+che dispone i prompt per voto medio degli ultimi 90 giorni (dai migliori in
+giù), lasciando in fondo quelli senza voti. Con questo ordinamento attivo le
+card della lista mostrano il voto medio accanto al prompt, così vedi al volo
+quali funzionano meglio.
 
-| Comando | Cosa fa |
-|---|---|
-| `rating_aggiungi(nuovo)` | Insert con `UserId='usr-locale'`. Ritorna l'id `rtg-<hex>`. Errore se rating fuori range o prompt inesistente. |
-| `rating_aggregato(prompt_id)` | Media + conteggio + distribuzione `pos/neu/neg`. `media: null` se nessun rating. |
+## Limiti noti
 
-## Limiti noti / roadmap
-
-- ✅ **Modale "Aggiungi nota"** atterrata in `v0.5.0`: solo il voto
-  👎 apre la modale "Cosa non ha funzionato?" con textarea opzionale.
-  😐 e 👍 salvano subito senza friction (resta la nota inline
-  opzionale nel blocco di valutazione). "Salta e registra voto"
-  memorizza il voto senza nota.
-- ✅ **Sort by quality "Migliori prompt"** atterrato in `v0.5.0`:
-  nuova option "Migliori" nel dropdown ordine della Libreria.
-  Ordina per `AVG(Rating)` ultimi 90 giorni (DESC), prompt senza
-  rating in fondo. Tie-breaker su `UseCount` + `UpdatedAt`. Con
-  l'ordine "Migliori" attivo le card della lista mostrano il voto
-  medio `±X.XX` (da `v0.8.29`).
-- **Privacy team**: oggi `usr-locale` (single-user). Nel workspace
-  team gli admin vedono aggregati ma non singoli rating con note
-  — scope Fase 5 con E2E.
-- **Aggregato per modello**: il campo `UsedWithModel` è popolato ma
-  il dashboard non lo filtra. Atterrabile post-v0.4 in `Insight.svelte`.
+- Le valutazioni sono personali e legate alla tua installazione: non
+  esistono ancora aggregati condivisi di team.
+- Ogni voto registra anche il modello con cui hai usato il prompt, ma
+  l'aggregato non permette oggi di filtrare i voti per modello: la media
+  mescola gli esiti ottenuti con modelli diversi.
 
 ## Vedi anche
 
-- [`schema-dati.md`](../architettura/schema-dati.md) — schema dati dei rating (§ V013).
-- [`fase-4-workflow.md`](../roadmap/fase-4-workflow.md) — spec roadmap (Step 2).
-- Implementazione: `apps/client/src-tauri/src/rating.rs` — backend del rating.
+- [`varianti-prompt.md`](./varianti-prompt.md) — le valutazioni indipendenti di ogni variante fanno emergere la formulazione migliore.
+- [`regression-testing.md`](./regression-testing.md) — la misura automatica degli output, complementare al tuo giudizio umano.
+- [`scorciatoie-tastiera.md`](./scorciatoie-tastiera.md) — la scorciatoia per aprire la Command Palette e compilare in fretta.

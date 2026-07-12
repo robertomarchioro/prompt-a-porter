@@ -1,17 +1,23 @@
 # Formato export JSON
 
-> Schema del formato JSON di export: campi, modalità di gestione dei conflitti in import, garanzie round-trip. **Versione corrente**: `1` (stabile, un breaking change richiede bump di `schemaVersion`).
+> Lo schema del formato JSON di export: campi, gestione dei conflitti in import, garanzie di round-trip. **Versione corrente**: `1`.
 
-Il formato JSON di export è il contratto pubblico del vault Prompt a Porter. Permette portabilità completa dei dati utente — nessun lock-in. È pensato per essere generato e consumato sia dall'app desktop sia da tool esterni (CLI, script, migrazioni da/verso altri tool).
+I tuoi prompt ti appartengono, e un giorno potresti volerli portare altrove: su un'altra macchina, in un altro strumento, in uno script tutto tuo. Per questo il formato di export JSON è **documentato pubblicamente**, campo per campo: è la garanzia concreta che i tuoi dati non restano prigionieri dell'app. Nessun lock-in — se domani Prompt a Porter non ti servisse più, i tuoi dati sarebbero già in un formato che qualunque strumento sa leggere.
 
-## Filosofia
+Questo formato è il contratto pubblico del vault: viene generato e consumato dall'app desktop, ma è pensato perché anche tool esterni — script, migrazioni da o verso altri strumenti — possano produrlo e leggerlo senza sorprese. Un file di export contiene tutto il contenuto del workspace: prompt con il loro storico versioni, tag, cartelle e segnaposti globali.
 
-- **Round-trip lossless**: export → import → confronto must produce dati equivalenti
-- **Versioning esplicito**: `schemaVersion` cambia solo per breaking change
-- **Forward compatibility**: campi opzionali (Fase 3+: `folder_id`, `target_model`) presenti come `null` o omessi se non popolati
-- **Backward compatibility**: import di v1 deve continuare a funzionare in versioni future del formato
+## Le garanzie del formato
+
+Quattro promesse tengono in piedi il contratto:
+
+- **Round-trip lossless**: esportare e poi reimportare deve produrre dati equivalenti, senza perdite.
+- **Versioning esplicito**: il campo `schemaVersion` cambia solo per modifiche incompatibili (breaking change).
+- **Compatibilità in avanti**: i campi opzionali compaiono come `null` o vengono omessi se non popolati; aggiungerne di nuovi non rompe il formato.
+- **Compatibilità all'indietro**: un export v1 continuerà a essere importabile anche nelle versioni future del formato.
 
 ## Schema v1
+
+Questo è un export completo in miniatura — un workspace con un prompt, una versione storica, un tag e un segnaposto globale:
 
 ```json
 {
@@ -81,7 +87,7 @@ Il formato JSON di export è il contratto pubblico del vault Prompt a Porter. Pe
 | `schemaVersion` | integer | Versione del formato. Attualmente `1`. |
 | `exportedAt` | string ISO 8601 | Timestamp dell'export. UTC. |
 | `workspace` | object | Metadata del workspace esportato. |
-| `prompts` | array | Tutti i prompt del workspace (esclusi tombstoned). |
+| `prompts` | array | Tutti i prompt del workspace (esclusi quelli cancellati). |
 | `versions` | array | Tutte le versioni storiche di tutti i prompt esportati. |
 | `tags` | array | Tag del workspace. |
 | `folders` | array | Cartelle del workspace, ordinate per `path` (parent prima dei figli). Ricreate dall'import → round-trip lossless. |
@@ -98,7 +104,7 @@ Struttura di un singolo prompt:
 | `description` | string \| null | Descrizione breve. |
 | `body` | string | Corpo del template, può contenere `{{segnaposti}}`. |
 | `visibility` | enum | `private` \| `workspace`. |
-| `target_model` | string \| null | Modello AI target (es. `claude-sonnet`). Anticipato da Fase 3. |
+| `target_model` | string \| null | Modello AI target (es. `claude-sonnet`). |
 | `folder_id` | string \| null | ID cartella di appartenenza (`null` = root). Se la cartella referenziata non è presente nell'import, il prompt va a root. |
 | `is_favorite` | boolean | Flag preferiti. |
 | `use_count` | integer | Contatore d'uso. |
@@ -121,7 +127,7 @@ Struttura di una versione storica:
 | Campo | Tipo | Note |
 |---|---|---|
 | `id` | string | ID univoco, formato `pv-{20hex}`. |
-| `prompt_id` | string | FK al prompt corrente. |
+| `prompt_id` | string | Riferimento al prompt corrente. |
 | `version` | integer | Numero versione. |
 | `title`, `description`, `body`, `visibility`, `target_model` | come in `prompts[]` | Snapshot dei campi alla versione N. |
 | `created_at` | string ISO 8601 | Quando la versione è stata creata. |
@@ -138,7 +144,7 @@ Struttura di una versione storica:
 
 ### `folders[]`
 
-Le cartelle sono incluse nell'export e ricreate dall'import (round-trip lossless). Sono ordinate per `path` così che ogni cartella padre preceda i propri figli (requisito per il vincolo `parent_folder_id`). In import, se un `parent_folder_id` non è risolvibile (es. export di un solo sotto-albero), la cartella viene creata come root.
+Le cartelle sono incluse nell'export e ricreate dall'import (round-trip lossless). Sono ordinate per `path` così che ogni cartella padre preceda i propri figli. In import, se un `parent_folder_id` non è risolvibile (es. export di un solo sotto-albero), la cartella viene creata come root.
 
 ```json
 {
@@ -153,49 +159,52 @@ Le cartelle sono incluse nell'export e ricreate dall'import (round-trip lossless
 
 ## Modalità di import
 
-L'import accetta una modalità di gestione dei conflitti:
+Cosa succede se importi un file che contiene prompt già presenti nel vault? Lo decidi tu: nell'app, la card **Importa JSON** (in **Impostazioni → Dati**) offre tre modalità nel campo **Conflitti**:
 
-| Modalità | Comportamento su ID già esistente |
-|---|---|
-| `skip` | Mantiene la versione locale, ignora quella in import |
-| `overwrite` | Sostituisce la versione locale con quella in import |
-| `rename` | Crea una copia del prompt importato con nuovo ID + suffisso `(importato)` |
+| Modalità | Nell'app | Comportamento su ID già esistente |
+|---|---|---|
+| `skip` | **Salta esistenti** | Mantiene la versione locale, ignora quella in import |
+| `overwrite` | **Sovrascrivi** | Sostituisce la versione locale con quella in import |
+| `rename` | **Rinomina duplicati** | Crea una copia del prompt importato con nuovo ID + suffisso `(importato)` |
+
+Se non sei sicuro, `skip` è la scelta prudente: non tocca nulla di esistente.
 
 ## Garanzie e limiti
 
 - **Encoding**: sempre UTF-8.
 - **Date**: sempre ISO 8601 con timezone Z (UTC). Timestamp locali NON ammessi nel formato.
-- **Audit log**: NON è incluso nell'export (rimane locale per workspace personali; per workspace team passa per il server).
-- **Vault metadata**: NON è incluso (chiavi crittografiche, salt, parametri Argon2 — sono dati di sicurezza, non di contenuto).
+- **Audit log**: NON è incluso nell'export; resta nel vault locale.
+- **Vault metadata**: NON è incluso (chiavi crittografiche, salt, parametri di derivazione — sono dati di sicurezza, non di contenuto).
 - **Allegati / file binari**: non supportati. Se un prompt fa riferimento a file esterni, il riferimento è solo testuale.
-- **Dimensione massima**: nessun limite hard, ma consigliato `< 50 MB` per import singolo (parser deve materializzare tutto in memoria).
+- **Dimensione massima**: nessun limite hard, ma consigliato `< 50 MB` per import singolo (l'import carica l'intero file in memoria).
 
-## Esempi di uso
+## Esempi d'uso
 
 ### Backup completo del workspace
 
-```
-Da app desktop: Impostazioni → Dati, card "Esporta Vault → JSON"
-Salva il file generato in posizione sicura (cifrata se sensibile).
-```
+Dall'app desktop: **Impostazioni → Dati**, card **Esporta Vault → JSON**. Salva il file generato in una posizione sicura (cifrata, se il contenuto è sensibile). Un backup periodico di questo file è tutto quello che serve per poter ricostruire il workspace.
 
-### Migrazione da altro tool
+### Migrazione da un altro strumento
 
-Convertire l'export del tool sorgente nello schema v1 sopra, poi import via Impostazioni → Dati, card "Importa JSON", con modalità `skip` (sicura) o `rename` (esplorativa).
+Se arrivi da un altro tool, converti il suo export nello schema v1 descritto sopra, poi importa da **Impostazioni → Dati**, card **Importa JSON**. Usa la modalità **Salta esistenti** (sicura) o **Rinomina duplicati** (esplorativa: vedi tutto, non perdi nulla).
 
 ### Round-trip di sicurezza
 
-```
-1. Esporta JSON
-2. Cancella un prompt nel vault
-3. Importa lo stesso JSON con modalità `skip` (non sovrascrive nulla esistente)
-   o `overwrite` (recupera la versione persa)
-```
+Un modo semplice per toccare con mano la garanzia di round-trip:
+
+1. Esporta il JSON.
+2. Cancella un prompt nel vault.
+3. Reimporta lo stesso JSON: con **Salta esistenti** non viene sovrascritto nulla di esistente e il prompt cancellato torna al suo posto; con **Sovrascrivi** recuperi anche eventuali modifiche fatte per errore.
 
 ## Versioning del formato
 
-- v1 (corrente): schema descritto sopra
-- v2 (futuro): bump richiesto solo per breaking change. Campi aggiuntivi non rompono v1.
-- Cambi non-breaking compatibili con v1: aggiungere nuovi campi opzionali ai prompt/versions, aggiungere nuovi top-level keys non documentati.
+- **v1** (corrente): lo schema descritto sopra.
+- **v2** (eventuale futuro): il bump è richiesto solo per breaking change. Campi aggiuntivi non rompono v1.
+- Cambi non-breaking compatibili con v1: nuovi campi opzionali su prompt/versioni, nuove chiavi top-level non documentate.
 
-L'app deve **rifiutare** import con `schemaVersion` superiore a quello supportato (forward incompatibility) e **leggere** import con `schemaVersion` inferiore (backward compatibility).
+L'app **rifiuta** import con `schemaVersion` superiore a quello che supporta (non può garantire di interpretarli correttamente) e **legge** import con `schemaVersion` inferiore (i vecchi export restano validi per sempre).
+
+## Vedi anche
+
+- [`markdown-import-export.md`](./markdown-import-export.md) — l'alternativa a file Markdown: più leggibile, meno metadati.
+- [`cli.md`](./cli.md) — leggere il vault da script e terminale, senza passare da un export.

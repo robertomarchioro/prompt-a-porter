@@ -2,7 +2,11 @@
 
 > Tutte le scorciatoie attive in Prompt a Porter: hotkey globale, palette, modali, editor e menu contestuale.
 
-La notazione `Ctrl` si applica a Windows/Linux; su macOS sostituisci con `⌘` (Cmd). Quando entrambe le piattaforme usano `Ctrl` (es. global hotkey), è esplicitato.
+Prompt a Porter è pensato per essere guidato dalla tastiera: il flusso tipico — hotkey, due lettere nella palette, `Enter`, `Ctrl+Enter` — non tocca mai il mouse. Questa pagina raccoglie tutte le scorciatoie in un posto solo, organizzate per contesto: quelle globali che funzionano ovunque, quelle attive nella finestra dell'app, e quelle specifiche di palette, modali ed editor.
+
+Tienila a portata di mano le prime settimane: le scorciatoie della palette e della modale Compila sono quelle che ripagano prima, perché stanno sul percorso che ripeti ogni giorno.
+
+Una nota sulla notazione: `Ctrl` si applica a Windows/Linux; su macOS sostituisci con `⌘` (Cmd). Quando entrambe le piattaforme usano `Ctrl` (es. la hotkey globale), è esplicitato.
 
 ## Globali (funzionano fuori dall'app)
 
@@ -10,9 +14,9 @@ La notazione `Ctrl` si applica a Windows/Linux; su macOS sostituisci con `⌘` (
 |---|---|
 | `Ctrl+Shift+P` | Apri Command Palette (configurabile in **Impostazioni → Sistema → Hotkey**) |
 
-La hotkey globale è registrata via `tauri-plugin-global-shortcut` e funziona anche quando l'app è minimizzata o in background. Su macOS la combinazione di default è `⌃⇧P`.
+La hotkey globale funziona anche quando l'app è minimizzata o in background: è il gesto con cui richiami Prompt a Porter mentre lavori altrove. Su macOS la combinazione di default è `⌃⇧P`.
 
-## Nella Shell (app in primo piano)
+## Nella finestra principale (app in primo piano)
 
 | Scorciatoia | Azione |
 |---|---|
@@ -35,11 +39,11 @@ La hotkey globale è registrata via `tauri-plugin-global-shortcut` e funziona an
 | `Ctrl+Enter` | Compila e copia negli appunti |
 | `Esc` | Chiudi senza compilare |
 
-`Tab` / `Shift+Tab` per navigare fra i campi segnaposti (comportamento standard browser).
+`Tab` / `Shift+Tab` per navigare fra i campi segnaposti (comportamento standard).
 
-## Nell'editor del prompt (CodeMirror)
+## Nell'editor del prompt
 
-L'editor usa CodeMirror 6: tutte le scorciatoie standard di CodeMirror sono attive. Le più comuni:
+L'editor del body supporta le scorciatoie di editing più diffuse. Le più comuni:
 
 | Scorciatoia | Azione |
 |---|---|
@@ -48,9 +52,9 @@ L'editor usa CodeMirror 6: tutte le scorciatoie standard di CodeMirror sono atti
 | `Ctrl+A` | Seleziona tutto |
 | `Ctrl+F` | Cerca nel body |
 | `Ctrl+D` | Seleziona la prossima occorrenza della selezione |
-| `Ctrl+/` | Toggle commento (Markdown comment HTML) |
+| `Ctrl+/` | Toggle commento (commento HTML in Markdown) |
 
-Quando l'autocomplete `{{import "..."}}` è attivo (M4):
+Quando l'autocomplete degli import (`{{import "..."}}`) è attivo:
 
 | Scorciatoia | Azione |
 |---|---|
@@ -61,17 +65,16 @@ Quando l'autocomplete `{{import "..."}}` è attivo (M4):
 
 ## Editing del prompt
 
-- **Salvataggio**: automatico (debounce ~2 secondi dopo l'ultima modifica). Nessuna scorciatoia esplicita: ti basta scrivere.
-- **Nuovo prompt**: click sul bottone `+ Nuovo` nel ListPane (in alto a sinistra). In v1.0 non c'è una scorciatoia da tastiera dedicata.
+Il salvataggio è automatico: scatta circa 2 secondi dopo l'ultima modifica, senza bisogno di una scorciatoia esplicita — ti basta scrivere. Per creare un nuovo prompt si clicca il bottone **Nuovo** in alto nella colonna della lista: non esiste una scorciatoia da tastiera dedicata.
 
 ## Modali in generale
 
 | Scorciatoia | Azione |
 |---|---|
 | `Esc` | Chiudi modale (attivo in tutte le modali: Compila, Impostazioni, Palette, etc.) |
-| `Tab` / `Shift+Tab` | Cycle fra elementi focus all'interno della modale (focus trap WCAG 2.1) |
+| `Tab` / `Shift+Tab` | Sposta il focus fra gli elementi della modale (il focus resta sempre all'interno della modale aperta) |
 
-## Tray icon (tutti gli OS)
+## Icona nel tray (tutti gli OS)
 
 | Voce di menu | Azione |
 |---|---|
@@ -83,7 +86,7 @@ Quando l'autocomplete `{{import "..."}}` è attivo (M4):
 
 ## Menu contestuale (tasto destro)
 
-Non è una scorciatoia da tastiera (non esiste una scorciatoia `Shift+F10` dedicata), ma il tasto destro apre un menu contestuale ricco:
+Non è una scorciatoia da tastiera (non esiste una combinazione `Shift+F10` dedicata), ma il tasto destro apre un menu contestuale ricco:
 
 **Su un prompt:**
 
@@ -113,6 +116,11 @@ Non è una scorciatoia da tastiera (non esiste una scorciatoia `Shift+F10` dedic
 
 ## Limitazioni note
 
-- **Vim/Emacs binding**: non supportati in v1.0 (l'editor CodeMirror è in modalità default). Roadmap post-v1.0.
-- **Macros / hotkey custom in-app**: oltre alla global hotkey, le scorciatoie sopra elencate sono fisse in v1.0. Future versioni esporranno una configurazione utente.
-- **macOS**: alcune hotkey con `Ctrl` (es. `Ctrl+K`) sono già usate dal sistema (Emacs-style cut). L'app rispetta la convenzione macOS usando `⌘K`.
+I binding Vim/Emacs non sono supportati: l'editor usa le scorciatoie standard elencate sopra. Allo stesso modo, a parte la hotkey globale, le scorciatoie non sono personalizzabili: le combinazioni di questa pagina sono fisse.
+
+Su macOS, alcune combinazioni con `Ctrl` (es. `Ctrl+K`) sono già usate dal sistema per l'editing in stile Emacs: l'app rispetta la convenzione macOS e usa `⌘K` al loro posto.
+
+## Vedi anche
+
+- [`getting-started.md`](./getting-started.md) — il flusso hotkey → palette → Compila raccontato passo-passo.
+- [`troubleshooting.md`](./troubleshooting.md) — cosa fare quando la hotkey globale non risponde.
