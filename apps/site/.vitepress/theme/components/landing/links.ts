@@ -1,7 +1,10 @@
 // URL esterni della landing — un unico punto di verità.
 export const GITHUB = 'https://github.com/robertomarchioro/prompt-a-porter'
 export const RELEASES = `${GITHUB}/releases`
-export const DOCS = `${GITHUB}/tree/main/docs`
+// La documentazione utente vive su questo stesso sito (VitePress, base
+// hardcoded come in config.ts) — non mandare i visitatori su GitHub.
+export const DOCS = '/prompt-a-porter/utente/'
+export const GUIDA = '/prompt-a-porter/utente/getting-started'
 export const LICENSE = `${GITHUB}/blob/main/LICENSE`
 export const ISSUES = `${GITHUB}/issues`
 export const AUTHOR = 'https://github.com/robertomarchioro'

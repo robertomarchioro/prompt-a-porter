@@ -19,16 +19,17 @@ const linkDownload = useLinkDownload()
         </div>
         <nav class="ft-col">
           <h4>La collezione</h4>
-          <a href="#come-funziona">Versioni &amp; diff</a>
-          <a href="#come-funziona">Segnaposti</a>
-          <a href="#come-funziona">Ricerca semantica</a>
-          <a href="#come-funziona">Varianti A/B</a>
-          <a href="#come-funziona">Import composti</a>
+          <a :href="withBase('/utente/glossario-sintassi')">Segnaposti</a>
+          <a :href="withBase('/utente/ricerca-semantica')">Ricerca semantica</a>
+          <a :href="withBase('/utente/varianti-prompt')">Varianti A/B</a>
+          <a :href="withBase('/utente/prompt-componibili')">Import composti</a>
+          <a :href="withBase('/utente/regression-testing')">Test golden</a>
         </nav>
         <nav class="ft-col">
           <h4>Atelier</h4>
           <a href="#come-funziona">Come funziona</a>
-          <a href="#come-funziona">La palette ⌃⇧P</a>
+          <a :href="withBase('/utente/getting-started')">Getting started</a>
+          <a :href="withBase('/utente/scorciatoie-tastiera')">La palette ⌃⇧P</a>
           <a href="#collezione">Local-first</a>
           <a :href="RELEASES">Changelog</a>
         </nav>

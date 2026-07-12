@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { withBase } from 'vitepress'
-import { GITHUB } from './links'
+import { GITHUB, GUIDA } from './links'
 import { useLinkDownload } from './download'
 
 const linkDownload = useLinkDownload()
@@ -39,6 +39,7 @@ function chiudiConFocus(): void {
     <nav id="menu-principale" class="nav" :class="{ aperta: menuAperto }">
       <a href="#collezione" @click="chiudiMenu">La collezione</a>
       <a href="#come-funziona" @click="chiudiMenu">Come funziona</a>
+      <a :href="GUIDA" @click="chiudiMenu">Guida</a>
       <a :href="GITHUB" @click="chiudiMenu">GitHub</a>
       <a class="dl" :href="linkDownload" @click="chiudiMenu">Scarica</a>
     </nav>
