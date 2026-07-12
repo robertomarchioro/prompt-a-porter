@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="design_doc_mode" content="canvas">
+<title>Prompt-à-porter · Icona — Concept</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,300;1,6..72,400;1,6..72,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --violet:#8470D5; --violet-d:#6E56CF; --violet-br:#9B86F0;
+    --amber:#D8A463; --amber-soft:#E8C79A;
+    --ink:#EFEDF2; --muted:#8A8792; --faint:#5c5a63; --line:#2a2a30;
+    --card:#161618; --card-line:#26262b;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:"Inter",sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;}
+  .serif{font-family:"Newsreader",serif;}
+  .mono{font-family:"JetBrains Mono",monospace;}
+
+  .frame{position:absolute;}
+
+  /* ---- header ---- */
+  .hero{width:1180px;}
+  .hero .kick{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:var(--amber);}
+  .hero h1{font-family:"Newsreader",serif;font-weight:300;font-size:60px;line-height:1;letter-spacing:-.02em;margin-top:14px;color:#f4f2f7;}
+  .hero h1 em{font-style:italic;color:var(--violet-br);}
+  .hero p{font-family:"Newsreader",serif;font-weight:300;font-size:21px;line-height:1.45;color:#cfcbd8;margin-top:16px;max-width:720px;}
+  .hero p b{color:#fff;font-weight:400;font-style:italic;}
+
+  /* ---- concept card ---- */
+  .card{width:360px;background:var(--card);border:1px solid var(--card-line);border-radius:18px;padding:26px 26px 24px;}
+  .card .idx{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.2em;color:var(--faint);}
+  .card .cname{font-family:"Newsreader",serif;font-weight:400;font-size:26px;margin-top:6px;letter-spacing:-.01em;}
+  .card .cname .rec{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.12em;vertical-align:middle;margin-left:9px;color:var(--violet-d);background:rgba(132,112,213,.16);border:1px solid rgba(132,112,213,.4);border-radius:100px;padding:3px 9px;text-transform:uppercase;}
+
+  .bigwrap{margin:22px 0 20px;display:flex;justify-content:center;}
+  /* app-icon squircle */
+  .ic{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;
+      background:linear-gradient(150deg,var(--violet) 0%,var(--violet-d) 100%);}
+  .ic.amber{background:linear-gradient(150deg,var(--amber-soft) 0%,var(--amber) 100%);}
+  .ic.big{width:200px;height:200px;border-radius:46px;box-shadow:0 26px 50px -18px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.14);}
+  .ic .glow{position:absolute;inset:0;background:radial-gradient(120% 90% at 30% 12%,rgba(255,255,255,.28),transparent 55%);pointer-events:none;}
+
+  /* glyphs */
+  .g-p{font-family:"Newsreader",serif;color:#fff;line-height:1;}
+  .g-mono{font-family:"JetBrains Mono",monospace;line-height:1;color:#fff;}
+
+  /* combined {P} */
+  .bp{display:flex;align-items:center;justify-content:center;color:#fff;}
+  .bp .br{font-family:"JetBrains Mono",monospace;font-weight:400;opacity:.72;}
+  .bp .p{font-family:"Newsreader",serif;font-weight:400;}
+
+  /* mini legibility row */
+  .minis{display:flex;align-items:flex-end;gap:22px;justify-content:center;padding-top:18px;border-top:1px solid var(--card-line);}
+  .mini-i{display:flex;flex-direction:column;align-items:center;gap:8px;}
+  .mini-i .lab{font-family:"JetBrains Mono",monospace;font-size:9px;color:var(--faint);}
+  .ic.s64{width:64px;height:64px;border-radius:15px;}
+  .ic.s32{width:32px;height:32px;border-radius:8px;}
+  .ic.s16{width:16px;height:16px;border-radius:4px;}
+  .ic.s64 .glow,.ic.s32 .glow,.ic.s16 .glow{background:radial-gradient(120% 90% at 30% 12%,rgba(255,255,255,.22),transparent 55%);}
+
+  .rationale{font-size:13px;line-height:1.5;color:var(--muted);margin-top:20px;}
+  .rationale b{color:var(--ink);font-weight:500;}
+
+  /* light strip test */
+  .lighttest{margin-top:18px;background:#f4f2ee;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;}
+  .lighttest .t{font-size:11px;color:#8a8578;font-family:"JetBrains Mono",monospace;line-height:1.4;}
+</style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="frame hero" style="left:60px;top:56px;">
+    <div class="kick">Identità · Icona applicazione</div>
+    <h1 class="serif">L'icona <em>definitiva</em></h1>
+    <p class="serif">Sei segni a confronto, tutti nella palette del brand. Oggi convivono le <b>{ } graffe</b> (icona app, ambra) e la <b>P couture</b> (sito, viola): scegliamo un unico segno, poi lo declino in tutte le piattaforme e dimensioni. Ogni concept è testato a 200 · 64 · 32 · 16 px.</p>
+  </div>
+
+  <!-- ROW 1 -->
+
+  <!-- 01 Serif P -->
+  <div class="frame card" style="left:60px;top:360px;">
+    <div class="idx">01</div>
+    <div class="cname serif">P couture</div>
+    <div class="bigwrap">
+      <div class="ic big"><div class="glow"></div><span class="g-p" style="font-size:132px;font-weight:400;margin-top:-4px;">P</span></div>
+    </div>
+    <div class="minis">
+      <div class="mini-i"><div class="ic s64"><div class="glow"></div><span class="g-p" style="font-size:42px;">P</span></div><div class="lab">64</div></div>
+      <div class="mini-i"><div class="ic s32"><span class="g-p" style="font-size:21px;">P</span></div><div class="lab">32</div></div>
+      <div class="mini-i"><div class="ic s16"><span class="g-p" style="font-size:11px;">P</span></div><div class="lab">16</div></div>
+    </div>
+    <p class="rationale"><b>Continuità col sito.</b> La P serif di Newsreader — elegante, sartoriale. Massima riconoscibilità, ma dice “moda” più che “prompt”.</p>
+  </div>
+
+  <!-- 02 {P} combined -->
+  <div class="frame card" style="left:460px;top:360px;">
+    <div class="idx">02</div>
+    <div class="cname serif">{ P } — la sintesi<span class="rec">Consigliata</span></div>
+    <div class="bigwrap">
+      <div class="ic big"><div class="glow"></div>
+        <span class="bp" style="font-size:96px;gap:2px;"><span class="br">{</span><span class="p">P</span><span class="br">}</span></span>
+      </div>
+    </div>
+    <div class="minis">
+      <div class="mini-i"><div class="ic s64"><div class="glow"></div><span class="bp" style="font-size:31px;gap:1px;"><span class="br">{</span><span class="p">P</span><span class="br">}</span></span></div><div class="lab">64</div></div>
+      <div class="mini-i"><div class="ic s32"><span class="bp" style="font-size:16px;gap:0px;"><span class="br">{</span><span class="p">P</span><span class="br">}</span></span></div><div class="lab">32</div></div>
+      <div class="mini-i"><div class="ic s16"><span class="bp" style="font-size:9px;gap:0;"><span class="br">{</span><span class="p">P</span><span class="br">}</span></span></div><div class="lab">16</div></div>
+    </div>
+    <p class="rationale"><b>Unisce i due segni:</b> le graffe del prompt che vestono la P couture. Racconta esattamente il prodotto — prompt, pronti da indossare. Regge fino a 32; a 16 le graffe si chiudono.</p>
+  </div>
+
+  <!-- 03 braces refined -->
+  <div class="frame card" style="left:860px;top:360px;">
+    <div class="idx">03</div>
+    <div class="cname serif">{ } graffe</div>
+    <div class="bigwrap">
+      <div class="ic big"><div class="glow"></div><span class="g-mono" style="font-size:118px;font-weight:500;letter-spacing:-2px;">{ }</span></div>
+    </div>
+    <div class="minis">
+      <div class="mini-i"><div class="ic s64"><div class="glow"></div><span class="g-mono" style="font-size:38px;font-weight:500;letter-spacing:-1px;">{ }</span></div><div class="lab">64</div></div>
+      <div class="mini-i"><div class="ic s32"><span class="g-mono" style="font-size:19px;font-weight:500;letter-spacing:-.5px;">{ }</span></div><div class="lab">32</div></div>
+      <div class="mini-i"><div class="ic s16"><span class="g-mono" style="font-size:10px;font-weight:600;letter-spacing:-.5px;">{}</span></div><div class="lab">16</div></div>
+    </div>
+    <p class="rationale"><b>Continuità con l'app,</b> ricolorata nel viola del brand. Segno “prompt/codice” puro e leggibilissimo a ogni taglia — ma perde il richiamo couture.</p>
+  </div>
+
+  <!-- ROW 2 -->
+
+  <!-- 04 Hanger -->
+  <div class="frame card" style="left:60px;top:900px;">
+    <div class="idx">04</div>
+    <div class="cname serif">Gruccia</div>
+    <div class="bigwrap">
+      <div class="ic big"><div class="glow"></div>
+        <svg width="120" height="120" viewBox="0 0 120 120" fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M60 30c0-7 5-12 11-12s11 5 11 11c0 6-5 9-11 11-6 2-11 5-11 11"/>
+          <path d="M60 51 20 84c-4 3-2 9 3 9h74c5 0 7-6 3-9L60 51z"/>
+        </svg>
+      </div>
+    </div>
+    <div class="minis">
+      <div class="mini-i"><div class="ic s64"><div class="glow"></div><svg width="40" height="40" viewBox="0 0 120 120" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path d="M60 30c0-7 5-12 11-12s11 5 11 11c0 6-5 9-11 11-6 2-11 5-11 11"/><path d="M60 51 20 84c-4 3-2 9 3 9h74c5 0 7-6 3-9L60 51z"/></svg></div><div class="lab">64</div></div>
+      <div class="mini-i"><div class="ic s32"><svg width="20" height="20" viewBox="0 0 120 120" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"><path d="M60 30c0-7 5-12 11-12s11 5 11 11c0 6-5 9-11 11-6 2-11 5-11 11"/><path d="M60 51 20 84c-4 3-2 9 3 9h74c5 0 7-6 3-9L60 51z"/></svg></div><div class="lab">32</div></div>
+      <div class="mini-i"><div class="ic s16"><svg width="11" height="11" viewBox="0 0 120 120" fill="none" stroke="#fff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"><path d="M60 34c0-8 5-13 11-13s11 5 11 12c0 6-5 9-11 11-6 2-11 5-11 11"/><path d="M60 55 20 86c-4 3-2 9 3 9h74c5 0 7-6 3-9L60 55z"/></svg></div><div class="lab">16</div></div>
+    </div>
+    <p class="rationale"><b>Segno moda puro.</b> Immediatamente “guardaroba”. Distintivo e caldo, ma non comunica nulla di AI/prompt e a 16px diventa una massa.</p>
+  </div>
+
+  <!-- 05 Couture tag -->
+  <div class="frame card" style="left:460px;top:900px;">
+    <div class="idx">05</div>
+    <div class="cname serif">Cartellino</div>
+    <div class="bigwrap">
+      <div class="ic big"><div class="glow"></div>
+        <svg width="128" height="128" viewBox="0 0 128 128" fill="none">
+          <g transform="rotate(-16 64 64)">
+            <path d="M44 30h30l24 24v34a8 8 0 0 1-8 8H44a8 8 0 0 1-8-8V38a8 8 0 0 1 8-8z" fill="none" stroke="#fff" stroke-width="6"/>
+            <circle cx="52" cy="46" r="6" fill="#fff"/>
+            <text x="66" y="86" font-family="'JetBrains Mono',monospace" font-size="34" font-weight="600" fill="#fff" text-anchor="middle">{ }</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <div class="minis">
+      <div class="mini-i"><div class="ic s64"><div class="glow"></div><svg width="42" height="42" viewBox="0 0 128 128" fill="none"><g transform="rotate(-16 64 64)"><path d="M44 30h30l24 24v34a8 8 0 0 1-8 8H44a8 8 0 0 1-8-8V38a8 8 0 0 1 8-8z" fill="none" stroke="#fff" stroke-width="7"/><circle cx="52" cy="46" r="6" fill="#fff"/><text x="66" y="86" font-family="'JetBrains Mono',monospace" font-size="34" font-weight="700" fill="#fff" text-anchor="middle">{}</text></g></svg></div><div class="lab">64</div></div>
+      <div class="mini-i"><div class="ic s32"><svg width="21" height="21" viewBox="0 0 128 128" fill="none"><g transform="rotate(-16 64 64)"><path d="M44 30h30l24 24v34a8 8 0 0 1-8 8H44a8 8 0 0 1-8-8V38a8 8 0 0 1 8-8z" fill="none" stroke="#fff" stroke-width="9"/><circle cx="52" cy="46" r="7" fill="#fff"/></g></svg></div><div class="lab">32</div></div>
+      <div class="mini-i"><div class="ic s16"><svg width="11" height="11" viewBox="0 0 128 128" fill="none"><g transform="rotate(-16 64 64)"><path d="M44 30h30l24 24v34a8 8 0 0 1-8 8H44a8 8 0 0 1-8-8V38a8 8 0 0 1 8-8z" fill="none" stroke="#fff" stroke-width="12"/><circle cx="52" cy="46" r="9" fill="#fff"/></g></svg></div><div class="lab">16</div></div>
+    </div>
+    <p class="rationale"><b>Hang-tag couture</b> con le graffe dentro. Concettualmente ricco (etichetta + prompt), ma troppo dettaglio: sotto i 32px collassa in un poligono.</p>
+  </div>
+
+  <!-- 06 monogram på -->
+  <div class="frame card" style="left:860px;top:900px;">
+    <div class="idx">06</div>
+    <div class="cname serif">Monogramma på</div>
+    <div class="bigwrap">
+      <div class="ic big"><div class="glow"></div><span class="g-p" style="font-size:96px;font-weight:400;font-style:italic;letter-spacing:-4px;">på</span></div>
+    </div>
+    <div class="minis">
+      <div class="mini-i"><div class="ic s64"><div class="glow"></div><span class="g-p" style="font-size:31px;font-style:italic;letter-spacing:-1px;">på</span></div><div class="lab">64</div></div>
+      <div class="mini-i"><div class="ic s32"><span class="g-p" style="font-size:16px;font-style:italic;letter-spacing:-.5px;">på</span></div><div class="lab">32</div></div>
+      <div class="mini-i"><div class="ic s16"><span class="g-p" style="font-size:9px;font-style:italic;">på</span></div><div class="lab">16</div></div>
+    </div>
+    <p class="rationale"><b>La legatura à-porter.</b> Colto e distintivo, gioca sull'accento. Ma due lettere sono deboli come icona e illeggibili sotto i 32px.</p>
+  </div>
+
+  <!-- RECOMMENDATION PANEL -->
+  <div class="frame card" style="left:60px;top:1440px;width:1180px;background:linear-gradient(150deg,#161618,#131316);">
+    <div class="idx">Nota di direzione</div>
+    <div class="cname serif" style="font-size:28px;">La raccomandazione: <span style="font-style:italic;color:var(--violet-br);">{ P }</span></div>
+    <p class="rationale" style="max-width:840px;font-size:14px;">È l'unico segno che <b>fonde le due anime</b> del prodotto in una forma sola: le graffe del prompt (l'eredità dell'app) che <b>vestono</b> la P couture (l'identità del sito). Regge fino a 32px; per il favicon 16px passiamo alla sola <b>P</b> come versione ridotta — pratica standard (icona piena vs. mark ridotto). Dimmi quale concept ti convince — o se vuoi che ne fonda due — e procedo a generare il set completo: <span class="mono" style="font-size:12px;color:var(--amber);">favicon 16/32/48 · PNG 64→1024 · .icns macOS · .ico Windows · maskable Android · Apple touch · SVG vettoriale</span>.</p>
+    <div class="lighttest" style="max-width:520px;">
+      <div class="ic s64" style="border-radius:15px;"><div class="glow"></div><span class="bp" style="font-size:31px;gap:1px;"><span class="br">{</span><span class="p">P</span><span class="br">}</span></span></div>
+      <div class="ic s64 amber" style="border-radius:15px;"><span class="bp" style="font-size:31px;gap:1px;color:#3a2c12;"><span class="br" style="opacity:.8;">{</span><span class="p" style="color:#3a2c12;">P</span><span class="br" style="opacity:.8;">}</span></span></div>
+      <div class="t">Anche in ambra il segno tiene,<br>se un giorno servisse un'alternativa calda.</div>
+    </div>
+  </div>
+
+</body>
+</html>
