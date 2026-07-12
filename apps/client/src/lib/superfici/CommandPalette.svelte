@@ -90,7 +90,11 @@
     // l'utente potrebbe aver cambiato il toggle in Impostazioni.
     // Stessa occasione: ri-focus campo ricerca se siamo in quella view
     // (utente atteso digiti subito senza dover cliccare).
+    // La registrazione è asincrona: se il cleanup gira prima che la
+    // .then assegni `unlisten`, il listener resterebbe orfano. Il flag
+    // `annullato` copre quella finestra disiscrivendolo appena arriva.
     let unlisten: (() => void) | undefined;
+    let annullato = false;
     finestra.onFocusChanged(({ payload: focused }) => {
       if (focused) {
         void caricaPreferenze();
@@ -99,9 +103,14 @@
         }
       }
     }).then((u) => {
-      unlisten = u;
+      if (annullato) {
+        u();
+      } else {
+        unlisten = u;
+      }
     });
     return () => {
+      annullato = true;
       unlisten?.();
     };
   });
