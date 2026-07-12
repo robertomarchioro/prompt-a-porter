@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { AUTHOR, DOCS, GITHUB, ISSUES, LICENSE, RELEASES } from './links'
+import { useNomeOsVisitatore } from './os'
+
+const osNome = useNomeOsVisitatore()
 </script>
 
 <template>
@@ -9,7 +12,7 @@ import { AUTHOR, DOCS, GITHUB, ISSUES, LICENSE, RELEASES } from './links'
         <div class="ft-brand">
           <div class="ft-mark"><span class="mk serif">P</span><span class="nm">Prompt-à-porter</span></div>
           <p class="ft-tag">La tua collezione di prompt AI. <em>Pronti da indossare.</em></p>
-          <div class="ft-cta"><a class="p" :href="RELEASES">Scarica per Windows</a><a class="g" :href="GITHUB">Vedi su GitHub</a></div>
+          <div class="ft-cta"><a class="p" :href="RELEASES">{{ osNome ? `Scarica per ${osNome}` : "Scarica l'app" }}</a><a class="g" :href="GITHUB">Vedi su GitHub</a></div>
         </div>
         <nav class="ft-col">
           <h4>La collezione</h4>

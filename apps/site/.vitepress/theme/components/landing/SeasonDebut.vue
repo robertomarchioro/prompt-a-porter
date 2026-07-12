@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { RELEASES } from './links'
+import { useNomeOsVisitatore } from './os'
+
+const osNome = useNomeOsVisitatore()
 </script>
 
 <template>
@@ -14,7 +17,7 @@ import { RELEASES } from './links'
         </div>
         <p class="lede">Il capo era ancora <em>in cucitura</em>. Con la 1.0 l'ago si posa: Prompt-à-porter smette di essere in beta e apre la sua prima stagione in negozio.</p>
         <div class="scta">
-          <a class="b1" :href="RELEASES">Scarica la 1.0 per Windows</a>
+          <a class="b1" :href="RELEASES">{{ osNome ? `Scarica la 1.0 per ${osNome}` : 'Scarica la 1.0' }}</a>
           <span class="note">gratis · local-first · AGPL 3.0</span>
         </div>
       </div>
@@ -24,7 +27,7 @@ import { RELEASES } from './links'
           <span class="stamp">v1.0 · AI 2026</span>
         </div>
         <div class="cl-list">
-          <div class="cl-row"><span class="ic">↓</span><div class="tx"><div class="t">Installazione senza attriti</div><div class="d">Setup per-utente su Windows, nessun avviso, aggiornamenti automatici e silenziosi in background.</div></div></div>
+          <div class="cl-row"><span class="ic">↓</span><div class="tx"><div class="t">Installazione senza attriti</div><div class="d">Setup rapido per Windows, macOS e Linux; aggiornamenti automatici e silenziosi in background.</div></div></div>
           <div class="cl-row"><span class="ic">✒</span><div class="tx"><div class="t">Editor rifinito su misura</div><div class="d">Vista Sorgente e Compilato affiancate, varianti create al volo, import e export Markdown con front-matter.</div></div></div>
           <div class="cl-row"><span class="ic">⊕</span><div class="tx"><div class="t">Prompt componibili evoluti</div><div class="d" v-pre><code>{{import "x" with k=v}}</code> con variabili scopate e pinning a una versione storica.</div></div></div>
           <div class="cl-row"><span class="ic">◉</span><div class="tx"><div class="t">Solida da indossare tutti i giorni</div><div class="d">Accessibilità di base, suite di regressione verde e documentazione utente completa.</div></div></div>
