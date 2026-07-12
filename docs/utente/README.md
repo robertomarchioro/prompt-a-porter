@@ -25,14 +25,14 @@ Se sei un nuovo utente, parti da qui:
 | [`mcp.md`](./mcp.md) | Integrazione Model Context Protocol: setup Claude Desktop, Cursor, custom client; 4 tool esposti (`pap_search`, `pap_get`, `pap_list_recent`, `pap_render`); trasporto stdio; troubleshooting |
 | [`formato-export-json.md`](./formato-export-json.md) | Schema del formato di export JSON v1: campi obbligatori/opzionali, modalità conflitti import (skip/overwrite/rename), garanzie round-trip lossless |
 | [`ricerca-semantica.md`](./ricerca-semantica.md) | Ricerca ibrida (FTS + embedding), modello scelto, alpha bilanciamento, idle-unload, performance e privacy |
-| [`linting-regole.md`](./linting-regole.md) | Catalogo completo delle 11 regole di linting con esempi pratici (LEN/PH/PII/STY/IMP) |
+| [`linting-regole.md`](./linting-regole.md) | Catalogo completo delle 12 regole di linting con esempi pratici (LEN/PH/PII/STY/IMP) |
 | [`cartelle.md`](./cartelle.md) | Modello dati e UX cartelle (anticipa permessi Fase 4) |
 | [`prompt-componibili.md`](./prompt-componibili.md) | Sintassi `{{import "..."}}`, esempi, anti-pattern, depth limits e cicli |
 | [`varianti-prompt.md`](./varianti-prompt.md) | A/B testing dei prompt: come creare varianti B/C/Z, navigazione, differenza con i fork (Fase 4) |
 | [`fork-prompt.md`](./fork-prompt.md) | Clone indipendente con tracciabilità: quando fare fork, banner "Fork di X", chain (Fase 4) |
-| [`rating-prompt.md`](./rating-prompt.md) | Rating discreto post-uso 👎/😐/👍, badge percentuale colorato, traiettoria nel tempo (Fase 4) |
+| [`rating-prompt.md`](./rating-prompt.md) | Rating discreto post-uso 👎/😐/👍, aggregato nella tab Valutazioni, traiettoria nel tempo (Fase 4) |
 | [`regression-testing.md`](./regression-testing.md) | Golden examples + provider AI (Ollama/Anthropic/OpenAI) + similarity functions + drift report — differenziatore strategico (Fase 4) |
-| [`auto-update.md`](./auto-update.md) | Aggiornamenti automatici (v1.0+): policy on-demand, firma Ed25519 + Authenticode, privacy, troubleshooting, FAQ |
+| [`auto-update.md`](./auto-update.md) | Aggiornamenti automatici: policy on-demand, firma Ed25519 + Authenticode, privacy, troubleshooting, FAQ |
 
 ## Integrazioni avanzate
 

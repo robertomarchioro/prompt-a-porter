@@ -13,37 +13,31 @@ refactor).
 
 1. Compila il prompt (Command Palette `Ctrl+Shift+P` o detail pane →
    "Compila").
-2. Click su **Copia** — il testo finisce nella clipboard.
-3. In basso a destra appare un toast:
-   ```
-   Com'è andata con questo prompt?
-   👎  😐  👍
-   ```
-4. Click su un'emoji registra il voto + mostra "Grazie!" per 1 secondo
-   prima di chiudersi.
-5. Se non interagisci, il toast si chiude da solo dopo 5 secondi senza
-   registrare nulla — il rating è sempre opzionale.
+2. Sotto l'output compilato, la modale mostra il blocco espandibile
+   **"Valuta il risultato"** con tre bottoni: **Negativo** / **Neutro**
+   / **Positivo** (icone 👎 😐 👍).
+3. Click su un bottone registra il voto e mostra la conferma
+   "— grazie!" inline accanto al titolo del blocco.
+4. Prima di votare puoi espandere il campo **"Aggiungi nota"**
+   (collassato di default) per annotare cosa ha funzionato o meno.
+5. Se chiudi la modale senza votare non viene registrato nulla — il
+   rating è sempre opzionale.
 
 Errori di rete/DB sono silenziosi: il rating è non-bloccante per la
 UX di "compila & usa".
 
-## Aggregato visibile nel detail pane
+## Aggregato visibile nella tab "Valutazioni"
 
-Il detail pane della Libreria mostra un badge accanto agli altri
-metadata:
+Il detail pane della Libreria ospita la tab **Valutazioni** con
+l'aggregato dei voti:
 
-```
-Privato · claude-sonnet · Usato 24 volte · 👍 87% su 23 · 2g fa
-```
+- **Media firmata** a 2 decimali (es. `+0.75`) su N voti.
+- **Barre di distribuzione** Positivi / Neutri / Negativi con
+  conteggio per fascia.
 
-| Colore | Soglia | Interpretazione |
-|---|---|---|
-| 🟢 verde | ≥ 80% positivi | "Funziona bene" |
-| 🟡 giallo | 50–79% | "Risultati misti" |
-| 🔴 rosso | < 50% | "Candidato a refactor" |
-
-Tooltip sul badge mostra la distribuzione completa: `N positivi · N
-neutri · N negativi`.
+Senza voti la tab mostra uno stato vuoto con l'invito a valutare
+dalla modale Compila. Nella riga dei metadata il detail pane mostra
+solo il chip di utilizzo `Usato N×`.
 
 ## Convenzioni dei 3 valori
 
@@ -78,14 +72,17 @@ nuovo voto, e l'aggregato media le entry più recenti.
 
 ## Limiti noti / roadmap
 
-- ✅ **Modale "Aggiungi nota"** atterrata in `v0.5.0`: dopo voto
-  👎 o 😐 si apre una modale con textarea opzionale (max 500
-  caratteri). 👍 salva subito senza friction. "Salta" memorizza il
-  voto senza nota.
+- ✅ **Modale "Aggiungi nota"** atterrata in `v0.5.0`: solo il voto
+  👎 apre la modale "Cosa non ha funzionato?" con textarea opzionale.
+  😐 e 👍 salvano subito senza friction (resta la nota inline
+  opzionale nel blocco di valutazione). "Salta e registra voto"
+  memorizza il voto senza nota.
 - ✅ **Sort by quality "Migliori prompt"** atterrato in `v0.5.0`:
   nuova option "Migliori" nel dropdown ordine della Libreria.
   Ordina per `AVG(Rating)` ultimi 90 giorni (DESC), prompt senza
-  rating in fondo. Tie-breaker su `UseCount` + `UpdatedAt`.
+  rating in fondo. Tie-breaker su `UseCount` + `UpdatedAt`. Con
+  l'ordine "Migliori" attivo le card della lista mostrano il voto
+  medio `±X.XX` (da `v0.8.29`).
 - **Privacy team**: oggi `usr-locale` (single-user). Nel workspace
   team gli admin vedono aggregati ma non singoli rating con note
   — scope Fase 5 con E2E.

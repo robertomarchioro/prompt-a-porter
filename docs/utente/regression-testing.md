@@ -40,11 +40,13 @@ tabella `ProviderConfig`):
 
 ## Crea un golden
 
-Apri un prompt in **Editor** → tab **Test** (accanto a Cronologia /
-Diagnosi). Click **+ Aggiungi golden**:
+Apri un prompt in **Editor** → tab **Test golden** (accanto a
+Cronologia / Diagnosi). Click **+ Aggiungi golden**:
 
 1. **Etichetta**: nome leggibile (es. `caso comune`, `edge case lungo`).
-2. **Input vars** JSON: oggetto con i valori dei segnaposti. Es.
+2. **Input vars**: da `v0.8.31` l'inserimento è guidato, con un campo
+   per ogni segnaposto letto dal body del prompt. Se il body non è
+   caricabile resta il fallback JSON grezzo:
    ```json
    {"contesto":"reclamo cliente", "tono":"formale"}
    ```
@@ -87,11 +89,24 @@ catturati: l'observation viene comunque salvata con `Errore`
 valorizzato e `Passed = false`. Errori DB invece propagano (es.
 golden inesistente).
 
-## Vista "Regressioni" in Libreria
+## Miglioramenti run (`v0.8.30`-`v0.8.31`)
 
-Sidebar Libreria → **Regressioni**. Mostra tabella drift aggregata
-per (prompt × provider × model) negli ultimi N giorni (filtro
-periodo dropdown 7/30/90/365):
+- **Dettaglio risultato per run singola**: "Esegui" apre una modale
+  che al termine mostra l'esito completo dell'observation.
+- **Modale di modifica** del golden (stessa UI della creazione).
+- **Selettore provider + modello** per run singola e batch, con
+  memoria dell'ultimo usato.
+- **Selettori separati per il giudice** quando la similarity è
+  `llm-judge` (default: stesso provider/modello, modificabile).
+- **Verifica preventiva del modello embeddings** per `cosine`: se
+  non è inizializzato, la run si ferma prima di chiamare il provider
+  (Impostazioni → Ricerca & Embeddings).
+
+## Vista "Regressioni"
+
+Il link **Regressioni** nel footer della sidebar apre una modale con
+la tabella drift aggregata per (prompt × provider × model) negli
+ultimi N giorni (periodo regolabile con slider 1-90 giorni):
 
 | Prompt | Provider · Model | Run | Pass | Fail | Sim. media | Sim. ultima | Drift | Ultima |
 |---|---|---|---|---|---|---|---|---|
@@ -103,7 +118,7 @@ periodo dropdown 7/30/90/365):
   fail).
 
 Click **Esporta CSV** per scaricare il report (RFC 4180, escape
-virgole/quote/newline).
+virgole/quote/newline) come `regressioni-<N>g-<data>.csv`.
 
 ## Schema dati
 
@@ -128,7 +143,7 @@ Vedi `docs/architettura/schema-dati.md` § V008-V010. Riassunto:
 ## Limiti noti / roadmap
 
 - ✅ **"Esegui tutti i golden" batch** atterrato in `v0.5.0`:
-  bottone "Esegui tutti (N)" nel pannello Test dell'Editor.
+  bottone "Esegui tutti (N)" nella tab Test golden dell'Editor.
   Esecuzione sequenziale (no parallel per rate limit), progress
   inline `Esecuzione X/Y…`, summary finale `✓ N passed · ✗ M failed`.
 - **CLI integration** `pap test <promptId>` per CI/CD —

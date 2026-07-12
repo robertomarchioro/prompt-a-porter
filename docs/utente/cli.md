@@ -103,6 +103,14 @@ pap render prm-abc123 --var-file vars.yaml | xclip -selection clipboard
 pap render prm-abc123 --var-file vars.yaml --var nome=Carlo
 ```
 
+Da `v0.8.32` `pap render` espande anche i **segnaposti globali** `{{global nome}}`, leggendo i valori dal vault, prima di applicare i `--var`.
+
+Avvisi su stderr (l'output su stdout non è mai silenziosamente incompleto):
+
+- segnaposti rimasti senza valore;
+- globali non trovati nel vault;
+- `{{import}}` presenti nel body: la CLI **non li espande** (usa il client desktop per compilarli).
+
 ### Recenti
 
 ```bash
@@ -151,20 +159,7 @@ pap completion powershell >> $PROFILE
 
 ## Installazione
 
-### Da binario (raccomandato)
-
-Scarica l'archivio per la tua piattaforma dalla pagina Releases:
-
-- `pap-linux-amd64`
-- `pap-linux-arm64`
-- `pap-darwin-amd64`
-- `pap-darwin-arm64`
-- `pap-windows-amd64.exe`
-- `pap-windows-arm64.exe`
-
-Sposta il binario in una directory presente in `$PATH` (es. `/usr/local/bin/pap` su Linux/macOS, `%LOCALAPPDATA%\pap\pap.exe` su Windows).
-
-### Da sorgente
+L'installazione avviene **da sorgente** (la pagina Releases pubblica solo gli installer del client desktop, non i binari CLI). Serve Go installato:
 
 ```bash
 git clone https://github.com/robertomarchioro/prompt-a-porter
@@ -172,7 +167,7 @@ cd prompt-a-porter/apps/cli
 go install .
 ```
 
-`go install` mette il binario in `$GOPATH/bin` (default `~/go/bin`).
+`go install` mette il binario in `$GOPATH/bin` (default `~/go/bin`); assicurati che sia in `$PATH`. In alternativa `go build -o pap .` produce il binario nella directory corrente, da spostare dove preferisci (es. `/usr/local/bin/pap`).
 
 ## Codici di uscita
 

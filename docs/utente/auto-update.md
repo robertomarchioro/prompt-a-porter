@@ -2,7 +2,7 @@
 
 > Come Prompt a Porter mantiene il software aggiornato e che controllo hai tu sul processo.
 >
-> **Disponibile da**: v1.0.
+> **Disponibile da**: v0.8.10.
 
 ## In breve
 
@@ -13,7 +13,7 @@
 
 ## Come funziona
 
-Quando vuoi sapere se c'è una versione nuova, vai in **Impostazioni → Sviluppo → Aggiornamenti** e clicca **"Verifica aggiornamenti"**.
+Quando vuoi sapere se c'è una versione nuova, vai in **Impostazioni → Sistema → Aggiornamenti** e clicca **"Verifica aggiornamenti"**.
 
 L'app contatta GitHub Releases, scarica un piccolo file di metadati (`latest.json`), verifica che sia firmato con la chiave del progetto, e ti dice:
 
@@ -31,7 +31,7 @@ Se confermi, l'app scarica il nuovo binario, verifica anche quella firma, e appl
 
 ## Come disabilitare il check
 
-In **Impostazioni → Sviluppo → Aggiornamenti** c'è un toggle "Abilita verifica aggiornamenti". Se lo disattivi:
+In **Impostazioni → Sistema → Aggiornamenti** c'è un toggle "Abilita verifica aggiornamenti". Se lo disattivi:
 
 - Il bottone "Verifica aggiornamenti" sparisce.
 - L'app non contatta mai GitHub Releases per i meta updates.
@@ -43,11 +43,12 @@ In qualsiasi momento puoi scaricare la versione più recente direttamente da:
 
 [https://github.com/robertomarchioro/prompt-a-porter/releases/latest](https://github.com/robertomarchioro/prompt-a-porter/releases/latest)
 
-Asset disponibili (Windows):
+Asset disponibili:
 
-- **NSIS installer** (`Prompt.a.Porter_X.Y.Z_x64-setup.exe`) — installazione standard per-user senza UAC. Sostituisce la versione precedente preservando i dati.
-- **MSI installer** (`Prompt.a.Porter_X.Y.Z_x64_en-US.msi`) — installazione system-wide (richiede privilegi admin).
-- **Portable .zip** — estrazione e uso senza installer. Manuale.
+- **Windows — NSIS installer** (`Prompt.a.Porter_X.Y.Z_x64-setup.exe`) — installazione standard per-user senza UAC. Sostituisce la versione precedente preservando i dati.
+- **Windows — Portable .zip** (`Prompt-a-Porter-portable-windows-x64-vX.Y.Z.zip`) — estrazione e uso senza installer. Manuale.
+- **macOS — DMG universale** (`Prompt.a.Porter_X.Y.Z_universal.dmg`) — Apple Silicon + Intel, firmato e notarizzato.
+- **Linux — AppImage** (`Prompt.a.Porter_X.Y.Z_amd64.AppImage`) e **`.deb`** (`Prompt.a.Porter_X.Y.Z_amd64.deb`).
 
 Per gli installer, fai doppio click e segui la procedura. I tuoi dati (vault, preferenze, log) restano intatti durante l'aggiornamento.
 
@@ -98,11 +99,11 @@ Il download è iniziato ma si è interrotto.
 
 L'updater non supporta il downgrade automatico (per sicurezza). Per tornare a una versione precedente:
 
-1. Disinstalla la versione corrente da Impostazioni Windows → App.
+1. Disinstalla la versione corrente (Windows: Impostazioni → App; macOS: elimina l'app da `Applications`; Linux: rimuovi l'AppImage o `sudo apt remove` per il `.deb`).
 2. Scarica la versione che vuoi da [github.com/robertomarchioro/prompt-a-porter/releases](https://github.com/robertomarchioro/prompt-a-porter/releases) (tutte le release sono permanenti).
 3. Installa.
 
-I tuoi dati restano: il vault è in `%APPDATA%\com.pap.client\`, indipendente dalla versione dell'eseguibile.
+I tuoi dati restano: il vault è nella cartella dati dell'app (vedi [`getting-started.md`](./getting-started.md)), indipendente dalla versione dell'eseguibile.
 
 ### "SmartScreen mi dice che l'eseguibile non è riconosciuto"
 
@@ -137,6 +138,4 @@ Per dettagli tecnici (firma Ed25519, garanzie di sicurezza, policy applicata):
 
 ## Manutenzione di questo documento
 
-- Quando l'UI Impostazioni → Sviluppo → Aggiornamenti viene implementata (M1.4b): aggiornare §"Come funziona" con istruzioni precise + screenshot.
-- Quando esce v1.0: rimuovere "Disponibile da v1.0" dal preambolo, è il default.
 - Quando la chiave di firma viene ruotata: aggiornare §FAQ "cosa succede se cambia la chiave".

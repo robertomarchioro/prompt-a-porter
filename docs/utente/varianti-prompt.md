@@ -19,7 +19,9 @@ formulazione funziona meglio.
 
 ## Crea una variante
 
-Dal **detail pane** della Libreria, click su **"+ Variante"**:
+Dal **detail pane** della Libreria, click su **"+ Variante"** nel
+pannello laterale destro: si apre la modale **"Crea variante"** con
+un campo etichetta opzionale (vuoto = etichetta auto-assegnata).
 
 1. Il prompt corrente diventa il "principale" e una nuova copia
    appare con etichetta `B` (la `A` è riservata al principale).
@@ -38,12 +40,17 @@ pillole cliccabili. Click su una pillola seleziona quella variante
 nel pane. Click sull'etichetta del principale (titolo senza suffisso)
 torna al principale.
 
+Nella lista della Libreria le varianti sono evidenziate con rientro
+e connettore "↳" verso il prompt padre **solo con ordinamento
+"A-Z"** (dove le sorelle tendono a stare vicine); con gli altri
+ordinamenti la lista resta piatta.
+
 ## Etichette custom
 
 Per dare un nome semantico (es. `Formal`, `Concise`, `Per-junior`),
-oggi serve modificarla via SQL nel vault — il backend supporta già
-qualunque stringa, manca solo lo step UI per l'input. Quick win
-candidato per `v0.5.0`.
+compila il campo etichetta nella modale **"Crea variante"** (bottone
+"+ Variante" nel pannello laterale del dettaglio). Se lo lasci
+vuoto, il sistema assegna la prossima lettera libera.
 
 ## Differenza con i Fork
 
@@ -66,15 +73,17 @@ Vedi anche [`fork-prompt.md`](./fork-prompt.md).
 
 ## Limiti noti
 
-- **UI Editor "Crea variante"**: oggi solo dalla Libreria. Quick win
-  per `v0.5.0`.
+- ✅ **UI "Crea variante" nel dettaglio**: il bottone "+ Variante"
+  nel pannello laterale del detail pane apre la modale con etichetta
+  custom opzionale.
 - **Confronto varianti dedicato** (vista N colonne con metadata
   affiancate) — riusabile via [`Confronto fianco-a-fianco`](./README.md):
   Cmd/Ctrl+click sulle pillole varianti per metterle nel set di
   confronto.
-- **Promozione a principale** (swap main ↔ variant) non implementata.
-  Oggi il "principale" resta sempre il primo prompt creato; per
-  cambiare paradigma duplica manualmente.
+- ✅ **Promozione a principale** (swap main ↔ variant): voce
+  "Promuovi a principale" nel menu contestuale della pillola
+  variante. La "Rinomina etichetta" della pillola è invece ancora
+  disabilitata.
 
 ## Riferimenti
 

@@ -18,7 +18,8 @@ sperimentare modifiche su un prompt **team** senza toccare l'originale.
 
 ## Cosa fa "Fork"
 
-Click su **"Fork"** nel detail pane della Libreria:
+Click sull'icona **fork** nella toolbar del detail pane, oppure
+voce **"Duplica (fork)"** nel menu contestuale della lista:
 
 | Campo | Valore del fork |
 |---|---|

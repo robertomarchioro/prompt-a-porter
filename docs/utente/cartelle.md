@@ -51,21 +51,22 @@ ricalcolata su sposta/rinomina di sotto-tree. Vincolo invariante:
 La sidebar della Libreria mostra l'albero delle cartelle. Click
 destro su una cartella per:
 
-- **Nuova cartella figlia** (rispetta UNIQUE su (parent, name))
+- **Nuovo prompt qui** (crea un prompt direttamente nella cartella)
+- **Nuova sottocartella** (rispetta UNIQUE su (parent, name))
 - **Rinomina** (propaga `Path` a tutti i discendenti, in transazione)
-- **Sposta in...** (drag&drop o menu)
-- **Elimina** (soft delete cascata; conferma esplicita perché i
-  prompt dentro tornano a root)
+- **Elimina cartella** (soft delete cascata; conferma esplicita
+  perché i prompt dentro tornano a root)
 
-I prompt si spostano **trascinandoli** sulla cartella desiderata,
-oppure dal menu contestuale del prompt > "Sposta in...".
+Le cartelle non si spostano fra loro dalla UI (niente drag&drop né
+voce "Sposta in..."). I prompt invece si spostano dal loro menu
+contestuale > "Sposta in cartella".
 
 ### Filtri di lista
 
-Nella Libreria, click su una cartella filtra la lista a:
-
-- prompt direttamente in quella cartella, **oppure**
-- prompt anche nei sotto-tree (toggle "include sottocartelle")
+Nella Libreria, click su una cartella filtra la lista ai prompt di
+quella cartella **e di tutto il suo sotto-albero** (sempre incluso,
+non c'è un toggle). L'opzione **Nessuna cartella** mostra i soli
+prompt a root.
 
 ## Anti-pattern
 

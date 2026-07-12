@@ -128,8 +128,7 @@ L'editor segnala in tempo reale problemi nel body. Catalogo riassuntivo (dettagl
 
 | Codice | Severità | Quando |
 |---|---|---|
-| `STY001` | Info | Ripetizione di n-gram (frase identica 3+ volte) |
-| `STY002` | Info | Maiuscole eccessive (parola in CAPS > 10 char) |
+| `STY001` | Info | Stesso n-gram (3 parole) ripetuto ≥ 4 volte |
 
 ### IMP — Import / dipendenze
 
@@ -138,8 +137,9 @@ L'editor segnala in tempo reale problemi nel body. Catalogo riassuntivo (dettagl
 | `IMP001` | Error | Import non risolvibile (path non esistente) |
 | `IMP002` | Error | Ciclo di import (diretto o indiretto) |
 | `IMP003` | Warning | Profondità import ≥ 6 (limite hard a 5) |
+| `IMP004` | Info | Il prompt corrente è importato da N altri prompt |
 
-Disabilita singole categorie da **Impostazioni → Linter** (la scelta è persistita locale).
+Da **Impostazioni → Linter** puoi disabilitare intere categorie o singole regole, cambiare la severità di ogni regola e regolare le soglie numeriche (caratteri massimi/minimi, ripetizioni minime). Le scelte sono persistite in locale.
 
 ## Esempi compositi
 
@@ -186,5 +186,5 @@ Analizza il seguente dataset: {{dataset}}.
 I segnaposti sono pensati per **valori brevi** (parole, frasi, qualche riga). Per testi lunghi (interi articoli, codice multi-file):
 
 - Considera di **dividere** il prompt in fasi (prompt 1 → output → prompt 2).
-- Usa la modalità **doppia vista Sorgente/Compilato** dell'editor (M5) per validare visivamente il render.
+- Usa la tab **Anteprima** dell'editor (M5) per validare visivamente il render.
 - Evita segnaposti dentro segnaposti: PaP non supporta interpolazione ricorsiva nei valori (il risultato è trattato come stringa letterale).

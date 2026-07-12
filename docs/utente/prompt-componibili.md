@@ -5,7 +5,9 @@
 Un prompt può **importare** il body di un altro prompt usando la
 sintassi `{{import "path"}}`. Il client espande la catena al volo
 quando compili il prompt finale (Command Palette > Compila & copia,
-oppure via MCP/CLI).
+oppure via MCP). La CLI invece **non espande gli import**:
+`pap render` li lascia com'è ed emette un warning su stderr (vedi
+[`cli.md`](./cli.md)).
 
 Il vault diventa così un sistema modulare: definisci una volta un
 "ruolo esperto" o un "tono editoriale" e lo riusi in molti prompt
@@ -96,9 +98,54 @@ Un prompt **non può importarsi a vicenda** con un altro:
 Il linter rileva i cicli con `IMP002` (errore) e mostra il punto
 esatto nell'editor. La compilazione fallisce con messaggio chiaro.
 
+## Pinning a versioni
+
+L'import può **bloccarsi a una versione storica** del prompt target
+con il modifier `version=N`:
+
+```
+{{import "ruolo-esperto-marketing" version=3}}
+```
+
+Senza modifier, l'import risolve sempre alla versione corrente: se
+aggiorni `ruolo-esperto-marketing`, tutti i prompt che lo importano
+vedono il nuovo body alla prossima compilazione. Con `version=N` il
+body viene letto dal repository di versioni (`PromptVersions`), così
+puoi importare uno snapshot stabile anche dopo modifiche al child.
+
+## Variabili a import
+
+Il modifier `with` passa **valori scopati** ai segnaposti del prompt
+importato:
+
+```
+{{import "ruolo-esperto-marketing" with tono=formale, lingua="italiano formale"}}
+```
+
+I valori si applicano solo ai segnaposti del body importato (non a
+quelli del prompt che importa). Valori con spazi vanno fra virgolette
+doppie; in caso di chiavi duplicate vince l'ultima.
+
+I due modifiers si combinano — `version` va **prima** di `with`:
+
+```
+{{import "ruolo-esperto-marketing" version=3 with tono=formale}}
+```
+
+## Supporto nell'editor
+
+- **Autocomplete**: digitando `{{import "` (o con `Ctrl+Space`)
+  l'editor suggerisce i prompt del vault da importare.
+- **Token cliccabili**: gli `{{import}}` nel body sono evidenziati e
+  cliccabili per saltare al prompt importato.
+- **Tab "Import & Var."** nel dettaglio del prompt: mostra l'albero
+  degli import (con eventuali varianti) e le variabili in gioco.
+- La regola linter `IMP004` ti avvisa quando il prompt che stai
+  modificando è importato da altri prompt.
+
 ## Linting
 
-Tre regole IMP* sui prompt componibili (vedi
+Quattro regole IMP* sui prompt componibili (vedi
 [`linting-regole.md`](./linting-regole.md)):
 
 | Codice | Severità | Cosa segnala |
@@ -106,6 +153,7 @@ Tre regole IMP* sui prompt componibili (vedi
 | `IMP001` | Error | Path che non risolve a nessun prompt |
 | `IMP002` | Error | Ciclo (self o multi-hop) |
 | `IMP003` | Warning | Profondità raggiungibile > 5 livelli |
+| `IMP004` | Info | Il prompt corrente è importato da N altri prompt |
 
 Le regole IMP* sono attive **solo sui prompt salvati** (non sul
 draft non ancora committato). Compaiono nel pannello Diagnosi
@@ -133,21 +181,6 @@ strutturali.
 Non sono supportati. Se hai bisogno di "include questo se quello",
 oggi devi mantenere due varianti del prompt e scegliere a mano.
 Future versioni potrebbero aggiungere `{{import_if cond "..."}}`.
-
-### Pinning a versioni
-
-Non supportato. L'import risolve sempre alla versione corrente del
-prompt target. Se aggiorni `ruolo-esperto-marketing`, tutti i prompt
-che lo importano vedono il nuovo body alla prossima compilazione.
-
-Roadmap Fase 4: sintassi `{{import "x" version=N}}` per pinning a
-una versione storica (richiede già `PromptVersions` esistente).
-
-### Variabili a import
-
-Non supportate in v0.3. Roadmap futura: `{{import "x" with k=v}}`
-per passare parametri all'import (oggi i segnaposti sono globali al
-prompt root, non scopati per import).
 
 ## Comandi Tauri esposti
 

@@ -12,9 +12,9 @@ Il binario è firmato con certificato Authenticode Certum EV, ma Microsoft costr
 
 ### macOS: "L'app non può essere aperta perché lo sviluppatore non è verificato"
 
-L'app non è ancora notarizzata da Apple (in roadmap post-v1.0).
+L'app è firmata Developer ID e **notarizzata da Apple**: questo avviso **non è lo stato atteso**. Se compare, probabilmente il download è corrotto o proviene da una fonte non ufficiale.
 
-**Soluzione**: Tasto destro sull'app in `Applications` → "Apri" → conferma "Apri". L'app viene aggiunta alle eccezioni Gatekeeper e i prossimi avvi sono diretti.
+**Soluzione**: riscarica il `.dmg` dalla [pagina release ufficiale](https://github.com/robertomarchioro/prompt-a-porter/releases/latest) e reinstalla. Se il problema persiste, apri un'issue.
 
 ### Linux: AppImage non si avvia
 
@@ -44,10 +44,10 @@ Su GNOME serve un'estensione tipo *AppIndicator/KStatusNotifier Support*; su KDE
 
 L'app cerca il vault nei path di default (vedi [`getting-started.md`](./getting-started.md) — sezione Onboarding). Se il file non esiste, l'onboarding si avvia e ti guida nella creazione.
 
-Se hai un vault esistente in posizione non standard, puoi puntarci impostando la variabile d'ambiente prima dell'avvio:
+L'app desktop **non legge variabili d'ambiente** per il path del vault. La variabile `PAP_VAULT_PATH` vale solo per la CLI `pap` e per il server MCP:
 
 ```bash
-PAP_VAULT_PATH=/percorso/del/vault.db prompt-a-porter
+PAP_VAULT_PATH=/percorso/del/vault.db pap list
 ```
 
 ## Password e vault
@@ -85,7 +85,7 @@ Verifica nell'ordine:
 1. **Conflitto con altra app**: prova a chiudere altri programmi che potrebbero usare la stessa combinazione (clipboard manager, Spotlight custom, Raycast, AutoHotkey su Windows). Riavvia PaP dopo aver chiuso il conflitto.
 2. **Permessi macOS**: la prima volta che PaP registra una global shortcut, macOS chiede l'autorizzazione Accessibilità. Vai in **System Settings → Privacy & Security → Accessibility** e abilita PaP.
 3. **Linux Wayland**: alcuni desktop environment (GNOME Wayland) hanno restrizioni sulle global shortcut. Considera X11 o usa la palette dall'interno dell'app (`Ctrl+K`).
-4. **Reimposta default**: **Impostazioni → Generale → Hotkey**, premi il pulsante reset, riprova.
+4. **Reimposta default**: **Impostazioni → Sistema → Hotkey**, reinserisci `Ctrl+Shift+P` nel campo e salva. La modifica ha effetto al prossimo riavvio dell'app.
 
 ### La hotkey funziona ma apre il programma sbagliato
 
@@ -103,7 +103,7 @@ PaP usa **autosave** con debounce di ~2 secondi: ferma di scrivere per 2-3 secon
 
 ### "Vault locked" durante l'edit
 
-Il vault si auto-blocca dopo un timeout di inattività configurabile (Impostazioni → Sicurezza). Reinserisci la password per sbloccare. Le modifiche non salvate (dentro la finestra di autosave) potrebbero essere perse — la lock scatta dopo l'autosave, ma può succedere edge case.
+Il vault non si blocca da solo: si blocca solo se premi il pulsante **"Blocca vault"** in **Impostazioni → Sicurezza**. Reinserisci la password per sbloccare. Le modifiche non salvate (dentro la finestra di autosave) potrebbero essere perse — la lock scatta dopo l'autosave, ma può succedere edge case.
 
 ### `{{segnaposto}}` non viene sostituito durante la compilazione
 
@@ -129,13 +129,13 @@ Vedi [`prompt-componibili.md`](./prompt-componibili.md) per la sintassi completa
 Il primo avvio carica il modello di embedding (se la ricerca semantica è abilitata, ~150 MB). Successivi avvi sono cached.
 
 Se persiste lentezza:
-- Disabilita temporaneamente la ricerca semantica (**Impostazioni → Ricerca → Ricerca semantica abilitata**).
+- Disabilita temporaneamente la ricerca semantica (**Impostazioni → Ricerca & Embeddings → Ricerca semantica abilitata**).
 - Verifica spazio disco libero (< 1 GB libero rallenta SQLite).
-- Controlla i log: **Impostazioni → Sviluppo → Debug log** (richiede toggle ON, poi riavvio).
+- Controlla i log: **Impostazioni → Sviluppo → Debug log** (toggle ON, effetto immediato, nessun riavvio richiesto).
 
 ### La Command Palette è lenta con molti prompt
 
-PaP è testato fino a ~10 000 prompt. Oltre, considera di organizzare in cartelle (vedi [`cartelle.md`](./cartelle.md)) o di eliminare prompt obsoleti (Cestino → Vuota cestino).
+PaP è testato fino a ~10 000 prompt. Oltre, considera di organizzare in cartelle (vedi [`cartelle.md`](./cartelle.md)) o di eliminare prompt obsoleti (Cestino → Svuota cestino).
 
 Per dataset > 50 000 prompt: apri un'issue, il design corrente non è ottimizzato per quel volume.
 
@@ -143,9 +143,11 @@ Per dataset > 50 000 prompt: apri un'issue, il design corrente non è ottimizzat
 
 ### Sync non si connette al server
 
+La sezione **Impostazioni → Sync** mostra solo lo **Stato**, il pulsante **"Sincronizza ora"** e il **"Logout"**; il login e la configurazione del server avvengono nella superficie legacy (il redesign completo della configurazione Sync è previsto per la v0.9).
+
 Verifica nell'ordine:
-1. **URL server**: in **Impostazioni → Sync → Server URL** deve iniziare con `https://` (no `http://` accettato in v1.0).
-2. **Credenziali**: re-login da **Impostazioni → Sync → Disconnetti** → **Login**.
+1. **Stato**: controlla in **Impostazioni → Sync** che risulti connesso.
+2. **Credenziali**: fai **Logout** da **Impostazioni → Sync**, poi ripeti il login dalla superficie legacy.
 3. **Server raggiungibile**: prova `curl https://server-url/health` (deve rispondere `ok`).
 4. **CORS / certificati**: se usi reverse proxy, verifica certificato TLS e header `Access-Control-Allow-Origin`.
 
@@ -164,7 +166,7 @@ Per editing collaborativo intenso, considera di lavorare in branch separati (var
 Tre opzioni:
 
 1. **Copia del file**: chiudi l'app → copia `pap-vault.db` in altra posizione. È un singolo file SQLite.
-2. **Export JSON** (consigliato): **Impostazioni → Dati → Esporta vault** → `pap-export-<data>.json`. Round-trip lossless. Vedi [`formato-export-json.md`](./formato-export-json.md).
+2. **Export JSON** (consigliato): **Impostazioni → Dati → Esporta vault** → `prompt-a-porter-export-YYYY-MM-DD.json`. Round-trip lossless. Vedi [`formato-export-json.md`](./formato-export-json.md).
 3. **Export Markdown** (M6): **Impostazioni → Dati → Esporta come Markdown** → zip con un file `.md` per ogni prompt. Compatibile con Obsidian / Foam. Vedi [`markdown-import-export.md`](./markdown-import-export.md).
 
 ### Migrazione da altro tool (Obsidian, Notion, …)
@@ -184,20 +186,20 @@ Per problemi con l'auto-update, vedi la sezione dedicata in [`auto-update.md`](.
 
 ### Come abilito i log dettagliati?
 
-**Impostazioni → Sviluppo → Debug log**: toggle ON. I log vengono scritti in:
+**Impostazioni → Sviluppo → Debug log**: toggle ON, con **effetto immediato** (nessun riavvio richiesto). I log vengono scritti in `pap.log`:
 
-- Windows: `%APPDATA%\com.pap.client\logs\pap-client.log`
-- macOS: `~/Library/Logs/com.pap.client/pap-client.log`
-- Linux: `~/.local/share/com.pap.client/logs/pap-client.log`
+- Windows: `%APPDATA%\com.pap.client\logs\pap.log`
+- macOS: `~/Library/Logs/com.pap.client/pap.log`
+- Linux: `~/.local/share/com.pap.client/logs/pap.log`
 
-Il toggle ON aumenta il livello da `WARN` a `DEBUG` ed espone un viewer in-app (Impostazioni → Sviluppo → Visualizza log). Disabilita quando non serve (i file possono crescere).
+Il toggle ON aumenta il livello da `WARN` a `DEBUG`; nella stessa sezione Sviluppo trovi il viewer in-app **"Visualizza log"**. Disabilita quando non serve (i file possono crescere).
 
 ### Come segnalo un bug?
 
 1. Abilita Debug log (vedi sopra) e riproduci il problema.
 2. Apri [GitHub Issues → New issue → Bug report](https://github.com/robertomarchioro/prompt-a-porter/issues/new?template=bug_report.yml).
 3. Allega:
-   - Versione PaP (Impostazioni → Info)
+   - Versione PaP (Impostazioni → Informazioni)
    - Sistema operativo
    - Estratto del log al momento del bug (cerca timestamp dell'evento)
    - Step per riprodurre

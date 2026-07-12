@@ -63,7 +63,13 @@ Il formato JSON di export è il contratto pubblico del vault Prompt a Porter. Pe
       "created_at": "2026-04-01T09:00:00Z"
     }
   ],
-  "folders": []
+  "folders": [],
+  "global_placeholders": [
+    {
+      "name": "autore",
+      "value": "Mario Rossi"
+    }
+  ]
 }
 ```
 
@@ -80,6 +86,7 @@ Il formato JSON di export è il contratto pubblico del vault Prompt a Porter. Pe
 | `versions` | array | Tutte le versioni storiche di tutti i prompt esportati. |
 | `tags` | array | Tag del workspace. |
 | `folders` | array | Cartelle del workspace, ordinate per `path` (parent prima dei figli). Ricreate dall'import → round-trip lossless. |
+| `global_placeholders` | array | Segnaposti globali del vault, oggetti `{name, value}`. Campo opzionale: assente nei vecchi export (retrocompatibile, default lista vuota). |
 
 ### `prompts[]`
 
@@ -169,13 +176,13 @@ L'import accetta una modalità di gestione dei conflitti:
 ### Backup completo del workspace
 
 ```
-Da app desktop: Impostazioni > Vault > Esporta JSON
+Da app desktop: Impostazioni → Dati, card "Esporta Vault → JSON"
 Salva il file generato in posizione sicura (cifrata se sensibile).
 ```
 
 ### Migrazione da altro tool
 
-Convertire l'export del tool sorgente nello schema v1 sopra, poi import via Impostazioni > Vault > Importa JSON con modalità `skip` (sicura) o `rename` (esplorativa).
+Convertire l'export del tool sorgente nello schema v1 sopra, poi import via Impostazioni → Dati, card "Importa JSON", con modalità `skip` (sicura) o `rename` (esplorativa).
 
 ### Round-trip di sicurezza
 

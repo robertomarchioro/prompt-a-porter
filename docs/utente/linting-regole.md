@@ -1,6 +1,6 @@
 # Linting — Catalogo regole
 
-> Disponibile da `v0.3.0`. 11 regole su 14 dello spec implementate.
+> Disponibile da `v0.3.0`. 12 regole implementate.
 
 L'editor del prompt mostra un pannello **Diagnosi** che segnala
 problemi (errori, warning, info) sul body del prompt, in tempo reale
@@ -11,9 +11,11 @@ esterna, nessun salvataggio dei risultati nel vault.
 
 | Livello | Effetto UI | Esempi |
 |---|---|---|
-| **Error** | Rosso, blocca salvataggio in casi gravi | Carta di credito, ciclo di import |
-| **Warning** | Giallo, non blocca | Body troppo lungo, email PII |
+| **Error** | Rosso, problema da correggere | Carta di credito, ciclo di import |
+| **Warning** | Giallo, revisione consigliata | Body troppo lungo, email PII |
 | **Info** | Grigio, suggerimento | Body troppo corto, ripetizione n-gram |
+
+Nessuna regola blocca il salvataggio: la diagnosi è puramente informativa, decidi tu se e come intervenire.
 
 ## Catalogo
 
@@ -59,6 +61,7 @@ esterna, nessun salvataggio dei risultati nel vault.
 | `IMP001` | Error | `{{import "path"}}` con path che non risolve a nessun prompt |
 | `IMP002` | Error | Ciclo di import (self-loop o catena A→B→A multi-hop) |
 | `IMP003` | Warning | Profondità di import > 5 livelli |
+| `IMP004` | Info | Il prompt corrente è **importato da N altri prompt** — utile saperlo prima di modifiche breaking, perché le modifiche al body si propagano a chi lo importa |
 
 Le regole IMP* funzionano solo sui prompt **già salvati** nel vault.
 Su un prompt nuovo (mai salvato) il controllo del ciclo che parte
@@ -163,4 +166,4 @@ Il debounce frontend è 600 ms, quindi non vedi il pannello
 
 - Spec completa nello spec roadmap: [`fase-3-intelligence.md`](../roadmap/fase-3-intelligence.md) Step 5
 - Implementazione: `apps/client/src-tauri/src/linting.rs`
-- Test: 28 unit test sulla logica di lint (vedi `cargo test --lib linting::`)
+- Test: la logica di lint è coperta da unit test (vedi `cargo test --lib linting::`)

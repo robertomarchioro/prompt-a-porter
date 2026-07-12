@@ -16,37 +16,44 @@ Scarica l'ultima release da [GitHub Releases](https://github.com/robertomarchior
 
 | Piattaforma | Bundle |
 |---|---|
-| Windows | `prompt-a-porter_x.y.z_x64-setup.exe` (firmato Authenticode) o `.zip` portable |
-| macOS | `prompt-a-porter_x.y.z_universal.dmg` |
-| Linux | `prompt-a-porter_x.y.z_amd64.AppImage` o `.deb` |
+| Windows | `Prompt.a.Porter_X.Y.Z_x64-setup.exe` (installer, firmato Authenticode) o `Prompt-a-Porter-portable-windows-x64-vX.Y.Z.zip` (portable) |
+| macOS | `Prompt.a.Porter_X.Y.Z_universal.dmg` (universale: Apple Silicon + Intel) |
+| Linux | `Prompt.a.Porter_X.Y.Z_amd64.AppImage` o `Prompt.a.Porter_X.Y.Z_amd64.deb` |
 
 Su Windows, l'installer chiede l'approvazione SmartScreen al primo avvio: clicca "Esegui comunque" — il binario è firmato con certificato Certum EV (vedi [`auto-update.md`](./auto-update.md) per i dettagli sulla firma).
 
-Su macOS, al primo avvio Gatekeeper potrebbe segnalare l'app come "non identificato": Tasto destro → Apri → conferma. È un comportamento atteso finché non viene completata la notarization (in roadmap post-v1.0).
+Su macOS l'app è firmata Developer ID e notarizzata da Apple: il `.dmg` si apre normalmente, senza avvisi Gatekeeper.
 
 ## Onboarding: il primo avvio
 
 Al primo avvio l'app mostra un wizard a 3 step:
 
-### 1. Crea il vault
+### 1. Benvenuto e nome del vault
 
-Il vault è il file SQLite cifrato (SQLCipher, AES-256) che contiene tutti i tuoi prompt. Viene salvato di default in:
+Il vault è il file SQLite che contiene tutti i tuoi prompt. Scegli il nome nel campo **"Nome del vault"**. Il file viene salvato di default in:
 
 - Windows: `%APPDATA%\com.pap.client\pap-vault.db`
 - macOS: `~/Library/Application Support/com.pap.client/pap-vault.db`
 - Linux: `~/.local/share/com.pap.client/pap-vault.db`
 
-Scegli una password robusta (12+ caratteri, mix lettere/numeri/simboli). **La password non è recuperabile:** se la dimentichi devi ricreare il vault. Considera di salvarla in un password manager.
+### 2. Cifra il tuo vault
 
-### 2. Imposta la hotkey globale
+La cifratura (SQLCipher, AES-256) è **opzionale ma consigliata**. Scegli una password robusta (minimo 12 caratteri, mix lettere/numeri/simboli). **La password non è recuperabile:** se la dimentichi devi ricreare il vault. Considera di salvarla in un password manager.
 
-La hotkey di default è `Ctrl+Shift+P` (Windows/Linux) o `⌃⇧P` (macOS). La hotkey funziona anche quando l'app non è in primo piano: premila in qualunque momento per evocare la Command Palette.
+Se preferisci un vault in chiaro, attiva il toggle **"Salta cifratura del vault"** (segnalato con badge "Sconsigliato").
 
-Puoi cambiarla in qualsiasi momento da **Impostazioni → Generale → Hotkey**.
+### 3. Hotkey e opzioni finali
 
-### 3. Scegli se creare i prompt di esempio
+La hotkey di default è `Ctrl+Shift+P` (Windows/Linux) o `⌃⇧P` (macOS). La hotkey funziona anche quando l'app non è in primo piano: premila in qualunque momento per evocare la Command Palette. Puoi cambiarla in qualsiasi momento da **Impostazioni → Sistema → Hotkey** (la modifica ha effetto al prossimo riavvio dell'app).
 
-L'opzione "Crea prompt di esempio" (attiva di default) popola il vault con prompt dimostrativi. Disattivala se preferisci partire da vuoto.
+Nello stesso step trovi due switch:
+
+- **"Importa prompt di esempio al primo avvio"** (attivo di default): popola il vault con prompt dimostrativi. Disattivalo se preferisci partire da vuoto.
+- **"Avvia automaticamente con \<nome OS\>"** (l'etichetta si adatta al tuo sistema operativo): avvia PaP al login.
+
+### Dopo il wizard: tour di benvenuto
+
+Al primo ingresso nell'app parte un breve **tour guidato** dell'interfaccia e una checklist **"Primi passi"** con le azioni essenziali. Puoi rilanciare il tour in qualunque momento da **Impostazioni → Guida e aiuto → "Avvia il tour guidato"**.
 
 ## Anatomia dell'interfaccia
 
@@ -63,7 +70,7 @@ Dopo l'onboarding entri nella **Shell**, l'interfaccia principale a 3 colonne:
 └──────────┴──────────────┴───────────────────────────┘
 ```
 
-- **Sidebar (sinistra):** viste predefinite (Tutti, Preferiti, Privati, Team), cartelle, tag.
+- **Sidebar (sinistra):** viste predefinite (Preferiti, Tutti i prompt, Cestino, Privati, Team), cartelle, tag; nel footer il link "Regressioni". Il **Cestino** raccoglie i prompt eliminati (soft-delete): da lì puoi ripristinarli o eliminarli definitivamente con "Svuota cestino".
 - **List Pane (centro):** lista dei prompt nella vista corrente, con anteprima del body.
 - **Right Rail (destra):** dettaglio del prompt selezionato — titolo, body, tag, modello target, varianti, cronologia.
 
@@ -71,7 +78,7 @@ In alto: barra di ricerca + filtri rapidi. In basso: status bar con conteggio pr
 
 ## Il tuo primo prompt
 
-1. Clicca **+ Nuovo** in alto nel ListPane (la colonna centrale).
+1. Clicca **Nuovo** in alto nel ListPane (la colonna centrale).
 2. Compila i campi:
    - **Titolo:** "Email di reclamo professionale"
    - **Descrizione:** una riga che spieghi cosa fa il prompt (opzionale ma consigliata: appare nella ricerca).
@@ -91,7 +98,7 @@ In alto: barra di ricerca + filtri rapidi. In basso: status bar con conteggio pr
 
 3. Imposta **Modello target** (es. `claude-sonnet`, `gpt-4`) se il prompt è ottimizzato per un modello specifico.
 4. Aggiungi **tag** (es. `email`, `clienti`, `reclami`) per ritrovarlo facilmente.
-5. Le modifiche vengono salvate **automaticamente** ~2 secondi dopo l'ultima edit (autosave debounced). Nessuna azione esplicita richiesta.
+5. Le modifiche vengono salvate **automaticamente** ~2 secondi dopo l'ultima edit (autosave debounced; il ritardo è configurabile in **Impostazioni → Editor**). Nessuna azione esplicita richiesta.
 
 ## La tua prima compilazione
 

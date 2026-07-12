@@ -6,7 +6,7 @@ Tutte le scorciatoie attive in Prompt a Porter. La notazione `Ctrl` si applica a
 
 | Scorciatoia | Azione |
 |---|---|
-| `Ctrl+Shift+P` | Apri Command Palette (configurabile in **Impostazioni → Generale → Hotkey**) |
+| `Ctrl+Shift+P` | Apri Command Palette (configurabile in **Impostazioni → Sistema → Hotkey**) |
 
 La hotkey globale è registrata via `tauri-plugin-global-shortcut` e funziona anche quando l'app è minimizzata o in background. Su macOS la combinazione di default è `⌃⇧P`.
 
@@ -69,23 +69,45 @@ Quando l'autocomplete `{{import "..."}}` è attivo (M4):
 | `Esc` | Chiudi modale (attivo in tutte le modali: Compila, Impostazioni, Palette, etc.) |
 | `Tab` / `Shift+Tab` | Cycle fra elementi focus all'interno della modale (focus trap WCAG 2.1) |
 
-## Tray icon (Windows/Linux)
+## Tray icon (tutti gli OS)
 
 | Voce di menu | Azione |
 |---|---|
-| Apri Prompt a Porter | Porta la finestra in primo piano |
+| Apri palette | Apre la Command Palette |
 | Nuovo prompt | Crea un nuovo prompt vuoto e apre l'editor |
+| Mostra libreria | Porta la finestra in primo piano |
 | Impostazioni | Apre la modale Impostazioni |
 | Esci | Chiudi l'app |
 
+## Menu contestuale (tasto destro)
+
+Non è una scorciatoia da tastiera (non esiste una scorciatoia `Shift+F10` dedicata), ma il tasto destro apre un menu contestuale ricco:
+
+**Su un prompt:**
+
+| Voce | Azione |
+|---|---|
+| Apri | Apre il prompt nell'editor |
+| Apri in Compila | Apre direttamente la modale Compila |
+| Duplica (fork) | Crea un fork indipendente del prompt |
+| Preferiti | Aggiunge/rimuove dai preferiti |
+| Sposta in cartella | Sposta il prompt in un'altra cartella |
+| Gestisci tag | Aggiunge/rimuove tag |
+| Esporta come Markdown | Esporta il prompt in `.md` |
+| Elimina | Sposta il prompt nel Cestino |
+
+**Su una selezione multipla:** Confronta (N), Sposta N, Aggiungi tag a N, Esporta N, Elimina N.
+
+**Su una cartella:** Nuovo prompt qui, Nuova sottocartella, Rinomina, Elimina cartella.
+
 ## Personalizzare la hotkey globale
 
-1. Apri **Impostazioni → Generale → Hotkey**.
-2. Clicca sul campo e premi la nuova combinazione.
+1. Apri **Impostazioni → Sistema → Hotkey**.
+2. Clicca sul campo e premi la nuova combinazione, poi salva. La modifica ha effetto al prossimo riavvio dell'app.
 3. Combinazioni valide: almeno un modificatore (`Ctrl`/`Alt`/`Shift`/`Cmd`) + un tasto. Es. `Ctrl+Alt+P`, `Cmd+Shift+L`.
 4. Il sistema verifica che non sia già in uso da un'altra app. In caso di conflitto, scegli un'altra combinazione.
 
-> **Reset**: se la hotkey impostata smette di funzionare (es. conflitto con un nuovo programma installato), apri **Impostazioni → Generale** e reimposta il valore di default `Ctrl+Shift+P`.
+> **Reset**: se la hotkey impostata smette di funzionare (es. conflitto con un nuovo programma installato), apri **Impostazioni → Sistema → Hotkey** e reinserisci il valore di default `Ctrl+Shift+P` (effettivo al riavvio).
 
 ## Limitazioni note
 

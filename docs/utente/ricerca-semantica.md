@@ -33,7 +33,7 @@ Il modello si scarica al primo uso da HuggingFace. Tutto resta
 
 ## Attivare la feature
 
-1. Apri **Impostazioni** > **Ricerca semantica**.
+1. Apri **Impostazioni** → **Ricerca & Embeddings** (gruppo AI).
 2. Premi **Abilita**: il client scarica il modello (~118 MB) e il
    runtime ONNX (~10 MB) sotto `${data_dir}/models/` e
    `${data_dir}/onnxruntime/`.
@@ -44,7 +44,7 @@ Il modello si scarica al primo uso da HuggingFace. Tutto resta
 
 ## Bilanciare lessicale ↔ semantico (`α`)
 
-Lo slider **α** in Impostazioni > Ricerca semantica regola il peso
+Lo slider **α** in Impostazioni → Ricerca & Embeddings regola il peso
 fra le due pipeline:
 
 | α | Effetto |
@@ -75,7 +75,7 @@ Il modello + runtime occupano ~150 MB in RAM. Se non usi la ricerca
 semantica per un po', il client li **scarica automaticamente** per
 liberare memoria.
 
-In **Impostazioni > Ricerca semantica > Scarica modello dopo
+In **Impostazioni → Ricerca & Embeddings → Scarica modello dopo
 inattività** scegli la soglia (default 5 minuti, 0=mai). Dopo lo
 scarico la ricerca torna a FTS-only fino al prossimo riavvio del
 client (il riload automatico arriverà in una versione successiva).
@@ -104,7 +104,7 @@ prompt nello stesso file SQLite.
 
 ## Disabilitare
 
-In **Impostazioni > Ricerca semantica** togli la spunta a "Usa
+In **Impostazioni → Ricerca & Embeddings** togli la spunta a "Usa
 ricerca semantica nelle query": la Command Palette torna a FTS-only.
 I file modello/runtime restano su disco — per cancellarli del tutto
 elimina manualmente le cartelle `models/` e `onnxruntime/` dentro
