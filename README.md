@@ -1,82 +1,89 @@
+<div align="center">
+
+<img src="docs/public/icons/icon-256.png" alt="Prompt a Porter" width="110" />
+
 # Prompt a Porter
 
-**Libreria locale e di team per prompt AI** — template parametrici, vault cifrato, sync opzionale.
+**I prompt migliori, pronti da indossare.**
 
-> Il nome è un gioco su "prêt-à-porter": prompt pronti all'uso.
+Libreria desktop local-first per i tuoi prompt AI: template parametrici, vault cifrato,
+palette globale a portata di hotkey — su Windows, macOS e Linux.
 
-## Cos'è
+[![Release](https://img.shields.io/github/v/release/robertomarchioro/prompt-a-porter?label=release&color=7c6cf4)](https://github.com/robertomarchioro/prompt-a-porter/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/robertomarchioro/prompt-a-porter/total?color=7c6cf4)](https://github.com/robertomarchioro/prompt-a-porter/releases)
+[![CI](https://github.com/robertomarchioro/prompt-a-porter/actions/workflows/client-build.yml/badge.svg)](https://github.com/robertomarchioro/prompt-a-porter/actions/workflows/client-build.yml)
+[![License: AGPL-3.0](https://img.shields.io/github/license/robertomarchioro/prompt-a-porter?color=blue)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)
 
-Prompt a Porter (PaP) è un'app desktop local-first per knowledge worker che usano LLM quotidianamente. Permette di salvare prompt efficaci, renderli parametrici con segnaposti `{{nome}}`, compilarli in pochi secondi e copiarli nella chat AI di destinazione.
+**[🌐 Sito](https://robertomarchioro.github.io/prompt-a-porter/)** ·
+**[⬇️ Download](https://github.com/robertomarchioro/prompt-a-porter/releases/latest)** ·
+**[📖 Guida rapida](https://robertomarchioro.github.io/prompt-a-porter/utente/getting-started)** ·
+**[📋 Changelog](CHANGELOG.md)**
 
-Non è un'app cloud. È un'app desktop invocabile via hotkey globale (tipo Raycast/Alfred), con storage primario su un **SQLite cifrato** locale. Il sync con il team è opzionale e passa attraverso un server self-hosted minimale.
+<img src="docs/roadmap/website/screenshots/02-carosello-libreria.png" alt="La Libreria di Prompt a Porter" width="720" />
 
-## Funzionalità principali
+</div>
 
-- **Command palette globale** — `Ctrl+Shift+P` (o `⌘⇧P` su macOS) per cercare e compilare prompt in pochi secondi
-- **Template parametrici** — segnaposti `{{nome}}` con tipi (testo, multilinea, enum), default e hint
-- **Vault cifrato** — SQLite + SQLCipher, AES-256, password mai persistita
-- **Libreria organizzata** — tag, preferiti, ricerca full-text, visibilità privata/team
-- **Sync team opzionale** — server Go self-hosted, WebSocket real-time, last-write-wins
-- **RBAC** — ruoli Admin / Editor / User per workspace team
-- **Cross-platform** — Windows 10+, macOS 12+, Linux
+---
 
-## Stack tecnico
+## Perché
 
-| Componente | Tecnologia |
-|------------|------------|
-| Client desktop | Tauri 2.x (Rust) + Svelte 5 + TypeScript |
-| Editor prompt | CodeMirror 6 |
-| Storage locale | SQLite + SQLCipher |
-| Server sync | Go 1.22+, single binary |
-| Icone | Lucide (subset tree-shakable) |
-| Font | Sistema per UI, JetBrains Mono per codice |
-
-## Struttura del repository
+Se usi gli LLM ogni giorno, i tuoi prompt migliori sono capitale — e probabilmente oggi vivono
+sparsi tra note, chat e file di testo. Prompt a Porter li mette in un **vault locale**
+(cifrabile, senza cloud, senza account), li rende **parametrici** e te li serve **in due
+tasti** in qualunque app tu stia lavorando: `Ctrl+Shift+P`, cerchi, compili, incolli. Fine.
 
 ```
-prompt-a-porter/
-├── apps/
-│   ├── client/          ← Tauri + Svelte (app desktop)
-│   ├── server/          ← Go sync server
-│   ├── cli/             ← CLI Go pap
-│   └── mcp-server/      ← MCP server TypeScript
-├── packages/
-│   └── shared-schema/   ← Tipi TypeScript condivisi
-├── docs/                ← Documentazione tecnica (vedi sotto)
-├── spikes/              ← Crate/script di spike tecnici
-└── .github/workflows/   ← CI/CD
+Scrivi un'email {{tono}} a {{destinatario}} per {{global firma}}…
+     └─ compila i segnaposti in un form → copia negli appunti → incolla nella tua chat AI
 ```
 
-## Documentazione
+## Funzionalità
 
-🌐 **Sito utente**: <https://robertomarchioro.github.io/prompt-a-porter/> (build automatica da `main`)
-
-🧪 **Test plan**: [`docs/test/test-cases.md`](docs/test/test-cases.md) — 146 test cases manuali citabili nelle issue (`[TC-AUTH-003] ...`)
-
-La documentazione tecnica è organizzata in 5 cluster sotto [`docs/`](docs/):
-
-| Cluster | Per chi |
+| | |
 |---|---|
-| [`docs/utente/`](docs/utente/) | Chi usa PaP — CLI, MCP, formato export |
-| [`docs/contribuire/`](docs/contribuire/) | Chi contribuisce codice — setup ambiente |
-| [`docs/architettura/`](docs/architettura/) | Chi studia o estende il sistema — overview, schema dati, design system, ADR |
-| [`docs/roadmap/`](docs/roadmap/) | Maintainer e contributor che pianificano — fasi, rinvii, quality gate |
-| [`docs/operativo/`](docs/operativo/) | Chi deploya — guide di deploy |
+| ⚡ **Palette globale** | Hotkey di sistema stile Raycast/Alfred: cerca, compila e copia senza aprire l'app |
+| 🧩 **Template componibili** | Segnaposti `{{nome}}`, valori globali `{{global …}}`, import fra prompt con pinning di versione e variabili scopate (`{{import "x" version=3 with tono=formale}}`) |
+| 🔐 **Vault cifrato, local-first** | SQLite + SQLCipher AES-256 (opzionale), nessun cloud, nessuna telemetria, password mai persistita |
+| 🔍 **Ricerca ibrida** | Full-text + **ricerca semantica on-device** (embeddings locali, niente API esterne) |
+| 🧪 **Test golden** | Casi di regressione per prompt con provider AI reali (Ollama/Anthropic/OpenAI), similarity cosine/regex/LLM-judge e report di drift |
+| ⭐ **Qualità misurata** | Rating post-uso, media per prompt, ordinamento "Migliori", varianti A/B e fork tracciati |
+| 🩺 **Linter configurabile** | 12 regole (lunghezza, segnaposti, PII, stile, import) con severità e soglie personalizzabili |
+| 📦 **Porta i tuoi dati ovunque** | Import/export JSON lossless e Markdown compatibile Obsidian/Foam; cestino con ripristino |
+| 🤖 **CLI & MCP** | CLI `pap` per script e pipeline; server MCP per usare il vault da Claude Desktop, Cursor & co. |
+| 🔏 **Release firmate** | Authenticode (Windows), Developer ID + notarizzazione (macOS), auto-update verificato Ed25519 |
 
-Punto di accesso: [`docs/README.md`](docs/README.md).
+## Download
 
-## Setup sviluppo
+Tutte le release: **[github.com/robertomarchioro/prompt-a-porter/releases](https://github.com/robertomarchioro/prompt-a-porter/releases/latest)**
 
-> Documentazione dettagliata in [`docs/contribuire/setup-sviluppo.md`](docs/contribuire/setup-sviluppo.md).
+| Piattaforma | Pacchetto |
+|---|---|
+| **Windows 10/11** | Installer NSIS `…x64-setup.exe` (per-user, niente UAC) oppure `.zip` portable |
+| **macOS 12+** | `.dmg` universale (Apple Silicon + Intel), firmato e notarizzato |
+| **Linux** | `.AppImage` oppure `.deb` |
 
-### Prerequisiti
+Primo avvio in 3 passi: dai un nome al vault → scegli se cifrarlo → imposta la hotkey.
+Poi parte il tour guidato. Guida completa: **[getting-started](https://robertomarchioro.github.io/prompt-a-porter/utente/getting-started)**.
 
-- Node.js 22.x LTS
-- pnpm 9.x+
-- Rust toolchain stable (per Tauri)
-- Go 1.22+ (per il server sync)
+## L'ecosistema
 
-### Quick start
+Un monorepo, quattro superfici sullo stesso vault:
+
+| App | Cos'è | Stack |
+|---|---|---|
+| [`apps/client`](apps/client) | L'app desktop | Tauri 2 · Svelte 5 · TypeScript · CodeMirror 6 |
+| [`apps/cli`](apps/cli) | CLI `pap` — list, get, render, completion | Go |
+| [`apps/mcp-server`](apps/mcp-server) | 4 tool MCP read-only per i client AI | TypeScript |
+| [`apps/server`](apps/server) | Sync di team self-hosted (opzionale, WIP) | Go, single binary |
+
+## Filosofia
+
+- **Local-first davvero**: il vault è un file SQLite sul tuo disco. L'app funziona per sempre anche offline; il sync è un'aggiunta, mai un requisito.
+- **I tuoi dati non hanno lock-in**: export JSON round-trip lossless e Markdown leggibile ovunque.
+- **Sicurezza verificabile**: codice AGPL, firma su ogni binario, updater che rifiuta firme non valide, CI con audit di sicurezza.
+
+## Contribuire
 
 ```bash
 git clone https://github.com/robertomarchioro/prompt-a-porter.git
@@ -85,22 +92,30 @@ pnpm install
 pnpm --filter @pap/client dev
 ```
 
-## Stato del progetto
+Prerequisiti: Node 22 LTS, pnpm 9+, Rust stable (Tauri), Go 1.25+ (CLI/server).
+Setup completo, convenzioni e mappa CI in [`docs/contribuire/`](docs/contribuire/).
+La documentazione tecnica è in 5 cluster sotto [`docs/`](docs/README.md)
+(utente · contribuire · architettura · roadmap · operativo).
 
-- **Fase 1 (MVP)** ✅ completata (`v0.1.0-fase1`).
-- **Fase 2 (Foundations)** ✅ chiusa parziale (`v0.2.0-foundations` + patch line `v0.2.x`).
-- **Fase 3 (Intelligence)** ⏳ in preparazione, con 3 spike tecnici già chiusi.
+## Stato e roadmap
 
-Vedi [`CHANGELOG.md`](CHANGELOG.md) per i dettagli completi e [`docs/roadmap/`](docs/roadmap/) per la pianificazione.
+Il progetto segue **collezioni stagionali**, come impone il nome:
+
+- **«Ago e Filo»** (v0.8.x) — la collezione corrente: 35+ release, 4 piattaforme, tutto quello che leggi sopra.
+- **«Arioso Atelier» (v1.0)** — il debutto in passerella, imminente.
+- **Linea Deluxe (v2.0)** — sync multi-device peer-to-peer senza server («Ordito») e versione enterprise database-agnostic. Design già pubblico in [`docs/roadmap/`](docs/roadmap/).
 
 ## Licenza
 
-**[GNU AGPL 3.0](LICENSE)** (Affero General Public License). Chiude il loophole SaaS — chi ospita il codice come servizio ha l'obbligo di pubblicare modifiche. Tutto il codice del progetto è libero, ispezionabile e portabile.
+**[GNU AGPL-3.0](LICENSE)** — tutto il codice è libero, ispezionabile e portabile; chi lo
+ospita come servizio ha l'obbligo di pubblicare le modifiche.
 
-## Autore
-
-**Roberto Marchioro** — ICT Manager
+<div align="center">
 
 ---
 
+**Roberto Marchioro** · costruito in coppia con Claude
+
 *Prompt a Porter — perché i prompt migliori meritano di essere riutilizzati.*
+
+</div>
