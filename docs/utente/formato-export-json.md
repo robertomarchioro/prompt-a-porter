@@ -1,7 +1,6 @@
 # Formato export JSON
 
-> **Versione corrente**: `1`
-> **Status**: stabile, breaking change richiede bump `schemaVersion`
+> Schema del formato JSON di export: campi, modalità di gestione dei conflitti in import, garanzie round-trip. **Versione corrente**: `1` (stabile, un breaking change richiede bump di `schemaVersion`).
 
 Il formato JSON di export è il contratto pubblico del vault Prompt a Porter. Permette portabilità completa dei dati utente — nessun lock-in. È pensato per essere generato e consumato sia dall'app desktop sia da tool esterni (CLI, script, migrazioni da/verso altri tool).
 

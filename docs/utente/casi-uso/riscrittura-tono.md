@@ -1,6 +1,6 @@
 # Riscrittura tono
 
-Template per riscrivere testo cambiando registro: da bozza grezza a formale, da formale a conciso, da informale a divulgativo.
+> Template per riscrivere testo cambiando registro: da bozza grezza a formale, da formale a conciso, da informale a divulgativo.
 
 ## Quando usarlo
 

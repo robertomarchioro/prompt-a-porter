@@ -1,8 +1,6 @@
 # Getting started
 
-Guida al primo utilizzo di Prompt a Porter: installazione, creazione del vault, primo prompt, prima compilazione.
-
-> **Tempo richiesto:** 5 minuti.
+> Guida al primo utilizzo di Prompt a Porter: installazione, creazione del vault, primo prompt, prima compilazione. Tempo richiesto: 5 minuti.
 
 ## Prerequisiti
 
@@ -114,11 +112,9 @@ Ora compila il prompt con valori reali:
 5. Premi `Ctrl+Enter` (o "Compila & copia"): il testo compilato è automaticamente copiato negli appunti.
 6. Incolla in ChatGPT / Claude / dovunque: ✅
 
-## Prossimi passi
+## Vedi anche
 
-- **Sintassi avanzata:** segnaposti tipizzati, import fra prompt, valori globali — vedi [`glossario-sintassi.md`](./glossario-sintassi.md).
-- **Scorciatoie:** [`scorciatoie-tastiera.md`](./scorciatoie-tastiera.md) per la lista completa.
-- **Casi d'uso pratici:** [`casi-uso/`](./casi-uso/) raccoglie ricette concrete (email, code review, summarize, …).
-- **Problemi?** [`troubleshooting.md`](./troubleshooting.md) per FAQ e soluzioni.
-- **Integrazione AI:** [`mcp.md`](./mcp.md) per esporre il vault a Claude Desktop, Cursor e altri agenti via MCP.
-- **CLI:** [`cli.md`](./cli.md) per usare il vault dal terminale.
+- [`glossario-sintassi.md`](./glossario-sintassi.md) — sintassi avanzata: segnaposti, import fra prompt, valori globali.
+- [`scorciatoie-tastiera.md`](./scorciatoie-tastiera.md) — la lista completa delle scorciatoie.
+- [`casi-uso/`](./casi-uso/README.md) — ricette concrete pronte all'uso (email, code review, summarize, …).
+- [`troubleshooting.md`](./troubleshooting.md) — FAQ e soluzioni ai problemi più comuni.

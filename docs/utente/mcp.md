@@ -1,6 +1,6 @@
 # Integrazione MCP — Prompt a Porter
 
-> **Stato**: Beta (Fase 2 Step 7). Read-only. Solo trasporto stdio.
+> Come esporre il vault a Claude Desktop, Cursor e altri agenti via Model Context Protocol. **Stato**: Beta (Fase 2 Step 7), read-only, solo trasporto stdio.
 
 Il server MCP (`@pap/mcp-server`) espone il vault Prompt a Porter al **Model Context Protocol**, permettendo a Claude Desktop, Cursor e qualunque agente MCP-compatibile di cercare, leggere e compilare i tuoi prompt direttamente.
 

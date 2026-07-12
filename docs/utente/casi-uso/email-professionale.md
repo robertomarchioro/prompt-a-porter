@@ -1,6 +1,6 @@
 # Email professionale
 
-Template per email professionali parametriche: richieste, follow-up, reclami, ringraziamenti.
+> Template per email professionali parametriche: richieste, follow-up, reclami, ringraziamenti.
 
 ## Quando usarlo
 

@@ -1,6 +1,6 @@
 # Brainstorm idee
 
-Template per brainstorm strutturato con vincoli precisi su numero, formato e criteri di valutazione.
+> Template per brainstorm strutturato con vincoli precisi su numero, formato e criteri di valutazione.
 
 ## Quando usarlo
 

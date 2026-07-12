@@ -1,6 +1,6 @@
 # Commit message
 
-Template per generare commit message da un diff seguendo Conventional Commits.
+> Template per generare commit message da un diff seguendo Conventional Commits.
 
 ## Quando usarlo
 

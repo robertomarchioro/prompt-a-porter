@@ -1,6 +1,8 @@
 # Scorciatoie tastiera
 
-Tutte le scorciatoie attive in Prompt a Porter. La notazione `Ctrl` si applica a Windows/Linux; su macOS sostituisci con `⌘` (Cmd). Quando entrambe le piattaforme usano `Ctrl` (es. global hotkey), è esplicitato.
+> Tutte le scorciatoie attive in Prompt a Porter: hotkey globale, palette, modali, editor e menu contestuale.
+
+La notazione `Ctrl` si applica a Windows/Linux; su macOS sostituisci con `⌘` (Cmd). Quando entrambe le piattaforme usano `Ctrl` (es. global hotkey), è esplicitato.
 
 ## Globali (funzionano fuori dall'app)
 

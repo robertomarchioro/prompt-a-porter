@@ -1,6 +1,6 @@
 # Cluster — Utente
 
-Documentazione per **chi usa** Prompt a Porter, sia il client desktop che gli strumenti integrati.
+> Documentazione per **chi usa** Prompt a Porter, sia il client desktop che gli strumenti integrati.
 
 ## Inizio rapido
 

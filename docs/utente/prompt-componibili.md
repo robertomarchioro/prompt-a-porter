@@ -1,6 +1,6 @@
 # Prompt componibili
 
-> Disponibile da `v0.3.0`.
+> Come importare il body di un altro prompt con `{{import "path"}}` e costruire un vault modulare: sintassi, nidificazione, pinning a versioni, variabili scopate. Disponibile da `v0.3.0`.
 
 Un prompt può **importare** il body di un altro prompt usando la
 sintassi `{{import "path"}}`. Il client espande la catena al volo
@@ -192,9 +192,8 @@ L'editor del prompt mostra un **CompilatorePrompt** dedicato
 (superficie UI separata) che esegue la compilazione e mostra il
 risultato finale espanso, utile per debug della catena di import.
 
-## Riferimenti
+## Vedi anche
 
-- Implementazione: `apps/client/src-tauri/src/prompt_componibili.rs`
-- Test: 16 unit test su parsing, resolve, cycle, depth
-- Linting: [`linting-regole.md`](./linting-regole.md) regole IMP*
-- Schema dipendenze: [`schema-dati.md`](../architettura/schema-dati.md) tabella `PromptImports`
+- [`linting-regole.md`](./linting-regole.md) — dettaglio delle regole `IMP*` e come personalizzarle.
+- [`schema-dati.md`](../architettura/schema-dati.md) — tabella `PromptImports` e schema delle dipendenze.
+- Implementazione: `apps/client/src-tauri/src/prompt_componibili.rs` — parsing, resolve, cycle e depth check.

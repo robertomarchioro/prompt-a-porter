@@ -1,6 +1,6 @@
 # Fork / Clone dei prompt
 
-> Disponibile da `v0.4.0`.
+> Quando e come clonare un prompt in una copia indipendente ma tracciata (banner "Fork di X", chain di fork). Disponibile da `v0.4.0`.
 
 Un **fork** è una copia indipendente di un prompt che mantiene un
 riferimento all'originale via `ForkOfPromptId`. Caso d'uso primario:
@@ -93,8 +93,8 @@ banner.
   originale. Quick win: pulsante "Vedi diff con originale" diretto
   nel banner.
 
-## Riferimenti
+## Vedi anche
 
-- Implementazione: `apps/client/src-tauri/src/fork.rs`
-- Schema: `docs/architettura/schema-dati.md` § V012
-- Spec roadmap: `docs/roadmap/fase-4-workflow.md` Step 5
+- [`schema-dati.md`](../architettura/schema-dati.md) — schema dati dei fork (§ V012).
+- [`fase-4-workflow.md`](../roadmap/fase-4-workflow.md) — spec roadmap (Step 5).
+- Implementazione: `apps/client/src-tauri/src/fork.rs` — backend del fork.

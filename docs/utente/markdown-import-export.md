@@ -1,6 +1,6 @@
 # Import / Export Markdown
 
-Prompt a Porter supporta import ed export dei prompt come file Markdown con front-matter YAML, compatibile con **Obsidian** e **Foam** (pattern wiki).
+> Come importare ed esportare i prompt come file Markdown con front-matter YAML, compatibili con **Obsidian** e **Foam** (pattern wiki).
 
 ## Quando usare
 

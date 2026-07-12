@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Risposte ai problemi più comuni durante l'uso di Prompt a Porter. Se non trovi quello che cerchi, apri un'issue su [GitHub](https://github.com/robertomarchioro/prompt-a-porter/issues/new/choose).
+> Risposte ai problemi più comuni durante l'uso di Prompt a Porter. Se non trovi quello che cerchi, apri un'issue su [GitHub](https://github.com/robertomarchioro/prompt-a-porter/issues/new/choose).
 
 ## Installazione e primo avvio
 

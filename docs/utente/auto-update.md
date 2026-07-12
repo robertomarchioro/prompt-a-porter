@@ -131,11 +131,10 @@ R: No: il vault è in una cartella separata (`%APPDATA%\com.pap.client\`). Gli u
 **D: Posso aggiornare PaP installato in modalità portable?**
 R: Per la versione portable serve sostituzione manuale: scarica la nuova `.zip`, sovrascrivi i file della cartella. Il check aggiornamenti dell'updater è disponibile anche in portable, ma il "Applica" richiede privilegi di scrittura nella cartella dove hai estratto il portable.
 
-## Riferimenti tecnici
-
-Per dettagli tecnici (firma Ed25519, garanzie di sicurezza, policy applicata):
-- [`docs/architettura/decisioni/authenticode-signing.md`](../architettura/decisioni/authenticode-signing.md)
-
 ## Manutenzione di questo documento
 
 - Quando la chiave di firma viene ruotata: aggiornare §FAQ "cosa succede se cambia la chiave".
+
+## Vedi anche
+
+- [`authenticode-signing.md`](../architettura/decisioni/authenticode-signing.md) — dettagli tecnici: firma Ed25519, garanzie di sicurezza, policy applicata.

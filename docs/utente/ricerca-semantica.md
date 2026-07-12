@@ -1,6 +1,6 @@
 # Ricerca semantica
 
-> Disponibile da `v0.3.0` (Fase 3 — Intelligenza & authoring).
+> Come funziona la ricerca ibrida (lessicale + embedding), come attivarla e bilanciarla, cosa comporta per memoria e privacy. Disponibile da `v0.3.0` (Fase 3 — Intelligenza & authoring).
 
 La ricerca semantica permette di trovare prompt **per significato**,
 non solo per match esatto delle parole. Cerca "scrivere email
@@ -110,9 +110,9 @@ I file modello/runtime restano su disco — per cancellarli del tutto
 elimina manualmente le cartelle `models/` e `onnxruntime/` dentro
 `${data_dir}` del client.
 
-## Riferimenti
+## Vedi anche
 
-- ADR modello: [`embedding-model.md`](../architettura/decisioni/embedding-model.md)
-- ADR sqlite-vec + SQLCipher: [`sqlite-vec-sqlcipher.md`](../architettura/decisioni/sqlite-vec-sqlcipher.md)
-- ADR ONNX bundle: [`onnx-bundle.md`](../architettura/decisioni/onnx-bundle.md)
-- Bench performance: [`docs/operativo/bench-ricerca-ibrida.md`](../operativo/bench-ricerca-ibrida.md)
+- [`embedding-model.md`](../architettura/decisioni/embedding-model.md) — ADR sulla scelta del modello di embedding.
+- [`sqlite-vec-sqlcipher.md`](../architettura/decisioni/sqlite-vec-sqlcipher.md) — ADR su sqlite-vec dentro il vault SQLCipher.
+- [`onnx-bundle.md`](../architettura/decisioni/onnx-bundle.md) — ADR sul bundling del runtime ONNX.
+- [`bench-ricerca-ibrida.md`](../operativo/bench-ricerca-ibrida.md) — numeri completi dei bench di performance.

@@ -1,6 +1,8 @@
 # Casi d'uso
 
-Ricette concrete che mostrano Prompt a Porter all'opera su task reali. Ogni ricetta include:
+> Ricette concrete che mostrano Prompt a Porter all'opera su task reali, con prompt completi pronti da copiare nel vault.
+
+Ogni ricetta include:
 
 - Il prompt completo (template con segnaposti).
 - Come l'abbiamo strutturato e perché.

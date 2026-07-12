@@ -1,6 +1,6 @@
 # CLI `pap` — Reference
 
-> **Stato**: Beta (Fase 2 Step 8). Read-only. MVP con 5 comandi.
+> Come cercare, leggere e compilare prompt dal vault direttamente da terminale con la CLI `pap`. **Stato**: Beta (Fase 2 Step 8), read-only.
 
 `pap` è il CLI di Prompt a Porter per cercare, leggere e compilare prompt dal vault locale direttamente da terminale. Single binary, multipiattaforma, zero dipendenze runtime.
 

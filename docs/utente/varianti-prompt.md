@@ -1,6 +1,6 @@
 # Varianti / A-B testing dei prompt
 
-> Disponibile da `v0.4.0`.
+> Come creare e navigare varianti B/C/…/Z di un prompt per testare formulazioni alternative, e in cosa differiscono dai fork. Disponibile da `v0.4.0`.
 
 Una **variante** è un prompt che condivide l'intento col Parent ma
 testa una formulazione alternativa. UseCount, rating, versioning di
@@ -85,8 +85,8 @@ Vedi anche [`fork-prompt.md`](./fork-prompt.md).
   variante. La "Rinomina etichetta" della pillola è invece ancora
   disabilitata.
 
-## Riferimenti
+## Vedi anche
 
-- Implementazione: `apps/client/src-tauri/src/varianti.rs`
-- Schema: `docs/architettura/schema-dati.md` § V011
-- Spec roadmap: `docs/roadmap/fase-4-workflow.md` Step 1
+- [`schema-dati.md`](../architettura/schema-dati.md) — schema dati delle varianti (§ V011).
+- [`fase-4-workflow.md`](../roadmap/fase-4-workflow.md) — spec roadmap (Step 1).
+- Implementazione: `apps/client/src-tauri/src/varianti.rs` — backend delle varianti.

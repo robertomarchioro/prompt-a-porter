@@ -1,6 +1,6 @@
 # Linting — Catalogo regole
 
-> Disponibile da `v0.3.0`. 12 regole implementate.
+> Il catalogo delle regole di linting del pannello Diagnosi, con esempi pratici e istruzioni per silenziarle o personalizzarle. Disponibile da `v0.3.0`.
 
 L'editor del prompt mostra un pannello **Diagnosi** che segnala
 problemi (errori, warning, info) sul body del prompt, in tempo reale
@@ -162,8 +162,8 @@ in `OnceLock`). Costo tipico:
 Il debounce frontend è 600 ms, quindi non vedi il pannello
 "flickerare" mentre digiti.
 
-## Riferimenti
+## Vedi anche
 
-- Spec completa nello spec roadmap: [`fase-3-intelligence.md`](../roadmap/fase-3-intelligence.md) Step 5
-- Implementazione: `apps/client/src-tauri/src/linting.rs`
-- Test: la logica di lint è coperta da unit test (vedi `cargo test --lib linting::`)
+- [`fase-3-intelligence.md`](../roadmap/fase-3-intelligence.md) — spec completa delle regole (Step 5).
+- [`glossario-sintassi.md`](./glossario-sintassi.md) — tabella riassuntiva dei codici linter nel reference di sintassi.
+- Implementazione: `apps/client/src-tauri/src/linting.rs` — motore di lint (coperto da unit test, `cargo test --lib linting::`).

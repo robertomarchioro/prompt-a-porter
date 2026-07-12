@@ -1,7 +1,6 @@
 # Regression testing dei prompt
 
-> Disponibile da `v0.4.0`. **Differenziatore strategico**: nessun
-> altro prompt manager esistente offre questa funzione.
+> Come definire golden examples sui prompt ed eseguirli contro un provider AI per misurare il drift nel tempo. Disponibile da `v0.4.0` — nessun altro prompt manager offre questa funzione.
 
 I **golden examples** trasformano un prompt da testo a **contratto
 comportamentale verificabile**: dato un certo input, ti aspetti un
@@ -156,8 +155,8 @@ Vedi `docs/architettura/schema-dati.md` § V008-V010. Riassunto:
 - ✅ **UI Impostazioni Provider** — atterrato in `v0.5.0`
   (pannello dedicato in **Impostazioni** → **Provider AI**).
 
-## Riferimenti
+## Vedi anche
 
-- Implementazione: `apps/client/src-tauri/src/{regression,provider_ai,similarity}.rs`
-- Schema: `docs/architettura/schema-dati.md` § V008-V010
-- Spec roadmap: `docs/roadmap/fase-4-workflow.md` Step 8
+- [`schema-dati.md`](../architettura/schema-dati.md) — schema dati di golden, observation e provider (§ V008-V010).
+- [`fase-4-workflow.md`](../roadmap/fase-4-workflow.md) — spec roadmap (Step 8).
+- Implementazione: `apps/client/src-tauri/src/{regression,provider_ai,similarity}.rs` — backend golden/provider/similarity.

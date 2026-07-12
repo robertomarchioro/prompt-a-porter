@@ -1,6 +1,6 @@
 # Rating dei prompt
 
-> Disponibile da `v0.4.0`.
+> Come valutare un prompt dopo l'uso (👎 / 😐 / 👍) e leggere l'aggregato nella tab Valutazioni per capire quali prompt funzionano nel tempo. Disponibile da `v0.4.0`.
 
 Dopo aver compilato e copiato un prompt dalla Command Palette o dal
 Compilatore, puoi lasciare un **feedback discreto** a 3 valori
@@ -89,8 +89,8 @@ nuovo voto, e l'aggregato media le entry più recenti.
 - **Aggregato per modello**: il campo `UsedWithModel` è popolato ma
   il dashboard non lo filtra. Atterrabile post-v0.4 in `Insight.svelte`.
 
-## Riferimenti
+## Vedi anche
 
-- Implementazione: `apps/client/src-tauri/src/rating.rs`
-- Schema: `docs/architettura/schema-dati.md` § V013
-- Spec roadmap: `docs/roadmap/fase-4-workflow.md` Step 2
+- [`schema-dati.md`](../architettura/schema-dati.md) — schema dati dei rating (§ V013).
+- [`fase-4-workflow.md`](../roadmap/fase-4-workflow.md) — spec roadmap (Step 2).
+- Implementazione: `apps/client/src-tauri/src/rating.rs` — backend del rating.

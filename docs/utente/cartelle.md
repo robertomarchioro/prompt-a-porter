@@ -1,6 +1,6 @@
 # Cartelle
 
-> Disponibile da `v0.3.0`.
+> Come organizzare i prompt in cartelle (ubicazione canonica, complementare ai tag): modello dati, UX nel client, anteprima dei permessi Fase 4. Disponibile da `v0.3.0`.
 
 Le **cartelle** sono l'ubicazione canonica di un prompt: ogni
 prompt sta in una sola cartella (oppure a *root* del workspace,
@@ -101,8 +101,7 @@ campo `Permissions` ma sarà additivo.
 | `folder_elimina` | Soft delete cascata + sposta prompt a root |
 | `prompt_sposta` | Cambia `FolderId` di un prompt |
 
-## Riferimenti
+## Vedi anche
 
-- Implementazione: `apps/client/src-tauri/src/cartelle.rs`
-- Test stress: 14 unit test (incluso 100 cartelle depth 5)
-- Schema: [`schema-dati.md`](../architettura/schema-dati.md)
+- [`schema-dati.md`](../architettura/schema-dati.md) — schema completo del modello dati.
+- Implementazione: `apps/client/src-tauri/src/cartelle.rs` — backend delle cartelle (con test stress su alberi profondi).

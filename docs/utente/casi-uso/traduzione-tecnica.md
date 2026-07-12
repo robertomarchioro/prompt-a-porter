@@ -1,6 +1,6 @@
 # Traduzione tecnica
 
-Template per traduzioni con glossario tecnico custom: mantiene termini del dominio nella lingua target corretta, evita "false friends".
+> Template per traduzioni con glossario tecnico custom: mantiene termini del dominio nella lingua target corretta, evita "false friends".
 
 ## Quando usarlo
 

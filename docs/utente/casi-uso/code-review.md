@@ -1,6 +1,6 @@
 # Code review
 
-Template per code review automatica con focus su edge case, performance, leggibilità e sicurezza.
+> Template per code review automatica con focus su edge case, performance, leggibilità e sicurezza.
 
 ## Quando usarlo
 

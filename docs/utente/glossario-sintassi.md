@@ -1,6 +1,6 @@
 # Glossario sintassi
 
-Reference rapido della sintassi del body di un prompt: segnaposti, globali, import, codici linter.
+> Reference rapido della sintassi del body di un prompt: segnaposti, globali, import, codici linter.
 
 Per approfondimenti: [`prompt-componibili.md`](./prompt-componibili.md) (import) e [`linting-regole.md`](./linting-regole.md) (regole linter complete).
 

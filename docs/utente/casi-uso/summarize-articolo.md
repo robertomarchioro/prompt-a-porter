@@ -1,6 +1,6 @@
 # Summarize articolo
 
-Template per riassumere articoli tecnici, paper, post di blog in N punti chiave.
+> Template per riassumere articoli tecnici, paper, post di blog in N punti chiave.
 
 ## Quando usarlo
 
