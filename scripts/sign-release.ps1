@@ -491,7 +491,9 @@ L'installer MSI e' stato rimosso di proposito (WiX/MSI installa in `Program File
 
 **Linux:** disponibili anche `.deb` e `.AppImage` (x86_64). L'AppImage riceve gli auto-update.
 
-> **Nota:** il target macOS resta temporaneamente disabilitato (richiede un certificato Apple Developer per la notarization).
+**macOS:** l'app e' inclusa come binario universale (`.dmg`, arm64 + Intel x86_64), firmata Developer ID e notarizzata in CI.
+
+**CLI (`pap`):** la release include i binari della CLI per Windows, macOS e Linux (`pap-<os>-<arch>`, arch amd64 e arm64). Scarica quello della tua piattaforma, mettilo nel PATH ed e' pronto - niente Go, niente compilazione. I binari CLI Windows sono firmati Authenticode; quelli macOS/Linux non sono firmati (su macOS togli la quarantena al primo avvio con `xattr -d com.apple.quarantine ./pap-darwin-arm64`).
 '@
 $publishedNotes = $notesTemplate.Replace('__TAG__', $Tag).Replace('__REPO__', $Repo)
 
