@@ -110,6 +110,31 @@ jobs:
       - name: Installa dipendenze pnpm
         run: pnpm install --frozen-lockfile
 
+      # La CLI `pap` viene bundlata come risorsa nell'installer NSIS
+      # (tauri.windows.conf.json, auto-merged solo su Windows). Va compilata
+      # PRIMA di tauri-action, in apps/client/src-tauri/pap.exe, così il
+      # bundler la trova. Solo windows/amd64: l'installer è x64.
+      - name: Setup Go (CLI da bundlare, solo Windows)
+        if: matrix.platform == 'windows-latest'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.25.11"
+          cache-dependency-path: apps/cli/go.sum
+
+      - name: Compila la CLI pap per il bundle installer (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        working-directory: apps/cli
+        env:
+          CGO_ENABLED: "0"
+          GOOS: windows
+          GOARCH: amd64
+        run: |
+          go mod tidy
+          VER="${GITHUB_REF_NAME#v}"
+          go build -ldflags="-s -w -X main.cliVersion=${VER}" -o ../client/src-tauri/pap.exe .
+          test -f ../client/src-tauri/pap.exe && echo "pap.exe pronto per il bundle"
+
       - name: Build & release Tauri
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
@@ -184,6 +209,9 @@ jobs:
             su macOS al primo avvio togli la quarantena con
             `xattr -d com.apple.quarantine ./pap-darwin-arm64`; su Windows
             SmartScreen può avvisare (Maggiori informazioni → Esegui comunque).
+            In più, **l'installer Windows** (`…-setup.exe`) offre in fase di
+            installazione di aggiungere la CLI al PATH: in quel caso `pap` è
+            subito disponibile dal terminale, senza scaricare nulla a parte.
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
