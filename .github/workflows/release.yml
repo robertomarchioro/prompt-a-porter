@@ -136,7 +136,7 @@ jobs:
           test -f ../client/src-tauri/pap.exe && echo "pap.exe pronto per il bundle"
 
       - name: Build & release Tauri
-        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # v1.0 M1.4 — Tauri Updater signing (Ed25519, separato da
