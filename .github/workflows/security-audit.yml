@@ -3,8 +3,9 @@ name: Security Audit
 on:
   workflow_dispatch:
   schedule:
-    # Lunedì alle 06:00 UTC settimanale
-    - cron: "0 6 * * 1"
+    # Giornaliero: il DB di govulncheck/RustSec si aggiorna di continuo,
+    # il run quotidiano accorcia la finestra di esposizione a ~1 giorno.
+    - cron: "23 5 * * *"
 
 permissions:
   contents: read
@@ -38,10 +39,10 @@ jobs:
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          # Pin esatto 1.25.11 per fix GO-2026-5039 (net/textproto) e
-          # GO-2026-5037 (crypto/x509), raggiunte da http.ListenAndServe.
-          # Setup-go con "1.25" può risolvere a una patch precedente se
-          # l'ultima non è ancora nel manifests cache — pin sempre esatto.
+          # Pin esatto: setup-go con "1.25" può risolvere a una patch
+          # precedente se l'ultima non è ancora nel manifests cache.
+          # Da bumpare a ogni patch stdlib con fix sicurezza
+          # (storico: GO-2026-5039, GO-2026-5037, GO-2026-5856).
           go-version: "1.25.12"
           cache-dependency-path: apps/server/go.sum
 
@@ -89,3 +90,36 @@ jobs:
       - name: Audit deps (no install richiesto)
         run: pnpm audit --audit-level=moderate
         continue-on-error: true
+
+  notifica-fallimento:
+    name: Apri issue su fallimento
+    runs-on: ubuntu-latest
+    needs: [rust-audit, go-audit-server, go-audit-cli, pnpm-audit]
+    if: failure()
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Crea o aggiorna issue di segnalazione
+        run: |
+          TITLE="Security Audit fallito: intervenire"
+          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" \
+              --body "Nuovo fallimento del run schedulato: $RUN_URL"
+            exit 0
+          fi
+          BODY="Il run schedulato di **Security Audit** è fallito: $RUN_URL
+
+          Passi per il fix:
+          1. Aprire il log del job fallito e identificare l'advisory (es. GO-XXXX-XXXX, RUSTSEC-XXXX-XXXX).
+          2. Verificare in quale versione è corretta (per Go stdlib: bump del pin \`go-version\` nei workflow; per dipendenze: bump in go.mod/Cargo.toml/package.json).
+          3. Aprire una PR col fix minimale e attendere il verde di questo workflow (rilanciabile con \`gh workflow run security-audit.yml\`).
+
+          Issue aperta automaticamente dal job \`notifica-fallimento\`; i fallimenti successivi vengono aggiunti come commento."
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" \
+            --body "$BODY" --label security 2>/dev/null || \
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
