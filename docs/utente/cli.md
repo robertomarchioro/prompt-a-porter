@@ -232,6 +232,7 @@ Il vault è aperto in scrittura dal client desktop. Chiudi il client desktop e r
 
 ## Vedi anche
 
+- [`cli-ricette.md`](./cli-ricette.md) — idee concrete: dare un prompt in pasto a un modello, copiarlo, sceglierlo con fzf, generarne a raffica.
 - [`mcp.md`](./mcp.md) — l'altra via per leggere il vault da fuori: gli assistenti AI via Model Context Protocol.
 - [`glossario-sintassi.md`](./glossario-sintassi.md) — la sintassi dei segnaposti che `pap render` compila.
 - [`formato-export-json.md`](./formato-export-json.md) — per portare i dati fuori dal vault in modo strutturato e documentato.

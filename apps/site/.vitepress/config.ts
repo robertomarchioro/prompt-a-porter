@@ -128,6 +128,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             { text: "CLI pap", link: "/utente/cli" },
+            { text: "pap in pratica (ricette)", link: "/utente/cli-ricette" },
             { text: "MCP server", link: "/utente/mcp" },
             { text: "Export/Import JSON", link: "/utente/formato-export-json" },
             { text: "Markdown import/export", link: "/utente/markdown-import-export" },
