@@ -406,6 +406,18 @@
 .pap-landing .card.cc-blue .swatch { background: linear-gradient(52deg, rgba(255,255,255,.22), transparent 26%, rgba(255,255,255,.12) 58%, transparent 78%), linear-gradient(135deg, #6e84cc, #33457a); }
 .pap-landing .card.cc-blue .swatch::after { background: repeating-linear-gradient(52deg, rgba(255,255,255,.05) 0 11px, rgba(0,0,0,.06) 11px 22px); opacity: .5; }
 
+/* Capo di chiusura: la CLI, featured a tutta riga e orizzontale. Il comando
+   è un'etichetta di manutenzione (mono su tint), non un emulatore di
+   terminale — resta nel linguaggio sartoriale della collezione. */
+.pap-landing .card.cli { grid-column: 1 / -1; flex-direction: row; min-height: 156px; }
+.pap-landing .card.cli .swatch { flex: none; width: 150px; }
+.pap-landing .card.cli .body { padding: 26px 30px; justify-content: center; gap: 12px; }
+.pap-landing .card.cli h3 { margin: 0; font-size: 27px; }
+.pap-landing .card.cli p { font-size: 15px; max-width: 60ch; }
+.pap-landing .card.cli .cli-cmd { align-self: flex-start; max-width: 100%; font-family: "JetBrains Mono", monospace; font-size: 13px; color: var(--ink); background: var(--tint); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; overflow-x: auto; white-space: nowrap; letter-spacing: .01em; }
+.pap-landing .card.cli .cli-link { align-self: flex-start; font-family: "Inter", sans-serif; font-size: 13px; font-weight: 500; color: var(--ac); text-decoration: none; }
+.pap-landing .card.cli:hover .cli-link { text-decoration: underline; }
+
 /* season debut — Arioso Atelier v1.0 */
 .pap-landing .season { position: relative; overflow: hidden; border-top: 1px solid var(--line); background: radial-gradient(120% 80% at 82% 0%, rgba(132,112,213,.16), transparent 55%), var(--bg); }
 .pap-landing .season .sin { max-width: 1240px; margin: 0 auto; padding: 104px 80px; display: grid; grid-template-columns: 0.94fr 1.06fr; gap: 72px; align-items: center; }
@@ -514,6 +526,9 @@
   .pap-landing .colhead { flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 24px; }
   .pap-landing .colhead h2 { font-size: clamp(36px, 10vw, 52px); }
   .pap-landing .card.sm { grid-column: span 6; }
+  /* CLI featured: impila swatch sopra il corpo su mobile */
+  .pap-landing .card.cli { flex-direction: column; }
+  .pap-landing .card.cli .swatch { width: auto; height: 88px; }
   .pap-landing .manifesto .in { padding: 56px 20px; gap: 36px; }
   .pap-landing .manifesto .slogan { font-size: clamp(32px, 9.5vw, 44px); }
   .pap-landing .manifesto .tech { font-size: 16px; max-width: none; }

@@ -1,6 +1,10 @@
+<script setup lang="ts">
+import { DOC_CLI_RICETTE } from './links'
+</script>
+
 <template>
   <section class="wrap sec tight" id="collezione">
-    <div class="colhead"><h2 class="serif">La collezione</h2><span class="label">Cinque capi · una stagione</span></div>
+    <div class="colhead"><h2 class="serif">La collezione</h2><span class="label">Sei capi · una stagione</span></div>
     <div class="grid">
       <article class="card big cc-violet">
         <div class="swatch"><span class="hang"></span><span class="sku">VER</span></div>
@@ -21,6 +25,15 @@
       <article class="card sm cc-blue">
         <div class="swatch"><span class="hang"></span><span class="sku">IMP</span></div>
         <div class="body"><h3 class="serif">Un tono, dieci tagli</h3><p v-pre><code>{{import "ruolo"}}</code> per riusare blocchi. Definisci lo stile una volta, riusalo ovunque. Sartoria modulare.</p></div>
+      </article>
+      <article class="card cli cc-violet">
+        <div class="swatch"><span class="hang"></span><span class="sku">CLI</span></div>
+        <div class="body">
+          <h3 class="serif">Il taglio da terminale</h3>
+          <p>Gli stessi prompt in ogni pipe, script e git hook: <code>pap</code> porta il vault dove già lavori, in sola lettura.</p>
+          <code class="cli-cmd">pap render email --var cliente="ACME" | llm</code>
+          <a class="cli-link" :href="DOC_CLI_RICETTE">Scopri la CLI →</a>
+        </div>
       </article>
     </div>
   </section>

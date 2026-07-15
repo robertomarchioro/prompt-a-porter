@@ -5,6 +5,7 @@ export const RELEASES = `${GITHUB}/releases`
 // hardcoded come in config.ts) — non mandare i visitatori su GitHub.
 export const DOCS = '/prompt-a-porter/utente/'
 export const GUIDA = '/prompt-a-porter/utente/getting-started'
+export const DOC_CLI_RICETTE = '/prompt-a-porter/utente/cli-ricette'
 export const LICENSE = `${GITHUB}/blob/main/LICENSE`
 export const ISSUES = `${GITHUB}/issues`
 export const AUTHOR = 'https://github.com/robertomarchioro'
