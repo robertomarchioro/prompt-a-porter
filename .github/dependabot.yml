@@ -81,6 +81,13 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - dependencies
+    groups:
+      patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
 
   # === Go (CLI) ===
   - package-ecosystem: gomod
@@ -90,3 +97,10 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - dependencies
+    groups:
+      patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
