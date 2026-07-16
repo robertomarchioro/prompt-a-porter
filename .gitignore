@@ -22,7 +22,9 @@ apps/server/papsync
 apps/server/papsync.exe
 apps/server/vendor/
 # CLI `pap` cross-compilata in CI e bundlata come risorsa nell'installer
-# Windows (vedi release.yml + tauri.windows.conf.json). Mai committata.
+# Windows in una sottocartella dedicata bin/ (evita la collisione col binario
+# GUI omonimo; vedi release.yml + tauri.windows.conf.json). Mai committata.
+apps/client/src-tauri/bin/
 apps/client/src-tauri/pap.exe
 
 # === Ambiente ===

@@ -112,8 +112,10 @@ jobs:
 
       # La CLI `pap` viene bundlata come risorsa nell'installer NSIS
       # (tauri.windows.conf.json, auto-merged solo su Windows). Va compilata
-      # PRIMA di tauri-action, in apps/client/src-tauri/pap.exe, così il
-      # bundler la trova. Solo windows/amd64: l'installer è x64.
+      # PRIMA di tauri-action, in apps/client/src-tauri/bin/pap.exe — SOTTOCARTELLA
+      # dedicata per evitare la collisione col binario GUI omonimo `pap.exe`
+      # (crate desktop `pap`); mainBinaryName forza comunque la GUI a
+      # "Prompt a Porter.exe". Solo windows/amd64: l'installer è x64.
       - name: Setup Go (CLI da bundlare, solo Windows)
         if: matrix.platform == 'windows-latest'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -132,8 +134,9 @@ jobs:
         run: |
           go mod tidy
           VER="${GITHUB_REF_NAME#v}"
-          go build -ldflags="-s -w -X main.cliVersion=${VER}" -o ../client/src-tauri/pap.exe .
-          test -f ../client/src-tauri/pap.exe && echo "pap.exe pronto per il bundle"
+          mkdir -p ../client/src-tauri/bin
+          go build -ldflags="-s -w -X main.cliVersion=${VER}" -o ../client/src-tauri/bin/pap.exe .
+          test -f ../client/src-tauri/bin/pap.exe && echo "bin/pap.exe pronto per il bundle"
 
       - name: Build & release Tauri
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
@@ -205,13 +208,15 @@ jobs:
             **CLI (`pap`):** la release include anche i binari della CLI per
             Windows, macOS e Linux (`pap-<os>-<arch>`, arch amd64 e arm64).
             Scarica quello della tua piattaforma, mettilo nel PATH ed è pronto —
-            niente Go, niente compilazione. I binari CLI **non sono firmati**:
-            su macOS al primo avvio togli la quarantena con
-            `xattr -d com.apple.quarantine ./pap-darwin-arm64`; su Windows
-            SmartScreen può avvisare (Maggiori informazioni → Esegui comunque).
+            niente Go, niente compilazione. Il binario CLI **Windows** viene
+            **firmato Authenticode** nella fase di signing (nella draft è ancora
+            unsigned); i binari **macOS/Linux non sono firmati** (su macOS al
+            primo avvio togli la quarantena con
+            `xattr -d com.apple.quarantine ./pap-darwin-arm64`).
             In più, **l'installer Windows** (`…-setup.exe`) offre in fase di
-            installazione di aggiungere la CLI al PATH: in quel caso `pap` è
-            subito disponibile dal terminale, senza scaricare nulla a parte.
+            installazione di aggiungere la CLI (installata in `bin\`) al PATH:
+            in quel caso `pap` è subito disponibile dal terminale, senza
+            scaricare nulla a parte.
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
