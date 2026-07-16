@@ -23,6 +23,7 @@ pub mod provider_ai;
 pub mod rating;
 pub mod regression;
 pub mod ricerca_ibrida;
+pub mod ritocco;
 pub mod similarity;
 pub mod statistiche;
 pub mod sync;
