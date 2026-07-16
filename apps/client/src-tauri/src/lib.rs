@@ -625,6 +625,7 @@ pub fn run() {
             provider_ai::provider_config_lista,
             provider_ai::provider_config_salva,
             provider_ai::provider_config_elimina,
+            ritocco::ritocco_esegui,
             varianti::prompt_crea_variante,
             varianti::varianti_lista,
             varianti::prompt_promuovi_variante,

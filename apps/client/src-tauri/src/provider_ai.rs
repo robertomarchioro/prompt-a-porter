@@ -885,6 +885,18 @@ pub(crate) fn config_carica_completa(
 pub(crate) fn istanzia_provider(
     cfg: &ProviderConfigItem,
 ) -> Result<Box<dyn AIProvider>, PapErrore> {
+    istanzia_provider_con_max_tokens(cfg, None)
+}
+
+/// Come [`istanzia_provider`], ma con un tetto di token di output esplicito
+/// applicato ai provider che lo supportano (oggi solo Anthropic, che richiede
+/// `max_tokens` nella request). Usato da Ritocco, dove la riscrittura di un
+/// prompt lungo può superare il default (`ANTHROPIC_MAX_TOKENS_DEFAULT`) e
+/// troncarsi. `None` = default del provider (comportamento dei golden run).
+pub(crate) fn istanzia_provider_con_max_tokens(
+    cfg: &ProviderConfigItem,
+    max_tokens_output: Option<u32>,
+) -> Result<Box<dyn AIProvider>, PapErrore> {
     // Fix #457 (review HIGH): `config_salva_pure` valida `base_url` solo al
     // salvataggio. Righe scritte da una build precedente a #457, o
     // importate/ripristinate da backup/migrazione, non passano MAI da lì e
@@ -903,10 +915,11 @@ pub(crate) fn istanzia_provider(
             let key = cfg.api_key.as_ref().ok_or_else(|| {
                 PapErrore::Generico("Anthropic richiede una API key configurata".into())
             })?;
-            Ok(Box::new(AnthropicProvider::new(
-                key.clone(),
-                cfg.base_url.clone(),
-            )))
+            let mut p = AnthropicProvider::new(key.clone(), cfg.base_url.clone());
+            if let Some(m) = max_tokens_output {
+                p.max_tokens = m;
+            }
+            Ok(Box::new(p))
         }
         "openai" | "openai-compat" => {
             let key = cfg.api_key.as_ref().ok_or_else(|| {
