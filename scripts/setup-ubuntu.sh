@@ -302,7 +302,14 @@ export TAURI_UPDATER_PRIVATE_KEY_PATH="\$HOME/.tauri/pap-updater.key"
 # sottoprocesso \`tauri signer sign\`, mai nella shell.
 pap-sign() {
   command -v secret-tool >/dev/null 2>&1 || { echo "secret-tool non disponibile" >&2; return 1; }
-  TAURI_SIGNING_PRIVATE_KEY_PASSWORD="\$(secret-tool lookup service prompt-a-porter account tauri-updater-key 2>/dev/null)" \\
+  local pw
+  pw="\$(secret-tool lookup service prompt-a-porter account tauri-updater-key 2>/dev/null)"
+  # Fail-closed: se il keyring e' bloccato / senza sessione D-Bus (tipico
+  # via SSH) o l'item non e' ancora stato salvato, NON firmiamo con
+  # passphrase vuota (tauri signer ha un fallback silente insicuro, cfr.
+  # nota su 'tauri signer generate' piu' sopra).
+  [[ -n "\$pw" ]] || { echo "passphrase Updater non trovata nel keyring (usa 'secret-tool store ...')" >&2; return 1; }
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD="\$pw" \\
     tauri signer sign -k "\$TAURI_UPDATER_PRIVATE_KEY_PATH" "\$@"
 }
 $END_MARKER
