@@ -289,15 +289,22 @@ $MARKER
 # su Windows; su Linux serve per tauri signer sign / generate).
 export TAURI_UPDATER_PRIVATE_KEY_PATH="\$HOME/.tauri/pap-updater.key"
 # Se la chiave Updater e' cifrata, la passphrase NON va scritta qui in
-# chiaro. Viene invece custodita nel keyring di sistema (GNOME Keyring /
-# KWallet via libsecret) e riletta a ogni apertura di shell:
+# chiaro NE' esportata a livello di sessione: un export nel .bashrc la
+# lascerebbe nell'ambiente di OGNI processo dell'utente, leggibile via
+# /proc/<pid>/environ per tutta la durata della sessione. Va invece
+# custodita nel keyring di sistema (GNOME Keyring / KWallet via libsecret)
+# e iniettata SOLO nell'ambiente del singolo comando di firma:
 #   salvarla:   secret-tool store --label="Prompt a Porter - Tauri Updater key passphrase" \\
 #                 service prompt-a-porter account tauri-updater-key
 #   rimuoverla: secret-tool clear service prompt-a-porter account tauri-updater-key
-if command -v secret-tool >/dev/null 2>&1; then
-  TAURI_SIGNING_PRIVATE_KEY_PASSWORD="\$(secret-tool lookup service prompt-a-porter account tauri-updater-key 2>/dev/null)"
-  export TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-fi
+# La funzione qui sotto applica il pattern per-processo (specchia
+# scripts/sign-release.ps1): la passphrase vive solo nell'ambiente del
+# sottoprocesso \`tauri signer sign\`, mai nella shell.
+pap-sign() {
+  command -v secret-tool >/dev/null 2>&1 || { echo "secret-tool non disponibile" >&2; return 1; }
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD="\$(secret-tool lookup service prompt-a-porter account tauri-updater-key 2>/dev/null)" \\
+    tauri signer sign -k "\$TAURI_UPDATER_PRIVATE_KEY_PATH" "\$@"
+}
 $END_MARKER
 EOF
   echo "[OK] aggiunto blocco in $BASHRC"
