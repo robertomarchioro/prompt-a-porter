@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, onDestroy, untrack } from "svelte";
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
-  import { Star, GitFork, Download, PanelRight, Save, Trash2 } from "lucide-svelte";
+  import { Star, GitFork, Download, PanelRight, Save, Trash2, Wand2 } from "lucide-svelte";
   import type { EditorView } from "@codemirror/view";
   import DetailTabs, { type TabId } from "$lib/components/DetailTabs.svelte";
   import EditorTab from "$lib/components/EditorTab.svelte";
@@ -16,6 +16,7 @@
   import ImportVarTab from "$lib/components/ImportVarTab.svelte";
   import RatingTab from "$lib/components/RatingTab.svelte";
   import Modale from "$lib/components/Modale.svelte";
+  import RitoccoModal from "$lib/superfici/RitoccoModal.svelte";
   import Button from "$lib/components/Button.svelte";
   import { apriModale } from "$lib/stores/modale.svelte";
   import { statoEditor } from "$lib/stores/preferenze.svelte";
@@ -367,6 +368,23 @@
     return salva(true);
   }
 
+  // Ritocco (suggerimenti AI). Modale locale: l'accettazione scrive il testo
+  // riscritto nell'editor e salva con snapshot → nuova versione.
+  let ritoccoAperto = $state(false);
+
+  async function applicaRitocco(nuovoBody: string): Promise<void> {
+    if (!dettaglio) return;
+    body = nuovoBody;
+    dettaglio = { ...dettaglio, body: nuovoBody };
+    if (editorView) {
+      editorView.dispatch({
+        changes: { from: 0, to: editorView.state.doc.length, insert: nuovoBody },
+      });
+    }
+    ritoccoAperto = false;
+    await salvaManuale();
+  }
+
   /**
    * Issue #156: elimina prompt corrente con confirm dialog.
    * Backend prompt_elimina è soft-delete (DeletedAt timestamp).
@@ -658,6 +676,15 @@
             <Trash2 size={14} />
           </button>
           <button
+            class="ico"
+            type="button"
+            title="Ritocco (suggerimenti AI)"
+            aria-label="Ritocco"
+            onclick={() => (ritoccoAperto = true)}
+          >
+            <Wand2 size={14} />
+          </button>
+          <button
             class="primary"
             type="button"
             title="Compila (apre modale)"
@@ -804,6 +831,14 @@
   <div class="caricamento">
     <p>Caricamento…</p>
   </div>
+{/if}
+
+{#if ritoccoAperto && dettaglio}
+  <RitoccoModal
+    promptId={dettaglio.id}
+    onChiudi={() => (ritoccoAperto = false)}
+    onAccetta={(nuovo) => void applicaRitocco(nuovo)}
+  />
 {/if}
 
 {#if warnImport.aperto}

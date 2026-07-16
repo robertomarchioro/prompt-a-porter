@@ -149,6 +149,8 @@ pub(crate) struct RispostaModello {
 pub struct RitoccoEsito {
     pub suggerimenti: Vec<Suggerimento>,
     pub prompt_migliorato: String,
+    /// Il body inviato al modello (head corrente dal DB): base del diff in UI.
+    pub body_originale: String,
     pub tokens_used: Option<u32>,
     pub costo_stimato: Option<f64>,
     pub provider: String,
@@ -262,6 +264,7 @@ pub fn ritocco_esegui(
         Ok(RitoccoEsito {
             suggerimenti: risposta.suggerimenti,
             prompt_migliorato: risposta.prompt_migliorato,
+            body_originale: body,
             tokens_used: out.tokens_used,
             costo_stimato,
             provider: provider_kind,
