@@ -30,6 +30,20 @@ updates:
     labels:
       - dependencies
     groups:
+      # vitest e @vitest/coverage-v8 sono accoppiati: coverage-v8 4.x
+      # richiede vitest 4.x (e viceversa). Vanno bumpati INSIEME anche sui
+      # major, altrimenti Dependabot apre PR separate che si escludono a
+      # vicenda e falliscono in CI (vedi #492, PR #490/#491). Questo gruppo
+      # precede patch-minor così da rivendicare i pacchetti vitest per ogni
+      # tipo di update (Dependabot assegna al primo gruppo che matcha).
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+        update-types:
+          - minor
+          - patch
+          - major
       patch-minor:
         patterns:
           - "*"
