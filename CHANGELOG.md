@@ -1,5 +1,18 @@
 # Changelog — Prompt a Porter
 
+## v0.8.37 — Triage: passphrase setup Linux + sblocco vitest 4 (2026-07-16)
+
+> Ciclo di triage (`/gh-triage`): un fix di sicurezza sullo script di setup Linux e lo sblocco del salto major di Vitest, che Dependabot aveva spezzato in due PR reciprocamente incompatibili. Include i bump di dipendenze approdati nello stesso giro, tra cui uno con fix di sicurezza upstream.
+
+### Sicurezza
+
+- **Passphrase updater transiente nel setup Ubuntu** (#479): `scripts/setup-ubuntu.sh` inseriva nel blocco `.bashrc` un `export` della passphrase della chiave Tauri Updater, lasciandola nell'ambiente di *ogni* processo dell'utente per l'intera sessione (leggibile via `/proc/<pid>/environ`). Ora una funzione `pap-sign` la legge dal keyring e la inietta solo nell'ambiente del singolo comando di firma — stesso pattern per-processo già usato su Windows in `sign-release.ps1` (#466/#477) — e fallisce in modo esplicito se il keyring non la restituisce (niente firma con passphrase vuota).
+
+### Manutenzione
+
+- **Vitest + coverage-v8 a 4.x** (#492): `packages/shared-schema` e `apps/mcp-server` erano rimasti su Vitest 3.x mentre `apps/client` era già sulla 4.x; le PR Dependabot separate fallivano perché `@vitest/coverage-v8` 4.x richiede `vitest` 4.x e viceversa. Allineati alla 4.1.10 in un bump atomico, con un nuovo gruppo `vitest` in `dependabot.yml` (major inclusi) così i prossimi salti arrivano già accoppiati.
+- **Aggiornamento dipendenze** (#485, #486, #487, #489): `golang.org/x/crypto` 0.54.0 (fix di sicurezza upstream: verifica del tipo di chiave in `authorized_keys`, limiti sui parametri delle chiavi DSA, data race in `acme/autocert`), `go-chi/chi` 5.3.1, `regex` 1.13.0 (client Tauri) e `actions/upload-artifact` v7.
+
 ## v0.8.36 — App macOS universale (supporto Mac Intel) (2026-07-11)
 
 > Patch mirato: la v0.8.35, prima release con app macOS, girava solo su Apple Silicon e su Mac **Intel** veniva rifiutata con "non è supportato su questo Mac".
