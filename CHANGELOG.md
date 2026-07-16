@@ -1,5 +1,13 @@
 # Changelog — Prompt a Porter
 
+## v0.8.39 — Hotfix: avvio Windows dopo l'aggiornamento (2026-07-16)
+
+> Hotfix per v0.8.38: su Windows, dopo l'aggiornamento in-app l'applicazione non si avviava più (veniva interpretata come applicazione "da terminale"), per una collisione di nomi tra il binario dell'app e la CLI `pap` bundlata nell'installer.
+
+### Fix
+
+- **Avvio Windows ripristinato dopo l'update**: la CLI `pap` inclusa nell'installer è ora installata in una sottocartella dedicata (`bin\`) e l'eseguibile dell'app è forzato a `Prompt a Porter.exe` (`mainBinaryName`), eliminando la collisione con l'omonimo `pap.exe` che impediva l'avvio della GUI. L'opzione "aggiungi `pap` al PATH" aggiunge ora solo la cartella della CLI. Il binario CLI Windows standalone viene firmato Authenticode in fase di signing.
+
 ## v0.8.38 — Ritocco: suggerimenti AI per migliorare un prompt (2026-07-16)
 
 > Nuova funzione **Ritocco**: dal pannello di editing, un provider AI configurato dall'utente suggerisce migliorie al prompt — tarate sul modello per cui è scritto — e la versione riscritta può essere accettata come nuova versione. Design in `docs/roadmap/ritocco.md`. La release porta anche un fix di sicurezza sullo script di setup Linux e gli aggiornamenti di dipendenze del giro di triage confluiti nel frattempo.

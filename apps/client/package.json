@@ -1,7 +1,7 @@
 {
   "name": "@pap/client",
   "private": true,
-  "version": "0.8.38",
+  "version": "0.8.39",
   "type": "module",
   "description": "Prompt a Porter — Client desktop Tauri + Svelte",
   "license": "AGPL-3.0-only",
