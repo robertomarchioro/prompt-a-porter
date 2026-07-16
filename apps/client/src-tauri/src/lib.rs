@@ -23,6 +23,7 @@ pub mod provider_ai;
 pub mod rating;
 pub mod regression;
 pub mod ricerca_ibrida;
+pub mod ritocco;
 pub mod similarity;
 pub mod statistiche;
 pub mod sync;
@@ -624,6 +625,7 @@ pub fn run() {
             provider_ai::provider_config_lista,
             provider_ai::provider_config_salva,
             provider_ai::provider_config_elimina,
+            ritocco::ritocco_esegui,
             varianti::prompt_crea_variante,
             varianti::varianti_lista,
             varianti::prompt_promuovi_variante,

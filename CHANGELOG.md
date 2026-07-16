@@ -1,5 +1,17 @@
 # Changelog — Prompt a Porter
 
+## v0.8.38 — Ritocco: suggerimenti AI per migliorare un prompt (2026-07-16)
+
+> Nuova funzione **Ritocco**: dal pannello di editing, un provider AI configurato dall'utente suggerisce migliorie al prompt — tarate sul modello per cui è scritto — e la versione riscritta può essere accettata come nuova versione. Design in `docs/roadmap/ritocco.md`.
+
+### Novità
+
+- **Ritocco — suggerimenti AI sul prompt**: se hai configurato almeno un provider AI (**Impostazioni → Provider AI**), il pulsante ✦ nel pannello di editing apre una modale che invia il prompt e le linee guida ufficiali di prompting del suo **modello target** al provider scelto, e propone dei **suggerimenti** insieme a una **versione riscritta** (mostrata a diff). *Accetta suggerimenti* salva la riscrittura come **nuova versione** del prompt, preservando lo storico. Le linee guida per famiglia (Anthropic/OpenAI/Google/generico) sono incluse nell'app: nessuna connessione extra oltre al provider che hai configurato.
+
+### Manutenzione
+
+- **Provider Gemini configurabile** (fix): il vincolo del database non elencava `gemini` tra i provider ammessi, pur essendo supportato da codice e interfaccia; ora è possibile salvarlo e usarlo (migrazione `V016`).
+
 ## v0.8.37 — Triage: passphrase setup Linux + sblocco vitest 4 (2026-07-16)
 
 > Ciclo di triage (`/gh-triage`): un fix di sicurezza sullo script di setup Linux e lo sblocco del salto major di Vitest, che Dependabot aveva spezzato in due PR reciprocamente incompatibili. Include i bump di dipendenze approdati nello stesso giro, tra cui uno con fix di sicurezza upstream.

@@ -86,6 +86,11 @@ static MIGRAZIONI: &[Migrazione] = &[
         nome: "segnaposti_globali",
         sql: include_str!("../migrations/V015__segnaposti_globali.sql"),
     },
+    Migrazione {
+        versione: 16,
+        nome: "provider_config_gemini",
+        sql: include_str!("../migrations/V016__provider_config_gemini.sql"),
+    },
 ];
 
 /// Crea la tabella di tracking se non esiste.
@@ -153,6 +158,62 @@ mod test {
     use super::*;
 
     #[test]
+    fn v016_permette_provider_gemini() {
+        // Setup come gli altri test DB (V005/V006 usano l'estensione vec0).
+        crate::embeddings_store::registra_auto_extension();
+        let conn = Connection::open_in_memory().unwrap();
+        esegui_migrazioni(&conn).unwrap();
+
+        // Prima di V016 questo INSERT violava il CHECK di ProviderConfig.
+        conn.execute(
+            "INSERT INTO ProviderConfig
+                (Provider, ApiKey, BaseUrl, DefaultModel, Abilitato, CreatedAt, UpdatedAt)
+             VALUES ('gemini', 'k', NULL, 'gemini-2.5-pro', 1,
+                     datetime('now'), datetime('now'))",
+            [],
+        )
+        .expect("dopo V016 il provider 'gemini' deve essere accettato");
+
+        let n: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM ProviderConfig WHERE Provider = 'gemini'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn v016_preserva_le_righe_esistenti() {
+        crate::embeddings_store::registra_auto_extension();
+        let conn = Connection::open_in_memory().unwrap();
+        // Applica fino a V015 inserendo una riga, poi V016 deve preservarla.
+        // Semplice: esegui tutte le migrazioni, inserisci una riga anthropic,
+        // e verifica che sopravviva a una nuova esecuzione idempotente.
+        esegui_migrazioni(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO ProviderConfig
+                (Provider, ApiKey, BaseUrl, DefaultModel, Abilitato, CreatedAt, UpdatedAt)
+             VALUES ('anthropic', 'k', NULL, 'claude-opus-4-8', 1,
+                     datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        // Ri-eseguire non deve riapplicare V016 (idempotente) né perdere dati.
+        let applicate = esegui_migrazioni(&conn).unwrap();
+        assert_eq!(applicate, 0);
+        let n: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM ProviderConfig WHERE Provider = 'anthropic'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 1);
+    }
+
+    #[test]
     fn migrazioni_su_db_nuovo() {
         // Necessario registrare l'auto-extension sqlite-vec PRIMA di aprire
         // la connessione, perché V005 crea una vec0 virtual table.
@@ -160,10 +221,10 @@ mod test {
         let conn = Connection::open_in_memory().unwrap();
         let n = esegui_migrazioni(&conn).unwrap();
         assert!(
-            n >= 15,
-            "Tutte le migrazioni devono essere applicate (almeno 15)"
+            n >= 16,
+            "Tutte le migrazioni devono essere applicate (almeno 16)"
         );
-        assert_eq!(versione_corrente(&conn).unwrap(), 15);
+        assert_eq!(versione_corrente(&conn).unwrap(), 16);
     }
 
     #[test]
