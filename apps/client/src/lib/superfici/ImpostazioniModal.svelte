@@ -658,8 +658,19 @@
   let errorePassword = $state("");
   let statoOpPassword = $state<"" | "in_corso" | "ok">("");
 
+  // Cifratura di un vault nato in chiaro (transizione non_cifrato → cifrato).
+  // Chiude il vicolo cieco del fix #456: senza questo, un vault in chiaro non
+  // poteva salvare API key né essere cifrato se non ricreandolo da zero.
+  let vaultCifrato = $state(true);
+  let mostraCifraVault = $state(false);
+  let cifraPassword = $state("");
+  let cifraConferma = $state("");
+  let erroreCifra = $state("");
+  let statoOpCifra = $state<"" | "in_corso" | "ok">("");
+
   $effect(() => {
     void caricaVaultPath();
+    void caricaVaultCifrato();
   });
 
   async function caricaVaultPath(): Promise<void> {
@@ -667,6 +678,45 @@
       vaultPath = await invoke<string>("vault_percorso");
     } catch (e) {
       console.error("[impostazioni] vault_percorso", e);
+    }
+  }
+
+  async function caricaVaultCifrato(): Promise<void> {
+    try {
+      vaultCifrato = await invoke<boolean>("vault_cifrato");
+    } catch (e) {
+      console.error("[impostazioni] vault_cifrato", e);
+    }
+  }
+
+  async function cifraVault(): Promise<void> {
+    erroreCifra = "";
+    if (!cifraPassword) {
+      erroreCifra = "Inserisci una master password.";
+      return;
+    }
+    if (cifraPassword.length < 12) {
+      erroreCifra = "La password deve avere almeno 12 caratteri.";
+      return;
+    }
+    if (cifraPassword !== cifraConferma) {
+      erroreCifra = "La conferma non corrisponde alla password.";
+      return;
+    }
+    statoOpCifra = "in_corso";
+    try {
+      await invoke("vault_cifra", { password: cifraPassword });
+      statoOpCifra = "ok";
+      cifraPassword = "";
+      cifraConferma = "";
+      vaultCifrato = true;
+      setTimeout(() => {
+        statoOpCifra = "";
+        mostraCifraVault = false;
+      }, 1500);
+    } catch (e) {
+      statoOpCifra = "";
+      erroreCifra = String(e).replace(/^Error: /, "");
     }
   }
 
@@ -1592,23 +1642,97 @@
             </button>
           </div>
           <p class="hint">
-            Database SQLite cifrato (SQLCipher) salvato localmente.
+            {#if vaultCifrato}
+              Database SQLite cifrato (SQLCipher) salvato localmente.
+            {:else}
+              Database SQLite <strong>in chiaro</strong> salvato localmente.
+            {/if}
           </p>
         </div>
 
-        <div class="campo">
-          <span class="campo-label">Blocca vault</span>
-          <button type="button" class="btn-warn" onclick={bloccaVault}>
-            Blocca ora
-          </button>
-          <p class="hint">
-            Richiede la master password al prossimo accesso. La modale viene
-            chiusa automaticamente.
-          </p>
-        </div>
+        {#if !vaultCifrato}
+          <div class="campo campo-cifra">
+            <span class="campo-label">Cifra il vault</span>
+            <p class="hint">
+              Questo vault è salvato <strong>in chiaro</strong> sul disco.
+              Cifralo con una master password per proteggere i tuoi prompt e
+              poter salvare le API key dei provider AI. I dati esistenti vengono
+              conservati.
+            </p>
+            {#if !mostraCifraVault}
+              <button
+                type="button"
+                class="btn-primary"
+                onclick={() => (mostraCifraVault = true)}
+              >
+                <Lock size={14} />
+                Cifra vault…
+              </button>
+            {:else}
+              <div class="form-pwd">
+                <input
+                  type="password"
+                  placeholder="Master password (≥ 12 caratteri)"
+                  bind:value={cifraPassword}
+                  autocomplete="new-password"
+                />
+                <input
+                  type="password"
+                  placeholder="Conferma password"
+                  bind:value={cifraConferma}
+                  autocomplete="new-password"
+                />
+                {#if erroreCifra}
+                  <p class="msg-err">{erroreCifra}</p>
+                {/if}
+                {#if statoOpCifra === "ok"}
+                  <p class="msg-ok">Vault cifrato.</p>
+                {/if}
+                <p class="hint hint-cifra">
+                  Memorizza bene questa password: senza, il vault non è più
+                  recuperabile. Verrà richiesta a ogni avvio.
+                </p>
+                <div class="riga-azioni">
+                  <button
+                    type="button"
+                    class="btn-primary"
+                    onclick={cifraVault}
+                    disabled={statoOpCifra === "in_corso"}
+                  >
+                    {statoOpCifra === "in_corso" ? "Cifro…" : "Cifra vault"}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-ghost"
+                    onclick={() => {
+                      mostraCifraVault = false;
+                      cifraPassword = "";
+                      cifraConferma = "";
+                      erroreCifra = "";
+                    }}
+                  >
+                    Annulla
+                  </button>
+                </div>
+              </div>
+            {/if}
+          </div>
+        {/if}
 
-        <div class="campo">
-          <span class="campo-label">Master password</span>
+        {#if vaultCifrato}
+          <div class="campo">
+            <span class="campo-label">Blocca vault</span>
+            <button type="button" class="btn-warn" onclick={bloccaVault}>
+              Blocca ora
+            </button>
+            <p class="hint">
+              Richiede la master password al prossimo accesso. La modale viene
+              chiusa automaticamente.
+            </p>
+          </div>
+
+          <div class="campo">
+            <span class="campo-label">Master password</span>
           {#if !mostraCambioPassword}
             <button
               type="button"
@@ -1668,7 +1792,8 @@
               </div>
             </div>
           {/if}
-        </div>
+          </div>
+        {/if}
 
         <div class="campo campo-danger">
           <span class="campo-label">Elimina vault</span>
@@ -2982,6 +3107,18 @@
 
   .hint-danger {
     color: var(--accent-danger, #d9534f);
+  }
+
+  /* ── Cifra vault (chiude il vicolo cieco #456): call-to-action ── */
+  .campo-cifra {
+    margin-top: var(--sp-3);
+    padding: var(--sp-3);
+    border: 1px solid var(--accent-warn, #d9a441);
+    border-radius: var(--radius-sm);
+  }
+
+  .hint-cifra {
+    color: var(--accent-warn, #d9a441);
   }
 
   .btn-elimina {

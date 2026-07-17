@@ -185,7 +185,13 @@ fn verifica_chiave(conn: &Connection) -> Result<(), PapErrore> {
 
 fn salva_meta(path: &Path, meta: &VaultMeta) -> Result<(), PapErrore> {
     let json = serde_json::to_string_pretty(meta)?;
-    fs::write(path, json)?;
+    // Scrittura atomica: file temporaneo nella stessa directory + rename, così
+    // un'interruzione a metà (es. disco pieno) non lascia `vault-meta.json`
+    // troncato/illeggibile. `fs::rename` sostituisce il file esistente su tutte
+    // le piattaforme supportate (su Windows via MoveFileEx REPLACE_EXISTING).
+    let tmp = path.with_extension("json.tmp");
+    fs::write(&tmp, json)?;
+    fs::rename(&tmp, path)?;
     Ok(())
 }
 
@@ -553,6 +559,219 @@ pub(crate) fn vault_cambia_password_impl(
     Ok(())
 }
 
+/// Cifra un vault esistente nato in chiaro (transizione non_cifrato → cifrato).
+///
+/// Chiude il vicolo cieco del fix #456: un vault in chiaro non può salvare le
+/// API key dei provider AI, ma finora l'unico modo per cifrarlo era ricrearlo
+/// da zero e reimportare i dati. `PRAGMA rekey` NON serve allo scopo (cifra
+/// solo un DB già cifrato); la via corretta con SQLCipher è `sqlcipher_export`
+/// verso un nuovo file con chiave, seguito dallo swap del file su disco.
+///
+/// Richiede il vault aperto. Se qualcosa fallisce durante lo swap o la
+/// riapertura, ripristina il DB in chiaro dal backup così l'app resta usabile.
+#[tauri::command]
+pub fn vault_cifra(password: String, state: State<'_, VaultState>) -> Result<(), PapErrore> {
+    // Fix #459: azzera la password in memoria al termine della chiamata.
+    let password = Zeroizing::new(password);
+    vault_cifra_impl(&password, &state)
+}
+
+/// Logica testabile di `vault_cifra` (separata dal wrapper Tauri command).
+pub(crate) fn vault_cifra_impl(password: &str, state: &VaultState) -> Result<(), PapErrore> {
+    if password.len() < PASSWORD_MIN_LEN {
+        return Err(PapErrore::PasswordTroppoCorta);
+    }
+    if !state.esiste() {
+        return Err(PapErrore::VaultNonEsiste);
+    }
+    // Fast-fail prima dell'Argon2 (ri-verificato sotto lock contro le race).
+    if leggi_meta(&state.meta_path())?.cifrato {
+        return Err(PapErrore::VaultGiaCifrato);
+    }
+
+    // La chiave non dipende dallo stato condiviso: derivala PRIMA di prendere
+    // il lock, per non bloccare le altre operazioni durante l'Argon2 (32 MiB).
+    let salt = genera_salt()?;
+    let chiave = deriva_chiave(
+        password,
+        &salt,
+        ARGON2_MEMORY_KIB,
+        ARGON2_TIME_COST,
+        ARGON2_PARALLELISM,
+    )?;
+
+    let db_path = state.db_path();
+    let tmp_path = state.data_dir.join("pap-vault-cifra.tmp.db");
+    let bak_path = state.data_dir.join("pap-vault-preclear.bak.db");
+
+    // ─── Sezione critica ───
+    // Un SOLO lock tenuto per l'intera transizione export→swap→riapertura:
+    // così nessun altro comando (`with_conn`) può scrivere sul DB in chiaro
+    // nella finestra tra export e swap, evitando perdita dati silenziosa (H1).
+    let mut guard = state.lock_conn();
+    if guard.is_none() {
+        return Err(PapErrore::VaultChiuso);
+    }
+    // Ri-verifica sotto lock: una `vault_cifra` concorrente potrebbe aver già
+    // cifrato mentre attendevamo il lock (M2).
+    let meta = leggi_meta(&state.meta_path())?;
+    if meta.cifrato {
+        return Err(PapErrore::VaultGiaCifrato);
+    }
+
+    // Pulisci residui di un tentativo precedente interrotto (sotto lock).
+    if tmp_path.exists() {
+        fs::remove_file(&tmp_path)?;
+    }
+    if bak_path.exists() {
+        fs::remove_file(&bak_path)?;
+    }
+
+    // 1) Esporta schema+dati nel nuovo DB cifrato; l'originale resta intatto.
+    //    Su errore usciamo tenendo la connessione in chiaro invariata.
+    esporta_db_cifrato(
+        guard.as_ref().ok_or(PapErrore::VaultChiuso)?,
+        &tmp_path,
+        &chiave,
+    )?;
+
+    // 2) Chiudi la connessione in chiaro (libera il file), rimuovi i sidecar e
+    //    fai lo swap con backup. Ogni rename ha il proprio ramo di recovery
+    //    che ripristina il DB in chiaro e riapre (M1).
+    *guard = None;
+    rimuovi_sidecar(state);
+
+    if let Err(e) = fs::rename(&db_path, &bak_path) {
+        // L'originale è ancora al suo posto: riaprilo per non lasciare l'app
+        // bloccata su "vault chiuso".
+        *guard = riapri_in_chiaro(&db_path);
+        return Err(e.into());
+    }
+    if let Err(e) = fs::rename(&tmp_path, &db_path) {
+        let _ = fs::rename(&bak_path, &db_path);
+        *guard = riapri_in_chiaro(&db_path);
+        return Err(e.into());
+    }
+
+    // 3) Riapri il cifrato e verifica la chiave. Su errore ripristina il chiaro.
+    let conn = match apri_cifrato(&db_path, &chiave) {
+        Ok(c) => c,
+        Err(e) => {
+            let _ = fs::remove_file(&db_path);
+            let _ = fs::rename(&bak_path, &db_path);
+            *guard = riapri_in_chiaro(&db_path);
+            return Err(e);
+        }
+    };
+    crate::audit::registra(&conn, "vault.cifrato", "Vault", "", Some("da_non_cifrato"));
+    *guard = Some(conn);
+
+    // 4) Persisti i metadati cifrati (scrittura atomica), preservando i campi
+    //    di identità del vault. Su errore torna a uno stato in chiaro coerente.
+    let meta_nuova = VaultMeta {
+        salt_hex: bytes_a_hex(&salt),
+        db_nome: meta.db_nome,
+        creato_a: meta.creato_a,
+        argon2_memory_kib: ARGON2_MEMORY_KIB,
+        argon2_time_cost: ARGON2_TIME_COST,
+        argon2_parallelism: ARGON2_PARALLELISM,
+        cifrato: true,
+    };
+    if let Err(e) = salva_meta(&state.meta_path(), &meta_nuova) {
+        *guard = None;
+        let _ = fs::remove_file(&db_path);
+        let _ = fs::rename(&bak_path, &db_path);
+        *guard = riapri_in_chiaro(&db_path);
+        return Err(e);
+    }
+    drop(guard);
+
+    // 5) Successo: rimuovi backup in chiaro e temporaneo. Un fallimento qui NON
+    //    è silenzioso: lascerebbe una copia in chiaro del vault su disco (H2).
+    if let Err(e) = fs::remove_file(&bak_path) {
+        log::error!(
+            "Cifratura riuscita ma backup in chiaro NON rimosso ({}): {e}. \
+             Rimuoverlo manualmente: contiene una copia leggibile del vault.",
+            bak_path.display()
+        );
+    }
+    if tmp_path.exists() {
+        if let Err(e) = fs::remove_file(&tmp_path) {
+            log::warn!("Temporaneo cifratura non rimosso ({}): {e}", tmp_path.display());
+        }
+    }
+
+    log::info!("Vault cifrato (transizione non_cifrato → cifrato).");
+    Ok(())
+}
+
+/// Esporta schema+dati della connessione in chiaro `conn` in un nuovo file
+/// SQLCipher cifrato con `chiave`, via `sqlcipher_export`. `dest` non deve
+/// esistere. Il DB viene sempre staccato, anche se l'export fallisce.
+fn esporta_db_cifrato(
+    conn: &Connection,
+    dest: &Path,
+    chiave: &[u8; KEY_LEN],
+) -> Result<(), PapErrore> {
+    // Fix #459: hex e istruzione ATTACH (che incorpora la chiave in chiaro)
+    // azzerati al drop, stesso ragionamento di `applica_chiave`.
+    let hex: Zeroizing<String> = Zeroizing::new(bytes_a_hex(chiave));
+    // Il path è un literal SQL: raddoppia gli apici singoli. SQLite non usa
+    // l'escape con backslash, quindi i separatori Windows restano letterali.
+    let dest_sql = dest.to_string_lossy().replace('\'', "''");
+    let attach: Zeroizing<String> = Zeroizing::new(format!(
+        "ATTACH DATABASE '{}' AS cifrato KEY \"x'{}'\";",
+        dest_sql,
+        hex.as_str()
+    ));
+    conn.execute_batch(&attach)?;
+    // sqlcipher_export copia ogni oggetto (tabelle, indici, trigger, dati) dal
+    // main (in chiaro) al db 'cifrato'. DETACH incondizionato per non lasciare
+    // il db attaccato sulla connessione dello stato.
+    let export = conn.execute_batch("SELECT sqlcipher_export('cifrato');");
+    let detach = conn.execute_batch("DETACH DATABASE cifrato;");
+    export?;
+    detach?;
+    Ok(())
+}
+
+/// Apre un DB cifrato applicando la chiave, verifica che sia leggibile ed
+/// esegue le migrazioni idempotenti (il DB esportato le contiene già).
+fn apri_cifrato(db_path: &Path, chiave: &[u8; KEY_LEN]) -> Result<Connection, PapErrore> {
+    let conn = Connection::open(db_path)?;
+    applica_chiave(&conn, chiave)?;
+    verifica_chiave(&conn)?;
+    migrazione::esegui_migrazioni(&conn)?;
+    crate::libreria::assicura_dati_base(&conn)?;
+    Ok(conn)
+}
+
+/// Best-effort: riapre il DB in chiaro dopo un rollback della cifratura e
+/// restituisce la connessione da rimettere nello stato (il chiamante tiene già
+/// il lock, quindi qui NON si riacquisisce). `None` se l'apertura fallisce.
+fn riapri_in_chiaro(db_path: &Path) -> Option<Connection> {
+    match Connection::open(db_path) {
+        Ok(conn) => Some(conn),
+        Err(e) => {
+            log::error!("Riapertura vault in chiaro dopo rollback cifratura fallita: {e}");
+            None
+        }
+    }
+}
+
+/// Rimuove i sidecar SQLite (`-wal`/`-shm`) del DB, best-effort. Dopo una
+/// chiusura pulita della connessione non dovrebbero esistere; li rimuoviamo
+/// comunque prima dello swap per evitare che un `-wal` stantio venga
+/// riapplicato al nuovo DB cifrato.
+fn rimuovi_sidecar(state: &VaultState) {
+    for suffisso in ["-wal", "-shm"] {
+        let side = state.data_dir.join(format!("pap-vault.db{suffisso}"));
+        if side.exists() {
+            let _ = fs::remove_file(&side);
+        }
+    }
+}
+
 /// Restituisce il percorso della directory dati del vault.
 #[tauri::command]
 pub fn vault_percorso(state: State<'_, VaultState>) -> String {
@@ -577,6 +796,17 @@ pub(crate) fn vault_elimina_impl(state: &VaultState) -> Result<(), PapErrore> {
     }
     if meta.exists() {
         fs::remove_file(&meta)?;
+    }
+
+    // Pulizia difensiva (H2): rimuovi eventuali residui in chiaro di una
+    // cifratura interrotta, così "Elimina vault" non lascia copie leggibili.
+    for residuo in ["pap-vault-preclear.bak.db", "pap-vault-cifra.tmp.db"] {
+        let p = state.data_dir.join(residuo);
+        if p.exists() {
+            if let Err(e) = fs::remove_file(&p) {
+                log::warn!("Residuo cifratura non rimosso in elimina ({}): {e}", p.display());
+            }
+        }
     }
 
     log::info!("Vault eliminato.");
@@ -1110,5 +1340,114 @@ mod test {
         assert!(msg.contains("backup"), "Deve suggerire backup: {msg}");
         assert!(!msg.contains("salt"), "Non deve esporre 'salt': {msg}");
         assert!(!msg.contains("non decodificabile"), "Non deve esporre dettagli interni: {msg}");
+    }
+
+    // ─── vault_cifra: transizione non_cifrato → cifrato ──────────────────
+
+    #[test]
+    fn cifra_impl_happy_path() {
+        let (_dir, state) = vault_temp();
+        vault_crea_aperto_impl(&state).unwrap();
+        assert!(!vault_cifrato_impl(&state).unwrap());
+
+        vault_cifra_impl("password_cifratura_ok", &state).unwrap();
+
+        // Meta ora dice cifrato, connessione aperta, backup/temp rimossi.
+        assert!(vault_cifrato_impl(&state).unwrap());
+        assert!(state.aperto());
+        assert!(!state.data_dir.join("pap-vault-preclear.bak.db").exists());
+        assert!(!state.data_dir.join("pap-vault-cifra.tmp.db").exists());
+
+        // La nuova password sblocca dopo un lock.
+        vault_lock_impl(&state).unwrap();
+        vault_unlock_impl("password_cifratura_ok", &state).unwrap();
+        assert!(state.aperto());
+    }
+
+    #[test]
+    fn cifra_impl_preserva_dati_e_cifra_davvero() {
+        let (_dir, state) = vault_temp();
+        vault_crea_aperto_impl(&state).unwrap();
+
+        // Scrivi un marcatore nel DB in chiaro prima della cifratura.
+        state
+            .with_conn(|c| {
+                c.execute_batch(
+                    "CREATE TABLE marker_cifra(x INTEGER); INSERT INTO marker_cifra VALUES (42);",
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        vault_cifra_impl("password_cifratura_ok", &state).unwrap();
+
+        // Il dato è sopravvissuto all'export SQLCipher.
+        let val: i64 = state
+            .with_conn(|c| {
+                c.query_row("SELECT x FROM marker_cifra", [], |r| r.get(0))
+                    .map_err(PapErrore::from)
+            })
+            .unwrap();
+        assert_eq!(val, 42);
+
+        // Il file su disco è davvero cifrato: aperto senza chiave non è leggibile.
+        let conn_senza_chiave = Connection::open(state.db_path()).unwrap();
+        assert!(
+            verifica_chiave(&conn_senza_chiave).is_err(),
+            "il DB deve risultare cifrato (illeggibile senza chiave)"
+        );
+    }
+
+    #[test]
+    fn cifra_impl_password_corta_errore() {
+        let (_dir, state) = vault_temp();
+        vault_crea_aperto_impl(&state).unwrap();
+        let r = vault_cifra_impl("corta", &state);
+        assert!(matches!(r, Err(PapErrore::PasswordTroppoCorta)));
+        // Il vault resta in chiaro e usabile.
+        assert!(!vault_cifrato_impl(&state).unwrap());
+        assert!(state.aperto());
+    }
+
+    #[test]
+    fn cifra_impl_vault_non_esiste_errore() {
+        let (_dir, state) = vault_temp();
+        let r = vault_cifra_impl("password_cifratura_ok", &state);
+        assert!(matches!(r, Err(PapErrore::VaultNonEsiste)));
+    }
+
+    #[test]
+    fn cifra_impl_gia_cifrato_errore() {
+        let (_dir, state) = vault_temp();
+        vault_crea_impl("password_gia_cifrata", &state).unwrap();
+        let r = vault_cifra_impl("password_cifratura_ok", &state);
+        assert!(matches!(r, Err(PapErrore::VaultGiaCifrato)));
+    }
+
+    #[test]
+    fn cifra_impl_vault_chiuso_errore() {
+        let (_dir, state) = vault_temp();
+        vault_crea_aperto_impl(&state).unwrap();
+        vault_lock_impl(&state).unwrap();
+        let r = vault_cifra_impl("password_cifratura_ok", &state);
+        assert!(matches!(r, Err(PapErrore::VaultChiuso)));
+    }
+
+    /// H2: "Elimina vault" deve rimuovere anche i residui in chiaro lasciati
+    /// da una cifratura interrotta (backup/temp), non solo db+meta.
+    #[test]
+    fn elimina_impl_rimuove_residui_cifratura() {
+        let (_dir, state) = vault_temp();
+        vault_crea_aperto_impl(&state).unwrap();
+        // Simula i residui di una cifratura interrotta.
+        let bak = state.data_dir.join("pap-vault-preclear.bak.db");
+        let tmp = state.data_dir.join("pap-vault-cifra.tmp.db");
+        std::fs::write(&bak, b"dati-in-chiaro-residui").unwrap();
+        std::fs::write(&tmp, b"export-parziale").unwrap();
+
+        vault_elimina_impl(&state).unwrap();
+
+        assert!(!bak.exists(), "il backup in chiaro deve essere rimosso");
+        assert!(!tmp.exists(), "il temporaneo deve essere rimosso");
     }
 }

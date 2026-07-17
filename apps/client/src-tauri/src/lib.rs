@@ -554,6 +554,7 @@ pub fn run() {
             vault::vault_unlock,
             vault::vault_lock,
             vault::vault_cambia_password,
+            vault::vault_cifra,
             vault::vault_percorso,
             vault::vault_elimina,
             preferenze::preferenze_carica,
