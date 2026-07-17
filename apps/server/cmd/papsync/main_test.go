@@ -1,6 +1,31 @@
 package main
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+)
+
+// G112/Slowloris: l'http.Server deve avere timeout espliciti, altrimenti un
+// client può tenere aperte connessioni a oltranza (DoS pre-auth).
+func TestNewHTTPServer_TimeoutImpostati(t *testing.T) {
+	srv := newHTTPServer(":8443", http.NewServeMux())
+
+	if srv.ReadHeaderTimeout == 0 {
+		t.Fatal("ReadHeaderTimeout non impostato: espone a Slowloris (slow-header)")
+	}
+	if srv.ReadTimeout == 0 {
+		t.Fatal("ReadTimeout non impostato: lettura richiesta illimitata")
+	}
+	if srv.IdleTimeout == 0 {
+		t.Fatal("IdleTimeout non impostato: keep-alive idle illimitati")
+	}
+	if srv.Addr != ":8443" {
+		t.Fatalf("Addr atteso :8443, ottenuto %q", srv.Addr)
+	}
+	if srv.Handler == nil {
+		t.Fatal("Handler non impostato")
+	}
+}
 
 func TestValidateJwtSecret_CortoRifiutato(t *testing.T) {
 	if err := validateJwtSecret("troppo-corto"); err == nil {

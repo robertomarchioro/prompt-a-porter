@@ -1,7 +1,9 @@
 package auth
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -124,15 +126,40 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ri-valida l'utente sul DB prima di ri-emettere il token (CWE-613,
+	// Insufficient Session Expiration): senza questo controllo un utente
+	// disattivato/rimosso (soft-delete) potrebbe estendere l'accesso a
+	// oltranza chiamando /auth/refresh prima di ogni scadenza, dato che il
+	// refresh copiava i claim dal solo token. Rileggiamo anche
+	// WorkspaceId/Role dal DB, così un cambio di ruolo o workspace si
+	// propaga al prossimo refresh invece di restare congelato nel token.
+	var user models.User
+	err := h.DB.QueryRow(`
+		SELECT Id, WorkspaceId, Role
+		FROM Users WHERE Id = ? AND DeletedAt IS NULL`,
+		claims.UserId,
+	).Scan(&user.Id, &user.WorkspaceId, &user.Role)
+	if errors.Is(err, sql.ErrNoRows) {
+		// Utente disattivato o non più esistente: la sessione non è più valida.
+		log.Printf("Refresh negato: utente %s non attivo", claims.UserId)
+		http.Error(w, `{"error":"sessione non più valida"}`, http.StatusUnauthorized)
+		return
+	}
+	if err != nil {
+		log.Printf("Refresh: errore rilettura utente %s: %v", claims.UserId, err)
+		http.Error(w, `{"error":"errore interno"}`, http.StatusInternalServerError)
+		return
+	}
+
 	expiresAt := time.Now().Add(h.TokenTTL)
 	newClaims := Claims{
-		UserId:      claims.UserId,
-		WorkspaceId: claims.WorkspaceId,
-		Role:        claims.Role,
+		UserId:      user.Id,
+		WorkspaceId: user.WorkspaceId,
+		Role:        user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Subject:   claims.UserId,
+			Subject:   user.Id,
 		},
 	}
 

@@ -22,6 +22,37 @@ import (
 // falsificabili (CWE-326, Inadequate Encryption Strength).
 const minJwtSecretBytes = 32
 
+// Timeout dell'http.Server. Senza questi, net/http lascia ReadHeaderTimeout,
+// ReadTimeout e IdleTimeout illimitati (gosec G112): un client può aprire
+// molte connessioni e centellinare gli header a oltranza (Slowloris) o
+// tenere keep-alive idle all'infinito, esaurendo goroutine e file descriptor
+// e negando il servizio a tutti i tenant, senza credenziali (CWE-400).
+const (
+	// readHeaderTimeout chiude la variante slow-header di Slowloris: gli
+	// header devono arrivare completi entro questo tempo.
+	readHeaderTimeout = 5 * time.Second
+	// readTimeout limita la lettura dell'intera richiesta (header+body).
+	// Ampio abbastanza per un /sync/push da 10 MiB su rete lenta.
+	readTimeout = 30 * time.Second
+	// idleTimeout limita quanto una connessione keep-alive resta idle.
+	idleTimeout = 60 * time.Second
+)
+
+// newHTTPServer costruisce l'http.Server con i timeout espliciti sopra.
+// WriteTimeout è volutamente NON impostato: le connessioni WebSocket (/ws)
+// vengono "hijacked" e gestiscono i propri deadline di lettura/scrittura
+// (internal/ws/hub.go), quindi un WriteTimeout globale rischierebbe di
+// tagliare le connessioni long-lived; le risposte HTTP normali sono piccole.
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		IdleTimeout:       idleTimeout,
+	}
+}
+
 func main() {
 	port := envOr("PAP_PORT", "8443")
 	dbPath := envOr("PAP_DB_PATH", "papsync.db")
@@ -86,13 +117,15 @@ func main() {
 
 	log.Printf("PaP Sync Server avviato su :%s (modalità: %s)", port, mode)
 
+	srv := newHTTPServer(":"+port, r)
+
 	switch mode {
 	case serveModeTLS:
-		err = http.ListenAndServeTLS(":"+port, certPath, keyPath, r)
+		err = srv.ListenAndServeTLS(certPath, keyPath)
 	case serveModeProxyHTTP:
 		log.Printf("ATTENZIONE: server avviato in HTTP semplice (PAP_BEHIND_PROXY=1): " +
 			"assicurati che il reverse proxy davanti termini il TLS")
-		err = http.ListenAndServe(":"+port, r)
+		err = srv.ListenAndServe()
 	}
 	if err != nil {
 		log.Fatalf("Errore server: %v", err)
