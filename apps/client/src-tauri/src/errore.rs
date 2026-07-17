@@ -30,8 +30,11 @@ pub enum PapErrore {
     /// Fix #456: l'utente ha tentato di salvare una API key di un provider
     /// AI mentre il vault corrente NON è cifrato. Le API key non devono mai
     /// essere persistite in chiaro su disco: l'utente deve prima cifrare
-    /// il vault (vault_cambia_password da vault non cifrato → cifrato).
+    /// il vault (comando `vault_cifra`).
     VaultNonCifrato,
+    /// L'utente ha tentato di cifrare (`vault_cifra`) un vault che è già
+    /// cifrato. Non è un errore di dati: è un no-op indicato all'utente.
+    VaultGiaCifrato,
 }
 
 impl fmt::Display for PapErrore {
@@ -66,6 +69,7 @@ impl fmt::Display for PapErrore {
                 f,
                 "Il vault non è cifrato: cifra il vault per poter salvare le API key dei provider AI."
             ),
+            Self::VaultGiaCifrato => write!(f, "Il vault è già cifrato."),
         }
     }
 }
