@@ -374,6 +374,14 @@
 
   async function applicaRitocco(nuovoBody: string): Promise<void> {
     if (!dettaglio) return;
+    // #508: prima di applicare la riscrittura, se ci sono modifiche non ancora
+    // snapshot-ate (autosave lascia dirty=true) va creata una versione con il
+    // body ATTUALE, altrimenti l'originale pre-Ritocco non finisce in cronologia
+    // e non è più ripristinabile. salvaManuale() bumpa Version + snapshotta lo
+    // stato corrente; poi applichiamo il testo AI come versione successiva.
+    if (dirty) {
+      await salvaManuale();
+    }
     body = nuovoBody;
     dettaglio = { ...dettaglio, body: nuovoBody };
     if (editorView) {
