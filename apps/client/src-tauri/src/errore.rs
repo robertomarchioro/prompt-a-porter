@@ -74,6 +74,25 @@ impl fmt::Display for PapErrore {
     }
 }
 
+impl PapErrore {
+    /// Costruisce un errore di dominio **opaco** per l'utente (CWE-209,
+    /// Information Exposure Through an Error Message).
+    ///
+    /// Il dettaglio tecnico grezzo (`dettaglio`: testo di rusqlite / ureq /
+    /// serde / io / servizio esterno) finisce **solo nel log di sistema**,
+    /// mentre l'utente vede unicamente `messaggio` — una descrizione breve in
+    /// italiano, senza internals (path, endpoint, schema DB, offset serde…).
+    ///
+    /// Da usare per avvolgere un errore di sistema/servizio prima di
+    /// restituirlo a un comando Tauri, al posto del leaky
+    /// `Generico(format!("...{e}"))`.
+    pub fn dominio(messaggio: impl Into<String>, dettaglio: impl std::fmt::Display) -> Self {
+        let messaggio = messaggio.into();
+        log::error!("{messaggio} — dettaglio: {dettaglio}");
+        PapErrore::Generico(messaggio)
+    }
+}
+
 impl std::error::Error for PapErrore {}
 
 impl From<rusqlite::Error> for PapErrore {
@@ -106,6 +125,25 @@ impl serde::Serialize for PapErrore {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    /// CWE-209: `dominio` mostra all'utente SOLO il messaggio di dominio,
+    /// mai il dettaglio grezzo (che deve finire solo nel log).
+    #[test]
+    fn dominio_e_opaco_verso_utente() {
+        let err = PapErrore::dominio(
+            "Impossibile contattare il provider AI. Verifica la connessione.",
+            "https://interno.example:8443 connection refused (os error 111)",
+        );
+        let msg = err.to_string();
+        assert_eq!(
+            msg,
+            "Impossibile contattare il provider AI. Verifica la connessione."
+        );
+        // Nessun dettaglio tecnico grezzo deve trapelare nel messaggio.
+        assert!(!msg.contains("interno.example"));
+        assert!(!msg.contains("os error"));
+        assert!(!msg.contains("refused"));
+    }
 
     #[test]
     fn display_varianti() {

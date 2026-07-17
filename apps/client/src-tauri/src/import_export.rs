@@ -206,7 +206,7 @@ pub(crate) fn export_pure_filter(
             "SELECT Path FROM Folders WHERE Id = ?1 AND DeletedAt IS NULL",
             [fid],
             |r| r.get(0),
-        ).map_err(|e| PapErrore::Generico(format!("Cartella '{fid}' non trovata: {e}")))?;
+        ).map_err(|e| PapErrore::dominio("Cartella non trovata durante l'esportazione.", e))?;
         let prefix_like = format!("{folder_path}/%");
 
         let mut stmt = conn.prepare(
@@ -483,7 +483,7 @@ pub(crate) fn prompt_export_markdown_pure(
                 updated_at: r.get(7)?,
             })
         },
-    ).map_err(|e| PapErrore::Generico(format!("Prompt '{prompt_id}' non trovato: {e}")))?;
+    ).map_err(|e| PapErrore::dominio("Prompt non trovato durante l'esportazione.", e))?;
 
     let imports = crate::prompt_componibili::parse_imports(&p.body);
 
@@ -867,7 +867,7 @@ pub fn vault_import_markdown_bulk(
 
     let mut paths: Vec<std::path::PathBuf> = Vec::new();
     walk_md_files(&root, 0, &mut paths).map_err(|e| {
-        PapErrore::Generico(format!("Errore scansione directory: {e}"))
+        PapErrore::dominio("Scansione della cartella non riuscita.", e)
     })?;
     let totale = paths.len();
     let truncated = totale >= BULK_MAX_FILES;
@@ -889,9 +889,10 @@ pub fn vault_import_markdown_bulk(
             let testo = match std::fs::read_to_string(path) {
                 Ok(t) => t,
                 Err(e) => {
+                    log::error!("import bulk, lettura file fallita: {e}");
                     ko.push(BulkImportFileError {
                         nome_file,
-                        errore: format!("read_to_string fallita: {e}"),
+                        errore: "Impossibile leggere il file.".to_string(),
                     });
                     continue;
                 }
@@ -1154,14 +1155,14 @@ pub(crate) fn export_markdown_zip_pure(
         };
 
         zipw.start_file(&full_path, options)
-            .map_err(|e| PapErrore::Generico(format!("zip start_file: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Creazione dell'archivio di esportazione non riuscita.", e))?;
         zipw.write_all(md.as_bytes())
-            .map_err(|e| PapErrore::Generico(format!("zip write_all: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Creazione dell'archivio di esportazione non riuscita.", e))?;
         esportati += 1;
     }
 
     zipw.finish()
-        .map_err(|e| PapErrore::Generico(format!("zip finish: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Creazione dell'archivio di esportazione non riuscita.", e))?;
     Ok(esportati)
 }
 
@@ -1263,7 +1264,11 @@ pub(crate) fn import_pure(
                         folder.updated_at
                     ],
                 ) {
-                    report.errori.push(format!("Folder {}: {}", folder.id, e));
+                    log::error!("import cartella {}: {e}", folder.id);
+                    report.errori.push(format!(
+                        "Cartella {}: importazione non riuscita.",
+                        folder.id
+                    ));
                 } else {
                     report.nuovi += 1;
                 }
@@ -1275,7 +1280,11 @@ pub(crate) fn import_pure(
                      WHERE Id = ?4",
                     rusqlite::params![parent, folder.name, folder.path, folder.id],
                 ) {
-                    report.errori.push(format!("Folder {}: {}", folder.id, e));
+                    log::error!("import cartella {}: {e}", folder.id);
+                    report.errori.push(format!(
+                        "Cartella {}: importazione non riuscita.",
+                        folder.id
+                    ));
                 } else {
                     report.aggiornati += 1;
                 }
@@ -1304,7 +1313,11 @@ pub(crate) fn import_pure(
                      VALUES (?1, 'ws-personale', ?2, ?3, ?4, ?4)",
                     rusqlite::params![tag.id, tag.name, tag.color, tag.created_at],
                 ) {
-                    report.errori.push(format!("Tag {}: {}", tag.id, e));
+                    log::error!("import tag {}: {e}", tag.id);
+                    report.errori.push(format!(
+                        "Tag {}: importazione non riuscita.",
+                        tag.id
+                    ));
                 } else {
                     report.nuovi += 1;
                 }
@@ -1318,7 +1331,11 @@ pub(crate) fn import_pure(
                      WHERE Id = ?3",
                     rusqlite::params![tag.name, tag.color, tag.id],
                 ) {
-                    report.errori.push(format!("Tag {}: {}", tag.id, e));
+                    log::error!("import tag {}: {e}", tag.id);
+                    report.errori.push(format!(
+                        "Tag {}: importazione non riuscita.",
+                        tag.id
+                    ));
                 } else {
                     report.aggiornati += 1;
                 }
@@ -1444,7 +1461,11 @@ pub(crate) fn import_pure(
             Ok("new") => report.nuovi += 1,
             Ok("agg") => report.aggiornati += 1,
             Err(e) => {
-                report.errori.push(format!("Prompt {}: {}", prompt.id, e));
+                log::error!("import prompt {}: {e}", prompt.id);
+                report.errori.push(format!(
+                    "Prompt {}: importazione non riuscita.",
+                    prompt.id
+                ));
                 continue;
             }
             _ => continue,
@@ -1457,18 +1478,20 @@ pub(crate) fn import_pure(
             "DELETE FROM PromptTags WHERE PromptId = ?1",
             [&id_effettivo],
         ) {
+            log::error!("import PromptTags delete {id_effettivo}: {e}");
             report
                 .errori
-                .push(format!("PromptTags delete {id_effettivo}: {e}"));
+                .push(format!("Tag del prompt {id_effettivo}: aggiornamento non riuscito."));
         }
         for tag_id in &prompt.tag_ids {
             if let Err(e) = conn.execute(
                 "INSERT OR IGNORE INTO PromptTags (PromptId, TagId) VALUES (?1, ?2)",
                 rusqlite::params![id_effettivo, tag_id],
             ) {
+                log::error!("import PromptTag {id_effettivo}/{tag_id}: {e}");
                 report
                     .errori
-                    .push(format!("PromptTag {id_effettivo}/{tag_id}: {e}"));
+                    .push(format!("Tag {tag_id} del prompt {id_effettivo}: associazione non riuscita."));
             }
         }
     }
@@ -1510,9 +1533,10 @@ pub(crate) fn import_pure(
             "UPDATE Prompts SET ParentPromptId = ?1, ForkOfPromptId = ?2 WHERE Id = ?3",
             rusqlite::params![parent, fork, self_id],
         ) {
+            log::error!("import link variante/fork {self_id}: {e}");
             report
                 .errori
-                .push(format!("Link variante/fork {self_id}: {e}"));
+                .push(format!("Collegamento variante/fork del prompt {self_id}: non riuscito."));
         }
     }
 
@@ -1537,7 +1561,8 @@ pub(crate) fn import_pure(
                 ver.created_by_user_id,
             ],
         ) {
-            report.errori.push(format!("Versione {}: {e}", ver.id));
+            log::error!("import versione {}: {e}", ver.id);
+            report.errori.push(format!("Versione {}: importazione non riuscita.", ver.id));
         }
     }
 
@@ -1556,9 +1581,10 @@ pub(crate) fn import_pure(
              ON CONFLICT(Name) DO NOTHING",
             rusqlite::params![nome, ph.value],
         ) {
+            log::error!("import GlobalPlaceholder {nome}: {e}");
             report
                 .errori
-                .push(format!("GlobalPlaceholder {nome}: {e}"));
+                .push(format!("Segnaposto globale {nome}: importazione non riuscita."));
         }
     }
 
@@ -1579,7 +1605,7 @@ pub fn vault_import_json(
     valida_modalita(&modalita)?;
 
     let export: ExportV1 = serde_json::from_str(&json)
-        .map_err(|e| PapErrore::Migrazione(format!("JSON non valido: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Il file di backup non è un JSON valido.", e))?;
 
     if export.schema_version > SCHEMA_VERSION {
         return Err(PapErrore::Migrazione(format!(

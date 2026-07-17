@@ -241,7 +241,21 @@ async function eseguiSync() {
       errore: null,
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Errore sconosciuto";
+    // CWE-209: i messaggi di dominio lanciati dall'app (es. "Pull fallito:
+    // HTTP 500") sono sicuri e li manteniamo; gli errori grezzi del browser
+    // (fetch di rete, parsing JSON) vengono resi opachi e il dettaglio va
+    // solo nel log.
+    console.error("[sync] sincronizzazione fallita", e);
+    let msg: string;
+    if (e instanceof TypeError) {
+      msg = "Impossibile contattare il server di sincronizzazione. Verifica la connessione e l'indirizzo.";
+    } else if (e instanceof SyntaxError) {
+      msg = "Il server ha restituito una risposta non valida.";
+    } else if (e instanceof Error) {
+      msg = e.message;
+    } else {
+      msg = "Sincronizzazione non riuscita.";
+    }
     aggiornaStato({ stato: "error", errore: msg });
   }
 }
@@ -340,10 +354,12 @@ function connettiWs() {
     // futuro cambio di formato del token avrebbe rotto tutto senza
     // nessun segnale. Ora logghiamo, esponiamo l'errore in `SyncState` e
     // ritentiamo con lo stesso backoff usato per `onclose`.
-    console.error("[sync] apertura WebSocket fallita", messaggioErrore(e));
+    // CWE-209: il dettaglio grezzo del costruttore WebSocket resta solo nel
+    // log; all'utente un messaggio opaco.
+    console.error("[sync] apertura WebSocket fallita", e);
     aggiornaStato({
       stato: "error",
-      errore: `Connessione realtime non disponibile: ${messaggioErrore(e)}`,
+      errore: "Connessione in tempo reale non disponibile.",
     });
     pianificaRiconnessioneWs();
   }

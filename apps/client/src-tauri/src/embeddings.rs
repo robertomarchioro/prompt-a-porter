@@ -268,7 +268,7 @@ fn http_get_streaming(url: &str) -> Result<Box<dyn Read + Send + Sync>, PapError
     let resp = agent
         .get(url)
         .call()
-        .map_err(|e| PapErrore::Generico(format!("HTTP get fallito ({}): {e}", url)))?;
+        .map_err(|e| PapErrore::dominio("Download del modello di embedding non riuscito. Verifica la connessione.", e))?;
     Ok(resp.into_reader())
 }
 
@@ -286,7 +286,7 @@ fn http_get_with_progress(
     let resp = agent
         .get(url)
         .call()
-        .map_err(|e| PapErrore::Generico(format!("HTTP get fallito ({}): {e}", url)))?;
+        .map_err(|e| PapErrore::dominio("Download del modello di embedding non riuscito. Verifica la connessione.", e))?;
     let total: Option<u64> = resp
         .header("Content-Length")
         .and_then(|s| s.parse::<u64>().ok());
@@ -298,7 +298,7 @@ fn http_get_with_progress(
     loop {
         let n = reader
             .read(&mut buf)
-            .map_err(|e| PapErrore::Generico(format!("Read stream: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Lettura del modello di embedding durante il download non riuscita.", e))?;
         if n == 0 {
             break;
         }
@@ -355,7 +355,7 @@ fn scarica_file(
     loop {
         let n = reader
             .read(&mut buf)
-            .map_err(|e| PapErrore::Generico(format!("Read stream: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Lettura del modello di embedding durante il download non riuscita.", e))?;
         if n == 0 {
             break;
         }
@@ -469,10 +469,10 @@ fn estrai_libonnxruntime(
         // ZIP
         let cursor = std::io::Cursor::new(archive_bytes);
         let mut archive = zip::ZipArchive::new(cursor)
-            .map_err(|e| PapErrore::Generico(format!("zip read: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Archivio del modello di embedding non valido.", e))?;
         let mut entry = archive
             .by_name(path_in_archive)
-            .map_err(|e| PapErrore::Generico(format!("zip entry {path_in_archive} non trovata: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Contenuto del modello di embedding mancante o corrotto nell'archivio.", e))?;
         let mut out = fs::File::create(dest)?;
         std::io::copy(&mut entry, &mut out)?;
     } else {
@@ -482,12 +482,12 @@ fn estrai_libonnxruntime(
         let mut found = false;
         for entry in archive
             .entries()
-            .map_err(|e| PapErrore::Generico(format!("tar entries: {e}")))?
+            .map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?
         {
-            let mut entry = entry.map_err(|e| PapErrore::Generico(format!("tar entry: {e}")))?;
+            let mut entry = entry.map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?;
             let entry_path = entry
                 .path()
-                .map_err(|e| PapErrore::Generico(format!("tar path: {e}")))?
+                .map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?
                 .to_string_lossy()
                 .to_string();
             if entry_path == path_in_archive {
@@ -605,11 +605,11 @@ pub fn init_session_pure(
     let tokenizer_path = dir_modello.join("tokenizer.json");
 
     let session = Session::builder()
-        .map_err(|e| PapErrore::Generico(format!("Session builder: {e}")))?
+        .map_err(|e| PapErrore::dominio("Inizializzazione del modello di embedding non riuscita.", e))?
         .commit_from_file(&model_path)
-        .map_err(|e| PapErrore::Generico(format!("Session load: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Inizializzazione del modello di embedding non riuscita.", e))?;
     let tokenizer = Tokenizer::from_file(&tokenizer_path)
-        .map_err(|e| PapErrore::Generico(format!("Tokenizer load: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Inizializzazione del modello di embedding non riuscita.", e))?;
 
     let mut guard = rt_state.inner.lock().unwrap_or_else(|p| p.into_inner());
     *guard = Some(EmbeddingsLoaded { session, tokenizer });
@@ -770,7 +770,7 @@ fn compute_with_loaded(
     let encoding = loaded
         .tokenizer
         .encode(testo, true)
-        .map_err(|e| PapErrore::Generico(format!("Tokenizer encode: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Elaborazione del testo per l'embedding non riuscita.", e))?;
 
     // 2. Trunc/pad a MAX_SEQ_LEN
     let mut ids: Vec<i64> = encoding.get_ids().iter().map(|x| *x as i64).collect();
@@ -794,16 +794,16 @@ fn compute_with_loaded(
     let mask_clone = mask.clone();
     let inputs = ort::inputs![
         "input_ids" => Tensor::from_array((shape.clone(), ids))
-            .map_err(|e| PapErrore::Generico(format!("tensor ids: {e}")))?,
+            .map_err(|e| PapErrore::dominio("Preparazione dei dati per il modello di embedding non riuscita.", e))?,
         "attention_mask" => Tensor::from_array((shape.clone(), mask_clone))
-            .map_err(|e| PapErrore::Generico(format!("tensor mask: {e}")))?,
+            .map_err(|e| PapErrore::dominio("Preparazione dei dati per il modello di embedding non riuscita.", e))?,
         "token_type_ids" => Tensor::from_array((shape, type_ids))
-            .map_err(|e| PapErrore::Generico(format!("tensor type: {e}")))?,
+            .map_err(|e| PapErrore::dominio("Preparazione dei dati per il modello di embedding non riuscita.", e))?,
     ];
     let outputs = loaded
         .session
         .run(inputs)
-        .map_err(|e| PapErrore::Generico(format!("ort run: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Esecuzione del modello di embedding non riuscita.", e))?;
 
     // 4. Output last_hidden_state shape [1, seq_len, hidden_dim]
     let (output_name, _) = outputs
@@ -815,7 +815,7 @@ fn compute_with_loaded(
         .ok_or_else(|| PapErrore::Generico("output mancante".into()))?;
     let (shape, data) = value
         .try_extract_tensor::<f32>()
-        .map_err(|e| PapErrore::Generico(format!("extract f32 tensor: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Lettura dell'output del modello di embedding non riuscita.", e))?;
 
     if shape.len() != 3 || shape[0] != 1 || shape[2] as usize != EMBEDDING_DIM {
         return Err(PapErrore::Generico(format!(
@@ -826,7 +826,7 @@ fn compute_with_loaded(
     let actual_seq = shape[1] as usize;
 
     let token_emb = Array2::from_shape_vec((actual_seq, EMBEDDING_DIM), data.to_vec())
-        .map_err(|e| PapErrore::Generico(format!("ndarray output: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Lettura dell'output del modello di embedding non riuscita.", e))?;
     let mask_arr1 = Array1::from_vec(mask.iter().take(actual_seq).copied().collect());
 
     // 5. Mean pooling + L2 normalize

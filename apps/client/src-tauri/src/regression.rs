@@ -100,7 +100,7 @@ fn re_segnaposto() -> &'static Regex {
 /// matcha le stringhe quotate).
 pub(crate) fn compila_per_golden(body: &str, input_vars_json: &str) -> Result<String, PapErrore> {
     let vars: serde_json::Value = serde_json::from_str(input_vars_json)
-        .map_err(|e| PapErrore::Generico(format!("InputVars JSON invalido: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Le variabili di input non sono un JSON valido.", e))?;
     let map = vars
         .as_object()
         .ok_or_else(|| PapErrore::Generico("InputVars deve essere un oggetto JSON".into()))?;
@@ -123,7 +123,7 @@ fn valida(input: &str, expected: &str, similarity_fn: &str, soglia: f64) -> Resu
         ));
     }
     serde_json::from_str::<serde_json::Value>(input)
-        .map_err(|e| PapErrore::Generico(format!("InputVars non è JSON valido: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Le variabili di input non sono un JSON valido.", e))?;
     if expected.trim().is_empty() {
         return Err(PapErrore::Generico("ExpectedOutput vuoto".into()));
     }
