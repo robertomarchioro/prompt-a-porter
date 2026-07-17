@@ -1,5 +1,15 @@
 # Changelog — Prompt a Porter
 
+## v0.8.40 — Ritocco: rifiniture dal collaudo (2026-07-17)
+
+> Correzioni a Ritocco emerse dai primi usi dal vivo.
+
+### Fix
+
+- **Ripristino della versione pre-Ritocco** (#508): accettando i suggerimenti, la versione precedente del prompt non era più recuperabile dalla cronologia. Ora, se ci sono modifiche non ancora salvate come versione, il testo attuale viene salvato come versione prima di applicare la riscrittura, così resta ripristinabile.
+- **Indicatore di attesa** (#507): durante la chiamata al modello AI è ora mostrato uno spinner ben visibile con l'indicazione che la richiesta è in corso.
+- **Diff scrollabile e stile coerente** (#506): il confronto tra versione attuale e proposta ora scorre dentro i bordi della modale invece di sbordare, e i pulsanti usano lo stile standard delle altre finestre.
+
 ## v0.8.39 — Hotfix: avvio Windows dopo l'aggiornamento (2026-07-16)
 
 > Hotfix per v0.8.38: su Windows, dopo l'aggiornamento in-app l'applicazione non si avviava più (veniva interpretata come applicazione "da terminale"), per una collisione di nomi tra il binario dell'app e la CLI `pap` bundlata nell'installer.
