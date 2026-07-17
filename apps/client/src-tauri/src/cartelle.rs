@@ -172,8 +172,18 @@ pub(crate) fn crea_pure(
         params![id, WORKSPACE_ID, dati.parent_folder_id, nome, path],
     )
     .map_err(|e| {
-        // Probabile violazione unique sibling name
-        PapErrore::Generico(format!("Impossibile creare cartella: {e}"))
+        // Il vincolo unico sui fratelli scatta se esiste già una cartella con
+        // lo stesso nome nella stessa posizione: messaggio dedicato. Ogni
+        // altro errore resta opaco, col dettaglio grezzo solo nel log.
+        if let rusqlite::Error::SqliteFailure(err, _) = &e {
+            if err.code == rusqlite::ErrorCode::ConstraintViolation {
+                return PapErrore::dominio(
+                    "Esiste già una cartella con questo nome nella stessa posizione.",
+                    e,
+                );
+            }
+        }
+        PapErrore::dominio("Impossibile creare la cartella.", e)
     })?;
 
     crate::audit::registra(conn, "folder.creato", "Folder", &id, Some(&path));
@@ -1124,6 +1134,18 @@ mod test {
         crea_pure(&conn, &dati).unwrap();
         let r = crea_pure(&conn, &dati);
         assert!(r.is_err(), "secondo crea con stesso nome+parent deve fallire UNIQUE");
+
+        // CWE-209: messaggio di dominio dedicato per il nome duplicato, senza
+        // esporre il testo grezzo del vincolo sqlite.
+        let msg = r.unwrap_err().to_string();
+        assert!(
+            msg.contains("Esiste già una cartella con questo nome"),
+            "atteso messaggio dedicato nome duplicato, ottenuto: {msg}"
+        );
+        assert!(
+            !msg.contains("UNIQUE") && !msg.contains("constraint") && !msg.contains("Folders"),
+            "il messaggio non deve esporre il vincolo sqlite: {msg}"
+        );
     }
 
     #[test]

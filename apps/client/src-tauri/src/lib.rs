@@ -200,7 +200,10 @@ fn registra_shortcut(app: &tauri::AppHandle, combo: &str) -> Result<(), String> 
                 toggle_palette(app_handle);
             }
         })
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            log::error!("registrazione scorciatoia globale fallita: {e}");
+            "Impossibile registrare la scorciatoia da tastiera.".to_string()
+        })?;
     log::info!("Hotkey registrata: {combo}");
     Ok(())
 }

@@ -111,7 +111,7 @@ struct OllamaResponse {
 /// dover spinning-up un server vero.
 pub(crate) fn parse_ollama_response(json: &str) -> Result<(String, Option<u32>), PapErrore> {
     let r: OllamaResponse = serde_json::from_str(json)
-        .map_err(|e| PapErrore::Generico(format!("Risposta Ollama malformata: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Il provider Ollama ha restituito una risposta non valida.", e))?;
     if !r.done {
         return Err(PapErrore::Generico(
             "Risposta Ollama incompleta (done=false, streaming non supportato)".into(),
@@ -132,7 +132,7 @@ impl AIProvider for OllamaProvider {
             stream: false,
         };
         let body = serde_json::to_string(&req)
-            .map_err(|e| PapErrore::Generico(format!("serializzazione richiesta: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Impossibile preparare la richiesta per il provider AI.", e))?;
 
         let agent = ureq::AgentBuilder::new()
             .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SEC))
@@ -143,12 +143,12 @@ impl AIProvider for OllamaProvider {
             .post(&self.endpoint())
             .set("Content-Type", "application/json")
             .send_string(&body)
-            .map_err(|e| PapErrore::Generico(format!("Ollama HTTP: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Impossibile contattare il provider Ollama. Verifica che sia in esecuzione e l'URL configurato.", e))?;
         let latency_ms = start.elapsed().as_millis() as u64;
 
         let json = resp
             .into_string()
-            .map_err(|e| PapErrore::Generico(format!("Ollama body: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Risposta del provider Ollama non leggibile.", e))?;
 
         let (content, tokens) = parse_ollama_response(&json)?;
 
@@ -227,7 +227,7 @@ struct AnthropicResponse {
 /// Concatena tutti i block di tipo `text` (di solito ce n'è uno solo).
 pub(crate) fn parse_anthropic_response(json: &str) -> Result<(String, Option<u32>), PapErrore> {
     let r: AnthropicResponse = serde_json::from_str(json)
-        .map_err(|e| PapErrore::Generico(format!("Risposta Anthropic malformata: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Il provider Anthropic ha restituito una risposta non valida.", e))?;
     let content: String = r
         .content
         .iter()
@@ -258,7 +258,7 @@ impl AIProvider for AnthropicProvider {
             }],
         };
         let body = serde_json::to_string(&req)
-            .map_err(|e| PapErrore::Generico(format!("serializzazione richiesta: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Impossibile preparare la richiesta per il provider AI.", e))?;
 
         let agent = ureq::AgentBuilder::new()
             .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SEC))
@@ -271,12 +271,12 @@ impl AIProvider for AnthropicProvider {
             .set("anthropic-version", ANTHROPIC_VERSION)
             .set("content-type", "application/json")
             .send_string(&body)
-            .map_err(|e| PapErrore::Generico(format!("Anthropic HTTP: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Impossibile contattare il provider Anthropic. Verifica la connessione e l'URL configurato.", e))?;
         let latency_ms = start.elapsed().as_millis() as u64;
 
         let json = resp
             .into_string()
-            .map_err(|e| PapErrore::Generico(format!("Anthropic body: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Risposta del provider Anthropic non leggibile.", e))?;
 
         let (content, tokens) = parse_anthropic_response(&json)?;
 
@@ -360,7 +360,7 @@ struct OpenAIResponse {
 /// si aspetta non avendo richiesto `n>1`).
 pub(crate) fn parse_openai_response(json: &str) -> Result<(String, Option<u32>), PapErrore> {
     let r: OpenAIResponse = serde_json::from_str(json)
-        .map_err(|e| PapErrore::Generico(format!("Risposta OpenAI malformata: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Il provider OpenAI ha restituito una risposta non valida.", e))?;
     let content = r
         .choices
         .first()
@@ -391,7 +391,7 @@ impl AIProvider for OpenAIProvider {
             }],
         };
         let body = serde_json::to_string(&req)
-            .map_err(|e| PapErrore::Generico(format!("serializzazione richiesta: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Impossibile preparare la richiesta per il provider AI.", e))?;
 
         let agent = ureq::AgentBuilder::new()
             .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SEC))
@@ -403,12 +403,12 @@ impl AIProvider for OpenAIProvider {
             .set("Authorization", &format!("Bearer {}", self.api_key))
             .set("content-type", "application/json")
             .send_string(&body)
-            .map_err(|e| PapErrore::Generico(format!("OpenAI HTTP: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Impossibile contattare il provider OpenAI. Verifica la connessione e l'URL configurato.", e))?;
         let latency_ms = start.elapsed().as_millis() as u64;
 
         let json = resp
             .into_string()
-            .map_err(|e| PapErrore::Generico(format!("OpenAI body: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Risposta del provider OpenAI non leggibile.", e))?;
 
         let (content, tokens) = parse_openai_response(&json)?;
 
@@ -504,7 +504,7 @@ struct GeminiResponse {
 /// Concatena tutti i `parts` del primo `candidate` (di solito ce n'è uno).
 pub(crate) fn parse_gemini_response(json: &str) -> Result<(String, Option<u32>), PapErrore> {
     let r: GeminiResponse = serde_json::from_str(json)
-        .map_err(|e| PapErrore::Generico(format!("Risposta Gemini malformata: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Il provider Google Gemini ha restituito una risposta non valida.", e))?;
     let content: String = r
         .candidates
         .first()
@@ -540,7 +540,7 @@ impl AIProvider for GeminiProvider {
             }],
         };
         let body = serde_json::to_string(&req)
-            .map_err(|e| PapErrore::Generico(format!("serializzazione richiesta: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Impossibile preparare la richiesta per il provider AI.", e))?;
 
         let agent = ureq::AgentBuilder::new()
             .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SEC))
@@ -552,12 +552,12 @@ impl AIProvider for GeminiProvider {
             .set("x-goog-api-key", &self.api_key)
             .set("content-type", "application/json")
             .send_string(&body)
-            .map_err(|e| PapErrore::Generico(format!("Gemini HTTP: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Impossibile contattare il provider Google Gemini. Verifica la connessione e l'URL configurato.", e))?;
         let latency_ms = start.elapsed().as_millis() as u64;
 
         let json = resp
             .into_string()
-            .map_err(|e| PapErrore::Generico(format!("Gemini body: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Risposta del provider Google Gemini non leggibile.", e))?;
 
         let (content, tokens) = parse_gemini_response(&json)?;
 
@@ -1033,7 +1033,16 @@ mod test {
     fn parse_response_json_invalido_fallisce() {
         let r = parse_ollama_response("non-json");
         assert!(r.is_err());
-        assert!(r.unwrap_err().to_string().contains("malformata"));
+        // CWE-209: messaggio di dominio opaco, senza il dettaglio serde grezzo.
+        let msg = r.unwrap_err().to_string();
+        assert!(
+            msg.contains("risposta non valida"),
+            "atteso messaggio di dominio, ottenuto: {msg}"
+        );
+        assert!(
+            !msg.contains("expected") && !msg.contains("column") && !msg.contains("line"),
+            "il messaggio non deve esporre internals serde: {msg}"
+        );
     }
 
     #[test]

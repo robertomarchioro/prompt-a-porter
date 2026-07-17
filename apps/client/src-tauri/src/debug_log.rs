@@ -53,7 +53,7 @@ pub struct InfoDebugLog {
 fn log_dir(app: &tauri::AppHandle) -> Result<PathBuf, PapErrore> {
     app.path()
         .app_log_dir()
-        .map_err(|e| PapErrore::Generico(format!("app_log_dir() fallito: {e}")))
+        .map_err(|e| PapErrore::dominio("Impossibile determinare la cartella dei log.", e))
 }
 
 /// #462 (security review, LOW): lo ZIP di export del debug log NON deve
@@ -66,7 +66,7 @@ fn export_dir(app: &tauri::AppHandle) -> Result<PathBuf, PapErrore> {
     let dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| PapErrore::Generico(format!("app_data_dir() fallito: {e}")))?
+        .map_err(|e| PapErrore::dominio("Impossibile determinare la cartella dati.", e))?
         .join("debug-exports");
     fs::create_dir_all(&dir)?;
     Ok(dir)
@@ -207,7 +207,7 @@ pub fn debug_log_apri_cartella(app: tauri::AppHandle) -> Result<(), PapErrore> {
     Command::new(cmd_name)
         .arg(&dir)
         .spawn()
-        .map_err(|e| PapErrore::Generico(format!("Apertura cartella fallita: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Impossibile aprire la cartella dei log.", e))?;
     Ok(())
 }
 
@@ -221,7 +221,7 @@ pub fn debug_log_pulisci(app: tauri::AppHandle) -> Result<(), PapErrore> {
         return Ok(());
     }
     File::create(&path).map_err(|e| {
-        PapErrore::Generico(format!("Pulizia log fallita ({}): {e}", path.display()))
+        PapErrore::dominio("Pulizia dei log non riuscita.", e)
     })?;
     log::info!("Debug log pulito (truncate)");
     Ok(())
@@ -250,7 +250,7 @@ pub fn debug_log_esporta_zip(app: tauri::AppHandle) -> Result<String, PapErrore>
     let zip_path = export_dir(&app)?.join(format!("pap-debug-log-{timestamp}.zip"));
 
     let file = crea_file_export(&zip_path)
-        .map_err(|e| PapErrore::Generico(format!("Create ZIP fallito: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Creazione dell'archivio dei log non riuscita.", e))?;
     let mut zip = ZipWriter::new(BufWriter::new(file));
     let opts: SimpleFileOptions =
         SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
@@ -271,9 +271,9 @@ pub fn debug_log_esporta_zip(app: tauri::AppHandle) -> Result<String, PapErrore>
         count = files.len(),
     );
     zip.start_file("metadata.txt", opts)
-        .map_err(|e| PapErrore::Generico(format!("Zip metadata fallito: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Creazione dell'archivio dei log non riuscita.", e))?;
     zip.write_all(metadata.as_bytes())
-        .map_err(|e| PapErrore::Generico(format!("Write metadata fallito: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Creazione dell'archivio dei log non riuscita.", e))?;
 
     for f in &files {
         let src = dir.join(&f.name);
@@ -285,13 +285,13 @@ pub fn debug_log_esporta_zip(app: tauri::AppHandle) -> Result<String, PapErrore>
             continue;
         }
         zip.start_file(&f.name, opts)
-            .map_err(|e| PapErrore::Generico(format!("Zip start_file fallito: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Creazione dell'archivio dei log non riuscita.", e))?;
         zip.write_all(&buf)
-            .map_err(|e| PapErrore::Generico(format!("Zip write fallito: {e}")))?;
+            .map_err(|e| PapErrore::dominio("Creazione dell'archivio dei log non riuscita.", e))?;
     }
 
     zip.finish()
-        .map_err(|e| PapErrore::Generico(format!("Zip finish fallito: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Creazione dell'archivio dei log non riuscita.", e))?;
     restringi_permessi_owner(&zip_path);
     log::info!("Debug log esportato: {}", zip_path.display());
     Ok(zip_path.to_string_lossy().to_string())
@@ -399,7 +399,7 @@ pub fn debug_log_leggi(
         return Ok(Vec::new());
     }
     let contenuto = fs::read_to_string(&path)
-        .map_err(|e| PapErrore::Generico(format!("Lettura log fallita: {e}")))?;
+        .map_err(|e| PapErrore::dominio("Lettura dei log non riuscita.", e))?;
     let righe: Vec<&str> = contenuto.lines().collect();
     let inizio = righe.len().saturating_sub(n);
     let parsed: Vec<RigaLog> = righe[inizio..].iter().map(|l| parse_riga(l)).collect();

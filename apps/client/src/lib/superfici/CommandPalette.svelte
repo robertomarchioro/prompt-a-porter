@@ -276,7 +276,10 @@
     try {
       await navigator.clipboard.writeText(testo);
     } catch (e) {
-      erroreEspansione = `Copia fallita: ${String(e).replace(/^Error: /, "")}`;
+      // CWE-209: il dettaglio grezzo (DOMException del browser) va solo nel
+      // log; all'utente un messaggio opaco.
+      console.error("[palette] copia negli appunti fallita", e);
+      erroreEspansione = "Copia negli appunti non riuscita.";
       return;
     }
     toastVisibile = true;

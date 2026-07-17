@@ -437,9 +437,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    // CWE-209: il dettaglio grezzo (errore SQLite, path del vault, ecc.) va
+    // solo sullo stderr del server, mai nella risposta al client MCP.
+    const dettaglio = err instanceof Error ? err.message : String(err);
+    process.stderr.write(
+      `[pap-mcp-server] errore durante l'esecuzione del tool ${name}: ${dettaglio}\n`,
+    );
     return {
-      content: [{ type: "text", text: `Errore: ${msg}` }],
+      content: [
+        { type: "text", text: "Errore interno durante l'esecuzione dello strumento." },
+      ],
       isError: true,
     };
   }
