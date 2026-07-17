@@ -216,6 +216,32 @@ func TestRefreshToken(t *testing.T) {
 	}
 }
 
+// CWE-613: un utente disattivato (soft-delete) dopo il login NON deve poter
+// estendere l'accesso via /auth/refresh. Prima del fix il refresh copiava i
+// claim dal solo token, senza rileggere il DB, permettendo accesso a oltranza.
+func TestRefreshUtenteDisattivatoNegato(t *testing.T) {
+	r, db, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	login := doLogin(t, r)
+
+	// Off-boarding: l'admin disattiva l'utente dopo che ha ottenuto un token.
+	if _, err := db.Exec("UPDATE Users SET DeletedAt = ? WHERE Id = ?",
+		models.NowUTC(), login.User.Id); err != nil {
+		t.Fatalf("soft-delete utente: %v", err)
+	}
+
+	req := httptest.NewRequest("POST", "/auth/refresh", nil)
+	req.Header.Set("Authorization", "Bearer "+login.Token)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("refresh di un utente disattivato deve dare 401, ottenuto %d: %s",
+			rec.Code, rec.Body.String())
+	}
+}
+
 func TestSyncPullVuoto(t *testing.T) {
 	r, _, cleanup := setupTestServer(t)
 	defer cleanup()
