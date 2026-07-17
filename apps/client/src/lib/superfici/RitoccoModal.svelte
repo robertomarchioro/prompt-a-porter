@@ -304,12 +304,26 @@
     }
   }
 
-  /* #506 — la diff dev'essere scrollabile dentro i bordi della modale. */
+  /* #506 — la diff dev'essere scrollabile dentro i bordi della modale.
+     DiffViewer è pensato per riempire un contenitore ad altezza DEFINITA e
+     scrollare al suo interno (.diff-viewer height:100%/overflow:hidden +
+     .render flex:1/overflow:auto). Qui il wrapper ha solo `max-height`: senza
+     un'altezza definita `height:100%` non si risolve e lo scroll interno non
+     si attiva. Rendiamo quindi `.diff-scroll` l'UNICO contenitore di scroll e
+     lasciamo che il DiffViewer segua il contenuto (override limitato a questo
+     punto, non tocca gli altri usi del DiffViewer ad altezza definita). */
   .diff-scroll {
     max-height: 42vh;
     overflow: auto;
     border: 1px solid var(--border-subtle, #ccc);
     border-radius: var(--radius-sm, 6px);
+  }
+  .diff-scroll :global(.diff-viewer) {
+    height: auto;
+    overflow: visible;
+  }
+  .diff-scroll :global(.diff-viewer .render) {
+    overflow: visible;
   }
 
   .sugg {
