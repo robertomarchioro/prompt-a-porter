@@ -1,8 +1,17 @@
 # Changelog — Prompt a Porter
 
-## v0.8.40 — Ritocco: rifiniture dal collaudo (2026-07-17)
+## v0.8.40 — Cifra un vault esistente + hardening di sicurezza (2026-07-17)
 
-> Correzioni a Ritocco emerse dai primi usi dal vivo.
+> Ora puoi cifrare un vault nato in chiaro senza ricrearlo da zero: utile per proteggere una libreria esistente e per configurare i provider AI. La release porta anche un giro di hardening di sicurezza (server di sync, messaggi d'errore) e le rifiniture di Ritocco emerse dai primi usi dal vivo.
+
+### Novità
+
+- **Cifra un vault esistente** (#510): se hai creato il vault "in chiaro" (senza password), ora puoi cifrarlo in un secondo momento da **Impostazioni → Sicurezza → "Cifra vault…"**, scegliendo una master password. I dati esistenti (prompt, cronologia, tag, valutazioni) vengono conservati. Questo sblocca anche il salvataggio delle **API key dei provider AI**, che richiede un vault cifrato: prima l'unica via era ricreare il vault da zero.
+
+### Sicurezza
+
+- **Server di sync: timeout HTTP + revoca sessione al refresh** (#511): il server imposta ora timeout espliciti sulle connessioni — chiudendo un possibile denial-of-service da connessioni lente o inattive (gosec G112) — e al rinnovo del token (`/auth/refresh`) rilegge l'utente dal database: un account disattivato non può più estendere l'accesso a oltranza (CWE-613) e i cambi di ruolo/workspace si propagano subito.
+- **Messaggi d'errore opachi** (#512): l'app non mostra più il testo tecnico grezzo degli errori di sistema/servizio (database, rete verso i provider AI, file, browser); ora vedi un messaggio chiaro in italiano, mentre il dettaglio tecnico resta nel log per la diagnosi (CWE-209). Riguarda client, server MCP e interfaccia.
 
 ### Fix
 
