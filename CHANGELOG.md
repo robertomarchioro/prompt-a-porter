@@ -1,5 +1,13 @@
 # Changelog — Prompt a Porter
 
+## v0.8.41 — Hotfix: scroll del diff nel Ritocco (2026-07-18)
+
+> Hotfix per v0.8.40: su Windows, nella schermata "Modifiche proposte" del Ritocco il diff veniva tagliato senza possibilità di scorrere.
+
+### Fix
+
+- **Scroll del diff nel Ritocco** (#514): su Windows (WebView2) il confronto tra versione attuale e proposta veniva clippato — le righe oltre l'altezza visibile non erano raggiungibili e mancava la barra di scorrimento. L'area del diff è ora un contenitore di scroll indipendente che tiene il confronto entro i propri bordi. Il fix #506 uscito in v0.8.40 era corretto su Chromium/Linux ma non efficace su WebView2.
+
 ## v0.8.40 — Cifra un vault esistente + hardening di sicurezza (2026-07-17)
 
 > Ora puoi cifrare un vault nato in chiaro senza ricrearlo da zero: utile per proteggere una libreria esistente e per configurare i provider AI. La release porta anche un giro di hardening di sicurezza (server di sync, messaggi d'errore) e le rifiniture di Ritocco emerse dai primi usi dal vivo.
