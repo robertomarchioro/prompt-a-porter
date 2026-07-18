@@ -1,27 +1,12 @@
 <script setup lang="ts">
-import TopBar from './TopBar.vue'
-import HeroStage from './HeroStage.vue'
-import ShowcaseCarousel from './ShowcaseCarousel.vue'
-import ManifestoSection from './ManifestoSection.vue'
-import ProblemSection from './ProblemSection.vue'
-import CollectionGrid from './CollectionGrid.vue'
-import SeasonDebut from './SeasonDebut.vue'
-import SiteFooter from './SiteFooter.vue'
+// Landing «Scontrino cucito» — architettura §1.1 delle istruzioni:
+// un solo URL, alberi separati per composizione. F1 = solo desktop (#4a);
+// F2 aggiungerà LandingMobile (#3a) e la commutazione CSS a 680px.
+import LandingDesktop from './desktop/LandingDesktop.vue'
 </script>
 
 <template>
   <div class="pap-landing">
-    <TopBar />
-    <main>
-      <HeroStage />
-      <ManifestoSection />
-      <ProblemSection />
-      <!-- Handoff UX Fix 2: la vetrina completa vive qui, dopo il problema —
-           non più come primo elemento auto-animato dentro l'hero. -->
-      <section class="showcase-sec"><ShowcaseCarousel /></section>
-      <CollectionGrid />
-      <SeasonDebut />
-    </main>
-    <SiteFooter />
+    <LandingDesktop />
   </div>
 </template>
