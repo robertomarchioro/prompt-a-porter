@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics="">
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,300;1,6..72,400;1,6..72,500&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#e4e1d9;font-family:Inter,system-ui,sans-serif}
+  a{color:inherit}
+  @keyframes blink{50%{opacity:0}}
+  .dv-turn{padding:44px 44px 40px}
+  .dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 28px}
+  .dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}
+  .dv-tname{font:600 13px/1.2 system-ui,sans-serif;color:#1a1a1a}
+  .dv-opts{display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start}
+  .dv-opt{flex:none;display:flex;flex-direction:column;gap:13px;scroll-margin-top:16px}
+  .dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}
+  .dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.35 system-ui,sans-serif;color:rgba(0,0,0,.55);max-width:392px}
+  .dv-olabel b{font-weight:600;color:#1a1a1a;white-space:nowrap}
+  .dv-opt:target .dv-oid{background:#8470D5;color:#fff}
+  .dv-next{margin:30px 0 0;font:12.5px/1.7 system-ui,sans-serif;color:rgba(0,0,0,.5);max-width:900px}
+  .mag{fill:none;stroke-width:1.8;flex:none}
+  .ph{width:392px;border-radius:38px;overflow:hidden;position:relative}
+  .stat{display:flex;align-items:center;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:12px;padding:13px 26px 7px}
+  .stat .dots{letter-spacing:.12em}
+</style>
+</helmet>
+
+<section class="dv-turn" id="t4" style="border-bottom:1px solid rgba(0,0,0,.08)">
+<div class="dv-thd"><a class="dv-tid" href="#t4">4</a><span class="dv-tname">Versione DESKTOP del concept <a class="dv-oid" href="#3a">3a</a> · Cloud Dancer · scontrino come colonna laterale · servizi dell'atelier · CTA "Scarica" (qui ha senso)</span></div>
+<div class="dv-opts">
+
+<!-- ================= 4a · DESKTOP "Scontrino cucito" ================= -->
+<div class="dv-opt" id="4a">
+<div class="dv-olabel"><a class="dv-oid" href="#4a">4a</a><b>Desktop · Scontrino cucito</b>1280px · hero editoriale, palette-su-app grande, collezione a colonna laterale, servizi dell'atelier</div>
+<div style="width:1280px;background:#F1F0EC;border:1px solid #E2E0D8;border-radius:16px;overflow:hidden;box-shadow:0 60px 120px -50px rgba(90,88,78,.5);color:#26251F">
+
+  <!-- launch ribbon full-bleed -->
+  <div style="position:relative;overflow:hidden;background:linear-gradient(100deg,#8470D5,#6E56CF 50%,#5A45BE);color:#fff">
+    <div style="position:absolute;inset:0;background:repeating-linear-gradient(115deg,rgba(255,255,255,.08) 0 2px,transparent 2px 24px);pointer-events:none"></div>
+    <div style="position:relative;max-width:1180px;margin:0 auto;padding:11px 48px;display:flex;align-items:center;gap:18px">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.2em;text-transform:uppercase;font-weight:700;color:#3A2A12;background:#E8C79A;border-radius:100px;padding:4px 11px;flex:none">✦ Nuova stagione</span>
+      <span style="font-family:Inter,sans-serif;font-size:13px;color:#E4DEFA;flex:1">Debutta <em style="font-family:Newsreader,serif;font-style:italic;color:#F0DFC0">Arioso Atelier</em> · la prima stagione esce dalla beta <span style="color:#B9A7F0">·</span> Autunno-Inverno 2026 · v1.0 <span style="color:#B9A7F0">·</span> codice <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#F0DFC0">Cloud Dancer 11-4201</span></span>
+      <a style="font-family:Inter,sans-serif;font-size:12.5px;font-weight:600;color:#fff;white-space:nowrap;flex:none">Scopri il debutto →</a>
+    </div>
+  </div>
+
+  <!-- topbar -->
+  <div style="max-width:1180px;margin:0 auto;padding:26px 48px;display:flex;align-items:center;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:12px"><span style="width:30px;height:30px;border-radius:8px;background:linear-gradient(150deg,#8470D5,#6E56CF);display:flex;align-items:center;justify-content:center;font-family:Newsreader,serif;font-size:18px;color:#fff">P</span><span style="font-family:Newsreader,serif;font-size:19px">Prompt a Porter</span></div>
+    <div style="display:flex;align-items:center;gap:30px">
+      <a style="font-family:Inter,sans-serif;font-size:13.5px;color:#54524A">La collezione</a>
+      <a style="font-family:Inter,sans-serif;font-size:13.5px;color:#54524A">I servizi</a>
+      <a style="font-family:Inter,sans-serif;font-size:13.5px;color:#54524A">Come funziona</a>
+      <a style="font-family:Inter,sans-serif;font-size:13.5px;color:#54524A">Guida</a>
+      <a style="font-family:Inter,sans-serif;font-size:13.5px;color:#26251F;border:1px solid #E2E0D8;background:#FBFBF9;border-radius:9px;padding:9px 18px">Scarica</a>
+    </div>
+  </div>
+
+  <!-- hero -->
+  <div style="max-width:1180px;margin:0 auto;padding:42px 48px 24px;text-align:center;position:relative">
+    <div style="position:absolute;left:50%;top:0;transform:translateX(-50%);width:900px;height:520px;background:radial-gradient(ellipse 50% 46% at 50% 28%,rgba(132,112,213,.16),transparent 70%);pointer-events:none"></div>
+    <div style="position:relative">
+      <span style="display:inline-flex;align-items:center;gap:9px;background:#FBFBF9;border:1px solid #E2E0D8;border-radius:100px;padding:7px 16px 7px 9px;margin-bottom:24px"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;background:#fff;border:1px solid #E2E0D8;border-bottom-width:2px;border-radius:5px;padding:3px 7px;color:#6E56CF">Ctrl + Shift + P</span><span style="font-family:Inter,sans-serif;font-size:12.5px;color:#6E6C60">richiama la tua collezione, in qualsiasi app</span></span>
+      <h1 style="font-family:Newsreader,serif;font-weight:300;font-size:98px;line-height:.92;letter-spacing:-.04em;margin:0">Prompt-<em style="font-style:italic;color:#6E56CF">à</em>-porter</h1>
+      <p style="font-family:Newsreader,serif;font-weight:300;font-size:25px;line-height:1.4;color:#54524A;margin:24px auto 0;max-width:600px">La tua collezione di prompt AI. Versionati, su misura, <em style="font-style:italic;color:#26251F">a un tasto di distanza</em> — ovunque tu stia scrivendo.</p>
+      <div style="display:flex;gap:14px;justify-content:center;align-items:center;margin-top:32px">
+        <a style="display:inline-flex;align-items:center;gap:10px;font-family:Inter,sans-serif;font-size:14.5px;font-weight:600;padding:15px 28px;border-radius:11px;background:linear-gradient(160deg,#8470D5,#6E56CF);color:#fff;box-shadow:0 16px 34px -14px rgba(132,112,213,.6)">↓ Scarica l'app</a>
+        <a style="display:inline-flex;align-items:center;font-family:Inter,sans-serif;font-size:14px;font-weight:500;padding:15px 24px;border-radius:11px;border:1px solid #E2E0D8;background:#FBFBF9;color:#26251F">Vedi su GitHub</a>
+      </div>
+      <div style="display:flex;gap:22px;justify-content:center;align-items:center;margin-top:20px">
+        <span style="display:flex;align-items:center;gap:7px;font-family:Inter,sans-serif;font-size:12.5px;color:#54524A"><svg viewBox="0 0 24 24" style="width:13px;height:13px"><g fill="#54524A"><rect x="2" y="2" width="8.6" height="8.6"></rect><rect x="13.4" y="2" width="8.6" height="8.6"></rect><rect x="2" y="13.4" width="8.6" height="8.6"></rect><rect x="13.4" y="13.4" width="8.6" height="8.6"></rect></g></svg>Windows</span>
+        <span style="display:flex;align-items:center;gap:7px;font-family:Inter,sans-serif;font-size:12.5px;color:#54524A"><svg viewBox="0 0 24 24" style="width:12px;height:13px"><path fill="#54524A" d="M17.6 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.15-2.8.85-3.5.85-.7 0-1.85-.83-3.05-.8-1.55.02-3 .9-3.8 2.3-1.65 2.85-.42 7.05 1.17 9.36.78 1.13 1.7 2.4 2.9 2.35 1.17-.05 1.6-.75 3.02-.75 1.4 0 1.8.75 3.05.72 1.26-.02 2.06-1.15 2.83-2.28.9-1.3 1.27-2.57 1.29-2.63-.03-.01-2.47-.95-2.5-3.75zM15.3 6.1c.64-.78 1.07-1.86.95-2.94-.92.04-2.04.61-2.7 1.39-.59.69-1.11 1.8-.97 2.85 1.03.08 2.08-.52 2.72-1.3z"></path></svg>macOS</span>
+        <span style="display:flex;align-items:center;gap:7px;font-family:Inter,sans-serif;font-size:12.5px;color:#54524A"><svg viewBox="0 0 24 24" style="width:11px;height:14px"><ellipse cx="12" cy="13" rx="7" ry="8.6" fill="#54524A"></ellipse><ellipse cx="12" cy="14.2" rx="4.2" ry="6.2" fill="#F5F4F0"></ellipse><circle cx="9.5" cy="7.2" r="1.1" fill="#F5F4F0"></circle><circle cx="14.5" cy="7.2" r="1.1" fill="#F5F4F0"></circle><path d="M10.6 8.7 L13.4 8.7 L12 10.5 Z" fill="#D8A463"></path><path d="M9 20.4 C7.6 21.6 6.2 21.4 6 20.4 6.4 19.2 7.8 19 9 19.2 Z" fill="#D8A463"></path><path d="M15 20.4 C16.4 21.6 17.8 21.4 18 20.4 17.6 19.2 16.2 19 15 19.2 Z" fill="#D8A463"></path></svg>Linux</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#AEAB9F">gratis · local-first · v1.0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- palette over app — wide gesture -->
+  <div style="max-width:1080px;margin:26px auto 0;position:relative;border-radius:20px;overflow:hidden;border:1px solid #E2E0D8;box-shadow:0 40px 90px -46px rgba(90,88,78,.6)">
+    <div style="background:linear-gradient(160deg,#E7E5DE,#D9D7CE);padding:30px 34px 130px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px"><span style="width:9px;height:9px;border-radius:50%;background:#C9C6BB"></span><span style="width:9px;height:9px;border-radius:50%;background:#C9C6BB"></span><span style="width:9px;height:9px;border-radius:50%;background:#C9C6BB"></span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#A9A69A;margin-left:10px">documento · qualsiasi editor</span></div>
+      <div style="height:10px;width:52%;background:#CBC8BD;border-radius:100px;margin-bottom:12px"></div>
+      <div style="height:10px;width:74%;background:#D4D1C7;border-radius:100px;margin-bottom:12px"></div>
+      <div style="height:10px;width:40%;background:#D4D1C7;border-radius:100px"></div>
+    </div>
+    <div style="position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:640px;max-width:88%;background:#FFFFFF;border:1px solid #ECEAE2;border-radius:16px;box-shadow:0 40px 70px -26px rgba(90,88,78,.6),0 0 0 1px rgba(132,112,213,.12);overflow:hidden;text-align:left">
+      <div style="display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid #F0EEE8"><svg viewBox="0 0 24 24" class="mag" style="width:17px;height:17px;stroke:#AEAB9F"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg><span style="font-family:Inter,sans-serif;font-size:15px;color:#AEAB9F">Cerca prompt, tag o azione…</span><span style="width:2px;height:17px;background:#6E56CF;margin-left:-4px;animation:blink 1.1s steps(1) infinite"></span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:#AEAB9F;border:1px solid #E2E0D8;border-radius:5px;padding:3px 7px">esc</span></div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#AEAB9F;padding:12px 20px 6px">Recenti</div>
+      <div style="display:flex;align-items:center;gap:14px;padding:11px 20px;background:linear-gradient(90deg,rgba(132,112,213,.1),transparent);box-shadow:inset 2px 0 0 #6E56CF"><div style="flex:1"><div style="font-family:Inter,sans-serif;font-size:14px;font-weight:500;color:#26251F">Riassumi articolo in N punti</div><div style="font-family:Inter,sans-serif;font-size:12px;color:#8C8A80;margin-top:2px">Distilla un testo lungo in <em style="font-style:normal;color:#6E56CF">N</em> punti chiave + TL;DR.</div></div><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#A36A2E;background:#F3E9D6;border:1px solid #E9DCC1;border-radius:5px;padding:3px 8px">privato</span></div>
+      <div style="display:flex;align-items:center;gap:14px;padding:11px 20px"><div style="flex:1"><div style="font-family:Inter,sans-serif;font-size:14px;font-weight:500;color:#26251F">Code review strutturata</div><div style="font-family:Inter,sans-serif;font-size:12px;color:#8C8A80;margin-top:2px">Review per severità. Importa il ruolo <em style="font-style:normal;color:#6E56CF">engineer</em>.</div></div><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#A36A2E;background:#F3E9D6;border:1px solid #E9DCC1;border-radius:5px;padding:3px 8px">privato</span></div>
+      <div style="display:flex;align-items:center;gap:14px;padding:11px 20px"><div style="flex:1"><div style="font-family:Inter,sans-serif;font-size:14px;font-weight:500;color:#26251F">Email professionale parametrica</div><div style="font-family:Inter,sans-serif;font-size:12px;color:#8C8A80;margin-top:2px">Email con tono e contenuto variabili.</div></div><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#A36A2E;background:#F3E9D6;border:1px solid #E9DCC1;border-radius:5px;padding:3px 8px">privato</span></div>
+      <div style="display:flex;gap:20px;padding:13px 20px;border-top:1px solid #F0EEE8;background:#FBFBF9"><span style="font-family:Inter,sans-serif;font-size:11px;color:#AEAB9F">esc chiudi</span><span style="font-family:Inter,sans-serif;font-size:11px;color:#AEAB9F">↑↓ naviga</span><span style="font-family:Inter,sans-serif;font-size:11px;color:#AEAB9F">↵ seleziona</span><span style="font-family:Inter,sans-serif;font-size:11px;color:#6E56CF;margin-left:auto">⌃↵ compila e incolla</span></div>
+    </div>
+  </div>
+  <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#AEAB9F;padding:18px 0 6px">Funzione in evidenza · La palette — premi <span style="color:#6E56CF">⌃⇧P</span> ovunque</div>
+
+  <!-- manifesto band full-bleed -->
+  <div style="margin:34px 0 0;padding:70px 48px;background:#EDEBF6;border-top:1px solid #E2E0D8;border-bottom:1px solid #E2E0D8;position:relative;overflow:hidden">
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse 60% 120% at 50% 50%,rgba(132,112,213,.13),transparent 72%);pointer-events:none"></div>
+    <div style="position:relative;max-width:1080px;margin:0 auto;display:grid;grid-template-columns:1.02fr .98fr;gap:56px;align-items:center">
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:#6E56CF;margin-bottom:18px">— manifesto —</div>
+        <div style="font-family:Newsreader,serif;font-weight:300;font-size:56px;line-height:1.03;letter-spacing:-.025em;color:#26251F">Se ci puoi scrivere, ci puoi <em style="font-style:italic;color:#6E56CF">incollare il tuo prompt.</em></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:15px;line-height:1.6;letter-spacing:.03em;color:#8C8A80;margin-top:26px;padding-top:22px;border-top:1px solid #DDDACE;max-width:440px">Si abbina con qualsiasi campo di testo, in ogni editor, applicazione o sito web.</div>
+      </div>
+      <!-- light palette art, tilted -->
+      <div style="display:flex;justify-content:center;position:relative">
+        <div style="position:absolute;width:80%;height:80%;left:50%;top:50%;transform:translate(-50%,-50%);background:radial-gradient(ellipse 60% 60% at 50% 50%,rgba(132,112,213,.28),transparent 70%);filter:blur(14px);pointer-events:none"></div>
+        <div style="position:relative;width:420px;transform:rotate(-2deg);background:#FFFFFF;border:1px solid #ECEAE2;border-radius:16px;box-shadow:0 40px 80px -34px rgba(90,88,78,.5);overflow:hidden;text-align:left">
+          <div style="display:flex;align-items:center;gap:11px;padding:14px 17px;border-bottom:1px solid #F0EEE8"><svg viewBox="0 0 24 24" class="mag" style="width:15px;height:15px;stroke:#AEAB9F"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg><span style="font-family:Inter,sans-serif;font-size:13px;color:#AEAB9F">Cerca prompt…</span><span style="width:2px;height:15px;background:#6E56CF;margin-left:-4px;animation:blink 1.1s steps(1) infinite"></span></div>
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 17px;background:#F2ECDE;box-shadow:inset 2px 0 0 #6E56CF"><div style="flex:1"><div style="font-family:Inter,sans-serif;font-size:13px;font-weight:500;color:#26251F">Brainstorm con criteri</div><div style="font-family:Inter,sans-serif;font-size:11px;color:#8C8A80;margin-top:2px">Idee valutate su criteri scelti da te</div></div><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#A36A2E;background:#EFE3CE;border:1px solid #E2D2B4;border-radius:5px;padding:3px 7px">privato</span></div>
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 17px"><div style="flex:1"><div style="font-family:Inter,sans-serif;font-size:13px;font-weight:500;color:#26251F">Traduzione con glossario</div><div style="font-family:Inter,sans-serif;font-size:11px;color:#8C8A80;margin-top:2px">Rispetta i termini che scegli</div></div><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#A36A2E;background:#EFE3CE;border:1px solid #E2D2B4;border-radius:5px;padding:3px 7px">privato</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COLLECTION band: receipt column + services -->
+  <div style="max-width:1080px;margin:0 auto;padding:80px 48px 40px">
+    <div style="display:grid;grid-template-columns:400px 1fr;gap:56px;align-items:start">
+
+      <!-- receipt as side column (pinned) -->
+      <div style="position:relative">
+        <svg width="54" height="54" viewBox="0 0 52 52" style="position:absolute;left:-12px;top:-16px;z-index:3;filter:drop-shadow(0 4px 5px rgba(60,50,30,.35))"><line x1="12" y1="42" x2="34" y2="18" stroke="#C7C4BA" stroke-width="2.6" stroke-linecap="round"></line><circle cx="36" cy="16" r="7" fill="#6E56CF"></circle><circle cx="33.5" cy="13.5" r="2.2" fill="rgba(255,255,255,.75)"></circle></svg>
+        <svg width="54" height="54" viewBox="0 0 52 52" style="position:absolute;right:-12px;top:-16px;z-index:3;transform:scaleX(-1);filter:drop-shadow(0 4px 5px rgba(60,50,30,.35))"><line x1="12" y1="42" x2="34" y2="18" stroke="#C7C4BA" stroke-width="2.6" stroke-linecap="round"></line><circle cx="36" cy="16" r="7" fill="#D8A463"></circle><circle cx="33.5" cy="13.5" r="2.2" fill="rgba(255,255,255,.7)"></circle></svg>
+        <div style="background:#FBFBF9;border:1px solid #E2E0D8;border-radius:4px;box-shadow:0 30px 60px -34px rgba(90,88,78,.5)">
+          <div style="text-align:center;padding:22px 20px 13px;border-bottom:1px dashed #D8D6CC">
+            <div style="font-family:Newsreader,serif;font-weight:400;font-size:24px">La collezione · scontrino</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#AEAB9F;margin-top:6px">Sei capi · AW26 · Nº 4A-001</div>
+          </div>
+          <div style="padding:6px 20px">
+            <div style="display:flex;align-items:center;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:#AEAB9F;padding:11px 0 9px;border-bottom:1px solid #26251F"><span>Capo</span><span>Prezzo</span></div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px dashed #E7E5DC"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:13px;color:#26251F">Ogni modifica, in vetrina</b><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#8C8A80">save = versione · diff git · ripristino</span></span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#6FA07A">incl.</span></div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px dashed #E7E5DC"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:13px;color:#26251F">Capi su misura</b><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#8C8A80"><span style="background:#F3E9D6;color:#A36A2E;padding:1px 4px;border-radius:3px"><i style="font-style:inherit">{</i>{nome}}</span> ad-hoc · <span style="background:#F3E9D6;color:#A36A2E;padding:1px 4px;border-radius:3px"><i style="font-style:inherit">{</i>{globale autore}}</span></span></span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#6FA07A">incl.</span></div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px dashed #E7E5DC"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:13px;color:#26251F">Cerca al buio dell'armadio</b><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#8C8A80">significato, non parola · ONNX MiniLM</span></span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#6FA07A">incl.</span></div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px dashed #E7E5DC"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:13px;color:#26251F">Prova prima di comprare</b><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#8C8A80">varianti A/B · golden test · costo stimato</span></span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#6FA07A">incl.</span></div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px dashed #E7E5DC"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:13px;color:#26251F">Un tono, dieci tagli</b><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#8C8A80"><span style="background:#F3E9D6;color:#A36A2E;padding:1px 4px;border-radius:3px"><i style="font-style:inherit">{</i>{import "ruolo"}}</span> · sartoria modulare</span></span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#6FA07A">incl.</span></div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:11px 0"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:13px;color:#26251F">Il taglio da terminale</b><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#8C8A80"><span style="color:#6E56CF">pap</span> render in pipe · sola lettura</span></span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#6FA07A">incl.</span></div>
+          </div>
+          <div style="padding:15px 20px"><div style="display:flex;align-items:center;justify-content:space-between;border-top:2px solid #26251F;padding-top:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#26251F">Totale</span><span style="font-family:Newsreader,serif;font-style:italic;font-size:28px;color:#6E56CF">gratis</span></div><div style="font-family:Inter,sans-serif;font-size:10px;color:#AEAB9F;text-align:right;margin-top:2px">local-first · open source · AGPL 3.0</div></div>
+          <div style="height:20px;background:radial-gradient(circle at 10px 20px,#D8D6CC 10px,transparent 10.5px),radial-gradient(circle at 10px 18px,#F1F0EC 10px,transparent 10.5px);background-size:20px 20px;background-repeat:repeat-x"></div>
+        </div>
+      </div>
+
+      <!-- right: intro + services -->
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#6E56CF">I servizi dell'atelier</div>
+        <h2 style="font-family:Newsreader,serif;font-weight:300;font-size:44px;line-height:1.04;letter-spacing:-.02em;margin:14px 0 12px">La collezione è tua.<br>L'atelier <em style="font-style:italic;color:#6E56CF">la tiene in forma.</em></h2>
+        <p style="font-family:Inter,sans-serif;font-size:14.5px;line-height:1.65;color:#54524A;max-width:460px;margin:0 0 26px">La controlla, la ritocca, te la porge ovunque tu stia lavorando — in un'altra app, nel terminale, dentro il tuo assistente.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div style="background:#FBFBF9;border:1px solid #E2E0D8;border-radius:13px;padding:18px 18px 20px"><div style="display:flex;align-items:center;gap:9px;margin-bottom:9px"><span style="width:26px;height:26px;border-radius:7px;background:rgba(132,112,213,.12);display:flex;align-items:center;justify-content:center;color:#6E56CF;font-size:13px">✦</span><span style="font-family:Newsreader,serif;font-size:19px">Ritocco</span></div><p style="font-family:Inter,sans-serif;font-size:12px;line-height:1.5;color:#8C8A80;margin:0">Un provider AI a tua scelta propone migliorie a diff, tarate sul modello. Accetti → nuova versione, storico intatto.</p></div>
+          <div style="background:#FBFBF9;border:1px solid #E2E0D8;border-radius:13px;padding:18px 18px 20px"><div style="display:flex;align-items:center;gap:9px;margin-bottom:9px"><span style="width:26px;height:26px;border-radius:7px;background:rgba(132,112,213,.12);display:flex;align-items:center;justify-content:center;color:#6E56CF;font-size:13px">◉</span><span style="font-family:Newsreader,serif;font-size:19px">Diagnosi</span></div><p style="font-family:Inter,sans-serif;font-size:12px;line-height:1.5;color:#8C8A80;margin:0">Un linter dei prompt segnala segnaposti malformati e fragilità. Ogni regola si attiva e si tara da te.</p></div>
+          <div style="background:#FBFBF9;border:1px solid #E2E0D8;border-radius:13px;padding:18px 18px 20px"><div style="display:flex;align-items:center;gap:9px;margin-bottom:9px"><span style="width:26px;height:26px;border-radius:7px;background:rgba(132,112,213,.12);display:flex;align-items:center;justify-content:center;color:#6E56CF;font-size:12px">›_</span><span style="font-family:Newsreader,serif;font-size:19px">CLI <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#6E56CF">pap</span></span></div><p style="font-family:Inter,sans-serif;font-size:12px;line-height:1.5;color:#8C8A80;margin:0">Stesso vault, in sola lettura: <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#54524A">pap render --var</span> e via in pipe. Per chi vive nella shell.</p></div>
+          <div style="background:#FBFBF9;border:1px solid #E2E0D8;border-radius:13px;padding:18px 18px 20px"><div style="display:flex;align-items:center;gap:9px;margin-bottom:9px"><span style="width:26px;height:26px;border-radius:7px;background:rgba(132,112,213,.12);display:flex;align-items:center;justify-content:center;color:#6E56CF;font-size:13px">⊕</span><span style="font-family:Newsreader,serif;font-size:19px">MCP</span></div><p style="font-family:Inter,sans-serif;font-size:12px;line-height:1.5;color:#8C8A80;margin:0">Espone il vault a Claude Desktop, Cursor e ogni client MCP. Solo via stdio: nessuna porta aperta.</p></div>
+        </div>
+        <!-- thread stitch under services -->
+        <svg viewBox="0 0 560 30" style="width:100%;height:26px;margin-top:20px;overflow:visible"><path d="M4 20 C 70 6, 140 6, 206 20 S 340 34, 406 20 S 520 8, 556 18" fill="none" stroke="#C89A55" stroke-width="1.6" stroke-dasharray="7 6" stroke-linecap="round"></path><g transform="translate(556 18) rotate(20)"><path d="M0 0 L 20 -2 L 20 2 Z" fill="#B9B6AC"></path><line x1="20" y1="0" x2="30" y2="0" stroke="#C7C4BA" stroke-width="2.4" stroke-linecap="round"></line></g></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- clienti tipo -->
+  <div style="max-width:1080px;margin:0 auto;padding:20px 48px 60px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#AEAB9F;text-align:center;margin-bottom:24px">A chi sta bene Prompt a Porter</div>
+    <div style="display:flex;gap:20px">
+      <div style="flex:1;position:relative;background:#FBFBF9;border:1px solid #E2E0D8;border-radius:4px 4px 9px 9px;padding:26px 22px 22px;transform:rotate(-1deg)"><span style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:10px;height:10px;border-radius:50%;border:1.5px solid #C6C3B9;background:#F1F0EC"></span><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:#6E56CF;text-align:center">Lo sviluppatore</div><p style="font-family:Inter,sans-serif;font-size:12.5px;line-height:1.55;color:#54524A;margin:12px 0 0;text-align:center">Trenta chiamate al giorno per review e refactor. Template versionabili come il codice — richiamati con <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6E56CF">pap render</span> o via MCP.</p></div>
+      <div style="flex:1;position:relative;background:#FBFBF9;border:1px solid #E2E0D8;border-radius:4px 4px 9px 9px;padding:26px 22px 22px;transform:rotate(.6deg)"><span style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:10px;height:10px;border-radius:50%;border:1.5px solid #C6C3B9;background:#F1F0EC"></span><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:#6E56CF;text-align:center">Il copywriter</div><p style="font-family:Inter,sans-serif;font-size:12.5px;line-height:1.55;color:#54524A;margin:12px 0 0;text-align:center">Cinquanta <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#A36A2E">email_v3_FINAL</span>. Un brief, mille varianti — e il Ritocco quando un prompt è fiacco.</p></div>
+      <div style="flex:1;position:relative;background:#FBFBF9;border:1px solid #E2E0D8;border-radius:4px 4px 9px 9px;padding:26px 22px 22px;transform:rotate(-.6deg)"><span style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:10px;height:10px;border-radius:50%;border:1.5px solid #C6C3B9;background:#F1F0EC"></span><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:#6E56CF;text-align:center">Il ricercatore</div><p style="font-family:Inter,sans-serif;font-size:12.5px;line-height:1.55;color:#54524A;margin:12px 0 0;text-align:center">Tre versioni dello stesso prompt a confronto. Quale rende meglio? Coi golden test, non a occhio.</p></div>
+    </div>
+  </div>
+
+  <!-- download band -->
+  <div style="background:linear-gradient(165deg,#F4F1FC,#EDE9F7 60%,#F3EEE6);border-top:1px solid #E1DBF2;position:relative;overflow:hidden">
+    <div style="position:absolute;right:-40px;top:-40px;width:220px;height:220px;background:radial-gradient(circle,rgba(132,112,213,.2),transparent 66%);pointer-events:none"></div>
+    <div style="position:relative;max-width:1080px;margin:0 auto;padding:64px 48px;display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center">
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#6E56CF">In due minuti</div>
+        <h2 style="font-family:Newsreader,serif;font-weight:300;font-size:50px;line-height:1.02;letter-spacing:-.03em;margin:14px 0 0">Come provare <em style="font-style:italic;color:#6E56CF">un abito.</em></h2>
+        <p style="font-family:Inter,sans-serif;font-size:14.5px;line-height:1.65;color:#54524A;max-width:420px;margin:16px 0 0">Installer firmato per Windows, `.dmg` universale per macOS (Apple Silicon + Intel), `.deb`/AppImage per Linux. Aggiornamenti firmati, automatici e silenziosi.</p>
+        <div style="display:flex;gap:14px;align-items:center;margin-top:28px">
+          <a style="display:inline-flex;align-items:center;gap:10px;font-family:Inter,sans-serif;font-size:14.5px;font-weight:600;padding:15px 28px;border-radius:11px;background:linear-gradient(160deg,#8470D5,#6E56CF);color:#fff;box-shadow:0 16px 34px -14px rgba(132,112,213,.6)">↓ Scarica la 1.0</a>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8C8A80">gratis · local-first · AGPL 3.0</span>
+        </div>
+        <div style="display:flex;gap:22px;margin-top:22px">
+          <span style="display:flex;align-items:center;gap:7px;font-family:Inter,sans-serif;font-size:12.5px;color:#54524A"><svg viewBox="0 0 24 24" style="width:13px;height:13px"><g fill="#54524A"><rect x="2" y="2" width="8.6" height="8.6"></rect><rect x="13.4" y="2" width="8.6" height="8.6"></rect><rect x="2" y="13.4" width="8.6" height="8.6"></rect><rect x="13.4" y="13.4" width="8.6" height="8.6"></rect></g></svg>Windows</span>
+          <span style="display:flex;align-items:center;gap:7px;font-family:Inter,sans-serif;font-size:12.5px;color:#54524A"><svg viewBox="0 0 24 24" style="width:12px;height:13px"><path fill="#54524A" d="M17.6 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.15-2.8.85-3.5.85-.7 0-1.85-.83-3.05-.8-1.55.02-3 .9-3.8 2.3-1.65 2.85-.42 7.05 1.17 9.36.78 1.13 1.7 2.4 2.9 2.35 1.17-.05 1.6-.75 3.02-.75 1.4 0 1.8.75 3.05.72 1.26-.02 2.06-1.15 2.83-2.28.9-1.3 1.27-2.57 1.29-2.63-.03-.01-2.47-.95-2.5-3.75zM15.3 6.1c.64-.78 1.07-1.86.95-2.94-.92.04-2.04.61-2.7 1.39-.59.69-1.11 1.8-.97 2.85 1.03.08 2.08-.52 2.72-1.3z"></path></svg>macOS <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#A36A2E;background:#F3E9D6;border:1px solid #E9DCC1;border-radius:100px;padding:2px 7px;margin-left:3px">universale</span></span>
+          <span style="display:flex;align-items:center;gap:7px;font-family:Inter,sans-serif;font-size:12.5px;color:#54524A"><svg viewBox="0 0 24 24" style="width:11px;height:14px"><ellipse cx="12" cy="13" rx="7" ry="8.6" fill="#54524A"></ellipse><ellipse cx="12" cy="14.2" rx="4.2" ry="6.2" fill="#F5F4F0"></ellipse><circle cx="9.5" cy="7.2" r="1.1" fill="#F5F4F0"></circle><circle cx="14.5" cy="7.2" r="1.1" fill="#F5F4F0"></circle><path d="M10.6 8.7 L13.4 8.7 L12 10.5 Z" fill="#D8A463"></path><path d="M9 20.4 C7.6 21.6 6.2 21.4 6 20.4 6.4 19.2 7.8 19 9 19.2 Z" fill="#D8A463"></path><path d="M15 20.4 C16.4 21.6 17.8 21.4 18 20.4 17.6 19.2 16.2 19 15 19.2 Z" fill="#D8A463"></path></svg>Linux</span>
+        </div>
+      </div>
+      <!-- pinned mini care ticket -->
+      <div style="position:relative;justify-self:center">
+        <svg width="50" height="50" viewBox="0 0 52 52" style="position:absolute;left:50%;top:-18px;transform:translateX(-50%);z-index:3;filter:drop-shadow(0 4px 5px rgba(60,50,30,.35))"><line x1="26" y1="46" x2="26" y2="14" stroke="#C7C4BA" stroke-width="2.6" stroke-linecap="round"></line><circle cx="26" cy="12" r="7" fill="#6E56CF"></circle><circle cx="23.5" cy="9.5" r="2.2" fill="rgba(255,255,255,.75)"></circle></svg>
+        <div style="width:280px;background:#FBFBF9;border:1px solid #E2E0D8;border-radius:9px;padding:22px 22px 20px;box-shadow:0 26px 54px -30px rgba(90,88,78,.5);transform:rotate(1.5deg)">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#AEAB9F;border-bottom:1px dashed #D8D6CC;padding-bottom:10px">Etichetta di manutenzione</div>
+          <div style="display:flex;flex-direction:column;gap:9px;margin-top:14px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#54524A;display:flex;align-items:center;gap:8px"><span style="width:5px;height:5px;border-radius:50%;background:#D8A463"></span>100% locale</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#54524A;display:flex;align-items:center;gap:8px"><span style="width:5px;height:5px;border-radius:50%;background:#D8A463"></span>no cloud</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#54524A;display:flex;align-items:center;gap:8px"><span style="width:5px;height:5px;border-radius:50%;background:#D8A463"></span>nessun account</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#54524A;display:flex;align-items:center;gap:8px"><span style="width:5px;height:5px;border-radius:50%;background:#D8A463"></span>lavabile in git</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#54524A;display:flex;align-items:center;gap:8px"><span style="width:5px;height:5px;border-radius:50%;background:#D8A463"></span>AGPL 3.0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- footer -->
+  <div style="background:#FBFBF9;border-top:1px solid #E2E0D8">
+    <div style="max-width:1080px;margin:0 auto;padding:56px 48px 30px;display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:44px">
+      <div>
+        <div style="display:flex;align-items:center;gap:11px"><span style="width:30px;height:30px;border-radius:8px;background:linear-gradient(150deg,#8470D5,#6E56CF);display:flex;align-items:center;justify-content:center;font-family:Newsreader,serif;font-size:18px;color:#fff">P</span><span style="font-family:Newsreader,serif;font-size:21px">Prompt-à-porter</span></div>
+        <p style="font-family:Newsreader,serif;font-weight:300;font-size:19px;line-height:1.4;color:#54524A;margin:18px 0 0;max-width:280px">La tua collezione di prompt AI. <em style="font-style:italic;color:#6E56CF">Pronti da indossare.</em></p>
+      </div>
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#AEAB9F;margin-bottom:16px">La collezione</div>
+        <a style="display:block;font-family:Inter,sans-serif;font-size:13.5px;color:#54524A;padding:6px 0">Segnaposti</a><a style="display:block;font-family:Inter,sans-serif;font-size:13.5px;color:#54524A;padding:6px 0">Ricerca semantica</a><a style="display:block;font-family:Inter,sans-serif;font-size:13.5px;color:#54524A;padding:6px 0">Varianti A/B</a><a style="display:block;font-family:Inter,sans-serif;font-size:13.5px;color:#54524A;padding:6px 0">Import composti</a>
+      </div>
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#AEAB9F;margin-bottom:16px">Atelier</div>
+        <a style="display:block;font-family:Inter,sans-serif;font-size:13.5px;color:#54524A;padding:6px 0">Come funziona</a><a style="display:block;font-family:Inter,sans-serif;font-size:13.5px;color:#54524A;padding:6px 0">Getting started</a><a style="display:block;font-family:Inter,sans-serif;font-size:13.5px;color:#54524A;padding:6px 0">La palette ⌃⇧P</a><a style="display:block;font-family:Inter,sans-serif;font-size:13.5px;color:#54524A;padding:6px 0">Changelog</a>
+      </div>
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#AEAB9F;margin-bottom:16px">La casa</div>
+        <a style="display:block;font-family:Inter,sans-serif;font-size:13.5px;color:#54524A;padding:6px 0">GitHub</a><a style="display:block;font-family:Inter,sans-serif;font-size:13.5px;color:#54524A;padding:6px 0">Documentazione</a><a style="display:block;font-family:Inter,sans-serif;font-size:13.5px;color:#54524A;padding:6px 0">Licenza AGPL 3.0</a><a style="display:block;font-family:Inter,sans-serif;font-size:13.5px;color:#54524A;padding:6px 0">Segnala un problema</a>
+      </div>
+    </div>
+    <div style="max-width:1080px;margin:0 auto;padding:0 48px 40px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:24px;padding:22px 0 0;border-top:1px solid #E2E0D8">
+        <div style="display:flex;align-items:center;gap:16px">
+          <svg width="38" height="38" viewBox="0 0 46 46" style="flex:none"><rect x="10" y="6" width="26" height="34" rx="3" fill="#EDEAE1" stroke="#D8D6CC" stroke-width="1"></rect><rect x="6" y="6" width="34" height="5" rx="2" fill="#C7C4BA"></rect><rect x="6" y="35" width="34" height="5" rx="2" fill="#C7C4BA"></rect><g stroke="#8470D5" stroke-width="2"><line x1="12" y1="13" x2="34" y2="15"></line><line x1="12" y1="17" x2="34" y2="19"></line><line x1="12" y1="21" x2="34" y2="23"></line><line x1="12" y1="25" x2="34" y2="27"></line><line x1="12" y1="29" x2="34" y2="31"></line></g><path d="M34 15 C 42 18, 40 26, 44 30" fill="none" stroke="#8470D5" stroke-width="1.4" stroke-linecap="round"></path></svg>
+          <div style="height:34px;width:220px;background:repeating-linear-gradient(90deg,#26251F 0 2px,transparent 2px 4px,#26251F 4px 5px,transparent 5px 9px,#26251F 9px 12px,transparent 12px 14px);opacity:.8"></div>
+        </div>
+        <div style="text-align:right"><div style="font-family:Inter,sans-serif;font-size:12px;color:#8C8A80">© 2026 Prompt-à-porter · Edizione locale · Stagione AW26</div><div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:#AEAB9F;margin-top:4px">Disegnato da <span style="font-family:Newsreader,serif;font-style:italic;font-size:15px;color:#54524A">Roberto</span> · cucito da <span style="color:#D97757">✦ Claude</span></div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+</div>
+<p class="dv-next">Prova a scrivere: "aggiungi la sezione Debutto stagione anche al desktop <a class="dv-oid" href="#4a">4a</a>" · "rendi la palette del desktop un mini-carosello (Ritocco, Test Golden)" · "handoff desktop" · "nuove direzioni"</p>
+</section>
+
+<section class="dv-turn" id="t3" style="border-bottom:1px solid rgba(0,0,0,.08)">
+<div class="dv-thd"><a class="dv-tid" href="#t3">3</a><span class="dv-tname"><a class="dv-oid" href="#2d">2d</a> rifinito · palette Cloud Dancer di <a class="dv-oid" href="#2b">2b</a> · masthead grande · "mandami il link" al posto del QR · scontrino con le feature reali · spilli &amp; filo</span></div>
+<div class="dv-opts">
+
+<!-- ================= 3a · SCONTRINO CUCITO ================= -->
+<div class="dv-opt" id="3a">
+<div class="dv-olabel"><a class="dv-oid" href="#3a">3a</a><b>Scontrino cucito</b>Cloud Dancer · apertura in grande, scontrino spillato con filo, sezione desktop reinventata</div>
+<div class="ph" style="background:#F1F0EC;border:1px solid #E2E0D8;box-shadow:0 46px 92px -46px rgba(90,88,78,.45);color:#26251F;font-family:'JetBrains Mono',monospace">
+  <div class="stat" style="color:#26251F"><span>9:41</span><span class="dots" style="color:#AEAB9F">● ● ▮</span></div>
+  <!-- topbar -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 24px 2px">
+    <div style="display:flex;align-items:center;gap:10px"><span style="width:26px;height:26px;border-radius:8px;background:linear-gradient(150deg,#8470D5,#6E56CF);display:flex;align-items:center;justify-content:center;font-family:Newsreader,serif;font-size:15px;color:#fff">P</span><span style="font-family:Newsreader,serif;font-size:16px">Prompt a Porter</span></div>
+    <span style="font-size:19px;color:#AEAB9F">☰</span>
+  </div>
+  <!-- ribbon — launch strillo -->
+  <div style="margin:12px 14px 0;border-radius:16px;position:relative;overflow:hidden;background:linear-gradient(135deg,#8470D5,#6E56CF 52%,#5A45BE);box-shadow:0 18px 38px -18px rgba(110,86,207,.65)">
+    <div style="position:absolute;inset:0;background:repeating-linear-gradient(115deg,rgba(255,255,255,.09) 0 2px,transparent 2px 22px);pointer-events:none"></div>
+    <div style="position:absolute;right:-26px;top:-26px;width:120px;height:120px;background:radial-gradient(circle,rgba(232,199,154,.45),transparent 66%);pointer-events:none"></div>
+    <div style="position:relative;padding:14px 16px 15px">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span style="font-size:8px;letter-spacing:.2em;text-transform:uppercase;font-weight:700;color:#3A2A12;background:#E8C79A;border-radius:100px;padding:4px 10px">✦ Nuova stagione</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.1em;color:#E4DEFA;margin-left:auto">AW 2026 · v1.0</span>
+      </div>
+      <div style="font-family:Newsreader,serif;font-weight:300;font-size:26px;line-height:1.02;color:#fff;margin:11px 0 0">Debutta <em style="font-style:italic;color:#F0DFC0">Arioso Atelier</em></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <span style="font-family:Inter,sans-serif;font-size:11px;color:#E4DEFA;flex:1;line-height:1.35">La prima stagione esce dalla beta <span style="color:#B9A7F0">·</span> codice <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#F0DFC0">Cloud Dancer 11-4201</span></span>
+        <a style="font-family:Inter,sans-serif;font-size:11px;font-weight:600;color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:100px;padding:6px 12px;white-space:nowrap">Scopri il debutto →</a>
+      </div>
+    </div>
+  </div>
+  <!-- BIG masthead hero -->
+  <div style="padding:24px 24px 20px;text-align:center">
+    <span style="display:inline-flex;align-items:center;gap:8px;background:#FBFBF9;border:1px solid #E2E0D8;border-radius:100px;padding:6px 14px 6px 8px;margin-bottom:18px"><span style="font-size:9px;background:#fff;border:1px solid #E2E0D8;border-bottom-width:2px;border-radius:4px;padding:2px 6px;color:#6E56CF">⌃⇧P</span><span style="font-family:Inter,sans-serif;font-size:10.5px;color:#6E6C60">in qualsiasi app</span></span>
+    <h1 style="font-family:Newsreader,serif;font-weight:300;font-size:54px;line-height:.9;letter-spacing:-.04em;margin:0">Prompt-<em style="font-style:italic;color:#6E56CF">à</em>-porter</h1>
+    <p style="font-family:Newsreader,serif;font-weight:300;font-size:19px;line-height:1.4;color:#54524A;margin:20px 6px 0">La tua collezione di prompt AI.<br><em style="font-style:italic;color:#26251F">Pronti da indossare.</em></p>
+    <p style="font-family:Inter,sans-serif;font-size:12.5px;line-height:1.6;color:#8C8A80;margin:14px 8px 0">Un tasto magico e il prompt giusto è tra le dita: lo compili e lo incolli dove stai scrivendo.</p>
+  </div>
+  <!-- palette over app (Cloud Dancer pale) -->
+  <div style="margin:2px 20px 0;position:relative;border-radius:22px;overflow:hidden;border:1px solid #E2E0D8;box-shadow:0 22px 50px -30px rgba(90,88,78,.5)">
+    <div style="background:linear-gradient(160deg,#E7E5DE,#D9D7CE);padding:22px 18px 66px">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:14px"><span style="width:8px;height:8px;border-radius:50%;background:#C9C6BB"></span><span style="width:8px;height:8px;border-radius:50%;background:#C9C6BB"></span><span style="width:8px;height:8px;border-radius:50%;background:#C9C6BB"></span><span style="font-size:9px;color:#A9A69A;margin-left:8px">documento</span></div>
+      <div style="height:8px;width:66%;background:#CBC8BD;border-radius:100px;margin-bottom:9px"></div>
+      <div style="height:8px;width:84%;background:#D4D1C7;border-radius:100px;margin-bottom:9px"></div>
+      <div style="height:8px;width:48%;background:#D4D1C7;border-radius:100px"></div>
+    </div>
+    <div style="position:absolute;left:16px;right:16px;bottom:14px;background:#FFFFFF;border:1px solid #ECEAE2;border-radius:14px;box-shadow:0 26px 46px -22px rgba(90,88,78,.55),0 0 0 1px rgba(132,112,213,.12);overflow:hidden;text-align:left">
+      <div style="display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid #F0EEE8"><svg viewBox="0 0 24 24" class="mag" style="width:15px;height:15px;stroke:#AEAB9F"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg><span style="font-family:Inter,sans-serif;font-size:12.5px;color:#AEAB9F">Cerca prompt…</span><span style="width:2px;height:14px;background:#6E56CF;margin-left:-4px;animation:blink 1.1s steps(1) infinite"></span></div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 15px;background:linear-gradient(90deg,rgba(132,112,213,.1),transparent);box-shadow:inset 2px 0 0 #6E56CF"><div style="flex:1"><div style="font-family:Inter,sans-serif;font-size:12.5px;font-weight:500;color:#26251F">Riassumi articolo in N punti</div><div style="font-family:Inter,sans-serif;font-size:10.5px;color:#8C8A80;margin-top:2px">Distilla in <em style="font-style:normal;color:#6E56CF">N</em> punti + TL;DR</div></div><span style="font-size:8.5px;color:#A36A2E;background:#F3E9D6;border:1px solid #E9DCC1;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 15px"><div style="flex:1"><div style="font-family:Inter,sans-serif;font-size:12.5px;font-weight:500;color:#26251F">Email professionale parametrica</div><div style="font-family:Inter,sans-serif;font-size:10.5px;color:#8C8A80;margin-top:2px">Tono e contenuto variabili</div></div><span style="font-size:8.5px;color:#A36A2E;background:#F3E9D6;border:1px solid #E9DCC1;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;gap:12px;padding:10px 15px;border-top:1px solid #F0EEE8;background:#FBFBF9"><span style="font-family:Inter,sans-serif;font-size:9.5px;color:#AEAB9F">↵ seleziona</span><span style="font-family:Inter,sans-serif;font-size:9.5px;color:#6E56CF;margin-left:auto">⌃↵ compila e incolla</span></div>
+    </div>
+  </div>
+  <div style="text-align:center;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:#AEAB9F;padding:16px 0 4px">Funzione in evidenza · La palette</div>
+
+  <!-- manifesto in un fiato -->
+  <div style="margin:16px 0 0;padding:30px 24px;background:#EDEBF6;border-top:1px solid #E2E0D8;border-bottom:1px solid #E2E0D8;text-align:center;position:relative;overflow:hidden">
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse 70% 120% at 50% 50%,rgba(132,112,213,.12),transparent 70%);pointer-events:none"></div>
+    <div style="position:relative">
+      <div style="font-size:9px;letter-spacing:.28em;text-transform:uppercase;color:#6E56CF;margin-bottom:14px">— manifesto —</div>
+      <div style="font-family:Newsreader,serif;font-weight:300;font-size:29px;line-height:1.06;letter-spacing:-.02em;color:#26251F">Se ci puoi scrivere,<br>ci puoi <em style="font-style:italic;color:#6E56CF">incollare il tuo prompt.</em></div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.04em;color:#8C8A80;margin-top:16px">in ogni editor, applicazione o sito web.</div>
+    </div>
+  </div>
+
+  <!-- sewing thread stitch divider -->
+  <div style="padding:10px 20px 4px">
+    <svg viewBox="0 0 340 34" style="width:100%;height:30px;overflow:visible">
+      <path d="M4 24 C 40 6, 80 6, 116 24 S 192 42, 228 24 S 300 6, 330 20" fill="none" stroke="#C89A55" stroke-width="1.6" stroke-dasharray="7 6" stroke-linecap="round"></path>
+      <g transform="translate(330 20) rotate(24)"><path d="M0 0 L 20 -2 L 20 2 Z" fill="#B9B6AC"></path><line x1="20" y1="0" x2="30" y2="0" stroke="#C7C4BA" stroke-width="2.4" stroke-linecap="round"></line><circle cx="4" cy="0" r="2.4" fill="none" stroke="#8C8A80" stroke-width="1"></circle></g>
+    </svg>
+  </div>
+
+  <!-- RECEIPT (pinned) -->
+  <div style="margin:6px 16px 0;position:relative">
+    <!-- pin top-left -->
+    <svg width="52" height="52" viewBox="0 0 52 52" style="position:absolute;left:-10px;top:-14px;z-index:3;filter:drop-shadow(0 4px 5px rgba(60,50,30,.35))"><line x1="12" y1="42" x2="34" y2="18" stroke="#C7C4BA" stroke-width="2.6" stroke-linecap="round"></line><line x1="12" y1="42" x2="34" y2="18" stroke="#EFEEE9" stroke-width="0.9" stroke-linecap="round"></line><circle cx="36" cy="16" r="7" fill="#6E56CF"></circle><circle cx="33.5" cy="13.5" r="2.2" fill="rgba(255,255,255,.75)"></circle></svg>
+    <!-- pin top-right -->
+    <svg width="52" height="52" viewBox="0 0 52 52" style="position:absolute;right:-10px;top:-14px;z-index:3;transform:scaleX(-1);filter:drop-shadow(0 4px 5px rgba(60,50,30,.35))"><line x1="12" y1="42" x2="34" y2="18" stroke="#C7C4BA" stroke-width="2.6" stroke-linecap="round"></line><circle cx="36" cy="16" r="7" fill="#D8A463"></circle><circle cx="33.5" cy="13.5" r="2.2" fill="rgba(255,255,255,.7)"></circle></svg>
+
+    <div style="background:#FBFBF9;border:1px solid #E2E0D8;border-radius:4px;box-shadow:0 20px 44px -26px rgba(90,88,78,.5);position:relative">
+      <!-- receipt header -->
+      <div style="text-align:center;padding:20px 18px 12px;border-bottom:1px dashed #D8D6CC">
+        <div style="font-family:Newsreader,serif;font-weight:400;font-size:22px;letter-spacing:-.01em">Atelier · scontrino</div>
+        <div style="font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#AEAB9F;margin-top:6px">Collezione AW26 · Nº 3A-001</div>
+      </div>
+      <!-- items -->
+      <div style="padding:6px 18px">
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:#AEAB9F;padding:10px 0 8px;border-bottom:1px solid #26251F"><span>Capo</span><span>Prezzo</span></div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px dashed #E7E5DC"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px;color:#26251F">Ogni modifica, in vetrina</b><span style="display:block;font-family:Inter,sans-serif;font-size:10px;color:#8C8A80">save = versione · diff git · ripristino</span></span><span style="font-size:10px;color:#6FA07A">incl.</span></div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px dashed #E7E5DC"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px;color:#26251F">Capi su misura</b><span style="display:block;font-family:Inter,sans-serif;font-size:10px;color:#8C8A80"><span style="background:#F3E9D6;color:#A36A2E;padding:1px 4px;border-radius:3px"><i style="font-style:inherit">{</i>{nome}}</span> ad-hoc · <span style="background:#F3E9D6;color:#A36A2E;padding:1px 4px;border-radius:3px"><i style="font-style:inherit">{</i>{globale autore}}</span></span></span><span style="font-size:10px;color:#6FA07A">incl.</span></div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px dashed #E7E5DC"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px;color:#26251F">Cerca al buio dell'armadio</b><span style="display:block;font-family:Inter,sans-serif;font-size:10px;color:#8C8A80">significato, non parola · ONNX MiniLM</span></span><span style="font-size:10px;color:#6FA07A">incl.</span></div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px dashed #E7E5DC"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px;color:#26251F">Prova prima di comprare</b><span style="display:block;font-family:Inter,sans-serif;font-size:10px;color:#8C8A80">varianti A/B · golden test · costo stimato</span></span><span style="font-size:10px;color:#6FA07A">incl.</span></div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px dashed #E7E5DC"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px;color:#26251F">Un tono, dieci tagli</b><span style="display:block;font-family:Inter,sans-serif;font-size:10px;color:#8C8A80"><span style="background:#F3E9D6;color:#A36A2E;padding:1px 4px;border-radius:3px"><i style="font-style:inherit">{</i>{import "ruolo"}}</span> · sartoria modulare</span></span><span style="font-size:10px;color:#6FA07A">incl.</span></div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:10px 0"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px;color:#26251F">Il taglio da terminale</b><span style="display:block;font-family:Inter,sans-serif;font-size:10px;color:#8C8A80"><span style="color:#6E56CF">pap</span> render in pipe · sola lettura</span></span><span style="font-size:10px;color:#6FA07A">incl.</span></div>
+      </div>
+      <!-- servizi sub-note -->
+      <div style="margin:0 18px;padding:11px 0;border-top:1px dashed #D8D6CC;border-bottom:1px dashed #D8D6CC;display:flex;flex-wrap:wrap;gap:6px">
+        <span style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#AEAB9F;width:100%">Servizi dell'atelier · inclusi</span>
+        <span style="font-family:Inter,sans-serif;font-size:10px;color:#54524A;background:#F1F0EC;border:1px solid #E2E0D8;border-radius:100px;padding:3px 9px">Ritocco ✦</span>
+        <span style="font-family:Inter,sans-serif;font-size:10px;color:#54524A;background:#F1F0EC;border:1px solid #E2E0D8;border-radius:100px;padding:3px 9px">Diagnosi</span>
+        <span style="font-family:Inter,sans-serif;font-size:10px;color:#54524A;background:#F1F0EC;border:1px solid #E2E0D8;border-radius:100px;padding:3px 9px">MCP</span>
+      </div>
+      <!-- totale -->
+      <div style="padding:14px 18px"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#26251F">Totale</span><span style="font-family:Newsreader,serif;font-style:italic;font-size:26px;color:#6E56CF">gratis</span></div><div style="font-family:Inter,sans-serif;font-size:9.5px;color:#AEAB9F;text-align:right;margin-top:2px">local-first · open source · AGPL 3.0</div></div>
+      <!-- perforated bottom -->
+      <div style="height:19px;background:radial-gradient(circle at 9px 19px,#D8D6CC 9px,transparent 9.5px),radial-gradient(circle at 9px 17px,#F1F0EC 9px,transparent 9.5px);background-size:18px 19px;background-repeat:repeat-x"></div>
+    </div>
+  </div>
+
+  <!-- clienti tipo: etichette di manutenzione -->
+  <div style="padding:24px 16px 2px">
+    <div style="font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:#AEAB9F;text-align:center;margin-bottom:16px">A chi sta bene</div>
+    <div style="display:flex;gap:9px;align-items:flex-start">
+      <div style="flex:1;position:relative;background:#FBFBF9;border:1px solid #E2E0D8;border-radius:4px 4px 7px 7px;padding:17px 11px 13px;transform:rotate(-1.5deg)">
+        <span style="position:absolute;top:6px;left:50%;transform:translateX(-50%);width:8px;height:8px;border-radius:50%;border:1.5px solid #C6C3B9;background:#F1F0EC"></span>
+        <div style="font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:#6E56CF;text-align:center;margin-top:4px">Sviluppatore</div>
+        <div style="font-family:Inter,sans-serif;font-size:10px;line-height:1.45;color:#54524A;margin-top:8px;text-align:center">Trenta chiamate al giorno. Template versionabili come il codice.</div>
+      </div>
+      <div style="flex:1;position:relative;background:#FBFBF9;border:1px solid #E2E0D8;border-radius:4px 4px 7px 7px;padding:17px 11px 13px;transform:rotate(1deg)">
+        <span style="position:absolute;top:6px;left:50%;transform:translateX(-50%);width:8px;height:8px;border-radius:50%;border:1.5px solid #C6C3B9;background:#F1F0EC"></span>
+        <div style="font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:#6E56CF;text-align:center;margin-top:4px">Copywriter</div>
+        <div style="font-family:Inter,sans-serif;font-size:10px;line-height:1.45;color:#54524A;margin-top:8px;text-align:center">Cinquanta <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#A36A2E">email_FINAL</span>. Un brief, mille varianti.</div>
+      </div>
+      <div style="flex:1;position:relative;background:#FBFBF9;border:1px solid #E2E0D8;border-radius:4px 4px 7px 7px;padding:17px 11px 13px;transform:rotate(-1deg)">
+        <span style="position:absolute;top:6px;left:50%;transform:translateX(-50%);width:8px;height:8px;border-radius:50%;border:1.5px solid #C6C3B9;background:#F1F0EC"></span>
+        <div style="font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:#6E56CF;text-align:center;margin-top:4px">Ricercatore</div>
+        <div style="font-family:Inter,sans-serif;font-size:10px;line-height:1.45;color:#54524A;margin-top:8px;text-align:center">Tre versioni a confronto. Coi golden test, non a occhio.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PaP vs .txt: un solo cartellino -->
+  
+
+  <!-- DESKTOP SECTION — reinvented, no QR -->
+  <div style="margin:22px 16px 0;background:linear-gradient(165deg,#F4F1FC,#EDE9F7 62%,#F3EEE6);color:#26251F;border-radius:20px;padding:22px 20px;position:relative;overflow:hidden;border:1px solid #E1DBF2">
+    <div style="position:absolute;right:-34px;top:-34px;width:160px;height:160px;background:radial-gradient(circle,rgba(132,112,213,.22),transparent 66%)"></div>
+    <div style="position:relative">
+      <div style="font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:#6E56CF">L'atelier è sul desktop</div>
+      <div style="font-family:Newsreader,serif;font-weight:300;font-size:27px;line-height:1.08;margin-top:10px">Questo capo si prova<br>al computer. <em style="font-style:italic;color:#6E56CF">Te lo mandiamo.</em></div>
+      <p style="font-family:Inter,sans-serif;font-size:11.5px;line-height:1.55;color:#6E6C60;margin:12px 0 0">Prompt a Porter vive su Windows, macOS e Linux. Lasciaci l'indirizzo: il link ti aspetta quando ti siedi al computer. Niente da inquadrare, niente app da cercare.</p>
+      <!-- input + button -->
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <div style="flex:1;background:#FFFFFF;border:1px solid #E1DBF2;border-radius:12px;padding:13px 14px;font-family:Inter,sans-serif;font-size:12.5px;color:#AEAB9F">la-tua@email.it</div>
+        <a style="display:flex;align-items:center;font-family:Inter,sans-serif;font-size:13px;font-weight:600;padding:0 18px;border-radius:12px;background:linear-gradient(160deg,#8470D5,#6E56CF);color:#fff;white-space:nowrap;box-shadow:0 12px 26px -12px rgba(132,112,213,.7)">Mandami il link →</a>
+      </div>
+      <p style="font-family:Inter,sans-serif;font-size:10px;color:#8C8A80;margin:12px 0 0;display:flex;align-items:center;gap:7px"><span style="width:6px;height:6px;border-radius:50%;background:#6FA07A"></span>un solo link. Niente newsletter, niente account, niente scuse.</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid #E1DBF2">
+        <a style="display:flex;align-items:center;gap:8px;font-family:Inter,sans-serif;font-size:11.5px;color:#54524A"><svg viewBox="0 0 24 24" style="width:14px;height:14px;flex:none"><g fill="#54524A"><rect x="2" y="2" width="8.6" height="8.6"></rect><rect x="13.4" y="2" width="8.6" height="8.6"></rect><rect x="2" y="13.4" width="8.6" height="8.6"></rect><rect x="13.4" y="13.4" width="8.6" height="8.6"></rect></g></svg>Windows</a>
+        <a style="display:flex;align-items:center;gap:8px;font-family:Inter,sans-serif;font-size:11.5px;color:#54524A"><svg viewBox="0 0 24 24" style="width:13px;height:14px;flex:none"><path fill="#54524A" d="M17.6 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.15-2.8.85-3.5.85-.7 0-1.85-.83-3.05-.8-1.55.02-3 .9-3.8 2.3-1.65 2.85-.42 7.05 1.17 9.36.78 1.13 1.7 2.4 2.9 2.35 1.17-.05 1.6-.75 3.02-.75 1.4 0 1.8.75 3.05.72 1.26-.02 2.06-1.15 2.83-2.28.9-1.3 1.27-2.57 1.29-2.63-.03-.01-2.47-.95-2.5-3.75zM15.3 6.1c.64-.78 1.07-1.86.95-2.94-.92.04-2.04.61-2.7 1.39-.59.69-1.11 1.8-.97 2.85 1.03.08 2.08-.52 2.72-1.3z"></path></svg>macOS</a>
+        <a style="display:flex;align-items:center;gap:8px;font-family:Inter,sans-serif;font-size:11.5px;color:#54524A"><svg viewBox="0 0 24 24" style="width:12px;height:15px;flex:none"><ellipse cx="12" cy="13" rx="7" ry="8.6" fill="#54524A"></ellipse><ellipse cx="12" cy="14.2" rx="4.2" ry="6.2" fill="#F5F4F0"></ellipse><circle cx="9.5" cy="7.2" r="1.1" fill="#F5F4F0"></circle><circle cx="14.5" cy="7.2" r="1.1" fill="#F5F4F0"></circle><circle cx="9.7" cy="7.4" r=".5" fill="#54524A"></circle><circle cx="14.3" cy="7.4" r=".5" fill="#54524A"></circle><path d="M10.6 8.7 L13.4 8.7 L12 10.5 Z" fill="#D8A463"></path><path d="M9 20.4 C7.6 21.6 6.2 21.4 6 20.4 6.4 19.2 7.8 19 9 19.2 Z" fill="#D8A463"></path><path d="M15 20.4 C16.4 21.6 17.8 21.4 18 20.4 17.6 19.2 16.2 19 15 19.2 Z" fill="#D8A463"></path></svg>Linux</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- footer: thread spool + barcode + care label -->
+  <div style="padding:22px 20px 26px;text-align:center">
+    <!-- thread spool -->
+    <svg width="46" height="46" viewBox="0 0 46 46" style="margin:0 auto 12px;display:block">
+      <rect x="10" y="6" width="26" height="34" rx="3" fill="#EDEAE1" stroke="#D8D6CC" stroke-width="1"></rect>
+      <rect x="6" y="6" width="34" height="5" rx="2" fill="#C7C4BA"></rect><rect x="6" y="35" width="34" height="5" rx="2" fill="#C7C4BA"></rect>
+      <g stroke="#8470D5" stroke-width="2"><line x1="12" y1="13" x2="34" y2="15"></line><line x1="12" y1="17" x2="34" y2="19"></line><line x1="12" y1="21" x2="34" y2="23"></line><line x1="12" y1="25" x2="34" y2="27"></line><line x1="12" y1="29" x2="34" y2="31"></line></g>
+      <path d="M34 15 C 42 18, 40 26, 44 30" fill="none" stroke="#8470D5" stroke-width="1.4" stroke-linecap="round"></path>
+    </svg>
+    <div style="height:32px;background:repeating-linear-gradient(90deg,#26251F 0 2px,transparent 2px 4px,#26251F 4px 5px,transparent 5px 9px,#26251F 9px 12px,transparent 12px 14px);opacity:.8"></div>
+    <div style="font-size:9px;letter-spacing:.2em;color:#8C8A80;margin-top:10px;line-height:1.8">100% LOCALE · NO CLOUD · NESSUN ACCOUNT · AGPL 3.0<br><span style="color:#AEAB9F">Disegnato da Roberto · cucito da ✦ Claude</span></div>
+  </div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Prova a scrivere: "sviluppa <a class="dv-oid" href="#3a">3a</a> in landing completa desktop+mobile" · "aggiungi la scena Ritocco alla palette di <a class="dv-oid" href="#3a">3a</a>" · "più spilli e un ditale nell'header" · "versione a tema scuro dello scontrino"</p>
+</section>
+
+<section class="dv-turn" id="t2" style="border-bottom:1px solid rgba(0,0,0,.08)">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Evoluzioni di <a class="dv-oid" href="#1d">1d</a> · glass + barcode di <a class="dv-oid" href="#1c">1c</a> · CTA mobile-sensata (niente "Scarica per Windows")</span></div>
+<div class="dv-opts">
+
+<!-- ================= 2a · VETRINA · QR ================= -->
+<div class="dv-opt" id="2a">
+<div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a><b>Vetrina · QR</b>l'evoluzione pulita di 1d: palette sopra un'app, barcode a piè, CTA "riprendi sul desktop"</div>
+<div class="ph" style="background:#EEEDF9;border:1px solid #DAD6F0;box-shadow:0 46px 90px -44px rgba(70,60,140,.45);color:#211E2E">
+  <div class="stat" style="color:#211E2E"><span>9:41</span><span class="dots" style="color:#9891C4">● ● ▮</span></div>
+  <div style="margin:8px 16px 0;display:flex;align-items:center;gap:9px;background:rgba(132,112,213,.14);border:1px solid rgba(132,112,213,.3);border-radius:100px;padding:6px 8px"><span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:#fff;background:linear-gradient(160deg,#8470D5,#6E56CF);border-radius:100px;padding:4px 9px">v1.0</span><span style="font-size:10.5px;color:#4A4470;flex:1"><em style="font-family:Newsreader,serif;font-style:italic;color:#6E56CF">Arioso Atelier</em> è in vetrina</span><span style="color:#6E56CF;font-size:14px">→</span></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 22px 2px">
+    <div style="display:flex;align-items:center;gap:9px"><span style="width:25px;height:25px;border-radius:8px;background:linear-gradient(150deg,#8470D5,#6E56CF);display:flex;align-items:center;justify-content:center;font-family:Newsreader,serif;font-size:14px;color:#fff;box-shadow:0 0 18px rgba(132,112,213,.5)">P</span><span style="font-family:Newsreader,serif;font-size:15px">Prompt a Porter</span></div>
+    <span style="font-size:19px;color:#9891C4">☰</span>
+  </div>
+  <div style="padding:14px 22px 6px;text-align:center">
+    <span style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.7);border:1px solid #DAD6F0;border-radius:100px;padding:5px 12px 5px 7px;margin-bottom:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;background:#fff;border:1px solid #DAD6F0;border-bottom-width:2px;border-radius:4px;padding:2px 6px;color:#6E56CF">⌃⇧P</span><span style="font-size:10px;color:#6A648C">in qualsiasi app</span></span>
+    <h1 style="font-family:Newsreader,serif;font-weight:300;font-size:46px;line-height:.94;letter-spacing:-.035em;margin:0">Prompt-<em style="font-style:italic;color:#6E56CF">à</em>-porter</h1>
+    <p style="font-size:12.5px;line-height:1.55;color:#6A648C;margin:14px 10px 0">Un tasto magico e il prompt giusto è già tra le dita — lo compili e lo incolli dove stai scrivendo.</p>
+  </div>
+  <div style="margin:16px 16px 0;position:relative;border-radius:20px;overflow:hidden;border:1px solid #DAD6F0;box-shadow:0 26px 54px -28px rgba(70,60,140,.5)">
+    <div style="background:linear-gradient(160deg,#5648A0,#3A2F73);padding:22px 18px 70px">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:14px"><span style="width:9px;height:9px;border-radius:50%;background:#FF6159"></span><span style="width:9px;height:9px;border-radius:50%;background:#FFBE2F"></span><span style="width:9px;height:9px;border-radius:50%;background:#2ACB42"></span><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:rgba(255,255,255,.5);margin-left:8px">chat AI</span></div>
+      <div style="height:9px;width:70%;background:rgba(255,255,255,.18);border-radius:100px;margin-bottom:9px"></div>
+      <div style="height:9px;width:88%;background:rgba(255,255,255,.12);border-radius:100px;margin-bottom:9px"></div>
+      <div style="height:9px;width:54%;background:rgba(255,255,255,.12);border-radius:100px"></div>
+    </div>
+    <div style="position:absolute;left:16px;right:16px;bottom:14px;background:rgba(255,255,255,.94);border:1px solid rgba(255,255,255,.7);border-radius:14px;box-shadow:0 24px 50px -18px rgba(30,20,70,.6),0 0 0 1px rgba(132,112,213,.2),0 0 60px -18px rgba(132,112,213,.5);overflow:hidden;text-align:left">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #EDEBF7"><svg viewBox="0 0 24 24" class="mag" style="width:15px;height:15px;stroke:#9891C4"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg><span style="font-size:12.5px;color:#9891C4">Cerca prompt…</span><span style="width:2px;height:14px;background:#6E56CF;margin-left:-4px;animation:blink 1.1s steps(1) infinite"></span></div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 14px;background:linear-gradient(90deg,rgba(132,112,213,.16),transparent);box-shadow:inset 2px 0 0 #6E56CF"><div style="flex:1"><div style="font-size:12.5px;font-weight:500;color:#211E2E">Code review strutturata</div><div style="font-size:10.5px;color:#7A7398;margin-top:2px">Importa il ruolo <em style="font-style:normal;color:#6E56CF">engineer</em></div></div><span style="font-family:'JetBrains Mono',monospace;font-size:8.5px;color:#A36A2E;background:#F6EBD8;border:1px solid #ECDCC0;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 14px"><div style="flex:1"><div style="font-size:12.5px;font-weight:500;color:#211E2E">Commit message da diff</div><div style="font-size:10.5px;color:#7A7398;margin-top:2px">Conventional Commits</div></div><span style="font-family:'JetBrains Mono',monospace;font-size:8.5px;color:#A36A2E;background:#F6EBD8;border:1px solid #ECDCC0;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;gap:12px;padding:10px 14px;border-top:1px solid #EDEBF7;background:rgba(132,112,213,.05)"><span style="font-size:9.5px;color:#9891C4">↵ seleziona</span><span style="font-size:9.5px;color:#6E56CF;margin-left:auto">⌃↵ compila e incolla</span></div>
+    </div>
+  </div>
+  <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#9891C4;padding:14px 0 4px">Funzione in evidenza · La palette</div>
+  <!-- smart desktop CTA -->
+  <div style="margin:10px 16px 0;background:#fff;border:1px solid #DAD6F0;border-radius:18px;padding:16px;display:flex;gap:15px;align-items:center;box-shadow:0 20px 44px -26px rgba(70,60,140,.4)">
+    <svg viewBox="0 0 100 100" style="width:74px;height:74px;flex:none">
+      <rect x="0" y="0" width="100" height="100" fill="#fff"></rect>
+      <g fill="#211E2E">
+        <path d="M6 6h26v26H6z M12 12v14h14V12z"></path><path d="M68 6h26v26H68z M74 12v14h14V12z"></path><path d="M6 68h26v26H6z M12 74v14h14V74z"></path>
+        <rect x="40" y="8" width="6" height="6"></rect><rect x="52" y="8" width="6" height="6"></rect><rect x="40" y="20" width="6" height="6"></rect><rect x="58" y="20" width="6" height="6"></rect><rect x="8" y="40" width="6" height="6"></rect><rect x="20" y="40" width="6" height="6"></rect><rect x="40" y="40" width="6" height="6" fill="#6E56CF"></rect><rect x="52" y="40" width="6" height="6"></rect><rect x="64" y="40" width="6" height="6"></rect><rect x="76" y="40" width="6" height="6"></rect><rect x="88" y="40" width="6" height="6"></rect><rect x="40" y="52" width="6" height="6"></rect><rect x="58" y="52" width="6" height="6" fill="#6E56CF"></rect><rect x="70" y="52" width="6" height="6"></rect><rect x="88" y="52" width="6" height="6"></rect><rect x="8" y="58" width="6" height="6"></rect><rect x="40" y="64" width="6" height="6"></rect><rect x="52" y="64" width="6" height="6"></rect><rect x="68" y="64" width="6" height="6"></rect><rect x="80" y="64" width="6" height="6"></rect><rect x="40" y="76" width="6" height="6"></rect><rect x="58" y="76" width="6" height="6"></rect><rect x="70" y="76" width="6" height="6"></rect><rect x="88" y="76" width="6" height="6"></rect><rect x="52" y="88" width="6" height="6"></rect><rect x="76" y="88" width="6" height="6"></rect>
+      </g>
+    </svg>
+    <div><div style="font-family:Newsreader,serif;font-size:18px;line-height:1.15">L'atelier vive sul desktop</div><div style="font-size:11px;color:#7A7398;margin-top:4px;line-height:1.4">Inquadra da un altro schermo per aprirlo, o continua qui sotto.</div></div>
+  </div>
+  <div style="margin:11px 16px 0;display:flex;gap:8px">
+    <div style="flex:1;background:#F4F3FB;border:1px solid #DAD6F0;border-radius:11px;padding:12px 13px;font-size:12px;color:#9891C4">la-tua@email.it</div>
+    <a style="display:flex;align-items:center;font-size:13px;font-weight:500;padding:0 16px;border-radius:11px;background:linear-gradient(160deg,#8470D5,#6E56CF);color:#fff">Mandami il link</a>
+  </div>
+  <p style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#9891C4;text-align:center;margin:11px 0 0">app desktop · gratis · Win / macOS / Linux</p>
+  <!-- barcode footer (from 1c) -->
+  <div style="margin-top:20px;background:#211E2E;padding:16px 20px 22px;text-align:center">
+    <div style="height:34px;background:repeating-linear-gradient(90deg,#EEEDF9 0 2px,transparent 2px 4px,#EEEDF9 4px 5px,transparent 5px 9px,#EEEDF9 9px 12px,transparent 12px 14px);border-radius:2px;opacity:.92"></div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.24em;color:#B7B0D8;margin-top:10px">PAP · AW26 · 100% LOCALE · AGPL 3.0</div>
+  </div>
+</div>
+</div>
+
+<!-- ================= 2b · CLOUD DANCER (Pantone 2026) ================= -->
+<div class="dv-opt" id="2b">
+<div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a><b>Cloud Dancer</b>colore Pantone 2026 (11-4201): near-white sereno, arioso, viola/ambra con misura</div>
+<div class="ph" style="background:#F1F0EC;border:1px solid #E2E0D8;box-shadow:0 46px 90px -46px rgba(90,88,78,.4);color:#26251F">
+  <div class="stat" style="color:#26251F"><span>9:41</span><span class="dots" style="color:#AEAB9F">● ● ▮</span></div>
+  <div style="margin:10px 18px 0;display:flex;align-items:center;gap:10px;background:#FBFBF9;border:1px solid #E2E0D8;border-radius:100px;padding:7px 9px"><span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.18em;text-transform:uppercase;font-weight:600;color:#6E56CF;background:rgba(132,112,213,.1);border-radius:100px;padding:4px 10px">v1.0</span><span style="font-size:10.5px;color:#6E6C60;flex:1"><em style="font-family:Newsreader,serif;font-style:italic;color:#6E56CF">Arioso Atelier</em> · Pantone 11-4201</span><span style="font-size:8.5px;font-family:'JetBrains Mono',monospace;color:#AEAB9F">Cloud Dancer</span></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 24px 2px">
+    <div style="display:flex;align-items:center;gap:10px"><span style="width:26px;height:26px;border-radius:8px;background:linear-gradient(150deg,#8470D5,#6E56CF);display:flex;align-items:center;justify-content:center;font-family:Newsreader,serif;font-size:15px;color:#fff">P</span><span style="font-family:Newsreader,serif;font-size:16px">Prompt a Porter</span></div>
+    <span style="font-size:19px;color:#AEAB9F">☰</span>
+  </div>
+  <div style="padding:26px 26px 22px;text-align:center">
+    <span style="display:inline-flex;align-items:center;gap:8px;background:#FBFBF9;border:1px solid #E2E0D8;border-radius:100px;padding:6px 14px 6px 8px;margin-bottom:20px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;background:#fff;border:1px solid #E2E0D8;border-bottom-width:2px;border-radius:4px;padding:2px 6px;color:#6E56CF">⌃⇧P</span><span style="font-size:10.5px;color:#6E6C60">in qualsiasi app</span></span>
+    <h1 style="font-family:Newsreader,serif;font-weight:300;font-size:50px;line-height:.92;letter-spacing:-.04em;margin:0">Prompt-<em style="font-style:italic;color:#6E56CF">à</em>-porter</h1>
+    <p style="font-family:Newsreader,serif;font-weight:300;font-size:19px;line-height:1.42;color:#54524A;margin:20px 4px 0">La tua collezione di prompt AI.<br><em style="font-style:italic;color:#26251F">Pronti da indossare.</em></p>
+    <p style="font-size:12.5px;line-height:1.6;color:#8C8A80;margin:14px 6px 0">Un tasto magico e il prompt giusto è tra le dita: lo compili e lo incolli dove stai scrivendo.</p>
+  </div>
+  <!-- palette over app, airy pale treatment -->
+  <div style="margin:2px 20px 0;position:relative;border-radius:22px;overflow:hidden;border:1px solid #E2E0D8;box-shadow:0 22px 50px -30px rgba(90,88,78,.5)">
+    <div style="background:linear-gradient(160deg,#E7E5DE,#D9D7CE);padding:22px 18px 68px">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:14px"><span style="width:8px;height:8px;border-radius:50%;background:#C9C6BB"></span><span style="width:8px;height:8px;border-radius:50%;background:#C9C6BB"></span><span style="width:8px;height:8px;border-radius:50%;background:#C9C6BB"></span><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#A9A69A;margin-left:8px">documento</span></div>
+      <div style="height:8px;width:66%;background:#CBC8BD;border-radius:100px;margin-bottom:9px"></div>
+      <div style="height:8px;width:84%;background:#D4D1C7;border-radius:100px;margin-bottom:9px"></div>
+      <div style="height:8px;width:48%;background:#D4D1C7;border-radius:100px"></div>
+    </div>
+    <div style="position:absolute;left:16px;right:16px;bottom:14px;background:#FFFFFF;border:1px solid #ECEAE2;border-radius:14px;box-shadow:0 26px 46px -22px rgba(90,88,78,.55),0 0 0 1px rgba(132,112,213,.12);overflow:hidden;text-align:left">
+      <div style="display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid #F0EEE8"><svg viewBox="0 0 24 24" class="mag" style="width:15px;height:15px;stroke:#AEAB9F"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg><span style="font-size:12.5px;color:#AEAB9F">Cerca prompt…</span><span style="width:2px;height:14px;background:#6E56CF;margin-left:-4px;animation:blink 1.1s steps(1) infinite"></span></div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 15px;background:linear-gradient(90deg,rgba(132,112,213,.1),transparent);box-shadow:inset 2px 0 0 #6E56CF"><div style="flex:1"><div style="font-size:12.5px;font-weight:500;color:#26251F">Riassumi articolo in N punti</div><div style="font-size:10.5px;color:#8C8A80;margin-top:2px">Distilla in <em style="font-style:normal;color:#6E56CF">N</em> punti + TL;DR</div></div><span style="font-family:'JetBrains Mono',monospace;font-size:8.5px;color:#A36A2E;background:#F3E9D6;border:1px solid #E9DCC1;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 15px"><div style="flex:1"><div style="font-size:12.5px;font-weight:500;color:#26251F">Email professionale parametrica</div><div style="font-size:10.5px;color:#8C8A80;margin-top:2px">Tono e contenuto variabili</div></div><span style="font-family:'JetBrains Mono',monospace;font-size:8.5px;color:#A36A2E;background:#F3E9D6;border:1px solid #E9DCC1;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;gap:12px;padding:10px 15px;border-top:1px solid #F0EEE8;background:#FBFBF9"><span style="font-size:9.5px;color:#AEAB9F">↵ seleziona</span><span style="font-size:9.5px;color:#6E56CF;margin-left:auto">⌃↵ compila e incolla</span></div>
+    </div>
+  </div>
+  <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:#AEAB9F;padding:16px 0 6px">Funzione in evidenza · La palette</div>
+  <!-- serene feature list -->
+  <div style="padding:6px 22px 8px">
+    <div style="display:flex;align-items:baseline;gap:11px;padding:13px 0;border-top:1px solid #E2E0D8"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#6E56CF">01</span><div><div style="font-family:Newsreader,serif;font-size:17px">Ogni modifica, in vetrina</div><div style="font-size:11px;color:#8C8A80;margin-top:2px">Diff stile git · cestino incluso</div></div></div>
+    <div style="display:flex;align-items:baseline;gap:11px;padding:13px 0;border-top:1px solid #E2E0D8"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#6E56CF">02</span><div><div style="font-family:Newsreader,serif;font-size:17px">Capi su misura</div><div style="font-size:11px;color:#8C8A80;margin-top:2px"><code style="font-family:'JetBrains Mono',monospace;font-size:10px;background:#F3E9D6;color:#A36A2E;padding:1px 4px;border-radius:3px"><i style="font-style:inherit">{</i>{nome}}</code> compilati al volo</div></div></div>
+    <div style="display:flex;align-items:baseline;gap:11px;padding:13px 0;border-top:1px solid #E2E0D8"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#6E56CF">03</span><div><div style="font-family:Newsreader,serif;font-size:17px">Cerca al buio dell'armadio</div><div style="font-size:11px;color:#8C8A80;margin-top:2px">Ricerca per significato, on-device</div></div></div>
+  </div>
+  <!-- smart CTA airy -->
+  <div style="margin:12px 22px 0;text-align:center">
+    <div style="font-family:Newsreader,serif;font-weight:300;font-size:22px;line-height:1.25">Quando sei al computer,<br><em style="font-style:italic;color:#6E56CF">il guardaroba ti aspetta.</em></div>
+    <div style="display:flex;gap:8px;margin-top:16px"><div style="flex:1;background:#FBFBF9;border:1px solid #E2E0D8;border-radius:11px;padding:12px 13px;font-size:12px;color:#AEAB9F;text-align:left">la-tua@email.it</div><a style="display:flex;align-items:center;font-size:13px;font-weight:500;padding:0 16px;border-radius:11px;background:linear-gradient(160deg,#8470D5,#6E56CF);color:#fff">Mandami il link</a></div>
+    <p style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#AEAB9F;margin:12px 0 0">app desktop · gratis · Win / macOS / Linux</p>
+  </div>
+  <div style="margin-top:22px;padding:16px 22px 22px;border-top:1px solid #E2E0D8;background:#ECEAE3;text-align:center">
+    <div style="height:30px;background:repeating-linear-gradient(90deg,#26251F 0 2px,transparent 2px 4px,#26251F 4px 5px,transparent 5px 8px,#26251F 8px 11px,transparent 11px 13px);opacity:.75"></div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.2em;color:#8C8A80;margin-top:10px">100% LOCALE · NO CLOUD · NESSUN ACCOUNT · AGPL 3.0</div>
+  </div>
+</div>
+</div>
+
+<!-- ================= 2c · CARTA D'IMBARCO ================= -->
+<div class="dv-opt" id="2c">
+<div class="dv-olabel"><a class="dv-oid" href="#2c">2c</a><b>Carta d'imbarco</b>metafora boarding-pass: la palette è il gate, barcode grande, QR "imbarco dal desktop"</div>
+<div class="ph" style="background:#E9E7F6;border:1px solid #D3CEEC;box-shadow:0 46px 90px -44px rgba(60,50,130,.45);color:#211E2E;font-family:'JetBrains Mono',monospace">
+  <div class="stat" style="color:#211E2E"><span>9:41</span><span class="dots" style="color:#948DBE">● ● ▮</span></div>
+  <!-- boarding header -->
+  <div style="background:linear-gradient(150deg,#6E56CF,#463A87);color:#fff;padding:16px 20px 18px;position:relative">
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#D8CFF6"><span>Carta d'imbarco</span><span>AW26 · v1.0</span></div>
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:14px">
+      <div><div style="font-family:Inter,sans-serif;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#B9AEEC">Passeggero</div><div style="font-family:Newsreader,serif;font-weight:300;font-size:24px;line-height:1;margin-top:3px">I tuoi prompt</div></div>
+      <span style="font-size:22px;color:#E8C79A">✈</span>
+      <div style="text-align:right"><div style="font-family:Inter,sans-serif;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#B9AEEC">Destinazione</div><div style="font-family:Newsreader,serif;font-weight:300;font-size:24px;line-height:1;margin-top:3px">ovunque scrivi</div></div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:-7px;height:14px;background:radial-gradient(circle at 7px 7px,#E9E7F6 7px,transparent 7px);background-size:14px 14px;background-repeat:repeat-x"></div>
+  </div>
+  <!-- gate = palette -->
+  <div style="padding:22px 18px 4px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px"><span style="font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#6E56CF">Gate · la palette</span><span style="font-size:9px;background:#DBD5F2;border:1px solid #CBC3EC;border-radius:4px;padding:2px 6px;color:#463A87">⌃⇧P</span></div>
+    <div style="background:#FFFFFF;border:1px solid #E2DDF4;border-radius:13px;overflow:hidden;box-shadow:0 20px 44px -24px rgba(60,50,130,.4);text-align:left">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #EEEBF9"><svg viewBox="0 0 24 24" class="mag" style="width:15px;height:15px;stroke:#948DBE"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg><span style="font-family:Inter,sans-serif;font-size:12.5px;color:#948DBE">Cerca prompt…</span><span style="width:2px;height:14px;background:#6E56CF;margin-left:-4px;animation:blink 1.1s steps(1) infinite"></span></div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 14px;background:linear-gradient(90deg,rgba(132,112,213,.14),transparent);box-shadow:inset 2px 0 0 #6E56CF"><div style="flex:1"><div style="font-family:Inter,sans-serif;font-size:12.5px;font-weight:600">Traduzione con glossario</div><div style="font-family:Inter,sans-serif;font-size:10.5px;color:#7A7398;margin-top:2px">Rispetta i termini scelti</div></div><span style="font-size:8px;color:#A36A2E;background:#F6EBD8;border:1px solid #ECDCC0;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 14px"><div style="flex:1"><div style="font-family:Inter,sans-serif;font-size:12.5px;font-weight:600">Brainstorm con criteri</div><div style="font-family:Inter,sans-serif;font-size:10.5px;color:#7A7398;margin-top:2px">Idee valutate da te</div></div><span style="font-size:8px;color:#A36A2E;background:#F6EBD8;border:1px solid #ECDCC0;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;gap:12px;padding:9px 14px;border-top:1px solid #EEEBF9;font-size:9px;color:#948DBE"><span>↵ seleziona</span><span style="margin-left:auto;color:#6E56CF">⌃↵ compila e incolla</span></div>
+    </div>
+  </div>
+  <!-- itinerary = features -->
+  <div style="padding:18px 18px 4px">
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#948DBE;border-bottom:1px solid #211E2E;padding-bottom:7px;margin-bottom:2px"><span>Scali</span><span>incluso</span></div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;padding:10px 0;border-bottom:1px dashed #D3CEEC"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px">Versioni · diff git</b><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#7A7398">ripristino, cestino</span></span><span style="color:#6FBF73">✓</span></div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;padding:10px 0;border-bottom:1px dashed #D3CEEC"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px">Segnaposti su misura</b><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#7A7398"><span style="background:rgba(216,164,99,.18);color:#A36A2E;padding:1px 4px;border-radius:3px"><i style="font-style:inherit">{</i>{nome}}</span> · globali</span></span><span style="color:#6FBF73">✓</span></div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;padding:10px 0;border-bottom:1px dashed #D3CEEC"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px">Ricerca semantica</b><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#7A7398">ONNX on-device</span></span><span style="color:#6FBF73">✓</span></div>
+  </div>
+  <!-- imbarco: QR + barcode -->
+  <div style="margin:16px 0 0;background:#211E2E;color:#E9E7F6;padding:18px 20px 22px;position:relative">
+    <div style="position:absolute;left:0;right:0;top:-7px;height:14px;background:radial-gradient(circle at 7px 0px,#E9E7F6 7px,transparent 7px);background-size:14px 14px;background-repeat:repeat-x"></div>
+    <div style="display:flex;gap:15px;align-items:center">
+      <svg viewBox="0 0 100 100" style="width:66px;height:66px;flex:none;background:#fff;border-radius:8px;padding:6px;box-sizing:border-box">
+        <g fill="#211E2E"><path d="M6 6h26v26H6z M12 12v14h14V12z"></path><path d="M68 6h26v26H68z M74 12v14h14V12z"></path><path d="M6 68h26v26H6z M12 74v14h14V74z"></path><rect x="40" y="8" width="6" height="6"></rect><rect x="52" y="8" width="6" height="6"></rect><rect x="40" y="20" width="6" height="6"></rect><rect x="58" y="20" width="6" height="6"></rect><rect x="8" y="40" width="6" height="6"></rect><rect x="40" y="40" width="6" height="6" fill="#6E56CF"></rect><rect x="52" y="40" width="6" height="6"></rect><rect x="64" y="40" width="6" height="6"></rect><rect x="88" y="40" width="6" height="6"></rect><rect x="40" y="52" width="6" height="6"></rect><rect x="58" y="52" width="6" height="6" fill="#6E56CF"></rect><rect x="70" y="52" width="6" height="6"></rect><rect x="40" y="64" width="6" height="6"></rect><rect x="52" y="64" width="6" height="6"></rect><rect x="68" y="64" width="6" height="6"></rect><rect x="80" y="64" width="6" height="6"></rect><rect x="40" y="76" width="6" height="6"></rect><rect x="70" y="76" width="6" height="6"></rect><rect x="88" y="76" width="6" height="6"></rect><rect x="52" y="88" width="6" height="6"></rect><rect x="76" y="88" width="6" height="6"></rect></g>
+      </svg>
+      <div><div style="font-family:Newsreader,serif;font-size:17px;color:#fff">Imbarco dal desktop</div><div style="font-family:Inter,sans-serif;font-size:11px;color:#B7B0D8;margin-top:4px;line-height:1.4">Inquadra da un altro schermo. L'app desktop è gratis, per Win / macOS / Linux.</div></div>
+    </div>
+    <div style="height:30px;background:repeating-linear-gradient(90deg,#E9E7F6 0 2px,transparent 2px 4px,#E9E7F6 4px 5px,transparent 5px 9px,#E9E7F6 9px 12px,transparent 12px 14px);margin-top:16px;border-radius:2px;opacity:.9"></div>
+    <div style="font-size:9px;letter-spacing:.24em;color:#948DBE;text-align:center;margin-top:9px">PAP · AW26 · 100% LOCALE · AGPL 3.0</div>
+  </div>
+</div>
+</div>
+
+<!-- ================= 2d · SCONTRINO-VETRINA ================= -->
+<div class="dv-opt" id="2d">
+<div class="dv-olabel"><a class="dv-oid" href="#2d">2d</a><b>Scontrino-vetrina</b>fonde lo scontrino di 1c con la palette-su-app di 1d · perforazioni + barcode + QR</div>
+<div class="ph" style="background:#EFEDF7;border:1px solid #DAD6EE;box-shadow:0 46px 90px -44px rgba(60,50,120,.4);color:#242038;font-family:'JetBrains Mono',monospace">
+  <div class="stat" style="color:#242038"><span>9:41</span><span class="dots" style="color:#948DBE">● ● ▮</span></div>
+  <div style="background:#242038;color:#EFEDF7;padding:14px 20px 16px;position:relative">
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#B9A7F0"><span>Atelier · ordine</span><span>Nº AW26-1D</span></div>
+    <div style="font-family:Newsreader,serif;font-weight:300;font-size:32px;line-height:1;letter-spacing:-.03em;margin-top:12px;color:#fff">Prompt-<em style="font-style:italic;color:#B9A7F0">à</em>-porter</div>
+    <div style="font-family:Inter,sans-serif;font-size:11.5px;color:rgba(255,255,255,.75);margin-top:8px;line-height:1.45">Un tasto magico e il prompt giusto è già tra le dita — lo compili e lo incolli dove scrivi.</div>
+    <div style="position:absolute;left:0;right:0;bottom:-7px;height:14px;background:radial-gradient(circle at 7px 7px,#EFEDF7 7px,transparent 7px);background-size:14px 14px;background-repeat:repeat-x"></div>
+  </div>
+  <!-- palette over app inside receipt -->
+  <div style="padding:22px 16px 6px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#6E56CF">✦ In prova · la palette</span><span style="flex:1;border-top:1px dashed #CFC7EA"></span><span style="font-size:9px;background:#DFD9F2;border:1px solid #CFC7EA;border-radius:4px;padding:2px 6px;color:#463A87">⌃⇧P</span></div>
+    <div style="position:relative;border-radius:15px;overflow:hidden;border:1px dashed #CFC7EA">
+      <div style="background:linear-gradient(160deg,#5648A0,#3A2F73);padding:18px 16px 62px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px"><span style="width:8px;height:8px;border-radius:50%;background:#FF6159"></span><span style="width:8px;height:8px;border-radius:50%;background:#FFBE2F"></span><span style="width:8px;height:8px;border-radius:50%;background:#2ACB42"></span><span style="font-family:Inter,sans-serif;font-size:9px;color:rgba(255,255,255,.5);margin-left:6px">chat AI</span></div>
+        <div style="height:8px;width:68%;background:rgba(255,255,255,.18);border-radius:100px;margin-bottom:8px"></div>
+        <div style="height:8px;width:86%;background:rgba(255,255,255,.12);border-radius:100px"></div>
+      </div>
+      <div style="position:absolute;left:12px;right:12px;bottom:12px;background:#FFFDF9;border:1px solid #ECE7DA;border-radius:12px;box-shadow:0 20px 44px -18px rgba(20,15,50,.6),0 0 50px -18px rgba(132,112,213,.5);overflow:hidden;text-align:left">
+        <div style="display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px dashed #EEE8DA"><svg viewBox="0 0 24 24" class="mag" style="width:14px;height:14px;stroke:#A99C78"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg><span style="font-family:Inter,sans-serif;font-size:12px;color:#A99C78">Cerca prompt…</span><span style="width:2px;height:13px;background:#6E56CF;margin-left:-3px;animation:blink 1.1s steps(1) infinite"></span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 13px;background:#F3ECD8;box-shadow:inset 2px 0 0 #6E56CF"><div style="flex:1"><div style="font-family:Inter,sans-serif;font-size:12px;font-weight:600;color:#242038">Riassumi articolo in N punti</div><div style="font-family:Inter,sans-serif;font-size:10px;color:#8A7E5E;margin-top:1px">Distilla in <em style="font-style:normal;color:#6E56CF">N</em> punti</div></div><span style="font-size:8px;color:#A36A2E;background:#EFE3CE;border:1px solid #E2D2B4;border-radius:5px;padding:3px 6px">privato</span></div>
+        <div style="display:flex;gap:10px;padding:8px 13px;border-top:1px dashed #EEE8DA;font-size:9px;color:#A99C78"><span>↵ seleziona</span><span style="margin-left:auto;color:#6E4B1E">⌃↵ compila e incolla</span></div>
+      </div>
+    </div>
+  </div>
+  <!-- line items -->
+  <div style="padding:16px 16px 4px">
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#948DBE;border-bottom:1px solid #242038;padding-bottom:7px;margin-bottom:2px"><span>Voce</span><span>Incluso</span></div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;padding:9px 0;border-bottom:1px dashed #DAD6EE"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px">Ogni modifica in vetrina</b><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#7A7398">diff git · cestino</span></span><span style="color:#6FBF73">✓</span></div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;padding:9px 0;border-bottom:1px dashed #DAD6EE"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px">Segnaposti su misura</b><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#7A7398"><span style="background:rgba(216,164,99,.18);color:#A36A2E;padding:1px 4px;border-radius:3px"><i style="font-style:inherit">{</i>{nome}}</span> · globali</span></span><span style="color:#6FBF73">✓</span></div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;padding:9px 0;border-bottom:1px dashed #DAD6EE"><span style="flex:1"><b style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px">CLI <span style="color:#6E56CF">pap</span> + MCP</b><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#7A7398">terminale + assistenti AI</span></span><span style="color:#6FBF73">✓</span></div>
+  </div>
+  <div style="padding:12px 16px"><div style="display:flex;align-items:center;justify-content:space-between;border-top:2px solid #242038;border-bottom:2px solid #242038;padding:11px 0"><span style="font-size:11px;letter-spacing:.14em;text-transform:uppercase">Totale</span><span style="font-family:Newsreader,serif;font-style:italic;font-size:23px;color:#6E56CF">gratis</span></div></div>
+  <!-- ritira sul desktop QR + barcode -->
+  <div style="padding:4px 16px 0;display:flex;gap:14px;align-items:center">
+    <svg viewBox="0 0 100 100" style="width:60px;height:60px;flex:none;background:#fff;border:1px solid #DAD6EE;border-radius:8px;padding:5px;box-sizing:border-box">
+      <g fill="#242038"><path d="M6 6h26v26H6z M12 12v14h14V12z"></path><path d="M68 6h26v26H68z M74 12v14h14V12z"></path><path d="M6 68h26v26H6z M12 74v14h14V74z"></path><rect x="40" y="8" width="6" height="6"></rect><rect x="40" y="20" width="6" height="6"></rect><rect x="58" y="20" width="6" height="6"></rect><rect x="40" y="40" width="6" height="6" fill="#6E56CF"></rect><rect x="52" y="40" width="6" height="6"></rect><rect x="64" y="40" width="6" height="6"></rect><rect x="88" y="40" width="6" height="6"></rect><rect x="58" y="52" width="6" height="6" fill="#6E56CF"></rect><rect x="40" y="64" width="6" height="6"></rect><rect x="68" y="64" width="6" height="6"></rect><rect x="40" y="76" width="6" height="6"></rect><rect x="70" y="76" width="6" height="6"></rect><rect x="88" y="76" width="6" height="6"></rect><rect x="52" y="88" width="6" height="6"></rect></g>
+    </svg>
+    <div><div style="font-family:Newsreader,serif;font-size:16px;color:#242038">Ritira sul desktop</div><div style="font-family:Inter,sans-serif;font-size:10.5px;color:#7A7398;margin-top:3px;line-height:1.4">Inquadra da un altro schermo · Win / macOS / Linux</div></div>
+  </div>
+  <div style="margin-top:16px;background:#242038;padding:15px 20px 20px;text-align:center">
+    <div style="height:32px;background:repeating-linear-gradient(90deg,#EFEDF7 0 2px,transparent 2px 4px,#EFEDF7 4px 5px,transparent 5px 9px,#EFEDF7 9px 12px,transparent 12px 14px);border-radius:2px;opacity:.92"></div>
+    <div style="font-size:9px;letter-spacing:.24em;color:#948DBE;margin-top:10px">100% LOCALE · NO CLOUD · NESSUN ACCOUNT · AGPL 3.0</div>
+  </div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Prova a scrivere: "sviluppa <a class="dv-oid" href="#2b">2b</a> Cloud Dancer in landing completa" · "<a class="dv-oid" href="#2a">2a</a> ma con QR più grande e senza campo email" · "il gate di <a class="dv-oid" href="#2c">2c</a> con la palette di <a class="dv-oid" href="#2b">2b</a>" · "nuove direzioni"</p>
+</section>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Prompt-à-porter · 4 concept mobile inediti · palette chiare</span></div>
+<div class="dv-opts">
+
+<!-- ================= 1a · LA RIVISTA ================= -->
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a><b>La rivista</b>copertina editoriale: masthead, cover-line e la palette come storia di copertina</div>
+<div class="ph" style="background:#F5EFE3;border:1px solid #E4D9C4;box-shadow:0 46px 90px -44px rgba(70,50,25,.5);color:#211D16">
+  <div class="stat" style="color:#211D16"><span>9:41</span><span class="dots" style="color:#A79A7E">● ● ▮</span></div>
+  <!-- issue ribbon -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 22px;border-top:1px solid #E4D9C4;border-bottom:2px solid #211D16;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:#6E4B1E">
+    <span>AW 2026</span><span>N°1 — Arioso Atelier</span><span style="color:#8470D5">€ 0,00</span>
+  </div>
+  <!-- masthead -->
+  <div style="padding:20px 20px 8px;text-align:center;border-bottom:1px solid #E4D9C4">
+    <div style="font-family:Newsreader,serif;font-weight:600;font-size:39px;line-height:.9;letter-spacing:-.03em">PROMPT<br><em style="font-style:italic;font-weight:500;color:#6E56CF">à porter</em></div>
+    <p style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.28em;text-transform:uppercase;color:#A79A7E;margin:10px 0 12px">La collezione di prompt AI · local-first</p>
+  </div>
+  <!-- cover-lines over a "shoot" -->
+  <div style="position:relative;background:linear-gradient(150deg,#8470D5,#4A3A87);padding:22px 20px 26px;overflow:hidden">
+    <div style="position:absolute;inset:0;background:radial-gradient(120% 80% at 78% 8%,rgba(255,255,255,.22),transparent 55%)"></div>
+    <div style="position:relative">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#E8C79A;background:rgba(0,0,0,.22);border-radius:100px;padding:5px 11px">Storia di copertina</span>
+      <h1 style="font-family:Newsreader,serif;font-weight:300;font-size:29px;line-height:1.06;letter-spacing:-.02em;color:#fff;margin:14px 0 0">Un tasto magico<br>e il prompt è <em style="font-style:italic;color:#E8C79A">già tra le dita</em></h1>
+      <p style="font-size:12px;line-height:1.5;color:rgba(255,255,255,.82);margin:12px 0 0;max-width:250px">Lo selezioni, lo compili, lo incolli dove stai scrivendo. Senza aprire nessuna finestra.</p>
+      <!-- scattered cover lines -->
+      <div style="position:absolute;top:-6px;right:0;font-family:Newsreader,serif;font-style:italic;font-size:14px;color:#fff;text-align:right;line-height:1.3;text-shadow:0 2px 8px rgba(0,0,0,.3)">versioni<br>diff git</div>
+    </div>
+  </div>
+  <!-- the palette as cover feature -->
+  <div style="padding:18px 18px 24px">
+    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:11px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#6E56CF">p. 01</span><span style="font-family:Newsreader,serif;font-style:italic;font-size:18px">La palette</span><span style="flex:1;height:1px;background:#E4D9C4"></span></div>
+    <div style="background:#FFFDF8;border:1px solid #E4D9C4;border-radius:13px;box-shadow:0 20px 44px -24px rgba(70,50,25,.4);overflow:hidden;text-align:left">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #EFE7D6"><svg viewBox="0 0 24 24" class="mag" style="width:15px;height:15px;stroke:#A79A7E"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg><span style="font-size:12.5px;color:#A79A7E">Cerca prompt, tag o azione…</span><span style="width:2px;height:14px;background:#6E56CF;margin-left:-4px;animation:blink 1.1s steps(1) infinite"></span></div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 14px;background:#F2ECDE;box-shadow:inset 2px 0 0 #6E56CF"><div style="flex:1"><div style="font-size:12.5px;font-weight:500">Riassumi articolo in N punti</div><div style="font-size:10.5px;color:#8A7E68;margin-top:2px">Distilla un testo in <em style="font-style:normal;color:#6E56CF">N</em> punti + TL;DR</div></div><span style="font-family:'JetBrains Mono',monospace;font-size:8.5px;color:#A36A2E;background:#EFE3CE;border:1px solid #E2D2B4;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 14px"><div style="flex:1"><div style="font-size:12.5px;font-weight:500">Code review strutturata</div><div style="font-size:10.5px;color:#8A7E68;margin-top:2px">Review per severità</div></div><span style="font-family:'JetBrains Mono',monospace;font-size:8.5px;color:#A36A2E;background:#EFE3CE;border:1px solid #E2D2B4;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;gap:12px;padding:10px 14px;border-top:1px solid #EFE7D6;background:#FAF5EA"><span style="font-size:9.5px;color:#A79A7E">↵ seleziona</span><span style="font-size:9.5px;color:#A79A7E;margin-left:auto">⌃↵ compila e incolla</span></div>
+    </div>
+  </div>
+  <!-- index / features highlighted -->
+  <div style="padding:0 18px 22px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#A79A7E;border-top:2px solid #211D16;padding-top:10px;margin-bottom:4px">In questo numero</div>
+    <a style="display:flex;align-items:baseline;gap:10px;padding:10px 0;border-bottom:1px solid #E4D9C4"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6E56CF">02</span><span style="flex:1"><b style="font-family:Newsreader,serif;font-weight:400;font-size:16px">Capi su misura</b><span style="display:block;font-size:11px;color:#8A7E68;margin-top:1px">Segnaposti <code style="font-family:'JetBrains Mono',monospace;font-size:10px;background:rgba(216,164,99,.16);color:#A36A2E;padding:1px 4px;border-radius:3px"><i style="font-style:inherit">{</i>{nome}}</code> compilati al volo</span></span></a>
+    <a style="display:flex;align-items:baseline;gap:10px;padding:10px 0;border-bottom:1px solid #E4D9C4"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6E56CF">03</span><span style="flex:1"><b style="font-family:Newsreader,serif;font-weight:400;font-size:16px">Cerca al buio dell'armadio</b><span style="display:block;font-size:11px;color:#8A7E68;margin-top:1px">Ricerca per significato, on-device</span></span></a>
+    <a style="display:flex;align-items:baseline;gap:10px;padding:10px 0;border-bottom:1px solid #E4D9C4"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6E56CF">04</span><span style="flex:1"><b style="font-family:Newsreader,serif;font-weight:400;font-size:16px">Prova prima di comprare</b><span style="display:block;font-size:11px;color:#8A7E68;margin-top:1px">Varianti A/B con Test Golden</span></span></a>
+  </div>
+  <!-- CTA + barcode -->
+  <div style="padding:18px 20px 26px;background:#211D16;color:#F5EFE3">
+    <a style="display:flex;align-items:center;justify-content:center;gap:9px;font-size:14px;font-weight:500;padding:14px;border-radius:11px;background:linear-gradient(160deg,#8470D5,#6E56CF);color:#fff">⊞ Scarica la 1.0</a>
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:16px">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;color:#B9AF98;line-height:1.6">100% locale · no cloud<br>nessun account · AGPL 3.0</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:22px;letter-spacing:-1px;color:#F5EFE3">▐║▌│║▌║│▐</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ================= 1b · IL CAMERINO ================= -->
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a><b>Il camerino</b>cipria &amp; salvia, morbido: la palette come specchio, feature come cartellini</div>
+<div class="ph" style="background:#F4ECEC;border:1px solid #E7D6D6;box-shadow:0 46px 90px -44px rgba(120,70,70,.4);color:#2C2427">
+  <div class="stat" style="color:#2C2427"><span>9:41</span><span class="dots" style="color:#B79EA0">● ● ▮</span></div>
+  <!-- pill ribbon -->
+  <div style="padding:10px 18px 4px;display:flex;justify-content:center">
+    <div style="display:flex;align-items:center;gap:9px;background:linear-gradient(90deg,#E1998A,#CF7A63);border-radius:100px;padding:6px 8px 6px 6px;box-shadow:0 10px 24px -12px rgba(207,122,99,.7)"><span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:#5A2418;background:#F6E4DA;border-radius:100px;padding:4px 9px">Nuova stagione</span><span style="font-size:10.5px;color:#fff">Arioso Atelier · v1.0 →</span></div>
+  </div>
+  <!-- topbar -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 22px 4px">
+    <div style="display:flex;align-items:center;gap:9px"><span style="width:25px;height:25px;border-radius:8px;background:linear-gradient(150deg,#8470D5,#6E56CF);display:flex;align-items:center;justify-content:center;font-family:Newsreader,serif;font-size:14px;color:#fff">P</span><span style="font-family:Newsreader,serif;font-size:15px">Prompt a Porter</span></div>
+    <span style="font-size:19px;color:#B79EA0">☰</span>
+  </div>
+  <!-- hero -->
+  <div style="padding:16px 24px 22px;text-align:center">
+    <h1 style="font-family:Newsreader,serif;font-weight:300;font-size:44px;line-height:.96;letter-spacing:-.035em;margin:0">Prompt-<em style="font-style:italic;color:#6E56CF">à</em>-porter</h1>
+    <p style="font-family:Newsreader,serif;font-weight:300;font-size:17px;line-height:1.4;color:#6A5457;margin:14px 8px 0">La tua collezione di prompt AI. <em style="font-style:italic;color:#2C2427">Pronti da indossare.</em></p>
+  </div>
+  <!-- palette as "mirror / camerino" -->
+  <div style="margin:0 18px 22px;background:#FBF6F5;border:1px solid #E7D6D6;border-radius:22px;padding:16px;box-shadow:0 24px 50px -28px rgba(120,70,70,.35)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#CF7A63">Prova in camerino</span><span style="font-family:'JetBrains Mono',monospace;font-size:9px;background:#F1E4E1;border:1px solid #E7D6D6;border-radius:4px;padding:2px 6px;color:#6E56CF">⌃⇧P</span></div>
+    <!-- the palette (mirror) -->
+    <div style="background:#FFFFFF;border:1px solid #EDDCDC;border-radius:16px;overflow:hidden;box-shadow:inset 0 0 0 4px rgba(255,255,255,.6),0 12px 30px -18px rgba(120,70,70,.4);text-align:left">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #F2E6E6"><svg viewBox="0 0 24 24" class="mag" style="width:15px;height:15px;stroke:#B79EA0"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg><span style="font-size:12.5px;color:#B79EA0">Cerca prompt…</span><span style="width:2px;height:14px;background:#6E56CF;margin-left:-4px;animation:blink 1.1s steps(1) infinite"></span></div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 14px;background:linear-gradient(90deg,rgba(132,112,213,.12),transparent);box-shadow:inset 2px 0 0 #8470D5"><div style="flex:1"><div style="font-size:12.5px;font-weight:500">Email professionale parametrica</div><div style="font-size:10.5px;color:#8A7076;margin-top:2px">Tono e contenuto <em style="font-style:normal;color:#6E56CF">variabili</em></div></div><span style="font-family:'JetBrains Mono',monospace;font-size:8.5px;color:#A36A2E;background:#F6EBD8;border:1px solid #ECDCC0;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 14px"><div style="flex:1"><div style="font-size:12.5px;font-weight:500">Brainstorm con criteri</div><div style="font-size:10.5px;color:#8A7076;margin-top:2px">Idee valutate sui tuoi criteri</div></div><span style="font-family:'JetBrains Mono',monospace;font-size:8.5px;color:#A36A2E;background:#F6EBD8;border:1px solid #ECDCC0;border-radius:5px;padding:3px 6px">privato</span></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px"><span style="font-size:11px;color:#8A7076">Ti sta bene? <b style="color:#2C2427">Incollalo.</b></span><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#CF7A63">⌃↵ compila e incolla</span></div>
+  </div>
+  <!-- feature tags (garment tags) -->
+  <div style="padding:0 18px 8px"><div style="font-family:Newsreader,serif;font-weight:300;font-size:24px;margin:0 0 12px">I capi della collezione</div></div>
+  <div style="padding:0 18px 22px;display:flex;flex-direction:column;gap:11px">
+    <div style="display:flex;gap:13px;align-items:center;background:#FBF6F5;border:1px solid #E7D6D6;border-radius:15px;padding:13px 15px"><span style="width:40px;height:40px;flex:none;border-radius:10px;background:linear-gradient(135deg,#6FA892,#33564A);position:relative"><span style="position:absolute;top:6px;left:50%;transform:translateX(-50%);width:8px;height:8px;border:1.5px solid rgba(255,255,255,.6);border-radius:50%"></span></span><div><div style="font-family:Newsreader,serif;font-size:16px">Ogni modifica, in vetrina</div><div style="font-size:11px;color:#8A7076;margin-top:1px">Diff stile git, ripristino in un click</div></div></div>
+    <div style="display:flex;gap:13px;align-items:center;background:#FBF6F5;border:1px solid #E7D6D6;border-radius:15px;padding:13px 15px"><span style="width:40px;height:40px;flex:none;border-radius:10px;background:linear-gradient(135deg,#C99A57,#6B4C24)"></span><div><div style="font-family:Newsreader,serif;font-size:16px">Capi su misura</div><div style="font-size:11px;color:#8A7076;margin-top:1px"><code style="font-family:'JetBrains Mono',monospace;font-size:10px;background:rgba(216,164,99,.16);color:#A36A2E;padding:1px 4px;border-radius:3px"><i style="font-style:inherit">{</i>{nome}}</code> e valori globali</div></div></div>
+    <div style="display:flex;gap:13px;align-items:center;background:#FBF6F5;border:1px solid #E7D6D6;border-radius:15px;padding:13px 15px"><span style="width:40px;height:40px;flex:none;border-radius:10px;background:linear-gradient(135deg,#CF7A63,#76392B)"></span><div><div style="font-family:Newsreader,serif;font-size:16px">Un tono, dieci tagli</div><div style="font-size:11px;color:#8A7076;margin-top:1px">Riusa blocchi con <code style="font-family:'JetBrains Mono',monospace;font-size:10px;background:rgba(216,164,99,.16);color:#A36A2E;padding:1px 4px;border-radius:3px">import</code></div></div></div>
+  </div>
+  <!-- giorno/sera toggle + CTA -->
+  <div style="margin:0 18px 24px;background:linear-gradient(135deg,#F6E4DA,#EFE3CE);border:1px solid #E7D6D6;border-radius:18px;padding:16px 16px 18px;display:flex;align-items:center;justify-content:space-between">
+    <div><div style="font-family:Newsreader,serif;font-style:italic;font-size:17px">Giorno · Sera</div><div style="font-size:10.5px;color:#8A7076;margin-top:2px">lo stesso guardaroba, due luci</div></div>
+    <div style="width:54px;height:30px;border-radius:100px;background:linear-gradient(90deg,#fff,#211D16);display:flex;align-items:center;justify-content:space-between;padding:0 7px;position:relative;border:1px solid #C9B7A0"><span style="font-size:11px;color:#A36A2E">☀</span><span style="font-size:10px;color:#E8C79A">☾</span><span style="position:absolute;top:50%;left:4px;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.35)"></span></div>
+  </div>
+  <div style="padding:0 18px 28px"><a style="display:flex;align-items:center;justify-content:center;gap:9px;font-size:14px;font-weight:500;padding:15px;border-radius:14px;background:linear-gradient(160deg,#8470D5,#6E56CF);color:#fff;box-shadow:0 16px 34px -14px rgba(132,112,213,.6)">⊞ Scarica per Windows</a><p style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#B79EA0;text-align:center;margin:12px 0 0">gratis · local-first · Win / macOS / Linux</p></div>
+</div>
+</div>
+
+<!-- ================= 1c · SCONTRINO D'ATELIER ================= -->
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a><b>Scontrino d'atelier</b>mono-forward su carta, bordi perforati, la palette come quick-access</div>
+<div class="ph" style="background:#F7F2E6;border:1px solid #E5D8BE;box-shadow:0 46px 90px -44px rgba(90,70,30,.45);color:#242017;font-family:'JetBrains Mono',monospace">
+  <div class="stat" style="color:#242017"><span>9:41</span><span class="dots" style="color:#A99C78">● ● ▮</span></div>
+  <!-- perforated ribbon header -->
+  <div style="background:#242017;color:#F7F2E6;padding:14px 20px 16px;position:relative">
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#E8C79A"><span>Atelier · ricevuta</span><span>Nº AW26-001</span></div>
+    <div style="font-family:Newsreader,serif;font-weight:300;font-size:34px;line-height:1;letter-spacing:-.03em;margin-top:14px;color:#fff">Prompt-<em style="font-style:italic;color:#B9A7F0">à</em>-porter</div>
+    <div style="font-family:Inter,sans-serif;font-size:12px;color:rgba(255,255,255,.75);margin-top:8px;line-height:1.45">La tua collezione di prompt AI. Versionati, su misura, a un tasto di distanza.</div>
+    <div style="position:absolute;left:0;right:0;bottom:-7px;height:14px;background:radial-gradient(circle at 7px -1px,transparent 7px,#242017 7px);background-size:14px 14px;background-repeat:repeat-x"></div>
+  </div>
+  <!-- quick access palette -->
+  <div style="padding:22px 18px 8px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#8470D5">✦ Accesso rapido</span><span style="flex:1;border-top:1px dashed #D8C7A2"></span><span style="font-size:9px;background:#EDE0C2;border:1px solid #E0CFA6;border-radius:4px;padding:2px 6px;color:#6E56CF">⌃⇧P</span></div>
+    <div style="background:#FFFDF6;border:1px dashed #D8C7A2;border-radius:11px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px dashed #E5D8BE"><svg viewBox="0 0 24 24" class="mag" style="width:15px;height:15px;stroke:#A99C78"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg><span style="font-family:Inter,sans-serif;font-size:12.5px;color:#A99C78">Cerca prompt, tag o azione…</span><span style="width:2px;height:14px;background:#6E56CF;margin-left:-4px;animation:blink 1.1s steps(1) infinite"></span></div>
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 14px;background:#F3ECD8;box-shadow:inset 2px 0 0 #6E56CF"><div style="flex:1"><div style="font-family:Inter,sans-serif;font-size:12.5px;font-weight:600">Riassumi articolo in N punti</div><div style="font-family:Inter,sans-serif;font-size:10.5px;color:#8A7E5E;margin-top:2px">Distilla in <em style="font-style:normal;color:#6E56CF">N</em> punti + verdetto</div></div><span style="font-size:8px;color:#A36A2E;background:#EFE3CE;border:1px solid #E2D2B4;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 14px"><div style="flex:1"><div style="font-family:Inter,sans-serif;font-size:12.5px;font-weight:600">Traduzione con glossario</div><div style="font-family:Inter,sans-serif;font-size:10.5px;color:#8A7E5E;margin-top:2px">Rispetta i termini che scegli</div></div><span style="font-size:8px;color:#A36A2E;background:#EFE3CE;border:1px solid #E2D2B4;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;gap:12px;padding:9px 14px;border-top:1px dashed #E5D8BE;font-size:9px;color:#A99C78"><span>↵ seleziona</span><span style="margin-left:auto;color:#6E4B1E">⌃↵ compila e incolla</span></div>
+    </div>
+    <div style="text-align:center;font-family:Inter,sans-serif;font-size:11px;color:#8A7E5E;margin-top:11px">Il prompt giusto, addosso a te, <b style="color:#242017">a un tasto di distanza.</b></div>
+  </div>
+  <!-- line items = features -->
+  <div style="padding:18px 18px 6px">
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#A99C78;border-bottom:1px solid #242017;padding-bottom:7px;margin-bottom:4px"><span>Voce</span><span>Incluso</span></div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;padding:9px 0;border-bottom:1px dashed #E5D8BE"><span style="flex:1"><span style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px;color:#242017">Ogni modifica in vetrina</span><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#8A7E5E">diff git · cestino</span></span><span style="color:#6FBF73">✓</span></div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;padding:9px 0;border-bottom:1px dashed #E5D8BE"><span style="flex:1"><span style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px;color:#242017">Segnaposti su misura</span><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#8A7E5E"><span style="background:rgba(216,164,99,.18);color:#A36A2E;padding:1px 4px;border-radius:3px"><i style="font-style:inherit">{</i>{nome}}</span> · globali</span></span><span style="color:#6FBF73">✓</span></div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;padding:9px 0;border-bottom:1px dashed #E5D8BE"><span style="flex:1"><span style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px;color:#242017">Ricerca semantica</span><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#8A7E5E">ONNX on-device · no cloud</span></span><span style="color:#6FBF73">✓</span></div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;padding:9px 0;border-bottom:1px dashed #E5D8BE"><span style="flex:1"><span style="font-family:Inter,sans-serif;font-weight:600;font-size:12.5px;color:#242017">CLI <span style="color:#6E56CF">pap</span> + MCP</span><span style="display:block;font-family:Inter,sans-serif;font-size:10.5px;color:#8A7E5E">terminale + assistenti AI</span></span><span style="color:#6FBF73">✓</span></div>
+  </div>
+  <!-- total -->
+  <div style="padding:14px 18px"><div style="display:flex;align-items:center;justify-content:space-between;border-top:2px solid #242017;border-bottom:2px solid #242017;padding:11px 0"><span style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#242017">Totale</span><span style="font-family:Newsreader,serif;font-style:italic;font-size:24px;color:#6E56CF">gratis</span></div></div>
+  <!-- CTA + barcode footer -->
+  <div style="padding:6px 18px 26px">
+    <a style="display:flex;align-items:center;justify-content:center;gap:9px;font-family:Inter,sans-serif;font-size:14px;font-weight:500;padding:15px;border-radius:11px;background:linear-gradient(160deg,#8470D5,#6E56CF);color:#fff">⊞ Scarica la 1.0</a>
+    <div style="text-align:center;font-size:9px;letter-spacing:.1em;color:#A99C78;margin-top:16px;line-height:1.7">100% LOCALE · NO CLOUD · NESSUN ACCOUNT<br>LAVABILE IN GIT · AGPL 3.0<br><span style="font-size:24px;letter-spacing:-1px;color:#242017;display:block;margin-top:6px">█║▌│║▌ ║│█║▌│▐║</span></div>
+  </div>
+</div>
+</div>
+
+<!-- ================= 1d · LA VETRINA ================= -->
+<div class="dv-opt" id="1d">
+<div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a><b>La vetrina</b>periwinkle glass, viola-forward: la palette galleggia sopra un'altra app</div>
+<div class="ph" style="background:#EEEDF9;border:1px solid #DAD6F0;box-shadow:0 46px 90px -44px rgba(70,60,140,.45);color:#211E2E">
+  <div class="stat" style="color:#211E2E"><span>9:41</span><span class="dots" style="color:#9891C4">● ● ▮</span></div>
+  <!-- glass ribbon -->
+  <div style="margin:8px 16px 0;display:flex;align-items:center;gap:9px;background:rgba(132,112,213,.14);border:1px solid rgba(132,112,213,.3);backdrop-filter:blur(6px);border-radius:100px;padding:6px 8px"><span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:#fff;background:linear-gradient(160deg,#8470D5,#6E56CF);border-radius:100px;padding:4px 9px">v1.0</span><span style="font-size:10.5px;color:#4A4470;flex:1"><em style="font-family:Newsreader,serif;font-style:italic;color:#6E56CF">Arioso Atelier</em> è in vetrina</span><span style="color:#6E56CF;font-size:14px">→</span></div>
+  <!-- topbar -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 22px 2px">
+    <div style="display:flex;align-items:center;gap:9px"><span style="width:25px;height:25px;border-radius:8px;background:linear-gradient(150deg,#8470D5,#6E56CF);display:flex;align-items:center;justify-content:center;font-family:Newsreader,serif;font-size:14px;color:#fff;box-shadow:0 0 18px rgba(132,112,213,.5)">P</span><span style="font-family:Newsreader,serif;font-size:15px">Prompt a Porter</span></div>
+    <span style="font-size:19px;color:#9891C4">☰</span>
+  </div>
+  <!-- hero -->
+  <div style="padding:14px 22px 6px;text-align:center">
+    <span style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.7);border:1px solid #DAD6F0;border-radius:100px;padding:5px 12px 5px 7px;margin-bottom:12px"><span style="font-family:'JetBrains Mono',monospace;font-size:9px;background:#fff;border:1px solid #DAD6F0;border-bottom-width:2px;border-radius:4px;padding:2px 6px;color:#6E56CF">⌃⇧P</span><span style="font-size:10px;color:#6A648C">in qualsiasi app</span></span>
+    <h1 style="font-family:Newsreader,serif;font-weight:300;font-size:46px;line-height:.94;letter-spacing:-.035em;margin:0">Prompt-<em style="font-style:italic;color:#6E56CF">à</em>-porter</h1>
+    <p style="font-size:12.5px;line-height:1.55;color:#6A648C;margin:14px 10px 0">Un tasto magico e il prompt giusto è già tra le dita — lo compili e lo incolli dove stai scrivendo.</p>
+  </div>
+  <!-- the gesture: palette over another app -->
+  <div style="margin:16px 16px 0;position:relative;border-radius:20px;overflow:hidden;border:1px solid #DAD6F0;box-shadow:0 26px 54px -28px rgba(70,60,140,.5)">
+    <!-- background "other app" -->
+    <div style="background:linear-gradient(160deg,#5648A0,#3A2F73);padding:22px 18px 70px">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:14px"><span style="width:9px;height:9px;border-radius:50%;background:#FF6159"></span><span style="width:9px;height:9px;border-radius:50%;background:#FFBE2F"></span><span style="width:9px;height:9px;border-radius:50%;background:#2ACB42"></span><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:rgba(255,255,255,.5);margin-left:8px">chat AI</span></div>
+      <div style="height:9px;width:70%;background:rgba(255,255,255,.18);border-radius:100px;margin-bottom:9px"></div>
+      <div style="height:9px;width:88%;background:rgba(255,255,255,.12);border-radius:100px;margin-bottom:9px"></div>
+      <div style="height:9px;width:54%;background:rgba(255,255,255,.12);border-radius:100px"></div>
+    </div>
+    <!-- floating palette (glass, light) -->
+    <div style="position:absolute;left:16px;right:16px;bottom:14px;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.7);border-radius:14px;box-shadow:0 24px 50px -18px rgba(30,20,70,.6),0 0 0 1px rgba(132,112,213,.2),0 0 60px -18px rgba(132,112,213,.5);overflow:hidden;text-align:left">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #EDEBF7"><svg viewBox="0 0 24 24" class="mag" style="width:15px;height:15px;stroke:#9891C4"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg><span style="font-size:12.5px;color:#9891C4">Cerca prompt…</span><span style="width:2px;height:14px;background:#6E56CF;margin-left:-4px;animation:blink 1.1s steps(1) infinite"></span></div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 14px;background:linear-gradient(90deg,rgba(132,112,213,.16),transparent);box-shadow:inset 2px 0 0 #6E56CF"><div style="flex:1"><div style="font-size:12.5px;font-weight:500;color:#211E2E">Code review strutturata</div><div style="font-size:10.5px;color:#7A7398;margin-top:2px">Importa il ruolo <em style="font-style:normal;color:#6E56CF">engineer</em></div></div><span style="font-family:'JetBrains Mono',monospace;font-size:8.5px;color:#A36A2E;background:#F6EBD8;border:1px solid #ECDCC0;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;align-items:center;gap:11px;padding:9px 14px"><div style="flex:1"><div style="font-size:12.5px;font-weight:500;color:#211E2E">Commit message da diff</div><div style="font-size:10.5px;color:#7A7398;margin-top:2px">Conventional Commits</div></div><span style="font-family:'JetBrains Mono',monospace;font-size:8.5px;color:#A36A2E;background:#F6EBD8;border:1px solid #ECDCC0;border-radius:5px;padding:3px 6px">privato</span></div>
+      <div style="display:flex;gap:12px;padding:10px 14px;border-top:1px solid #EDEBF7;background:rgba(132,112,213,.05)"><span style="font-size:9.5px;color:#9891C4">↵ seleziona</span><span style="font-size:9.5px;color:#6E56CF;margin-left:auto">⌃↵ compila e incolla</span></div>
+    </div>
+  </div>
+  <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#9891C4;padding:14px 0 4px">Funzione in evidenza · La palette</div>
+  <!-- CTA -->
+  <div style="padding:8px 20px 6px;display:flex;flex-direction:column;gap:10px">
+    <a style="display:flex;align-items:center;justify-content:center;gap:9px;font-size:14px;font-weight:500;padding:14px;border-radius:12px;background:linear-gradient(160deg,#8470D5,#6E56CF);color:#fff;box-shadow:0 16px 34px -14px rgba(132,112,213,.6)">⊞ Scarica per Windows</a>
+    <a style="display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:500;padding:13px;border-radius:12px;border:1px solid #DAD6F0;background:rgba(255,255,255,.7);color:#211E2E">Vedi su GitHub</a>
+    <p style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#9891C4;text-align:center;margin:2px 0 0">gratis · local-first · v1.0</p>
+  </div>
+  <!-- glass feature tiles -->
+  <div style="padding:18px 16px 26px">
+    <div style="font-family:Newsreader,serif;font-weight:300;font-size:26px;letter-spacing:-.02em;margin:0 0 13px;padding:0 4px">La collezione</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+      <div style="background:rgba(255,255,255,.72);border:1px solid #DAD6F0;border-radius:15px;padding:14px;backdrop-filter:blur(6px)"><span style="display:block;width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#8470D5,#473B86);margin-bottom:11px"></span><div style="font-family:Newsreader,serif;font-size:16px;line-height:1.15">In vetrina</div><div style="font-size:10.5px;color:#7A7398;margin-top:4px">Diff git, ripristino, cestino</div></div>
+      <div style="background:rgba(255,255,255,.72);border:1px solid #DAD6F0;border-radius:15px;padding:14px;backdrop-filter:blur(6px)"><span style="display:block;width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#D8A463,#7C5A2C);margin-bottom:11px"></span><div style="font-family:Newsreader,serif;font-size:16px;line-height:1.15">Su misura</div><div style="font-size:10.5px;color:#7A7398;margin-top:4px"><code style="font-family:'JetBrains Mono',monospace;font-size:9.5px;background:rgba(216,164,99,.16);color:#A36A2E;padding:1px 4px;border-radius:3px"><i style="font-style:inherit">{</i>{nome}}</code> al volo</div></div>
+      <div style="background:rgba(255,255,255,.72);border:1px solid #DAD6F0;border-radius:15px;padding:14px;backdrop-filter:blur(6px)"><span style="display:block;width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#6FA892,#33564A);margin-bottom:11px"></span><div style="font-family:Newsreader,serif;font-size:16px;line-height:1.15">A/B</div><div style="font-size:10.5px;color:#7A7398;margin-top:4px">Test Golden, costo stimato</div></div>
+      <div style="background:rgba(255,255,255,.72);border:1px solid #DAD6F0;border-radius:15px;padding:14px;backdrop-filter:blur(6px)"><span style="display:block;width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#6E86CF,#384C7C);margin-bottom:11px"></span><div style="font-family:Newsreader,serif;font-size:16px;line-height:1.15">Al buio</div><div style="font-size:10.5px;color:#7A7398;margin-top:4px">Ricerca on-device</div></div>
+    </div>
+  </div>
+  <div style="padding:16px 20px 28px;border-top:1px solid #DAD6F0;text-align:center"><span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#9891C4;line-height:1.7">100% locale · no cloud · nessun account · AGPL 3.0</span></div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Prova a scrivere: "sviluppa <a class="dv-oid" href="#1a">1a</a> in una landing completa" · "<a class="dv-oid" href="#1d">1d</a> ma con la palette che mostra Ritocco e Test Golden" · "unisci lo scontrino di <a class="dv-oid" href="#1c">1c</a> con i colori di <a class="dv-oid" href="#1b">1b</a>" · "nuove direzioni"</p>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
