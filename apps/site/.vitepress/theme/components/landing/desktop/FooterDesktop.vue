@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { withBase } from 'vitepress'
 import {
   GITHUB,
   DOCS,
@@ -19,7 +20,7 @@ import {
     <div class="griglia">
       <div>
         <div class="brand">
-          <span class="mark" aria-hidden="true">P</span>
+          <img class="mark" :src="withBase('/icons/icon-64.png')" alt="" width="30" height="30" />
           <span class="nome">Prompt-à-porter</span>
         </div>
         <p class="tagline">La tua collezione di prompt AI. <em>Pronti da indossare.</em></p>
@@ -96,14 +97,7 @@ import {
 .mark {
   width: 30px;
   height: 30px;
-  border-radius: 8px;
-  background: linear-gradient(150deg, var(--pap-viola2), var(--pap-viola));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--pap-serif);
-  font-size: 18px;
-  color: #fff;
+  display: block;
 }
 .nome {
   font-family: var(--pap-serif);

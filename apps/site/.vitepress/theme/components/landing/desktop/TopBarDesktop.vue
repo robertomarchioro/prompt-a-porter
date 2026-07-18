@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { withBase } from 'vitepress'
 import { GUIDA } from '../links'
 import { useLinkDownload } from '../download'
 
@@ -8,7 +9,7 @@ const linkDownload = useLinkDownload()
 <template>
   <div class="topbar">
     <div class="brand">
-      <span class="mark" aria-hidden="true">P</span>
+      <img class="mark" :src="withBase('/icons/icon-64.png')" alt="" width="30" height="30" />
       <span class="nome">Prompt a Porter</span>
     </div>
     <nav class="nav" aria-label="Navigazione principale">
@@ -35,17 +36,12 @@ const linkDownload = useLinkDownload()
   align-items: center;
   gap: 12px;
 }
+/* Icona ufficiale { P } (docs/public/icons/), non il placeholder del
+   prototipo — §2.3 istruzioni. */
 .mark {
   width: 30px;
   height: 30px;
-  border-radius: 8px;
-  background: linear-gradient(150deg, var(--pap-viola2), var(--pap-viola));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--pap-serif);
-  font-size: 18px;
-  color: #fff;
+  display: block;
 }
 .nome {
   font-family: var(--pap-serif);
