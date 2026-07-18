@@ -17,9 +17,6 @@ Il breakpoint di collasso è **≤680px**: sotto quella soglia si passa **alla c
 ### Cosa NON implementare (dagli handoff, ribadito)
 
 - Il runtime di prototipazione (`support.js`) e la struttura `.dc.html`: servono solo markup e stili come riferimento.
-- I turni/opzioni scartati (`#t1`, `#t2`, opzioni 1a–1d, 2a–2d): l'unica coppia valida è `#3a` + `#4a`.
-- Il cartellino "PaP vs .txt" mobile: **rimosso in revisione**, non reintrodurlo.
-- Il QR code nella sezione desktop-da-mobile: scelta deliberata, l'utente è già sul telefono.
 - La status bar finta ("9:41") del mockup mobile: solo cornice di prototipo.
 - Il trucco `<i style="font-style:inherit">{</i>{nome}}`: nel codice reale i token sono testo semplice `{{nome}}` nella pill ambra.
 
