@@ -9,8 +9,7 @@ import { RELEASES } from '../links'
       <span class="flag">✦ Nuova stagione</span>
       <span class="msg">
         Debutta <em>Arioso Atelier</em> · la prima stagione esce dalla beta
-        <span class="dot">·</span> Autunno-Inverno 2026 · v1.0 <span class="dot">·</span> codice
-        <span class="codice">Cloud Dancer 11-4201</span>
+        <span class="dot">·</span> Autunno-Inverno 2026 · v1.0 <span class="dot">·</span>
       </span>
       <a class="cta" :href="RELEASES">Scopri il debutto →</a>
     </div>
