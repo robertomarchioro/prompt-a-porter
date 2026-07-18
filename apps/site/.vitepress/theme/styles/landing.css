@@ -116,6 +116,20 @@
   flex: none;
 }
 
+/* Commutazione dei due alberi a 680px (§1.1 istruzioni): sotto si passa
+   alla composizione mobile 3a, non a un desktop compresso. */
+@media (max-width: 680px) {
+  .pap-landing .pap-albero-desktop {
+    display: none;
+  }
+}
+
+@media (min-width: 680.02px) {
+  .pap-landing .pap-albero-mobile {
+    display: none;
+  }
+}
+
 /* Caret della palette — decorativo */
 @keyframes pap-blink {
   50% {
