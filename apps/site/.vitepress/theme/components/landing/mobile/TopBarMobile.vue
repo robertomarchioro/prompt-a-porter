@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { withBase } from 'vitepress'
 import { GITHUB, GUIDA } from '../links'
 
 // Drawer di navigazione aperto dall'hamburger (handoff §Interactions:
@@ -14,7 +15,7 @@ function chiudi() {
 <template>
   <div class="topbar">
     <div class="brand">
-      <span class="mark" aria-hidden="true">P</span>
+      <img class="mark" :src="withBase('/icons/icon-64.png')" alt="" width="26" height="26" />
       <span class="nome">Prompt a Porter</span>
     </div>
     <button
@@ -51,14 +52,7 @@ function chiudi() {
 .mark {
   width: 26px;
   height: 26px;
-  border-radius: 8px;
-  background: linear-gradient(150deg, var(--pap-viola2), var(--pap-viola));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--pap-serif);
-  font-size: 15px;
-  color: #fff;
+  display: block;
 }
 .nome {
   font-family: var(--pap-serif);
