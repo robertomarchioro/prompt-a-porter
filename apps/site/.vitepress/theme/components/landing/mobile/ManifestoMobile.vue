@@ -41,7 +41,7 @@
 }
 .slogan {
   font-family: var(--pap-serif);
-  font-weight: 300;
+  font-weight: 400;
   font-size: 29px;
   line-height: 1.06;
   letter-spacing: -0.02em;

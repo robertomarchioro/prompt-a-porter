@@ -67,7 +67,7 @@ import IconOs from '../desktop/IconOs.vue'
 }
 .titolo {
   font-family: var(--pap-serif);
-  font-weight: 300;
+  font-weight: 400;
   font-size: 27px;
   line-height: 1.08;
   margin-top: 10px;
@@ -79,7 +79,7 @@ import IconOs from '../desktop/IconOs.vue'
 .testo {
   font-size: 11.5px;
   line-height: 1.55;
-  color: #6e6c60;
+  color: var(--pap-muted);
   margin: 12px 0 0;
 }
 .cta-row {

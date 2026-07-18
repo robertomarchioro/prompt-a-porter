@@ -10,8 +10,13 @@
   --pap-white: #ffffff;
   --pap-ink: #26251f;
   --pap-sub: #54524a;
-  --pap-muted: #8c8a80;
-  --pap-faint: #aeab9f;
+  /* Scala grigi scurita di un gradino rispetto al handoff (decisione
+     2026-07-18, leggibilità): i valori originali #8C8A80/#AEAB9F davano
+     3.0:1 e 2.0:1 su --pap-page — sotto il minimo AA per testo. Ora
+     muted = 4.6:1. I toni originali restano per soli ornamenti. */
+  --pap-muted: #6e6c60;
+  --pap-faint: #8c8a80;
+  --pap-ornamento: #aeab9f;
   --pap-line: #e2e0d8;
   --pap-line-soft: #eceae2;
   --pap-line-soft2: #e7e5dc;
