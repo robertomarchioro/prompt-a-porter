@@ -14,8 +14,7 @@ import { RELEASES } from '../links'
       <div class="titolo">Debutta <em>Arioso Atelier</em></div>
       <div class="riga">
         <span class="msg">
-          La prima stagione esce dalla beta <span class="dot">·</span> codice
-          <span class="codice">Cloud Dancer 11-4201</span>
+          La prima stagione esce dalla beta <span class="dot">·</span>
         </span>
         <a class="cta" :href="RELEASES">Scopri il debutto →</a>
       </div>
