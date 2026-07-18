@@ -72,9 +72,14 @@ Il **carosello** attuale (`ShowcaseCarousel.vue` + scenes) nel nuovo design non 
 
 ## 3. Matomo — tracciamento comportamenti
 
-### 3.1 Piattaforma da creare su Gigantto
+### 3.1 Istanza esistente su Giganto
 
-Serve l'istanza (era già in roadmap, non è mai stata creata): **Matomo + MariaDB in container** su Gigantto, dietro reverse proxy TLS, su sottodominio dedicato (es. `stats.<dominio>`). Dimensionamento minimo: il traffico atteso è basso; un container standard con retention corta basta.
+L'istanza Matomo **esiste già** e risponde su **`https://matomo.giganto.it`**: non va creata, va **preparata**. Da fare:
+
+- Creare nel pannello il sito/misurazione per la landing e annotare l'`idSite` da usare nel tag.
+- **Audit della configurazione** rispetto ai requisiti di esenzione (§3.2): anonimizzazione IP ≥2 byte, rispetto DNT, retention log grezzi — sono impostazioni **server-side**, il tag cookieless da solo non basta.
+- **Verificare la raggiungibilità pubblica del tracker**: al 2026-07-18 la connessione HTTPS da rete esterna risulta rifiutata (probabile restrizione IP/firewall). Va bene proteggere il pannello, ma `matomo.php` e `matomo.js` devono essere raggiungibili da qualsiasi visitatore, altrimenti la landing non traccia nulla.
+- Verificare versione/aggiornamenti dell'istanza prima di collegarla a un sito pubblico.
 
 ### 3.2 Configurazione privacy-first (obbligatoria, non facoltativa)
 
@@ -98,7 +103,7 @@ Questa configurazione è ciò che rende **superfluo il banner cookie** (§4). Ne
 |---|---|---|
 | Click CTA download, con OS rilevato | hero + banda download desktop | goal «Download avviato» |
 | Submit form «Mandami il link» | sezione mobile | **solo l'evento, mai l'indirizzo email** |
-| Spunta opt-in newsletter | form mobile | conteggio consensi, anonimo |
+| Iscrizioni newsletter | — | non tracciabili da Matomo del sito (avvengono via CTA in mail → pagina listmonk): usare le statistiche di listmonk |
 | Click «Scopri il debutto →» | ribbon | |
 | Outbound GitHub | hero + footer | |
 | Navigazione ancore (collezione/servizi/come funziona) | topbar | opzionale |
@@ -119,44 +124,63 @@ Fonti: [Matomo senza consenso/banner](https://matomo.org/faq/new-to-piwik/how-do
 
 ## 5. «Mandami il link» + raccolta email
 
-### 5.1 Il conflitto da risolvere prima di scrivere una riga di codice
+### 5.1 La soluzione: nessuna iscrizione dal sito
 
-Il design mobile promette testualmente: *«un solo link. Niente newsletter, niente account, niente scuse.»* La volontà di **raccogliere le email per comunicazioni future** contraddice quella promessa — e raccoglierle in silenzio sarebbe anche illecito (GDPR: finalità e consenso). Non si scioglie con l'ambiguità, si scioglie col **doppio binario**:
+Il design mobile promette testualmente: *«un solo link. Niente newsletter, niente account, niente scuse.»* La raccolta contatti per comunicazioni future **non passa dal sito** — così la promessa resta vera alla lettera, il form resta un campo solo e non c'è micro-copy da rinegoziare:
 
-1. **Invio link** (funzione primaria): l'email serve solo a recapitare il link di download. Base giuridica: esecuzione della richiesta dell'utente. L'indirizzo **si cancella automaticamente** dopo un tempo breve (es. 30 giorni).
-2. **Newsletter "stagioni"** (opzionale): checkbox **non preselezionata**, es. *«Avvisami quando debutta una nuova stagione»*. Base giuridica: consenso, con **double opt-in** (mail di conferma). Solo chi conferma entra nella lista.
+1. **Dal sito**: l'email serve esclusivamente a recapitare il link di download. Base giuridica: esecuzione della richiesta dell'utente. L'indirizzo **si cancella automaticamente** dopo un tempo breve (es. 30 giorni).
+2. **Dalla mail**: il corpo della mail col link contiene una **CTA di iscrizione** (es. *«Vuoi sapere quando debutta una nuova stagione? Avvisami →»*) che porta a una **pagina di iscrizione dedicata** con **double opt-in**. Chi clicca compie un'azione esplicita e la mail di conferma la sigilla: consenso pulito, lista costruita solo con chi la vuole davvero.
 
-Micro-copy da aggiornare di conseguenza (proposta, da riportare in `contenuti.md` quando approvata): *«un solo link. La newsletter solo se la spunti tu.»* Così la promessa resta vera e la lista si costruisce onestamente — che è anche l'unico modo coerente col brand "niente dark pattern".
+La mail del link è l'unico punto in cui la newsletter viene proposta — una volta, senza insistere. È l'approccio più coerente col brand "niente dark pattern": la conversione sarà più bassa di una checkbox, ma ogni iscritto è genuino.
 
-### 5.2 Architettura consigliata
+### 5.2 Architettura
 
-Il sito è statico (GitHub Pages): il form fa **POST cross-origin** verso Gigantto.
+Il sito è statico (GitHub Pages): il form fa **POST cross-origin** verso Giganto. L'iscrizione alla lista **non** passa dall'endpoint: avviene solo dopo, via CTA nella mail, sulla pagina pubblica dell'applicativo di supporto.
 
 ```
-form (apps/site) ──POST──► endpoint Go «mandami-il-link» (Gigantto)
+form (apps/site) ──POST──► endpoint Go «mandami-il-link» (Giganto)
                               │  rate limit IP · honeypot · validazione
                               │  errori opachi (pattern PapErrore, CWE-209)
-                              ├──► listmonk API transazionale ──► relay SMTP ──► email col link
-                              └──► listmonk lista «stagioni» (solo se opt-in, double opt-in)
+                              └──► API transazionale (app di supporto) ──► relay SMTP ──► mail col link
+                                                                                            │
+              pagina di iscrizione «stagioni» (double opt-in, app di supporto) ◄── CTA nel corpo della mail
 ```
 
-- **listmonk** (self-hosted su Gigantto, AGPL, binario singolo + Postgres): gestisce liste, double opt-in, unsubscribe, template, export/cancellazione GDPR, e ha un'API transazionale per l'invio del link. Evita di reinventare la gestione iscritti.
-- **Endpoint proxy in Go** (stile `apps/server`): non esporre listmonk direttamente. Fa rate limiting per IP, honeypot, validazione sintattica email, CORS ristretto al dominio del sito, risposte **non enumeranti** (sempre "Fatto, controlla la posta" — coerente con il lavoro #512 sugli errori opachi). Niente email in chiaro nei log.
-- **Relay SMTP esterno** per la consegna: **non** inviare SMTP direttamente da Gigantto (reputazione IP, PTR, blacklist = link che finiscono in spam). Serve un account presso un provider transazionale (preferenza UE) e la configurazione **SPF + DKIM + DMARC** sul dominio mittente. Questa è l'unica dipendenza esterna dell'intero impianto: scelta del provider da fare con Roberto.
+- **Endpoint proxy in Go** (stile `apps/server`): non esporre l'applicativo di supporto direttamente. Fa rate limiting per IP, honeypot, validazione sintattica email, CORS ristretto al dominio del sito, risposte **non enumeranti** (sempre "Fatto, controlla la posta" — coerente con il lavoro #512 sugli errori opachi). Niente email in chiaro nei log.
+- **Pagina di iscrizione**: è quella pubblica dell'applicativo di supporto (double opt-in nativo, unsubscribe nativo) — non serve proxarla, ha le sue protezioni; va solo brandizzata (template) e linkata all'informativa privacy.
+- **Relay SMTP esterno** per la consegna: **non** inviare SMTP direttamente da Giganto (reputazione IP, PTR, blacklist = link che finiscono in spam). Serve un account presso un provider transazionale (preferenza UE) e la configurazione **SPF + DKIM + DMARC** sul dominio mittente. Questa è l'unica dipendenza esterna dell'intero impianto: scelta del provider da fare con Roberto.
 - **Anti-abuso**: se il rate limit non basta, aggiungere [Altcha](https://altcha.org) (proof-of-work self-hosted, zero cookie). **Mai reCAPTCHA/Turnstile**: terze parti in contrasto col posizionamento privacy e col §4.
+
+### 5.2bis Applicativo di supporto: listmonk o altro?
+
+Requisiti: **(a)** API transazionale per la mail del link, **(b)** pagina di iscrizione pubblica con double opt-in, **(c)** gestione lista per le campagne future (unsubscribe, bounce, export/cancellazione GDPR), **(d)** self-hosted su Giganto con footprint contenuto.
+
+| | **listmonk** | **Keila** | **Mailtrain** | Custom (Go + DB) |
+|---|---|---|---|---|
+| Stack | Go, binario singolo + Postgres | Elixir/Phoenix | Node.js | Go |
+| API transazionale (a) | ✅ nativa | limitata (focus campagne) | ❌ | da scrivere |
+| Pagina iscrizione + double opt-in (b) | ✅ nativi | ✅ (form builder) | ✅ | da scrivere |
+| Campagne/lista (c) | ✅ completo | ✅ completo, UI più curata | ✅ ma base | da scrivere |
+| Footprint (d) | <100 MB RAM | più pesante (BEAM) | medio | minimo |
+| Manutenzione | attiva | attiva, progetto più giovane | **rallentata** | tutta a carico nostro |
+| Licenza | AGPL | AGPL | GPL | — |
+
+**Raccomandazione: listmonk.** Copre da solo tutti e quattro i requisiti, è nello **stesso stack Go di `apps/server`** (manutenzione familiare), un binario + Postgres, AGPL come PaP. **Keila** è la riserva se in futuro contasse di più l'editor visuale delle campagne — ma introduce uno stack Elixir estraneo al monorepo. **Mailtrain** scartato (sviluppo rallentato, niente transazionale). La soluzione custom reinventerebbe double opt-in, unsubscribe e bounce handling: da evitare.
+
+Fonti confronto: [Keila vs listmonk (openalternative)](https://openalternative.co/compare/keila/vs/listmonk) · [panoramica piattaforme self-hosted](https://mailflowauthority.com/email-comparisons/open-source-newsletter-platforms) · [Mailtrain vs listmonk](https://stackshare.io/stackups/listmonk-vs-mailtrain)
 
 ### 5.3 Impatto e fasi
 
 Il form è **solo mobile**: la landing desktop non ne dipende. Quindi:
 
 - **Fase A** — landing live senza backend: su mobile la CTA degrada a link diretto alla release Latest ("Apri la pagina di download") o resta il form con messaggio "in arrivo". **Decisione consigliata: lanciare con il fallback**, non tenere la landing in ostaggio del backend.
-- **Fase B** — backend attivo: form completo con doppio binario.
+- **Fase B** — backend attivo: form live, mail transazionale col link + CTA di iscrizione (§5.1).
 
-Piattaforme nuove da creare su Gigantto (riepilogo): **1)** Matomo + MariaDB (§3), **2)** listmonk + Postgres, **3)** endpoint Go `mandami-il-link`. Più l'account relay SMTP (esterno). Tutte e tre dietro il reverse proxy TLS esistente.
+Piattaforme nuove da creare su Giganto (riepilogo): **1)** listmonk + Postgres, **2)** endpoint Go `mandami-il-link` — Matomo esiste già (§3.1). Più l'account relay SMTP (esterno). Entrambe dietro il reverse proxy TLS esistente.
 
 ### 5.4 Obblighi privacy (dal momento in cui il form va live)
 
-- **Pagina «Privacy»** nel sito: informativa art. 13 GDPR — titolare (Roberto Marchioro), le due finalità con le rispettive basi giuridiche e retention (§5.1), diritti dell'interessato, contatto. Linkata dal form e dal footer.
+- **Pagina «Privacy»** nel sito: informativa art. 13 GDPR — titolare (Roberto Marchioro), le due finalità con le rispettive basi giuridiche e retention (§5.1), diritti dell'interessato, contatto. Linkata dal form, dalla pagina di iscrizione e dal footer.
 - Il claim di `contenuti.md` §10 (*"Nessun 'Privacy Policy' complesso perché non raccogliamo dati"*) **decade**: aggiornare `contenuti.md` quando la Fase B parte.
 - Unsubscribe in ogni mail della lista (listmonk lo fa da sé); cancellazione automatica delle email non iscritte; nessun indirizzo nei log applicativi.
 - Niente trasferimenti extra-UE se il relay SMTP scelto è UE; in caso contrario, va detto nell'informativa.
@@ -167,14 +191,14 @@ Ordine suggerito (ogni fase = PR autonoma verso `main`):
 
 1. **F1 — Token + desktop `#4a`**: custom properties Cloud Dancer, restyle/riscrittura componenti (§2.2), layout 1280 con breakpoint 1080/900.
 2. **F2 — Mobile `#3a`**: collasso ≤680px, hamburger/drawer, form in modalità fallback (Fase A §5.3).
-3. **F3 — Matomo**: creazione istanza su Gigantto, tag cookieless, eventi §3.4, disclaimer footer.
-4. **F4 — Form email**: listmonk + endpoint Go + relay SMTP, doppio binario, pagina Privacy, aggiornamento `contenuti.md`.
+3. **F3 — Matomo**: preparazione istanza esistente (audit §3.1), tag cookieless, eventi §3.4, disclaimer footer.
+4. **F4 — Form email**: listmonk + endpoint Go + relay SMTP, mail col link + CTA di iscrizione, pagina Privacy, aggiornamento `contenuti.md`.
 
 Checklist di ogni PR (estende quella di `contenuti.md`):
 
 - [ ] Copy conforme a `contenuti.md`; visivo conforme agli handoff (pixel-perfect sui render `4a-desktop.png` / `3a-mobile.png`)
 - [ ] Regola viola/ambra rispettata; token `{{…}}` sempre ambra
-- [ ] Nessuna richiesta a domini terzi (font self-hosted; unica eccezione runtime: POST del form verso Gigantto)
+- [ ] Nessuna richiesta a domini terzi (font self-hosted; unica eccezione runtime: POST del form verso Giganto)
 - [ ] `prefers-reduced-motion`, focus visibile, hit target 44px, contrasti verificati (§2.4)
 - [ ] Build statico verde + Lighthouse ≥95 (Perf/A11y/SEO)
 - [ ] Matomo: eventi verificati in staging, nessun dato personale negli eventi
