@@ -14,6 +14,16 @@ Una **sola pagina** con **due layout della stessa direzione creativa**:
 
 Il breakpoint di collasso è **≤680px**: sotto quella soglia si passa **alla composizione mobile 3a**, non a un desktop compresso (regola esplicita del handoff desktop; breakpoint intermedi 1080/900 descritti lì). Palette **Cloud Dancer** (chiara), design token identici tra le due varianti: implementarli **una volta sola** come CSS custom properties.
 
+### 1.1 Architettura dei layout: due alberi, un URL (decisione 2026-07-18)
+
+Valutata l'alternativa "due pagine distinte" e scartata (su GitHub Pages non esistono redirect server-side: servirebbe sniffing user-agent via JS con flash di pagina sbagliata, più doppio URL con annotazioni SEO sconsigliate da Google e statistiche Matomo spezzate). La decisione è:
+
+- **Un solo URL**, ma **due alberi di componenti completamente separati**: `LandingDesktop.vue` (composizione `#4a`) e `LandingMobile.vue` (composizione `#3a`). **Nessuna media query condivisa tra le due composizioni**: ognuna è scritta pixel-perfect sul proprio handoff, senza CSS che serve due padroni.
+- Entrambi gli alberi sono montati nella pagina; la commutazione a **680px** avviene in **CSS puro** (`display:none` sull'albero non attivo) — SSG-friendly, niente flash, niente JS di detection. I breakpoint interni al desktop (1080/900) vivono **solo** dentro `LandingDesktop.vue`.
+- Si **condividono solo** i pezzi identici per natura: design token (custom properties), `download.ts`/`os.ts`, il mockup palette (`CmdkPalette.vue` parametrizzato), il modulo form (§5). Il resto non si forza in comune: se un blocco diverge tra i due handoff, si duplica — la divergenza è del design, non un difetto del codice.
+- Costo accettato: DOM doppio (~decine di KB, tutto inline — irrilevante per una landing). Beneficio: sviluppo, review e fix di un layout **senza rischio di regressione sull'altro**.
+- **Verifica obbligatoria in ogni PR**: screenshot Playwright alle larghezze chiave **392 / 680 / 900 / 1280** confrontati coi render `3a-mobile.png` / `4a-desktop.png`.
+
 ### Cosa NON implementare (dagli handoff, ribadito)
 
 - Il runtime di prototipazione (`support.js`) e la struttura `.dc.html`: servono solo markup e stili come riferimento.
@@ -33,7 +43,7 @@ Il breakpoint di collasso è **≤680px**: sotto quella soglia si passa **alla c
 
 ### 2.2 Riuso dei componenti esistenti
 
-Non ripartire da zero: la struttura attuale in `theme/components/landing/` copre già gran parte dei blocchi. Mappa indicativa:
+Non ripartire da zero: la struttura attuale in `theme/components/landing/` copre già gran parte dei blocchi. I componenti nuovi/restylati vanno organizzati sotto i **due alberi di §1.1** (`LandingDesktop.vue` / `LandingMobile.vue`); condivisi solo token, `download.ts`/`os.ts`, palette mockup e modulo form. Mappa indicativa:
 
 | Blocco nuovo | Componente esistente | Azione |
 |---|---|---|
@@ -186,14 +196,15 @@ Piattaforme nuove da creare su Giganto (riepilogo): **1)** listmonk + Postgres, 
 
 Ordine suggerito (ogni fase = PR autonoma verso `main`):
 
-1. **F1 — Token + desktop `#4a`**: custom properties Cloud Dancer, restyle/riscrittura componenti (§2.2), layout 1280 con breakpoint 1080/900.
-2. **F2 — Mobile `#3a`**: collasso ≤680px, hamburger/drawer, form in modalità fallback (Fase A §5.3).
+1. **F1 — Token + desktop `#4a`**: custom properties Cloud Dancer, albero `LandingDesktop.vue` (§1.1), restyle/riscrittura componenti (§2.2), layout 1280 con breakpoint interni 1080/900.
+2. **F2 — Mobile `#3a`**: albero `LandingMobile.vue` separato, commutazione CSS a 680px, hamburger/drawer, form in modalità fallback (Fase A §5.3).
 3. **F3 — Matomo**: preparazione istanza esistente (audit §3.1), tag cookieless, eventi §3.4, disclaimer footer.
 4. **F4 — Form email**: listmonk + endpoint Go + relay SMTP, mail col link + CTA di iscrizione, pagina Privacy, aggiornamento `contenuti.md`.
 
 Checklist di ogni PR (estende quella di `contenuti.md`):
 
 - [ ] Copy conforme a `contenuti.md`; visivo conforme agli handoff (pixel-perfect sui render `4a-desktop.png` / `3a-mobile.png`)
+- [ ] Screenshot Playwright a 392 / 680 / 900 / 1280 confrontati coi render; nessuna regressione sull'altro layout (§1.1)
 - [ ] Regola viola/ambra rispettata; token `{{…}}` sempre ambra
 - [ ] Nessuna richiesta a domini terzi (font self-hosted; unica eccezione runtime: POST del form verso Giganto)
 - [ ] `prefers-reduced-motion`, focus visibile, hit target 44px, contrasti verificati (§2.4)
