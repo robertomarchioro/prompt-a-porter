@@ -76,7 +76,7 @@ const linkDownload = useLinkDownload()
 }
 .etesto {
   font-size: 12.5px;
-  color: #6e6c60;
+  color: var(--pap-muted);
 }
 h1 {
   font-family: var(--pap-serif);
@@ -92,7 +92,9 @@ h1 em {
 }
 .sub {
   font-family: var(--pap-serif);
-  font-weight: 300;
+  /* 400 sotto i 30px: il 300 su fondo chiaro degrada la leggibilità
+     (decisione 2026-07-18, vale per tutti i serif medi). */
+  font-weight: 400;
   font-size: 25px;
   line-height: 1.4;
   color: var(--pap-sub);

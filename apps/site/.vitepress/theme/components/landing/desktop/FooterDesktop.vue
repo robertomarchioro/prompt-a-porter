@@ -105,7 +105,7 @@ import {
 }
 .tagline {
   font-family: var(--pap-serif);
-  font-weight: 300;
+  font-weight: 400;
   font-size: 19px;
   line-height: 1.4;
   color: var(--pap-sub);

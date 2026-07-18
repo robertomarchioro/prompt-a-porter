@@ -71,7 +71,7 @@ Il **carosello** attuale (`ShowcaseCarousel.vue` + scenes) nel nuovo design non 
 - `prefers-reduced-motion`: disattiva il blink del caret e ogni transizione decorativa.
 - Focus visibile su link, bottoni, input (la palette chiara rende facile perderlo: outline viola).
 - Hit target ≥44px su CTA e voci nav mobile.
-- **Contrasto**: i toni faint (`#AEAB9F` su `#F1F0EC`) non passano WCAG AA per testo informativo — ammessi **solo** per elementi decorativi (eyebrow ridondanti, meta ornamentali). Ogni testo che porta informazione usa almeno `#8C8A80`/`#54524A` e va verificato.
+- **Contrasto — scala scurita rispetto al handoff** (decisione Roberto 2026-07-18, in produzione): i grigi originali erano illeggibili su `#F1F0EC` (`#8C8A80` = 3.0:1, `#AEAB9F` = 2.0:1). La scala implementata è spostata di un gradino: `--pap-muted: #6E6C60` (4.6:1, AA ✓) per descrizioni/body, `--pap-faint: #8C8A80` per label secondarie, `--pap-ornamento: #AEAB9F` riservato ai soli ornamenti. Inoltre **Newsreader 300 solo sopra i 30px**: i serif medi (sottotitoli, tagline, titoli card) usano peso 400.
 - **Corpi minimi**: il prototipo usa mono a 8–9px; sul web reale non scendere sotto ~10px effettivi (usare `rem`), a costo di allargare leggermente le label.
 - La regola cromatica **viola = brand/azione, ambra = segnaposti** è un vincolo: i token `{{…}}` sono sempre ambra JetBrains Mono su tint ambra.
 - Lighthouse ≥95 in Performance/Accessibility/SEO (checklist PR di `contenuti.md`).
