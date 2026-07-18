@@ -20,7 +20,7 @@ palette globale a portata di hotkey — su Windows, macOS e Linux.
 **[📖 Guida rapida](https://robertomarchioro.github.io/prompt-a-porter/utente/getting-started)** ·
 **[📋 Changelog](CHANGELOG.md)**
 
-<img src="docs/roadmap/website/screenshots/02-carosello-libreria.png" alt="La Libreria di Prompt a Porter" width="720" />
+<img src="docs/roadmap/website/archivio/screenshots/02-carosello-libreria.png" alt="La Libreria di Prompt a Porter" width="720" />
 
 </div>
 

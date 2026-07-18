@@ -57,7 +57,7 @@ La **fonte autorevole della pianificazione** è [`release-plan.md`](./release-pl
 | [`fase-5-enterprise.md`](./fase-5-enterprise.md) | Step della Fase 5 — dettaglio tecnico Step 0a-8 per `v2.0.0` (PaP Enterprise) |
 | [`rinvii.md`](./rinvii.md) | **Censimento unificato di tutto ciò che è stato deliberatamente rinviato.** Singola fonte di verità degli item rinviati; classificati per stream (v1.0 / v2.0 / patch line `v0.2.x` / scartato) |
 | [`SAL_2026_05_17.MD`](./SAL_2026_05_17.MD) | Stato Avanzamento Lavori snapshot 2026-05-17 — recap todo/bloccanti/rinvii con motivazione |
-| [`website/`](./website/README.md) | **Thread parallelo — Landing page PaP**. Sottocartella con 6 doc per agente parallelo: handoff Claude Design (contenuti IT), stack Astro, hosting GitHub Pages, analytics Matomo self-hosted su Gigantto, roadmap fasi |
+| [`website/`](./website/archivio/README.md) | **Thread parallelo — Landing page PaP**. Sottocartella con 6 doc per agente parallelo: handoff Claude Design (contenuti IT), stack Astro, hosting GitHub Pages, analytics Matomo self-hosted su Gigantto, roadmap fasi |
 | [`quality-gate-fase-2.md`](./quality-gate-fase-2.md) | Assessment dei criteri di qualità per il tag `v0.2.0-foundations`: coverage per modulo, audit security, verifica licenza |
 | [`lessons-learned-fase-1.md`](./lessons-learned-fase-1.md) | Lezioni apprese durante l'implementazione della Fase 1, utili per le fasi successive |
 

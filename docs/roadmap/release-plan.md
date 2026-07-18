@@ -43,7 +43,7 @@ Indipendente dai due stream prodotto. Asset di marketing/onboarding utenti:
 
 - **Scope**: landing page IT su GitHub Pages (Astro statico), analytics Matomo self-hosted, no costo continuativo.
 - **Sequenzialità rispetto a v1.0/v2.0**: nessuna, può partire in qualunque momento. Suggerito parallelo a M2-M3 di v1.0 così è pronta a v1.0.0 GA.
-- **Assegnazione**: agente parallelo dedicato (TBD), distinto dall'agente principale. Vedi [`website/README.md`](./website/README.md).
+- **Assegnazione**: agente parallelo dedicato (TBD), distinto dall'agente principale. Vedi [`website/archivio/README.md`](./website/archivio/README.md).
 - **Fasi**: 1 setup tecnico → 2 handoff Claude Design → 3 sviluppo → 4 analytics → 5 lancio. Effort effettivo ~6-10 giorni in 3-4 settimane.
 
 ## Timeline
