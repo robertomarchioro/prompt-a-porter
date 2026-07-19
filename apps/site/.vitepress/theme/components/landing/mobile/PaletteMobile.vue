@@ -1,3 +1,9 @@
+<script setup lang="ts">
+import { useScorciatoie } from '../os'
+
+const { compilaIncolla } = useScorciatoie()
+</script>
+
 <template>
   <div class="wrap">
     <div class="stage">
@@ -37,7 +43,7 @@
         </div>
         <div class="hints">
           <span>↵ seleziona</span>
-          <span class="viola">⌃↵ compila e incolla</span>
+          <span class="viola">{{ compilaIncolla }} compila e incolla</span>
         </div>
       </div>
     </div>

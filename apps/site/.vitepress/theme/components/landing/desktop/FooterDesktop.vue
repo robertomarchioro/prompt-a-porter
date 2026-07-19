@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { withBase } from 'vitepress'
+import { useScorciatoie } from '../os'
 import {
   GITHUB,
   DOCS,
@@ -13,6 +14,8 @@ import {
   DOC_IMPORT,
   DOC_SCORCIATOIE,
 } from '../links'
+
+const { palettaCompatta } = useScorciatoie()
 </script>
 
 <template>
@@ -36,7 +39,7 @@ import {
         <div class="col-label">Atelier</div>
         <a href="#come-funziona">Come funziona</a>
         <a :href="GUIDA">Getting started</a>
-        <a :href="DOC_SCORCIATOIE">La palette ⌃⇧P</a>
+        <a :href="DOC_SCORCIATOIE">La palette {{ palettaCompatta }}</a>
         <a :href="CHANGELOG">Changelog</a>
       </div>
       <div>
