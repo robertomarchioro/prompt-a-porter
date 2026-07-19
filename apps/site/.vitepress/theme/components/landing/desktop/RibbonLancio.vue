@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { RELEASES } from '../links'
+import { traccia } from '../analytics'
 </script>
 
 <template>
@@ -11,7 +12,7 @@ import { RELEASES } from '../links'
         Debutta <em>Arioso Atelier</em> · la prima stagione esce dalla beta
         <span class="dot">·</span> Autunno-Inverno 2026 · v1.0 <span class="dot">·</span>
       </span>
-      <a class="cta" :href="RELEASES">Scopri il debutto →</a>
+      <a class="cta" :href="RELEASES" @click="traccia('ribbon', 'scopri-debutto')">Scopri il debutto →</a>
     </div>
   </div>
 </template>

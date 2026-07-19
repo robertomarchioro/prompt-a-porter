@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { RELEASES } from '../links'
+import { traccia } from '../analytics'
 </script>
 
 <template>
@@ -16,7 +17,7 @@ import { RELEASES } from '../links'
         <span class="msg">
           La prima stagione esce dalla beta <span class="dot">·</span>
         </span>
-        <a class="cta" :href="RELEASES">Scopri il debutto →</a>
+        <a class="cta" :href="RELEASES" @click="traccia('ribbon', 'scopri-debutto-mobile')">Scopri il debutto →</a>
       </div>
     </div>
   </div>

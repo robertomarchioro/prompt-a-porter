@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { RELEASES } from '../links'
+import { traccia } from '../analytics'
 import IconOs from '../desktop/IconOs.vue'
 
 // Fase A (§5.3 istruzioni): il form «Mandami il link» arriva con F4
@@ -20,16 +21,16 @@ import IconOs from '../desktop/IconOs.vue'
         computer. Niente da inquadrare, niente app da cercare.
       </p>
       <div class="cta-row">
-        <a class="cta" :href="RELEASES">Apri la pagina di download →</a>
+        <a class="cta" :href="RELEASES" @click="traccia('download', 'mobile-fallback')">Apri la pagina di download →</a>
       </div>
       <p class="nota">
         <span class="pallino" aria-hidden="true"></span>
         un solo link. Niente newsletter, niente account, niente scuse.
       </p>
       <div class="piattaforme">
-        <a :href="RELEASES"><IconOs os="windows" />Windows</a>
-        <a :href="RELEASES"><IconOs os="macos" />macOS</a>
-        <a :href="RELEASES"><IconOs os="linux" />Linux</a>
+        <a :href="RELEASES" @click="traccia('download', 'mobile-piattaforme', 'windows')"><IconOs os="windows" />Windows</a>
+        <a :href="RELEASES" @click="traccia('download', 'mobile-piattaforme', 'macos')"><IconOs os="macos" />macOS</a>
+        <a :href="RELEASES" @click="traccia('download', 'mobile-piattaforme', 'linux')"><IconOs os="linux" />Linux</a>
       </div>
     </div>
   </div>

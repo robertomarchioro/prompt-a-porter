@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { GITHUB } from '../links'
 import { useLinkDownload } from '../download'
-import { useScorciatoie } from '../os'
+import { useNomeOsVisitatore, useScorciatoie } from '../os'
+import { traccia } from '../analytics'
 import IconOs from './IconOs.vue'
 
 const linkDownload = useLinkDownload()
+const nomeOs = useNomeOsVisitatore()
 const { paletta } = useScorciatoie()
+
+function clickDownload() {
+  traccia('download', 'hero', nomeOs.value ?? 'sconosciuto')
+}
 </script>
 
 <template>
@@ -22,7 +28,7 @@ const { paletta } = useScorciatoie()
         <em>a un tasto di distanza</em> — ovunque tu stia scrivendo.
       </p>
       <div class="cta-row">
-        <a class="pap-btn-primary" :href="linkDownload">↓ Scarica l'app</a>
+        <a class="pap-btn-primary" :href="linkDownload" @click="clickDownload">↓ Scarica l'app</a>
         <a class="pap-btn-ghost" :href="GITHUB">Vedi su GitHub</a>
       </div>
       <div class="piattaforme">

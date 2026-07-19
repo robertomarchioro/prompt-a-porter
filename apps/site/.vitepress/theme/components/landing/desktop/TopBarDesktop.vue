@@ -2,8 +2,15 @@
 import { withBase } from 'vitepress'
 import { GUIDA } from '../links'
 import { useLinkDownload } from '../download'
+import { useNomeOsVisitatore } from '../os'
+import { traccia } from '../analytics'
 
 const linkDownload = useLinkDownload()
+const nomeOs = useNomeOsVisitatore()
+
+function clickDownload() {
+  traccia('download', 'topbar', nomeOs.value ?? 'sconosciuto')
+}
 </script>
 
 <template>
@@ -17,7 +24,7 @@ const linkDownload = useLinkDownload()
       <a href="#servizi">I servizi</a>
       <a href="#come-funziona">Come funziona</a>
       <a :href="GUIDA">Guida</a>
-      <a class="scarica" :href="linkDownload">Scarica</a>
+      <a class="scarica" :href="linkDownload" @click="clickDownload">Scarica</a>
     </nav>
   </div>
 </template>

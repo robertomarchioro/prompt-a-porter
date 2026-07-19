@@ -70,6 +70,10 @@ const { palettaCompatta } = useScorciatoie()
         </div>
         <div class="firma">
           <div class="copy">© 2026 Prompt-à-porter · Edizione locale · Stagione AW26</div>
+          <div class="privacy">
+            Questa pagina usa Matomo self-hosted per analytics anonimizzati. Nessun cookie di
+            terze parti. Nessun dato condiviso.
+          </div>
           <div class="cucito">
             Disegnato da <span class="roberto">Roberto</span> · cucito da <span class="claude">✦ Claude</span>
           </div>
@@ -177,6 +181,12 @@ const { palettaCompatta } = useScorciatoie()
 .copy {
   font-size: 12.5px;
   color: var(--pap-muted);
+}
+.privacy {
+  font-size: 11.5px;
+  color: var(--pap-faint);
+  margin-top: 4px;
+  max-width: 420px;
 }
 .cucito {
   font-family: var(--pap-mono);
