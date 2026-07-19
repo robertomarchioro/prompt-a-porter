@@ -74,7 +74,7 @@ const { palettaCompatta, compilaIncolla } = useScorciatoie()
 }
 .documento {
   background: linear-gradient(160deg, #e7e5de, #d9d7ce);
-  padding: 30px 34px 130px;
+  padding: 30px 34px 155px;
 }
 .finestra {
   display: flex;
@@ -138,7 +138,7 @@ const { palettaCompatta, compilaIncolla } = useScorciatoie()
   stroke: var(--pap-faint);
 }
 .ph {
-  font-size: 15px;
+  font-size: 16px;
   color: var(--pap-faint);
 }
 .caret {
@@ -151,7 +151,7 @@ const { palettaCompatta, compilaIncolla } = useScorciatoie()
 .esc {
   margin-left: auto;
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pap-faint);
   border: 1px solid var(--pap-line);
   border-radius: 5px;
@@ -159,7 +159,7 @@ const { palettaCompatta, compilaIncolla } = useScorciatoie()
 }
 .label {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--pap-faint);
@@ -179,12 +179,12 @@ const { palettaCompatta, compilaIncolla } = useScorciatoie()
   flex: 1;
 }
 .titolo {
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 500;
   color: var(--pap-ink);
 }
 .desc {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--pap-muted);
   margin-top: 2px;
 }
@@ -194,7 +194,7 @@ const { palettaCompatta, compilaIncolla } = useScorciatoie()
 }
 .badge {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pap-ambra-testo);
   background: var(--pap-ambra-bg);
   border: 1px solid var(--pap-ambra-bordo);
@@ -209,7 +209,7 @@ const { palettaCompatta, compilaIncolla } = useScorciatoie()
   background: var(--pap-surface);
 }
 .hints span {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--pap-faint);
 }
 .hints .viola {
@@ -219,7 +219,7 @@ const { palettaCompatta, compilaIncolla } = useScorciatoie()
 .caption {
   text-align: center;
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--pap-faint);

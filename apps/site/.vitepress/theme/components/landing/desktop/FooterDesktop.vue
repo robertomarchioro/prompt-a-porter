@@ -121,7 +121,7 @@ const { palettaCompatta } = useScorciatoie()
 }
 .col-label {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--pap-faint);
@@ -129,7 +129,7 @@ const { palettaCompatta } = useScorciatoie()
 }
 .griglia a {
   display: block;
-  font-size: 13.5px;
+  font-size: 14px;
   color: var(--pap-sub);
   padding: 6px 0;
 }
@@ -175,12 +175,12 @@ const { palettaCompatta } = useScorciatoie()
   text-align: right;
 }
 .copy {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--pap-muted);
 }
 .cucito {
   font-family: var(--pap-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.06em;
   color: var(--pap-faint);
   margin-top: 4px;

@@ -33,7 +33,7 @@
 }
 .kicker {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--pap-viola);
@@ -53,7 +53,7 @@
 }
 .tecnica {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11.5px;
   letter-spacing: 0.04em;
   color: var(--pap-muted);
   margin-top: 16px;

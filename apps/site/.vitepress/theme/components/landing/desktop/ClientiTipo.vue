@@ -35,7 +35,7 @@
 }
 .label {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--pap-faint);
@@ -76,14 +76,14 @@
 }
 .chi {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--pap-viola);
   text-align: center;
 }
 .tag p {
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.55;
   color: var(--pap-sub);
   margin: 12px 0 0;
@@ -91,12 +91,12 @@
 }
 .cmd {
   font-family: var(--pap-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--pap-viola);
 }
 .fileaccio {
   font-family: var(--pap-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--pap-ambra-testo);
 }
 </style>

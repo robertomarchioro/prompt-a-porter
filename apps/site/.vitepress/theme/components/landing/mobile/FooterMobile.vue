@@ -45,7 +45,7 @@
 }
 .care {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--pap-muted);

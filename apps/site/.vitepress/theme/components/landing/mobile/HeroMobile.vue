@@ -38,7 +38,7 @@ const { palettaCompatta } = useScorciatoie()
 }
 .kbd {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   background: var(--pap-white);
   border: 1px solid var(--pap-line);
   border-bottom-width: 2px;
@@ -47,7 +47,7 @@ const { palettaCompatta } = useScorciatoie()
   color: var(--pap-viola);
 }
 .etesto {
-  font-size: 10.5px;
+  font-size: 12px;
   color: #6e6c60;
 }
 h1 {
@@ -75,7 +75,7 @@ h1 em {
   color: var(--pap-ink);
 }
 .pitch {
-  font-size: 12.5px;
+  font-size: 13.5px;
   line-height: 1.6;
   color: var(--pap-muted);
   margin: 14px 8px 0;
