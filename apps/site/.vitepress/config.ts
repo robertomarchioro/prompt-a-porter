@@ -17,6 +17,10 @@ import { defineConfig } from "vitepress";
 const MATOMO_SNIPPET = `var _paq = window._paq = window._paq || [];
 _paq.push(['disableCookies']);
 _paq.push(['setDoNotTrack', true]);
+// sendBeacon: gli eventi sulle CTA che navigano via (Releases, GitHub)
+// sopravvivono all'unload della pagina — senza, il browser può cancellare
+// la richiesta e l'evento non arriva mai.
+_paq.push(['alwaysUseSendBeacon', true]);
 _paq.push(['trackPageView']);
 _paq.push(['enableLinkTracking']);
 (function() {
