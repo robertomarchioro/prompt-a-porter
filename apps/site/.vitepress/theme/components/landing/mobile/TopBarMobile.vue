@@ -56,7 +56,7 @@ function chiudi() {
 }
 .nome {
   font-family: var(--pap-serif);
-  font-size: 16px;
+  font-size: 17px;
 }
 .hamburger {
   font-size: 19px;
@@ -79,7 +79,7 @@ function chiudi() {
   padding: 6px 0;
 }
 .drawer a {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--pap-sub);
   padding: 13px 24px;
   min-height: 44px;

@@ -57,7 +57,7 @@ import { RELEASES } from '../links'
 }
 .flag {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   font-weight: 700;
@@ -68,7 +68,7 @@ import { RELEASES } from '../links'
 }
 .aw {
   font-family: var(--pap-mono);
-  font-size: 11px;
+  font-size: 12.5px;
   letter-spacing: 0.1em;
   color: #e4defa;
   margin-left: auto;
@@ -92,7 +92,7 @@ import { RELEASES } from '../links'
   margin-top: 8px;
 }
 .msg {
-  font-size: 12px;
+  font-size: 13px;
   color: #e4defa;
   flex: 1;
   line-height: 1.35;
@@ -102,11 +102,11 @@ import { RELEASES } from '../links'
 }
 .codice {
   font-family: var(--pap-mono);
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--pap-crema);
 }
 .cta {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: #fff;
   background: rgba(255, 255, 255, 0.16);
