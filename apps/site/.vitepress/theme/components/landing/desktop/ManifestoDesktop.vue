@@ -89,7 +89,7 @@
 }
 .tecnica {
   font-family: var(--pap-mono);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.6;
   letter-spacing: 0.03em;
   color: var(--pap-muted);
@@ -138,7 +138,7 @@
   stroke: var(--pap-faint);
 }
 .ph {
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--pap-faint);
 }
 .caret {
@@ -162,18 +162,18 @@
   flex: 1;
 }
 .titolo {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--pap-ink);
 }
 .desc {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--pap-muted);
   margin-top: 2px;
 }
 .badge {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pap-ambra-testo);
   background: #efe3ce;
   border: 1px solid #e2d2b4;

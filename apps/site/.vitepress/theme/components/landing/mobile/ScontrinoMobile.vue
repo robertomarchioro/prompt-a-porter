@@ -111,7 +111,7 @@ import Spillo from '../desktop/Spillo.vue'
 }
 .numero {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--pap-faint);
@@ -125,7 +125,7 @@ import Spillo from '../desktop/Spillo.vue'
   align-items: center;
   justify-content: space-between;
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--pap-faint);
@@ -148,12 +148,12 @@ import Spillo from '../desktop/Spillo.vue'
 }
 .capo b {
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--pap-ink);
 }
 .capo .desc {
   display: block;
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--pap-muted);
 }
 .capo .viola {
@@ -161,7 +161,7 @@ import Spillo from '../desktop/Spillo.vue'
 }
 .incl {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pap-verde);
 }
 .servizi {
@@ -175,14 +175,14 @@ import Spillo from '../desktop/Spillo.vue'
 }
 .slabel {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--pap-faint);
   width: 100%;
 }
 .chip {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--pap-sub);
   background: var(--pap-page);
   border: 1px solid var(--pap-line);
@@ -211,7 +211,7 @@ import Spillo from '../desktop/Spillo.vue'
   color: var(--pap-viola);
 }
 .tmeta {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pap-faint);
   text-align: right;
   margin-top: 2px;

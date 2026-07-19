@@ -62,7 +62,7 @@ const { compilaIncolla } = useScorciatoie()
 }
 .documento {
   background: linear-gradient(160deg, #e7e5de, #d9d7ce);
-  padding: 22px 18px 66px;
+  padding: 22px 18px 82px;
 }
 .finestra {
   display: flex;
@@ -124,7 +124,7 @@ const { compilaIncolla } = useScorciatoie()
   stroke: var(--pap-faint);
 }
 .ph {
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--pap-faint);
 }
 .caret {
@@ -148,12 +148,12 @@ const { compilaIncolla } = useScorciatoie()
   flex: 1;
 }
 .titolo {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--pap-ink);
 }
 .desc {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--pap-muted);
   margin-top: 2px;
 }
@@ -163,7 +163,7 @@ const { compilaIncolla } = useScorciatoie()
 }
 .badge {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pap-ambra-testo);
   background: var(--pap-ambra-bg);
   border: 1px solid var(--pap-ambra-bordo);
@@ -178,7 +178,7 @@ const { compilaIncolla } = useScorciatoie()
   background: var(--pap-surface);
 }
 .hints span {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pap-faint);
 }
 .hints .viola {
@@ -188,7 +188,7 @@ const { compilaIncolla } = useScorciatoie()
 .caption {
   text-align: center;
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--pap-faint);

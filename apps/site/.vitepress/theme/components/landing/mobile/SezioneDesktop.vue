@@ -60,7 +60,7 @@ import IconOs from '../desktop/IconOs.vue'
 }
 .kicker {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--pap-viola);
@@ -77,7 +77,7 @@ import IconOs from '../desktop/IconOs.vue'
   color: var(--pap-viola);
 }
 .testo {
-  font-size: 11.5px;
+  font-size: 13px;
   line-height: 1.55;
   color: var(--pap-muted);
   margin: 12px 0 0;
@@ -91,7 +91,7 @@ import IconOs from '../desktop/IconOs.vue'
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   padding: 13px 18px;
   border-radius: 12px;
@@ -105,7 +105,7 @@ import IconOs from '../desktop/IconOs.vue'
   filter: brightness(1.08);
 }
 .nota {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--pap-muted);
   margin: 12px 0 0;
   display: flex;
@@ -131,7 +131,7 @@ import IconOs from '../desktop/IconOs.vue'
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--pap-sub);
   padding: 8px 0;
 }

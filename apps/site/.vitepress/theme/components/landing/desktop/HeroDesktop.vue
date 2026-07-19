@@ -77,7 +77,7 @@ const { paletta } = useScorciatoie()
   color: var(--pap-viola);
 }
 .etesto {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--pap-muted);
 }
 h1 {
@@ -125,12 +125,12 @@ h1 em {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--pap-sub);
 }
 .meta {
   font-family: var(--pap-mono);
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--pap-faint);
 }
 

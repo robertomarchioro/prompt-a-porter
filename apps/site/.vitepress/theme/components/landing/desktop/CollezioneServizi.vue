@@ -160,7 +160,7 @@ import Spillo from './Spillo.vue'
 }
 .numero {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--pap-faint);
@@ -174,7 +174,7 @@ import Spillo from './Spillo.vue'
   align-items: center;
   justify-content: space-between;
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--pap-faint);
@@ -197,12 +197,12 @@ import Spillo from './Spillo.vue'
 }
 .capo b {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--pap-ink);
 }
 .capo .desc {
   display: block;
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--pap-muted);
 }
 .capo .viola {
@@ -210,7 +210,7 @@ import Spillo from './Spillo.vue'
 }
 .incl {
   font-family: var(--pap-mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pap-verde);
 }
 .totale-wrap {
@@ -237,7 +237,7 @@ import Spillo from './Spillo.vue'
   color: var(--pap-viola);
 }
 .tmeta {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pap-faint);
   text-align: right;
   margin-top: 2px;
@@ -272,7 +272,7 @@ import Spillo from './Spillo.vue'
   color: var(--pap-viola);
 }
 .raccordo {
-  font-size: 14.5px;
+  font-size: 16px;
   line-height: 1.65;
   color: var(--pap-sub);
   max-width: 460px;
@@ -311,22 +311,22 @@ import Spillo from './Spillo.vue'
 }
 .cnome {
   font-family: var(--pap-serif);
-  font-size: 19px;
+  font-size: 21px;
 }
 .cmono {
   font-family: var(--pap-mono);
-  font-size: 13px;
+  font-size: 14px;
   color: var(--pap-viola);
 }
 .card p {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--pap-muted);
   margin: 0;
 }
 .cmd {
   font-family: var(--pap-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--pap-sub);
 }
 .filo {
