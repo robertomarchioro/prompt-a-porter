@@ -15,7 +15,10 @@ export default defineConfig({
     "Libreria locale per prompt AI — template parametrici, vault cifrato, sync opzionale",
   lang: "it",
   srcDir: "../../docs",
-  base: "/prompt-a-porter/",
+  // Dominio custom www.promptaporter.it (2026-07-19): il sito vive alla
+  // radice. I vecchi URL robertomarchioro.github.io/prompt-a-porter/*
+  // redirigono da soli (gestito da GitHub Pages).
+  base: "/",
   cleanUrls: true,
   lastUpdated: true,
 
@@ -76,11 +79,11 @@ export default defineConfig({
     // Icone { P } definitive (palette viola) — asset in docs/public/icons/,
     // copiati dal handoff docs/roadmap/icons/violet/. Il site.webmanifest ha
     // path relativi: i file devono restare tutti nella stessa cartella.
-    ["link", { rel: "icon", href: "/prompt-a-porter/icons/favicon.ico", sizes: "any" }],
-    ["link", { rel: "icon", type: "image/png", sizes: "32x32", href: "/prompt-a-porter/icons/icon-32.png" }],
-    ["link", { rel: "icon", type: "image/png", sizes: "16x16", href: "/prompt-a-porter/icons/icon-16.png" }],
-    ["link", { rel: "apple-touch-icon", sizes: "180x180", href: "/prompt-a-porter/icons/apple-touch-icon.png" }],
-    ["link", { rel: "manifest", href: "/prompt-a-porter/icons/site.webmanifest" }],
+    ["link", { rel: "icon", href: "/icons/favicon.ico", sizes: "any" }],
+    ["link", { rel: "icon", type: "image/png", sizes: "32x32", href: "/icons/icon-32.png" }],
+    ["link", { rel: "icon", type: "image/png", sizes: "16x16", href: "/icons/icon-16.png" }],
+    ["link", { rel: "apple-touch-icon", sizes: "180x180", href: "/icons/apple-touch-icon.png" }],
+    ["link", { rel: "manifest", href: "/icons/site.webmanifest" }],
     ["meta", { name: "theme-color", content: "#646cff" }],
   ],
 
