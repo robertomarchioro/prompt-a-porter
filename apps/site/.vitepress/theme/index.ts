@@ -3,6 +3,7 @@ import DefaultTheme from 'vitepress/theme'
 import { useData } from 'vitepress'
 import type { Theme } from 'vitepress'
 import Landing from './components/landing/Landing.vue'
+import { tracciaPagina } from './components/landing/analytics'
 // Font self-hosted (§2.3 istruzioni landing): niente CDN Google Fonts —
 // privacy (IP verso terzi) oltre che performance. Pesi usati dal design.
 import '@fontsource/newsreader/300.css'
@@ -39,18 +40,15 @@ export default {
     if (typeof window === 'undefined') return
     // L'hook scatta anche all'idratazione iniziale: quella pagina è già
     // tracciata dallo snippet in head → si deduplica sull'URL corrente.
+    // Il push passa da tracciaPagina(), che gestisce il TrackerProxy di
+    // matomo.js (NON è un Array dopo il caricamento del tracker).
     let ultimoUrl = window.location.pathname
     const originale = router.onAfterRouteChange
     router.onAfterRouteChange = (to: string) => {
       originale?.(to)
       if (to === ultimoUrl) return
       ultimoUrl = to
-      const paq = (window as unknown as { _paq?: unknown[][] })._paq
-      if (Array.isArray(paq)) {
-        paq.push(['setCustomUrl', to])
-        paq.push(['setDocumentTitle', document.title])
-        paq.push(['trackPageView'])
-      }
+      tracciaPagina(to, document.title)
     }
   },
 } satisfies Theme
