@@ -9,6 +9,24 @@ import { defineConfig } from "vitepress";
 // i delimitatori Vue globali (`vue.template.compilerOptions.delimiters`):
 // si applicano anche agli SFC del default theme e ne rompono le
 // interpolazioni (search box, outline, edit link → mustache letterali).
+// Matomo self-hosted (istanza matomo.giganto.it, sito idSite=3) in modalità
+// cookieless: disableCookies + rispetto DoNotTrack → esenzione dal banner
+// cookie (istruzioni landing §3-§4). Iniettato solo in build di produzione
+// per non sporcare i dati con lo sviluppo locale. Le route SPA successive
+// alla prima sono tracciate dal tema (theme/index.ts).
+const MATOMO_SNIPPET = `var _paq = window._paq = window._paq || [];
+_paq.push(['disableCookies']);
+_paq.push(['setDoNotTrack', true]);
+_paq.push(['trackPageView']);
+_paq.push(['enableLinkTracking']);
+(function() {
+  var u = 'https://matomo.giganto.it/';
+  _paq.push(['setTrackerUrl', u + 'matomo.php']);
+  _paq.push(['setSiteId', '3']);
+  var d = document, g = d.createElement('script'), s = d.getElementsByTagName('script')[0];
+  g.async = true; g.src = u + 'matomo.js'; s.parentNode.insertBefore(g, s);
+})();`
+
 export default defineConfig({
   title: "Prompt a Porter",
   description:
@@ -21,6 +39,7 @@ export default defineConfig({
   base: "/",
   cleanUrls: true,
   lastUpdated: true,
+  sitemap: { hostname: "https://www.promptaporter.it" },
 
   // Sito pubblico = solo utente/, test/ e index. Le doc tecniche
   // (architettura, contribuire, operativo, roadmap) restano accessibili
@@ -85,6 +104,9 @@ export default defineConfig({
     ["link", { rel: "apple-touch-icon", sizes: "180x180", href: "/icons/apple-touch-icon.png" }],
     ["link", { rel: "manifest", href: "/icons/site.webmanifest" }],
     ["meta", { name: "theme-color", content: "#646cff" }],
+    ...(process.env.NODE_ENV === "production"
+      ? ([["script", {}, MATOMO_SNIPPET]] as [string, Record<string, string>, string][])
+      : []),
   ],
 
   themeConfig: {

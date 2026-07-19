@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import { useLinkDownload } from '../download'
+import { useNomeOsVisitatore } from '../os'
+import { traccia } from '../analytics'
 import IconOs from './IconOs.vue'
 import Spillo from './Spillo.vue'
 
 const linkDownload = useLinkDownload()
+const nomeOs = useNomeOsVisitatore()
+
+function clickDownload() {
+  traccia('download', 'banda', nomeOs.value ?? 'sconosciuto')
+}
 </script>
 
 <template>
@@ -19,7 +26,7 @@ const linkDownload = useLinkDownload()
           silenziosi.
         </p>
         <div class="cta-row">
-          <a class="pap-btn-primary" :href="linkDownload">↓ Scarica la 1.0</a>
+          <a class="pap-btn-primary" :href="linkDownload" @click="clickDownload">↓ Scarica la 1.0</a>
           <span class="meta">gratis · local-first · AGPL 3.0</span>
         </div>
         <div class="piattaforme">

@@ -3,6 +3,12 @@ layout: landing
 title: Prompt-à-porter — La tua collezione di prompt AI
 head:
   - - meta
+    - property: og:url
+      content: https://www.promptaporter.it/
+  - - meta
+    - property: og:type
+      content: website
+  - - meta
     - property: og:title
       content: Prompt-à-porter — La tua collezione di prompt AI
   - - meta

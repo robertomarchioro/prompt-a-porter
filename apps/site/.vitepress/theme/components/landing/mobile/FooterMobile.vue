@@ -18,6 +18,10 @@
       100% locale · no cloud · nessun account · AGPL 3.0<br />
       <span class="firma">Disegnato da Roberto · cucito da <span class="claude">✦ Claude</span></span>
     </div>
+    <div class="privacy">
+      Questa pagina usa Matomo self-hosted per analytics anonimizzati. Nessun cookie di terze
+      parti. Nessun dato condiviso.
+    </div>
   </footer>
 </template>
 
@@ -59,5 +63,11 @@
 }
 .claude {
   color: #d97757;
+}
+.privacy {
+  font-size: 11px;
+  color: var(--pap-faint);
+  margin-top: 10px;
+  line-height: 1.5;
 }
 </style>

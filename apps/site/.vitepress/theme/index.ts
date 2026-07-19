@@ -33,4 +33,24 @@ const Layout = defineComponent({
 export default {
   extends: DefaultTheme,
   Layout,
+  enhanceApp({ router }) {
+    // Matomo è iniettato in head solo in produzione (config.ts): dopo il
+    // primo pageview, le navigazioni SPA vanno tracciate a mano.
+    if (typeof window === 'undefined') return
+    // L'hook scatta anche all'idratazione iniziale: quella pagina è già
+    // tracciata dallo snippet in head → si deduplica sull'URL corrente.
+    let ultimoUrl = window.location.pathname
+    const originale = router.onAfterRouteChange
+    router.onAfterRouteChange = (to: string) => {
+      originale?.(to)
+      if (to === ultimoUrl) return
+      ultimoUrl = to
+      const paq = (window as unknown as { _paq?: unknown[][] })._paq
+      if (Array.isArray(paq)) {
+        paq.push(['setCustomUrl', to])
+        paq.push(['setDocumentTitle', document.title])
+        paq.push(['trackPageView'])
+      }
+    }
+  },
 } satisfies Theme
