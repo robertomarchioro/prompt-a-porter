@@ -1,4 +1,4 @@
-import { onMounted, ref, type Ref } from 'vue'
+import { computed, onMounted, ref, type ComputedRef, type Ref } from 'vue'
 
 // Rilevamento OS del visitatore per personalizzare le CTA di download
 // ("Scarica per Windows/macOS/Linux"). Il sito è prerenderizzato (SSG):
@@ -28,6 +28,35 @@ export function classificaPiattaforma(
   if (/Win/i.test(platform)) return 'windows'
   if (/Linux/i.test(platform)) return 'linux'
   return null
+}
+
+/**
+ * Etichette delle scorciatoie tastiera coerenti con l'OS del visitatore:
+ * simboli Mac (⌃⇧P) solo su macOS; Windows, Linux, mobile, no-JS e OS
+ * ignoti vedono lo stile "Ctrl + Shift + P" (default SSG, quindi niente
+ * hydration mismatch — su Mac l'etichetta si aggiorna in onMounted).
+ */
+export interface Scorciatoie {
+  paletta: ComputedRef<string>
+  palettaCompatta: ComputedRef<string>
+  compilaIncolla: ComputedRef<string>
+}
+
+export function useScorciatoie(): Scorciatoie {
+  const isMac = ref(false)
+  onMounted(() => {
+    isMac.value =
+      classificaPiattaforma(
+        navigator.userAgent ?? '',
+        navigator.platform ?? '',
+        navigator.maxTouchPoints ?? 0,
+      ) === 'macos'
+  })
+  return {
+    paletta: computed(() => (isMac.value ? '⌃ ⇧ P' : 'Ctrl + Shift + P')),
+    palettaCompatta: computed(() => (isMac.value ? '⌃⇧P' : 'Ctrl+Shift+P')),
+    compilaIncolla: computed(() => (isMac.value ? '⌃↵' : 'Ctrl+↵')),
+  }
 }
 
 /**

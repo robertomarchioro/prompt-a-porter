@@ -1,7 +1,15 @@
+<script setup lang="ts">
+// Su mobile la scorciatoia appare in stile Windows (default di
+// useScorciatoie: gli OS mobili non sono macOS).
+import { useScorciatoie } from '../os'
+
+const { palettaCompatta } = useScorciatoie()
+</script>
+
 <template>
   <div class="hero">
     <span class="eyebrow">
-      <span class="kbd">⌃⇧P</span>
+      <span class="kbd">{{ palettaCompatta }}</span>
       <span class="etesto">in qualsiasi app</span>
     </span>
     <h1>Prompt-<em>à</em>-porter</h1>

@@ -1,3 +1,9 @@
+<script setup lang="ts">
+import { useScorciatoie } from '../os'
+
+const { palettaCompatta, compilaIncolla } = useScorciatoie()
+</script>
+
 <template>
   <div class="wrap">
     <div class="stage">
@@ -48,11 +54,11 @@
           <span>esc chiudi</span>
           <span>↑↓ naviga</span>
           <span>↵ seleziona</span>
-          <span class="viola">⌃↵ compila e incolla</span>
+          <span class="viola">{{ compilaIncolla }} compila e incolla</span>
         </div>
       </div>
     </div>
-    <div class="caption">Funzione in evidenza · La palette — premi <span class="viola">⌃⇧P</span> ovunque</div>
+    <div class="caption">Funzione in evidenza · La palette — premi <span class="viola">{{ palettaCompatta }}</span> ovunque</div>
   </div>
 </template>
 

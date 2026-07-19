@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { GITHUB } from '../links'
 import { useLinkDownload } from '../download'
+import { useScorciatoie } from '../os'
 import IconOs from './IconOs.vue'
 
 const linkDownload = useLinkDownload()
+const { paletta } = useScorciatoie()
 </script>
 
 <template>
@@ -11,7 +13,7 @@ const linkDownload = useLinkDownload()
     <div class="glow" aria-hidden="true"></div>
     <div class="in">
       <span class="eyebrow">
-        <span class="kbd">Ctrl + Shift + P</span>
+        <span class="kbd">{{ paletta }}</span>
         <span class="etesto">richiama la tua collezione, in qualsiasi app</span>
       </span>
       <h1>Prompt-<em>à</em>-porter</h1>
