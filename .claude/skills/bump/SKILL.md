@@ -76,7 +76,12 @@ Solo le sezioni non vuote, in quest'ordine. Le voci sono scritte per l'utente fi
 
 ### 4. Sanity locale
 
-Prima del commit, in `apps/client`: `pnpm run lint && pnpm run test && pnpm run build:frontend`
+Prima di tutto `pnpm install --frozen-lockfile` alla radice del workspace: se i merge
+recenti sono avvenuti in worktree, i `node_modules` del checkout principale possono
+essere stale rispetto al lockfile (vissuto: v0.8.42, deps di #530 mancanti → lint e
+test rossi per una non-causa).
+
+Poi in `apps/client`: `pnpm run lint && pnpm run test && pnpm run build:frontend`
 tutti verdi.
 
 ### 5. Commit e push su main
