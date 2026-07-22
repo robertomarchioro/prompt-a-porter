@@ -1,5 +1,14 @@
 # Changelog — Prompt a Porter
 
+## v0.8.42 — Rifiniture updater e vault (2026-07-22)
+
+> Due rifiniture dal triage delle segnalazioni: le note di rilascio nell'updater ora si leggono come testo formattato, e il minimo della password del vault torna a 8 caratteri.
+
+### Fix
+
+- **Note di rilascio leggibili nell'updater** (#524): in **Impostazioni → Aggiornamenti** le note della nuova versione erano mostrate come markdown grezzo (`#`, `-`, `**`); ora vengono renderizzate — titoli, elenchi, grassetti, link. Il contenuto arriva dalla release GitHub ed è sanificato prima della visualizzazione; i link si aprono fuori dall'app, senza far navigare via la finestra.
+- **Minimo password vault a 8 caratteri** (#525): il minimo di 12 caratteri introdotto in v0.8.40 (#462) si è rivelato troppo rigido all'uso; torna a 8. I vault già cifrati non sono toccati; il criterio è allineato ovunque (creazione, cambio password, cifratura di un vault esistente, procedura guidata).
+
 ## v0.8.41 — Hotfix: scroll del diff nel Ritocco (2026-07-18)
 
 > Hotfix per v0.8.40: su Windows, nella schermata "Modifiche proposte" del Ritocco il diff veniva tagliato senza possibilità di scorrere.
