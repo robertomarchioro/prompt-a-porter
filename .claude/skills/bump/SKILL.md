@@ -47,7 +47,8 @@ La versione nei file è `X.Y.Z` **senza** prefisso `v`:
 | `apps/client/src-tauri/Cargo.lock` | entry `[[package]] name = "pap"` (a mano o `cargo update -p pap`) |
 
 Poi verifica la coerenza: la nuova versione deve comparire in tutti e 4 i file
-(`grep -rn "X.Y.Z" <i 4 file>`).
+(`grep -rn "X.Y.Z" <i 4 file>`). L'allineamento del `Cargo.lock` non è cosmetico:
+la CI builda con `--locked` e fallisce se non combacia col `Cargo.toml`.
 
 ### 3. Voce CHANGELOG
 
@@ -73,7 +74,12 @@ formato esatto delle release precedenti:
 Solo le sezioni non vuote, in quest'ordine. Le voci sono scritte per l'utente finale
 (cosa cambia per lui), non per lo sviluppatore; i riferimenti issue/PR tra parentesi.
 
-### 4. Commit, push, tag
+### 4. Sanity locale
+
+Prima del commit, in `apps/client`: `pnpm run lint && pnpm run test && pnpm run build:frontend`
+tutti verdi.
+
+### 5. Commit e push su main
 
 Commit direttamente su main (il bump non passa da PR):
 
@@ -82,6 +88,11 @@ git add -A
 git commit -m "chore(release): bump vX.Y.Z — Titolo" -m "<riassunto breve dei cambi principali>"
 git push
 ```
+
+**Attendi il client-build verde su main** prima di taggare
+(`gh run watch` sul run appena partito): è il gate `--locked` + lint/test/build.
+
+### 6. Tag
 
 Tag annotato con lo stesso formato dei precedenti (prima riga = titolo, poi bullet;
 la firma avviene automaticamente dalla config git):
@@ -92,7 +103,7 @@ git tag -a vX.Y.Z -m "vX.Y.Z — Titolo" -m "- Voce principale 1 (#nnn)
 git push origin vX.Y.Z
 ```
 
-### 5. Verifica la build di release
+### 7. Verifica la build di release
 
 ```bash
 gh run list --workflow=release.yml --limit 1
@@ -102,7 +113,7 @@ Il push del tag avvia `release.yml`: build matrix 3 OS (~15–20 min) che produc
 **release DRAFT**. Attendi l'esito e controlla la draft: asset attesi per piattaforma
 + `latest.json`. Se la build fallisce, indaga con `gh run view <id> --log-failed`.
 
-### 6. STOP — riporta all'utente
+### 8. STOP — riporta all'utente
 
 Link alla draft, esito build, e il promemoria dei passi manuali (sotto).
 
