@@ -70,12 +70,18 @@ importers:
       diff2html:
         specifier: ^3
         version: 3.4.56
+      dompurify:
+        specifier: ^3.4.12
+        version: 3.4.12
       driver.js:
         specifier: ^1.7.0
         version: 1.7.0
       lucide-svelte:
         specifier: ^1.0.1
         version: 1.0.1(svelte@5.56.5)
+      marked:
+        specifier: ^18.0.7
+        version: 18.0.7
       paneforge:
         specifier: ^1.0.2
         version: 1.0.2(svelte@5.56.5)
@@ -1586,6 +1592,9 @@ packages:
   dom-accessibility-api@0.5.16:
     resolution: {integrity: sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg==}
 
+  dompurify@3.4.12:
+    resolution: {integrity: sha512-zQvGet8Z2sWbQhCmfFz/T5QWH2oBmjnqK3qvOjaqaNLrLEF912WamU+ohnTp0TCep/MFVHpdJuCZEdFOdTnEFg==}
+
   driver.js@1.7.0:
     resolution: {integrity: sha512-IWkESaVWaoxIWu3TqTpLRDgOFmDdjZsg/Oz7hrrr4ApBUapTFm9YCXYnptu3mKN8l4eAdtrxpU54l7kHLK96tw==}
 
@@ -1966,6 +1975,11 @@ packages:
 
   mark.js@8.11.1:
     resolution: {integrity: sha512-1I+1qpDt4idfgLQG+BNWmrqku+7/2bi5nLf4YwF8y8zXvmfiTBY3PV3ZibfrjBueCByROpuBjLLFCajqkgYoLQ==}
+
+  marked@18.0.7:
+    resolution: {integrity: sha512-iDVQ5ldaiKXn6b2JroX5kgRfmwgqolW7NpaEzTl1k/2Zh1njIEN9yniyLV/mOvWwtsE8OGgkjsCYvijuPk1dtA==}
+    engines: {node: '>= 20'}
+    hasBin: true
 
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
@@ -3928,6 +3942,10 @@ snapshots:
 
   dom-accessibility-api@0.5.16: {}
 
+  dompurify@3.4.12:
+    optionalDependencies:
+      '@types/trusted-types': 2.0.7
+
   driver.js@1.7.0: {}
 
   dunder-proto@1.0.1:
@@ -4339,6 +4357,8 @@ snapshots:
       semver: 7.8.5
 
   mark.js@8.11.1: {}
+
+  marked@18.0.7: {}
 
   math-intrinsics@1.1.0: {}
 

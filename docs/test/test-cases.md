@@ -34,7 +34,7 @@ Primo giro di gate test su **v0.8.13** (Windows 11): 8 anomalie aperte come issu
 **Steps**:
 1. Avvia l'app.
 2. Si apre il wizard di onboarding.
-3. Step "Crea vault": inserisci password ≥ 12 caratteri con mix lettere/numeri/simboli.
+3. Step "Crea vault": inserisci password ≥ 8 caratteri con mix lettere/numeri/simboli.
 4. Conferma password (campo di re-digitazione).
 5. Click "Crea".
 

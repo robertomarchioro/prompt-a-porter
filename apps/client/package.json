@@ -37,8 +37,10 @@
     "codemirror": "^6.0.0",
     "diff": "^9.0.0",
     "diff2html": "^3",
+    "dompurify": "^3.4.12",
     "driver.js": "^1.7.0",
     "lucide-svelte": "^1.0.1",
+    "marked": "^18.0.7",
     "paneforge": "^1.0.2"
   },
   "devDependencies": {

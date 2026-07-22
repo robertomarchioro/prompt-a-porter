@@ -42,7 +42,7 @@ Il vault è il file che contiene tutti i tuoi prompt: un unico archivio SQLite, 
 
 ### 2. Cifra il tuo vault
 
-La cifratura (SQLCipher, AES-256) è **opzionale ma consigliata**: protegge i tuoi prompt anche se qualcun altro mette le mani sul file. Scegli una password robusta (minimo 12 caratteri, mix lettere/numeri/simboli). **La password non è recuperabile:** se la dimentichi devi ricreare il vault. Considera di salvarla in un password manager.
+La cifratura (SQLCipher, AES-256) è **opzionale ma consigliata**: protegge i tuoi prompt anche se qualcun altro mette le mani sul file. Scegli una password robusta (minimo 8 caratteri, mix lettere/numeri/simboli). **La password non è recuperabile:** se la dimentichi devi ricreare il vault. Considera di salvarla in un password manager.
 
 Se preferisci un vault in chiaro, attiva il toggle **"Salta cifratura del vault"** (segnalato con badge "Sconsigliato").
 
