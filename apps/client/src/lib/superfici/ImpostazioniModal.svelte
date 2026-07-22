@@ -54,6 +54,7 @@
   import HotkeyInput from "$lib/components/HotkeyInput.svelte";
   import LogViewer from "$lib/components/LogViewer.svelte";
   import { nomeFileExport, scaricaBlob } from "$lib/util/dati-export";
+  import { renderNotesHtml } from "$lib/util/updater-notes";
   import {
     statoTema,
     salvaTemaTono,
@@ -695,8 +696,8 @@
       erroreCifra = "Inserisci una master password.";
       return;
     }
-    if (cifraPassword.length < 12) {
-      erroreCifra = "La password deve avere almeno 12 caratteri.";
+    if (cifraPassword.length < 8) {
+      erroreCifra = "La password deve avere almeno 8 caratteri.";
       return;
     }
     if (cifraPassword !== cifraConferma) {
@@ -1324,9 +1325,9 @@
       errorePassword = "Compila vecchia e nuova password.";
       return;
     }
-    if (nuovaPassword.length < 12) {
+    if (nuovaPassword.length < 8) {
       errorePassword =
-        "La nuova password deve essere lunga almeno 12 caratteri.";
+        "La nuova password deve essere lunga almeno 8 caratteri.";
       return;
     }
     if (nuovaPassword !== confermaPassword) {
@@ -1672,7 +1673,7 @@
               <div class="form-pwd">
                 <input
                   type="password"
-                  placeholder="Master password (≥ 12 caratteri)"
+                  placeholder="Master password (≥ 8 caratteri)"
                   bind:value={cifraPassword}
                   autocomplete="new-password"
                 />
@@ -1751,7 +1752,7 @@
               />
               <input
                 type="password"
-                placeholder="Nuova password (≥ 12 caratteri)"
+                placeholder="Nuova password (≥ 8 caratteri)"
                 bind:value={nuovaPassword}
                 autocomplete="new-password"
               />
@@ -2627,7 +2628,9 @@
                   {#if updaterStato.notes}
                     <details class="sviluppo-elenco">
                       <summary>Note di rilascio</summary>
-                      <pre class="updater-notes">{updaterStato.notes}</pre>
+                      <div class="updater-notes">
+                        {@html renderNotesHtml(updaterStato.notes)}
+                      </div>
                     </details>
                   {/if}
                 </div>
@@ -3270,11 +3273,46 @@
     border-radius: var(--radius-sm);
     padding: var(--sp-2);
     margin: 6px 0 0 0;
-    font-family: var(--font-mono);
     font-size: var(--fs-xs);
     color: var(--text-default);
-    white-space: pre-wrap;
     word-break: break-word;
+    line-height: 1.5;
+  }
+  .updater-notes :global(h1),
+  .updater-notes :global(h2),
+  .updater-notes :global(h3) {
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    margin: var(--sp-2) 0 4px 0;
+  }
+  .updater-notes :global(h1:first-child),
+  .updater-notes :global(h2:first-child),
+  .updater-notes :global(h3:first-child) {
+    margin-top: 0;
+  }
+  .updater-notes :global(p) {
+    margin: 0 0 var(--sp-2) 0;
+  }
+  .updater-notes :global(ul),
+  .updater-notes :global(ol) {
+    margin: 0 0 var(--sp-2) 0;
+    padding-left: 1.2em;
+  }
+  .updater-notes :global(li) {
+    margin: 2px 0;
+  }
+  .updater-notes :global(code) {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background: var(--bg-overlay);
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  .updater-notes :global(a) {
+    color: var(--accent-team);
+  }
+  .updater-notes :global(*:last-child) {
+    margin-bottom: 0;
   }
 
   /* M6 PR-4: sezione Dati */

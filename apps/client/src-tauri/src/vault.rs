@@ -17,11 +17,13 @@ use crate::util_random::riempi_random;
 const SALT_LEN: usize = 16;
 const KEY_LEN: usize = 32;
 // #462 (security review, LOW): il vault è un artefatto portabile (file
-// esportabile/copiabile), quindi la password minima passa da 8 a 12
-// caratteri alla creazione. L'apertura di un vault esistente (vault_unlock)
-// NON applica questo minimo: password già create con 8+ caratteri restano
-// valide per lo sblocco.
-const PASSWORD_MIN_LEN: usize = 12;
+// esportabile/copiabile), quindi la password minima era passata da 8 a 12
+// caratteri alla creazione.
+// #525 (decisione del proprietario): il minimo torna a 8 — usabilità
+// prevale sull'hardening in questo caso. L'apertura di un vault esistente
+// (vault_unlock) non ha mai applicato un minimo: password già create con
+// meno di 8 caratteri restano comunque valide per lo sblocco.
+const PASSWORD_MIN_LEN: usize = 8;
 const ARGON2_MEMORY_KIB: u32 = 32_768; // 32 MiB
 const ARGON2_TIME_COST: u32 = 3;
 const ARGON2_PARALLELISM: u32 = 4;
@@ -1038,25 +1040,25 @@ mod test {
         assert!(!state.esiste());
     }
 
-    /// #462: alza il minimo da 8 a 12 — una password di 11 caratteri
-    /// (accettata prima del fix) deve ora essere rifiutata alla creazione.
+    /// #525: il minimo è 8 — una password di 7 caratteri deve essere
+    /// rifiutata alla creazione.
     #[test]
-    fn crea_impl_password_11_caratteri_ora_rifiutata() {
+    fn crea_impl_password_7_caratteri_rifiutata() {
         let (_dir, state) = vault_temp();
-        let password_11 = "a".repeat(11);
-        assert_eq!(password_11.len(), 11);
-        let r = vault_crea_impl(&password_11, &state);
+        let password_7 = "a".repeat(7);
+        assert_eq!(password_7.len(), 7);
+        let r = vault_crea_impl(&password_7, &state);
         assert!(matches!(r, Err(PapErrore::PasswordTroppoCorta)));
         assert!(!state.esiste());
     }
 
-    /// #462: una password di esattamente 12 caratteri è il nuovo minimo valido.
+    /// #525: una password di esattamente 8 caratteri è il minimo valido.
     #[test]
-    fn crea_impl_password_12_caratteri_accettata() {
+    fn crea_impl_password_8_caratteri_accettata() {
         let (_dir, state) = vault_temp();
-        let password_12 = "a".repeat(12);
-        assert_eq!(password_12.len(), 12);
-        vault_crea_impl(&password_12, &state).unwrap();
+        let password_8 = "a".repeat(8);
+        assert_eq!(password_8.len(), 8);
+        vault_crea_impl(&password_8, &state).unwrap();
         assert!(state.esiste());
     }
 
@@ -1107,16 +1109,16 @@ mod test {
         assert!(state.esiste());
     }
 
-    /// #462: l'apertura di un vault esistente NON deve applicare il nuovo
-    /// minimo di 12 caratteri — un vault creato in passato (o via disco,
-    /// bypassando `vault_crea_impl`) con una password più corta di 8
-    /// caratteri deve continuare a sbloccarsi normalmente.
+    /// #525: l'apertura di un vault esistente non applica alcun minimo di
+    /// lunghezza — un vault creato in passato (o via disco, bypassando
+    /// `vault_crea_impl`) con una password più corta dell'attuale minimo (8)
+    /// deve continuare a sbloccarsi normalmente.
     #[test]
-    fn unlock_impl_password_legacy_corta_di_8_caratteri_funziona() {
+    fn unlock_impl_password_legacy_corta_funziona() {
         let (_dir, state) = vault_temp();
 
-        let password_legacy = "corta8ch"; // 8 caratteri, sotto il nuovo minimo
-        assert_eq!(password_legacy.len(), 8);
+        let password_legacy = "corta"; // 5 caratteri, sotto il minimo attuale
+        assert_eq!(password_legacy.len(), 5);
 
         let salt = genera_salt().unwrap();
         let chiave = deriva_chiave(password_legacy, &salt, 4096, 1, 1).unwrap();
