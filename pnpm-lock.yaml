@@ -35,11 +35,11 @@ importers:
         specifier: ^6.43.6
         version: 6.43.6
       '@fontsource/inter':
-        specifier: ^5.1
-        version: 5.2.8
+        specifier: ^5.3
+        version: 5.3.0
       '@fontsource/jetbrains-mono':
-        specifier: ^5.1
-        version: 5.2.8
+        specifier: ^5.3
+        version: 5.3.0
       '@tauri-apps/api':
         specifier: ^2.11.1
         version: 2.11.1
@@ -74,27 +74,27 @@ importers:
         specifier: ^3.4.12
         version: 3.4.12
       driver.js:
-        specifier: ^1.7.0
-        version: 1.7.0
+        specifier: ^1.8.0
+        version: 1.8.0
       lucide-svelte:
         specifier: ^1.0.1
-        version: 1.0.1(svelte@5.56.5)
+        version: 1.0.1(svelte@5.56.7)
       marked:
         specifier: ^18.0.7
         version: 18.0.7
       paneforge:
         specifier: ^1.0.2
-        version: 1.0.2(svelte@5.56.5)
+        version: 1.0.2(svelte@5.56.7)
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.2.0
-        version: 7.2.0(svelte@5.56.5)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1))
+        version: 7.2.0(svelte@5.56.7)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1))
       '@tauri-apps/cli':
         specifier: ^2.11.4
         version: 2.11.4
       '@testing-library/svelte':
         specifier: ^5.4.2
-        version: 5.4.2(svelte@5.56.5)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1))(vitest@4.1.10)
+        version: 5.4.2(svelte@5.56.7)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1))(vitest@4.1.10)
       '@vitest/coverage-v8':
         specifier: 4.1.10
         version: 4.1.10(vitest@4.1.10)
@@ -102,11 +102,11 @@ importers:
         specifier: ^29.1.1
         version: 29.1.1
       svelte:
-        specifier: ^5.56.5
-        version: 5.56.5
+        specifier: ^5.56.7
+        version: 5.56.7
       svelte-check:
         specifier: ^4.7.3
-        version: 4.7.3(picomatch@4.0.5)(svelte@5.56.5)(typescript@6.0.3)
+        version: 4.7.3(picomatch@4.0.5)(svelte@5.56.7)(typescript@6.0.3)
       tslib:
         specifier: ^2.8.0
         version: 2.8.1
@@ -157,14 +157,14 @@ importers:
   apps/site:
     devDependencies:
       '@fontsource/inter':
-        specifier: ^5.1
-        version: 5.2.8
+        specifier: ^5.3
+        version: 5.3.0
       '@fontsource/jetbrains-mono':
-        specifier: ^5.1
-        version: 5.2.8
+        specifier: ^5.3
+        version: 5.3.0
       '@fontsource/newsreader':
-        specifier: ^5.2.10
-        version: 5.2.10
+        specifier: ^5.3.0
+        version: 5.3.0
       vitepress:
         specifier: ^1.5.0
         version: 1.6.4(@algolia/client-search@5.52.1)(@types/node@26.1.1)(lightningcss@1.32.0)(postcss@8.5.19)(search-insights@2.17.3)(typescript@6.0.3)
@@ -721,14 +721,14 @@ packages:
       '@noble/hashes':
         optional: true
 
-  '@fontsource/inter@5.2.8':
-    resolution: {integrity: sha512-P6r5WnJoKiNVV+zvW2xM13gNdFhAEpQ9dQJHt3naLvfg+LkF2ldgSLiF4T41lf1SQCM9QmkqPTn4TH568IRagg==}
+  '@fontsource/inter@5.3.0':
+    resolution: {integrity: sha512-RofMylZmjlJEfELXeNHFWBRcSs75rGU/6bV2S2jfnvv/3rPXPGe0LgUJTklcHZ9lM4OZmAVFhcJPnACfb91A3g==}
 
-  '@fontsource/jetbrains-mono@5.2.8':
-    resolution: {integrity: sha512-6w8/SG4kqvIMu7xd7wt6x3idn1Qux3p9N62s6G3rfldOUYHpWcc2FKrqf+Vo44jRvqWj2oAtTHrZXEP23oSKwQ==}
+  '@fontsource/jetbrains-mono@5.3.0':
+    resolution: {integrity: sha512-fqDfB5I9f1p1TV486aUgB9t8zP84P0O1FtQR5Ol9vjwPy+S+EIGlVYm1cvj2W5shcZMTg2nZFdVMoH5wFu8a1A==}
 
-  '@fontsource/newsreader@5.2.10':
-    resolution: {integrity: sha512-TFaYzoFhDqarUyV2yYjgZZEwT4bpaj6sGBnXSnFknQ/QB8/9LzfY6IO9+inHOX4zzPp87Z7/KuG1OI5gr91Q3A==}
+  '@fontsource/newsreader@5.3.0':
+    resolution: {integrity: sha512-AFR6ZKY89GNL+9qBI2P2+66NhD5bhOj/v6fsLnFYLM4E0JnMB1yKb+Ro8cA64i1hwAWoBfTq5CHJGWH1toLDkw==}
 
   '@hono/node-server@1.19.14':
     resolution: {integrity: sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw==}
@@ -1571,8 +1571,8 @@ packages:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
 
-  devalue@5.8.1:
-    resolution: {integrity: sha512-4CXDYRBGqN+57wVJkuXBYmpAVUSg3L6JAQa/DFqm238G73E1wuyc/JhGQJzN7vUf/CMphYau2zXbfWzDR5aTEw==}
+  devalue@5.8.2:
+    resolution: {integrity: sha512-DObPPAfdtFbXjxLqK8s2Xk9ZuWz5+ZoFEhC7J76es4GU/rEiXwHTmbImoCdyoCOcBH1UF3+Cz6Z2sYD4hyl5TA==}
 
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
@@ -1595,8 +1595,8 @@ packages:
   dompurify@3.4.12:
     resolution: {integrity: sha512-zQvGet8Z2sWbQhCmfFz/T5QWH2oBmjnqK3qvOjaqaNLrLEF912WamU+ohnTp0TCep/MFVHpdJuCZEdFOdTnEFg==}
 
-  driver.js@1.7.0:
-    resolution: {integrity: sha512-IWkESaVWaoxIWu3TqTpLRDgOFmDdjZsg/Oz7hrrr4ApBUapTFm9YCXYnptu3mKN8l4eAdtrxpU54l7kHLK96tw==}
+  driver.js@1.8.0:
+    resolution: {integrity: sha512-+8/IO7h1v14IzWh2GP60N7T3PFZweXwdn5e5POuxRSBoCYUojsBxzqawPeXh3YZIibRy7EehYNEyxe7slwwtdg==}
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -1654,8 +1654,8 @@ packages:
   esm-env@1.2.2:
     resolution: {integrity: sha512-Epxrv+Nr/CaL4ZcFGPJIYLWFom+YeV1DqMLHJoEd9SYRxNbaFruBwfEX/kkHUJf55j2+TUbmDcmuilbP1TmXHA==}
 
-  esrap@2.2.13:
-    resolution: {integrity: sha512-m8jH5hZgJE2RRUK/jjkGPcJEDAV+dYnZYFkosQaPTcE+Yw4xynXHOo6FUdwaWBtdR3b1MMa7wEDTSHeR2VWsGA==}
+  esrap@2.3.0:
+    resolution: {integrity: sha512-GQ/7RN8uOtEfNpzZzBMTzW9JBcX42oaSVtPzdF+6cEL8pqIL094iUpr9jzYGn4O4P/1S60dJ6izyT8F4LYARng==}
     peerDependencies:
       '@typescript-eslint/types': ^8.2.0
     peerDependenciesMeta:
@@ -2349,8 +2349,8 @@ packages:
     peerDependencies:
       svelte: ^5.30.2
 
-  svelte@5.56.5:
-    resolution: {integrity: sha512-P03YJmUy2JoOxYHb4Ka3oFat1hq2ko2it1MOItSjsJ4B6WgZPLc3+RyyU+57OGWhs3Ieq74EJpZtSnNXdAGgDw==}
+  svelte@5.56.7:
+    resolution: {integrity: sha512-5qERUZX80oQj6XrDMUmD2Uhd/cIpCPDWWKBK3ZHmyRUC9apPyamWM8xMo31mbWsIQxwG2hVoSnOJ/EcnhVkkzQ==}
     engines: {node: '>=18'}
 
   symbol-tree@3.2.4:
@@ -3124,11 +3124,11 @@ snapshots:
 
   '@exodus/bytes@1.15.0': {}
 
-  '@fontsource/inter@5.2.8': {}
+  '@fontsource/inter@5.3.0': {}
 
-  '@fontsource/jetbrains-mono@5.2.8': {}
+  '@fontsource/jetbrains-mono@5.3.0': {}
 
-  '@fontsource/newsreader@5.2.10': {}
+  '@fontsource/newsreader@5.3.0': {}
 
   '@hono/node-server@1.19.14(hono@4.12.16)':
     dependencies:
@@ -3403,12 +3403,12 @@ snapshots:
 
   '@sveltejs/load-config@0.2.0': {}
 
-  '@sveltejs/vite-plugin-svelte@7.2.0(svelte@5.56.5)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1))':
+  '@sveltejs/vite-plugin-svelte@7.2.0(svelte@5.56.7)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1))':
     dependencies:
       deepmerge: 4.3.1
       magic-string: 0.30.21
       obug: 2.1.3
-      svelte: 5.56.5
+      svelte: 5.56.7
       vite: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)
       vitefu: 1.1.3(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1))
 
@@ -3492,15 +3492,15 @@ snapshots:
       picocolors: 1.1.1
       pretty-format: 27.5.1
 
-  '@testing-library/svelte-core@1.1.3(svelte@5.56.5)':
+  '@testing-library/svelte-core@1.1.3(svelte@5.56.7)':
     dependencies:
-      svelte: 5.56.5
+      svelte: 5.56.7
 
-  '@testing-library/svelte@5.4.2(svelte@5.56.5)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1))(vitest@4.1.10)':
+  '@testing-library/svelte@5.4.2(svelte@5.56.7)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1))(vitest@4.1.10)':
     dependencies:
       '@testing-library/dom': 10.4.1
-      '@testing-library/svelte-core': 1.1.3(svelte@5.56.5)
-      svelte: 5.56.5
+      '@testing-library/svelte-core': 1.1.3(svelte@5.56.7)
+      svelte: 5.56.7
     optionalDependencies:
       vite: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)
       vitest: 4.1.10(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1))
@@ -3923,7 +3923,7 @@ snapshots:
 
   detect-libc@2.1.2: {}
 
-  devalue@5.8.1: {}
+  devalue@5.8.2: {}
 
   devlop@1.1.0:
     dependencies:
@@ -3946,7 +3946,7 @@ snapshots:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
-  driver.js@1.7.0: {}
+  driver.js@1.8.0: {}
 
   dunder-proto@1.0.1:
     dependencies:
@@ -4037,7 +4037,7 @@ snapshots:
 
   esm-env@1.2.2: {}
 
-  esrap@2.2.13:
+  esrap@2.3.0:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
 
@@ -4336,9 +4336,9 @@ snapshots:
 
   lru-cache@11.3.6: {}
 
-  lucide-svelte@1.0.1(svelte@5.56.5):
+  lucide-svelte@1.0.1(svelte@5.56.7):
     dependencies:
-      svelte: 5.56.5
+      svelte: 5.56.7
 
   lz-string@1.5.0: {}
 
@@ -4451,11 +4451,11 @@ snapshots:
       regex: 6.1.0
       regex-recursion: 6.0.2
 
-  paneforge@1.0.2(svelte@5.56.5):
+  paneforge@1.0.2(svelte@5.56.7):
     dependencies:
-      runed: 0.23.4(svelte@5.56.5)
-      svelte: 5.56.5
-      svelte-toolbelt: 0.9.3(svelte@5.56.5)
+      runed: 0.23.4(svelte@5.56.7)
+      svelte: 5.56.7
+      svelte-toolbelt: 0.9.3(svelte@5.56.7)
 
   parse5@8.0.1:
     dependencies:
@@ -4626,15 +4626,15 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  runed@0.23.4(svelte@5.56.5):
+  runed@0.23.4(svelte@5.56.7):
     dependencies:
       esm-env: 1.2.2
-      svelte: 5.56.5
+      svelte: 5.56.7
 
-  runed@0.29.2(svelte@5.56.5):
+  runed@0.29.2(svelte@5.56.7):
     dependencies:
       esm-env: 1.2.2
-      svelte: 5.56.5
+      svelte: 5.56.7
 
   sade@1.8.1:
     dependencies:
@@ -4771,7 +4771,7 @@ snapshots:
     dependencies:
       has-flag: 4.0.0
 
-  svelte-check@4.7.3(picomatch@4.0.5)(svelte@5.56.5)(typescript@6.0.3):
+  svelte-check@4.7.3(picomatch@4.0.5)(svelte@5.56.7)(typescript@6.0.3):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@sveltejs/load-config': 0.2.0
@@ -4779,19 +4779,19 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.5)
       picocolors: 1.1.1
       sade: 1.8.1
-      svelte: 5.56.5
+      svelte: 5.56.7
       typescript: 6.0.3
     transitivePeerDependencies:
       - picomatch
 
-  svelte-toolbelt@0.9.3(svelte@5.56.5):
+  svelte-toolbelt@0.9.3(svelte@5.56.7):
     dependencies:
       clsx: 2.1.1
-      runed: 0.29.2(svelte@5.56.5)
+      runed: 0.29.2(svelte@5.56.7)
       style-to-object: 1.0.14
-      svelte: 5.56.5
+      svelte: 5.56.7
 
-  svelte@5.56.5:
+  svelte@5.56.7:
     dependencies:
       '@jridgewell/remapping': 2.3.5
       '@jridgewell/sourcemap-codec': 1.5.5
@@ -4802,9 +4802,9 @@ snapshots:
       aria-query: 5.3.1
       axobject-query: 4.1.0
       clsx: 2.1.1
-      devalue: 5.8.1
+      devalue: 5.8.2
       esm-env: 1.2.2
-      esrap: 2.2.13
+      esrap: 2.3.0
       is-reference: 3.0.3
       locate-character: 3.0.0
       magic-string: 0.30.21
