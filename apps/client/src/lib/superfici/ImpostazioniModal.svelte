@@ -937,6 +937,14 @@
 
   let updaterStato = $state<StatoUpdater>({ kind: "idle" });
 
+  // Markdown → HTML sanificato delle note di rilascio, precalcolato qui
+  // invece che inline nel markup (convenzione {@html} di DiffViewer.svelte).
+  const updaterNoteHtml = $derived.by(() =>
+    updaterStato.kind === "available"
+      ? renderNotesHtml(updaterStato.notes)
+      : "",
+  );
+
   async function verificaAggiornamenti(): Promise<void> {
     updaterStato = { kind: "checking" };
     try {
@@ -2629,7 +2637,7 @@
                     <details class="sviluppo-elenco">
                       <summary>Note di rilascio</summary>
                       <div class="updater-notes">
-                        {@html renderNotesHtml(updaterStato.notes)}
+                        {@html updaterNoteHtml}
                       </div>
                     </details>
                   {/if}
