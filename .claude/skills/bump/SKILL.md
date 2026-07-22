@@ -129,6 +129,8 @@ Link alla draft, esito build, e il promemoria dei passi manuali (sotto).
 - Promemoria per il box firma: `git pull` nel checkout del box **prima** di firmare
   (gotcha #291), poi `scripts/sign-release.ps1` (passphrase via DPAPI; lo script
   preserva le entry Linux in `latest.json`).
+- Quando l'utente comunica che ha pubblicato come Latest: eseguire
+  **`/verifica-release vX.Y.Z`** (verifica firme e `latest.json` pubblicati).
 - **Mai** creare heading o voci changelog fuori da questo processo: se dei fix sono
   mergiati ma la release non è decisa, le voci si preparano con `/bump --solo-voci`
   e restano in chat, non nel file.
