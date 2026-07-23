@@ -36,19 +36,6 @@ body:
       label: Contesto aggiuntivo
       description: Schermate, link, esempi simili in altri tool, riferimenti a documenti.
 
-  - type: dropdown
-    id: target_phase
-    attributes:
-      label: A quale fase del progetto pensi sia adatta?
-      description: Vedi `docs/todo-fase-*.md` per la roadmap.
-      options:
-        - Non lo so
-        - Fase 2 (Foundations & Distribuzione)
-        - Fase 3 (Intelligenza & Authoring)
-        - Fase 4 (Workflow Avanzati & QA)
-        - Fase 5 (Ecosistema Enterprise)
-        - Fuori roadmap
-
   - type: checkboxes
     id: dichiarazioni
     attributes:

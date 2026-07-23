@@ -51,9 +51,9 @@ Le segnalazioni serie sono accreditate (con consenso del segnalatore) nel `CHANG
 
 ## Modello di trust
 
-Per chi vuole capire il perimetro di sicurezza di Prompt a Porter, vedere `docs/sicurezza.md` (in arrivo nelle fasi successive) per il threat model dettagliato. Sintesi:
+Sintesi del perimetro di sicurezza di Prompt a Porter:
 
 - **Vault locale**: cifrato con SQLCipher (AES-256), password derivata via Argon2id, mai persistita.
 - **Sync server** (opzionale): autenticazione JWT + Argon2id. Le password utente non lasciano mai il client.
-- **Aggiornamenti** (in arrivo): firma asimmetrica Ed25519 sulle release. Niente update senza signature valida.
-- **End-to-end encryption** (Fase 5): roadmap per workspace ad alta sensibilità.
+- **Aggiornamenti**: firma asimmetrica Ed25519 sulle release, verificata dall'updater. Niente update senza signature valida. Le build sono inoltre firmate Authenticode (Windows) e Developer ID + notarizzazione (macOS).
+- **End-to-end encryption**: in roadmap per workspace ad alta sensibilità.

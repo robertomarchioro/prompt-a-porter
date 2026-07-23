@@ -15,9 +15,9 @@ palette globale a portata di hotkey — su Windows, macOS e Linux.
 [![License: AGPL-3.0](https://img.shields.io/github/license/robertomarchioro/prompt-a-porter?color=blue)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)
 
-**[🌐 Sito](https://robertomarchioro.github.io/prompt-a-porter/)** ·
+**[🌐 Sito](https://www.promptaporter.it/)** ·
 **[⬇️ Download](https://github.com/robertomarchioro/prompt-a-porter/releases/latest)** ·
-**[📖 Guida rapida](https://robertomarchioro.github.io/prompt-a-porter/utente/getting-started)** ·
+**[📖 Guida rapida](https://www.promptaporter.it/utente/getting-started)** ·
 **[📋 Changelog](CHANGELOG.md)**
 
 <img src="docs/roadmap/website/archivio/screenshots/02-carosello-libreria.png" alt="La Libreria di Prompt a Porter" width="720" />
@@ -64,7 +64,7 @@ Tutte le release: **[github.com/robertomarchioro/prompt-a-porter/releases](https
 | **Linux** | `.AppImage` oppure `.deb` |
 
 Primo avvio in 3 passi: dai un nome al vault → scegli se cifrarlo → imposta la hotkey.
-Poi parte il tour guidato. Guida completa: **[getting-started](https://robertomarchioro.github.io/prompt-a-porter/utente/getting-started)**.
+Poi parte il tour guidato. Guida completa: **[getting-started](https://www.promptaporter.it/utente/getting-started)**.
 
 ## L'ecosistema
 

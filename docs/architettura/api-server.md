@@ -5,7 +5,7 @@
 ## Panoramica
 
 Server Go single binary (`papsync`) per sync opzionale dei workspace team.
-Stack: Go 1.23, chi router, SQLite (WAL), Argon2id, JWT HS256, gorilla/websocket.
+Stack: Go 1.25, chi router, SQLite (WAL), Argon2id, JWT HS256, gorilla/websocket.
 
 ## Configurazione
 

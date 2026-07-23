@@ -34,9 +34,12 @@ Trigger: push/PR su `main` quando cambiano file in `apps/server/`.
 
 | Azione | Versione |
 |--------|----------|
-| `actions/checkout` | v4 |
-| `actions/setup-node` | v4 (Node 22) |
-| `pnpm/action-setup` | v4 |
-| `dtolnay/rust-toolchain` | stable |
-| `actions/setup-go` | v5 (Go 1.22) |
-| `golangci/golangci-lint-action` | v6 |
+| `actions/checkout` | v7 |
+| `actions/setup-node` | v7 (Node 22) |
+| `pnpm/action-setup` | v6 |
+| `dtolnay/rust-toolchain` | pin 1.96.0 |
+| `actions/setup-go` | v7 (Go 1.25) |
+| `golangci/golangci-lint-action` | v9 |
+
+> Le versioni sono pinnate per SHA nei workflow: la fonte di verità è sempre
+> `.github/workflows/*.yml`, questa tabella è un riepilogo.

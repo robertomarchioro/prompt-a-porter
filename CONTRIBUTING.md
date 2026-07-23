@@ -14,7 +14,7 @@ Prima di iniziare, leggi anche:
 - Node.js 22.x LTS
 - pnpm 9.x+
 - Rust toolchain stable (per il client Tauri)
-- Go 1.22+ (per il server sync)
+- Go 1.25+ (per la CLI e il server sync)
 - Vedi [`docs/contribuire/setup-sviluppo.md`](docs/contribuire/setup-sviluppo.md) per istruzioni dettagliate
 
 ## Workflow di sviluppo
@@ -79,7 +79,7 @@ Le PR senza DCO sign-off **non vengono mergiate**. Niente CLA, niente burocrazia
 - **Naming**: PascalCase per tipi/componenti/struct, camelCase per variabili/funzioni TypeScript, snake_case per Rust/Go.
 - **CSS**: solo CSS custom properties, niente preprocessor, niente `!important`.
 - **Commenti**: spiegare il *perché*, non il *cosa*. Docstring per funzioni non triviali.
-- **Test**: coverage minima 70% sui moduli core. Test E2E per i flussi critici.
+- **Test**: la CI applica gate di coverage per modulo (client Rust 80% line, client TypeScript 70%, MCP server e shared-schema 80%, server Go 50%) — non far scendere la coverage del modulo che tocchi. Test E2E per i flussi critici.
 - **Immutabilità**: preferire immutable updates (spread, struct copy) a mutazione in-place.
 
 ## Reportare bug e proporre feature

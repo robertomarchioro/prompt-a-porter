@@ -31,7 +31,8 @@ body:
     id: versione
     attributes:
       label: Versione di Prompt a Porter
-      placeholder: v0.1.0-fase1
+      description: La trovi nelle note dell'ultimo aggiornamento o nella pagina Releases.
+      placeholder: es. v0.8.42
     validations:
       required: true
 
