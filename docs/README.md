@@ -9,7 +9,7 @@ La documentazione è organizzata in **5 cluster** per scopo:
 | [**Utente**](./utente/) | Chi usa Prompt a Porter | Guide d'uso del client desktop, della CLI `pap`, dell'integrazione MCP, del formato di export |
 | [**Contribuire**](./contribuire/) | Chi vuole contribuire codice | Setup ambiente di sviluppo, branching strategy, convenzioni |
 | [**Architettura**](./architettura/) | Chi vuole capire o estendere il sistema | Overview moduli, schema dati, API server, design system, decisioni tecniche (ADR) |
-| [**Roadmap**](./roadmap/) | Maintainer e contributor che pianificano | Fasi del progetto, rinvii, quality gate, lessons learned |
+| [**Roadmap**](./roadmap/) | Maintainer e contributor che pianificano | Pianificazione viva: scope v1.0/v2.0, rinvii, esplorazioni post-1.0, naming dei rilasci (lo storico di lavorazione è archiviato fuori repo) |
 | [**Operativo**](./operativo/) | Chi deploya e opera in produzione | Deploy del server, configurazione, runbook |
 
 ## Tipi di file

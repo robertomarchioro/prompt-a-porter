@@ -2,7 +2,7 @@
 
 > **Cosa fissa questo documento**: la convenzione con cui battezziamo e collochiamo nel tempo i rilasci di Prompt a Porter, presa in prestito dal mondo della moda.
 > **Stato**: convenzione approvata dall'autore (2026-06-04). Da applicare ai rilasci futuri; quelli passati restano col loro tag tecnico, non si rinominano retroattivamente.
-> **Relazione con la pianificazione**: questo doc definisce *come si nominano* i rilasci. La timeline autorevole di *quali* rilasci escono resta [`release-plan.md`](./release-plan.md).
+> **Relazione con la pianificazione**: questo doc definisce *come si nominano* i rilasci. La timeline autorevole di *quali* rilasci escono resta [`release-plan.md`](https://github.com/robertomarchioro/prompt-a-porter/blob/98093ce635b81a0b42b4e2ada4ffca0f7397197d/docs/roadmap/release-plan.md) *(storico)*.
 
 ## Perché le stagioni
 
@@ -155,5 +155,5 @@ Lista di partenza. Si pesca dall'alto verso il basso man mano che arrivano le re
 
 - Quando una release cardine viene battezzata: **spuntare il nome usato** dal pool sopra (annotando il `vX.Y.Z` a cui è stato assegnato) e, se il pool si assottiglia, aggiungere nuove lettere/nomi.
 - Quando si apre la linea `2.x` Enterprise: aggiornare §2 con la prima etichetta reale.
-- Se cambia il taglio dei mesi o la cadenza: aggiornare §1 e allineare [`release-plan.md`](./release-plan.md).
-- L'abbinamento codename → rilascio va riportato anche in [`release-plan.md`](./release-plan.md) (fonte autorevole della timeline) e nel `CHANGELOG.md`.
+- Se cambia il taglio dei mesi o la cadenza: aggiornare §1 e allineare [`release-plan.md`](https://github.com/robertomarchioro/prompt-a-porter/blob/98093ce635b81a0b42b4e2ada4ffca0f7397197d/docs/roadmap/release-plan.md) *(storico)*.
+- L'abbinamento codename → rilascio va riportato anche in [`release-plan.md`](https://github.com/robertomarchioro/prompt-a-porter/blob/98093ce635b81a0b42b4e2ada4ffca0f7397197d/docs/roadmap/release-plan.md) *(storico)* (fonte autorevole della timeline) e nel `CHANGELOG.md`.
