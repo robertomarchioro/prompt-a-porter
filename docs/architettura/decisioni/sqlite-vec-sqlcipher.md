@@ -50,8 +50,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --defaul
 # 2. Carica path
 . "$HOME/.cargo/env"
 
-# 3. Esegui spike
-cd /home/roberto/prompt-a-porter/spikes/sqlite-vec
+# 3. Esegui spike (dalla radice del repo)
+cd spikes/sqlite-vec
 cargo run --release
 ```
 

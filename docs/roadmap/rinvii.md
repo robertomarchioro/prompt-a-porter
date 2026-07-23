@@ -77,10 +77,10 @@ Design completato, **nessun codice**. Candidati per i prossimi cicli, ognuno con
 
 **Blueprint atterrati** (spostati qui dalla tabella):
 
-- [`cestino-e-cancellazione-import.md`](./cestino-e-cancellazione-import.md) → v0.8.20 (#302 cestino + #303 warning import); resta solo l'opzione 3 (§2).
-- [`linter-personalizzabile.md`](./linter-personalizzabile.md) → **Fase 1** (#381/#383 toggle per-regola) + **Fase 2** (#384 backend `ConfigLinter`/`SoglieLinter`, #385 frontend UI severità + soglie editabili). Resta solo la **Fase 3** (regole custom utente) — **congelata** per scelta esplicita (blueprint §7), nessun debito.
-- [`guida-interattiva.md`](./guida-interattiva.md) → Fase 0/1/3 in v0.8.20-v0.8.23 (#364-#372: hub + "?" ovunque, tour benvenuto + auto-offerta + micro-tour, checklist "Primi passi"). Resta solo la **Fase 4** (deep-link al sito: quando il sito VitePress `apps/site` sarà pubblicato basta cambiare `SITO_BASE` in `docs-links.ts` — le pagine docs esistono già) + l'esplorazione guidata del vault demo.
-- [`menu-contestuale.md`](./menu-contestuale.md) → taglio principale in v0.8.23 (#374-#380 + tag): card/cartelle/editor/chip-tag/varianti/selezione-multipla + Gestisci tag / Aggiungi tag a N. Gap residui in §2.
+- [`cestino-e-cancellazione-import.md`](https://github.com/robertomarchioro/prompt-a-porter/blob/98093ce635b81a0b42b4e2ada4ffca0f7397197d/docs/roadmap/cestino-e-cancellazione-import.md) *(storico)* → v0.8.20 (#302 cestino + #303 warning import); resta solo l'opzione 3 (§2).
+- [`linter-personalizzabile.md`](https://github.com/robertomarchioro/prompt-a-porter/blob/98093ce635b81a0b42b4e2ada4ffca0f7397197d/docs/roadmap/linter-personalizzabile.md) *(storico)* → **Fase 1** (#381/#383 toggle per-regola) + **Fase 2** (#384 backend `ConfigLinter`/`SoglieLinter`, #385 frontend UI severità + soglie editabili). Resta solo la **Fase 3** (regole custom utente) — **congelata** per scelta esplicita (blueprint §7), nessun debito.
+- [`guida-interattiva.md`](https://github.com/robertomarchioro/prompt-a-porter/blob/98093ce635b81a0b42b4e2ada4ffca0f7397197d/docs/roadmap/guida-interattiva.md) *(storico)* → Fase 0/1/3 in v0.8.20-v0.8.23 (#364-#372: hub + "?" ovunque, tour benvenuto + auto-offerta + micro-tour, checklist "Primi passi"). Resta solo la **Fase 4** (deep-link al sito: quando il sito VitePress `apps/site` sarà pubblicato basta cambiare `SITO_BASE` in `docs-links.ts` — le pagine docs esistono già) + l'esplorazione guidata del vault demo.
+- [`menu-contestuale.md`](https://github.com/robertomarchioro/prompt-a-porter/blob/98093ce635b81a0b42b4e2ada4ffca0f7397197d/docs/roadmap/menu-contestuale.md) *(storico)* → taglio principale in v0.8.23 (#374-#380 + tag): card/cartelle/editor/chip-tag/varianti/selezione-multipla + Gestisci tag / Aggiungi tag a N. Gap residui in §2.
 
 ---
 
