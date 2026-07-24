@@ -24,7 +24,7 @@ Scarica l'ultima release da [GitHub Releases](https://github.com/robertomarchior
 | macOS | `Prompt.a.Porter_X.Y.Z_universal.dmg` (universale: Apple Silicon + Intel) |
 | Linux | `Prompt.a.Porter_X.Y.Z_amd64.AppImage` o `Prompt.a.Porter_X.Y.Z_amd64.deb` |
 
-Su Windows, l'installer chiede l'approvazione SmartScreen al primo avvio: clicca "Altre informazioni" e poi "Esegui comunque" — il binario è firmato con certificato Certum EV (vedi [`auto-update.md`](./auto-update.md) per i dettagli sulla firma).
+Su Windows download e installazione partono senza avvisi: il binario è firmato con certificato Certum EV, che dà a SmartScreen reputazione immediata (vedi [`auto-update.md`](./auto-update.md) per i dettagli sulla firma). Se un avviso SmartScreen dovesse comunque comparire, non è lo stato atteso: vedi [`troubleshooting.md`](./troubleshooting.md).
 
 Su macOS l'app è firmata Developer ID e notarizzata da Apple: il `.dmg` si apre normalmente, senza avvisi Gatekeeper.
 
