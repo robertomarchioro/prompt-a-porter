@@ -67,7 +67,7 @@ Ogni file scaricato dall'updater è verificato in due passaggi:
 
 Se una delle due verifiche fallisce, l'update viene rifiutato con errore. Niente "applica comunque" — niente bypass.
 
-Inoltre il binario Windows è firmato **Authenticode** dalla CA Certum: Windows lo riconosce come publisher fidato e la prima esecuzione non mostra avvisi SmartScreen aggressivi.
+Inoltre il binario Windows è firmato **Authenticode EV** dalla CA Certum: Windows lo riconosce come publisher fidato e né il download né l'installazione mostrano avvisi SmartScreen.
 
 ## Troubleshooting
 
@@ -105,9 +105,9 @@ I tuoi dati restano: il vault è nella cartella dati dell'app (vedi [`getting-st
 
 ### "SmartScreen mi dice che l'eseguibile non è riconosciuto"
 
-Capita nei primi giorni dopo il rilascio di una versione nuova (Microsoft "Reputation Building"): il nostro certificato è valido, ma la specifica versione del file non ha ancora abbastanza scaricamenti per essere classificata come "trusted" da SmartScreen.
+Con il certificato **EV** attuale questo avviso non è lo stato atteso: la reputazione SmartScreen è legata al certificato, non ai download della singola versione, quindi vale anche per le release appena pubblicate.
 
-**Cosa fare**: clicca "Maggiori informazioni" → verifica che il publisher sia "Open Source Developer, Roberto Marchioro" → "Esegui comunque". L'avviso sparisce dopo che il file ha qualche centinaio di download.
+**Cosa fare**: riscarica il file da [github.com/robertomarchioro/prompt-a-porter/releases/latest](https://github.com/robertomarchioro/prompt-a-porter/releases/latest) e riprova. Se l'avviso persiste, clicca "Maggiori informazioni" e verifica che il publisher sia "Open Source Developer, Roberto Marchioro" prima di scegliere "Esegui comunque"; poi segnalacelo con un'issue.
 
 ## FAQ
 

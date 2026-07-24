@@ -10,9 +10,9 @@ Le sezioni seguono il ciclo di vita dell'app: installazione e primo avvio, passw
 
 ### Windows: "SmartScreen ha bloccato l'app"
 
-Può capitare al primissimo avvio dell'installer, subito dopo il download. Il binario è firmato con certificato Authenticode Certum EV, ma Microsoft costruisce la reputazione sui singoli hash di binario nel tempo: per le prime release di ogni versione la reputazione parte da zero e SmartScreen è cauto. Non è un segnale di pericolo.
+Il binario è firmato con certificato Authenticode Certum **EV**, che dà a SmartScreen reputazione immediata: download e installazione, verificati su macchine reali, non mostrano avvisi. Questo avviso **non è lo stato atteso**: se compare, con ogni probabilità il download è corrotto o proviene da una fonte non ufficiale.
 
-**Soluzione**: clicca "Altre informazioni" → "Esegui comunque". Una volta installato, l'app funziona normalmente. Vedi [`auto-update.md`](./auto-update.md) per i dettagli sulla firma.
+**Soluzione**: riscarica l'installer dalla [pagina release ufficiale](https://github.com/robertomarchioro/prompt-a-porter/releases/latest) e riprova. Se l'avviso persiste, clicca "Altre informazioni" e verifica il publisher prima di scegliere "Esegui comunque"; poi apri un'issue: è un caso che vogliamo vedere. Dettagli sulla firma in [`auto-update.md`](./auto-update.md).
 
 ### macOS: "L'app non può essere aperta perché lo sviluppatore non è verificato"
 
