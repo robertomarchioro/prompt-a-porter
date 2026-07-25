@@ -748,7 +748,13 @@ pub fn golden_esegui(
         let main_provider: Box<dyn crate::provider_ai::AIProvider> = if provider_kind == "ollama"
             && base_url.as_deref().map(|u| !u.trim().is_empty()).unwrap_or(false)
         {
-            Box::new(OllamaProvider::new(base_url.clone().unwrap()))
+            // Fix #457: valida lo schema del base_url passato direttamente dal
+            // frontend prima di costruire il provider e fare la POST HTTP, come
+            // già fa `provider_ollama_genera` — un base_url malevolo (es. SSRF
+            // verso metadati cloud) deve essere rifiutato qui.
+            let url = base_url.clone().unwrap();
+            crate::provider_ai::valida_base_url(&url)?;
+            Box::new(OllamaProvider::new(url))
         } else {
             let cfg = crate::provider_ai::config_carica_completa(conn, &provider_kind)?;
             crate::provider_ai::istanzia_provider(&cfg)?

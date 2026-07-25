@@ -243,9 +243,13 @@ pub fn ritocco_esegui(
                 .map(|u| !u.trim().is_empty())
                 .unwrap_or(false)
         {
-            Box::new(crate::provider_ai::OllamaProvider::new(
-                base_url.clone().unwrap(),
-            ))
+            // Valida lo schema/host del base_url passato dal frontend prima di
+            // costruire il provider e inviare la richiesta HTTP, come
+            // `provider_ollama_genera` e `istanzia_provider_con_max_tokens`
+            // (blocca SSRF verso host interni/metadata).
+            let url = base_url.clone().unwrap();
+            crate::provider_ai::valida_base_url(&url)?;
+            Box::new(crate::provider_ai::OllamaProvider::new(url))
         } else {
             let cfg = crate::provider_ai::config_carica_completa(conn, &provider_kind)?;
             crate::provider_ai::istanzia_provider_con_max_tokens(&cfg, Some(RITOCCO_MAX_TOKENS))?

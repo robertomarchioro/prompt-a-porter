@@ -119,6 +119,34 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ErrSessioneNonPiuValida segnala che l'utente dei claim non è più una
+// sessione valida sul DB: non esiste più, è stato disattivato (soft-delete)
+// o non appartiene più al workspace indicato nel token. È distinto da un
+// errore interno del DB, così che i chiamanti possano rispondere 401
+// (sessione da rifiutare) invece di 500.
+var ErrSessioneNonPiuValida = errors.New("sessione non più valida")
+
+// RevalidateUser ri-controlla sul DB, a ogni richiesta protetta, che
+// l'utente dei claim sia ancora attivo e appartenga al workspace del token.
+// Il JWT ha TTL di 24h e porta i claim (userId/workspaceId/role) come unica
+// fonte di verità: senza questo controllo un utente rimosso dal workspace o
+// disattivato (Users.DeletedAt) manterrebbe accesso in lettura/scrittura per
+// tutta la durata del token (CWE-613, Insufficient Session Expiration).
+// Rispecchia il controllo già presente in Refresh, estendendolo alle rotte
+// /sync/pull, /sync/push e /ws che prima si fidavano dei soli claim.
+func RevalidateUser(db *database.DB, claims *Claims) error {
+	var id string
+	err := db.QueryRow(`
+		SELECT Id
+		FROM Users WHERE Id = ? AND WorkspaceId = ? AND DeletedAt IS NULL`,
+		claims.UserId, claims.WorkspaceId,
+	).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrSessioneNonPiuValida
+	}
+	return err
+}
+
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	claims, ok := ClaimsFromContext(r.Context())
 	if !ok {

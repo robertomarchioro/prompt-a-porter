@@ -3,6 +3,7 @@ package sync
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 
@@ -23,10 +24,34 @@ type Handler struct {
 	Hub *ws.Hub
 }
 
+// revalidate ri-controlla sul DB che l'utente dei claim sia ancora attivo e
+// appartenga al workspace del token (CWE-613): il JWT resta valido fino a 24h,
+// quindi ogni rotta protetta deve ricontrollare l'utente, altrimenti un utente
+// rimosso o disattivato mantiene accesso finché il token non scade. Scrive
+// direttamente la risposta di errore e ritorna false se la richiesta va
+// rifiutata; ritorna true se può proseguire.
+func (h *Handler) revalidate(w http.ResponseWriter, claims *auth.Claims) bool {
+	err := auth.RevalidateUser(h.DB, claims)
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, auth.ErrSessioneNonPiuValida) {
+		http.Error(w, `{"error":"sessione non più valida"}`, http.StatusUnauthorized)
+		return false
+	}
+	log.Printf("Errore rivalidazione utente %s: %v", claims.UserId, err)
+	http.Error(w, `{"error":"errore interno"}`, http.StatusInternalServerError)
+	return false
+}
+
 func (h *Handler) Pull(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.ClaimsFromContext(r.Context())
 	if !ok {
 		http.Error(w, `{"error":"non autenticato"}`, http.StatusUnauthorized)
+		return
+	}
+
+	if !h.revalidate(w, claims) {
 		return
 	}
 
@@ -126,6 +151,10 @@ func (h *Handler) Push(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.ClaimsFromContext(r.Context())
 	if !ok {
 		http.Error(w, `{"error":"non autenticato"}`, http.StatusUnauthorized)
+		return
+	}
+
+	if !h.revalidate(w, claims) {
 		return
 	}
 
