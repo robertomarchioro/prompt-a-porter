@@ -82,6 +82,12 @@ const MAX_SEQ_LEN: usize = 128;
 pub struct EmbeddingsState {
     inner: Mutex<Option<EmbeddingsLoaded>>,
     last_used: Mutex<Option<Instant>>,
+    /// Fix TOCTOU (CWE-367): TempDir che contiene la COPIA privata e già
+    /// verificata di libonnxruntime effettivamente caricata da `ort` via
+    /// `ORT_DYLIB_PATH`. Tenuta viva per l'intera vita del processo: dropparla
+    /// cancellerebbe la libreria mentre `ort` la tiene mappata in memoria.
+    /// Sostituita ad ogni (ri)caricamento della Session dallo staging fresco.
+    lib_privata: Mutex<Option<tempfile::TempDir>>,
 }
 
 struct EmbeddingsLoaded {
@@ -94,6 +100,7 @@ impl EmbeddingsState {
         Self {
             inner: Mutex::new(None),
             last_used: Mutex::new(None),
+            lib_privata: Mutex::new(None),
         }
     }
 }
@@ -229,6 +236,163 @@ fn verifica_artefatti_cache_su_disco(dir_modello: &Path, lib_path: &Path) -> Res
     verifica_sha256(&lib_bytes, sha256_lib_atteso, "libonnxruntime")?;
 
     Ok(())
+}
+
+// ─────────── Staging privato libonnxruntime (fix TOCTOU CWE-367) ───────────
+
+/// Nome della directory base, creata e posseduta dall'app, dentro cui viene
+/// messa la copia privata per-processo di libonnxruntime.
+const NOME_BASE_PRIVATA: &str = ".pap-priv";
+
+/// Fix TOCTOU (CWE-367): copia la libreria nativa dalla cache in una directory
+/// privata per-processo (una `mkdtemp` 0700 dentro la base hardened), rilegge
+/// e ri-verifica il SHA-256 della COPIA, e ritorna `(TempDir, path_copia)`.
+///
+/// Il chiamante punta `ORT_DYLIB_PATH` alla copia e tiene vivo il `TempDir`
+/// finché il processo vive: così i byte verificati QUI sono esattamente i byte
+/// che `ort` fa `dlopen`, chiudendo lo swap in-place del file in cache tra la
+/// verifica e il load.
+fn stage_lib_verificata(
+    runtime_dir: &Path,
+    lib_cache_path: &Path,
+    sha256_atteso: &str,
+) -> Result<(tempfile::TempDir, PathBuf), PapErrore> {
+    let base = base_privata_hardened(runtime_dir)?;
+    let tmp = tempfile::Builder::new()
+        .prefix("lib-")
+        .tempdir_in(&base)
+        .map_err(|e| PapErrore::dominio("Impossibile creare la copia privata di libonnxruntime.", e))?;
+    let dest = tmp.path().join(nome_libonnxruntime());
+    fs::copy(lib_cache_path, &dest)
+        .map_err(|e| PapErrore::dominio("Copia privata di libonnxruntime non riuscita.", e))?;
+    // Ri-verifica il SHA-256 della copia effettivamente presente nella dir
+    // privata: è questa la copia che verrà caricata, non più il file in cache.
+    let bytes = fs::read(&dest)
+        .map_err(|e| PapErrore::dominio("Impossibile rileggere la copia privata di libonnxruntime per la verifica.", e))?;
+    verifica_sha256(&bytes, sha256_atteso, "libonnxruntime (copia privata)")?;
+    Ok((tmp, dest))
+}
+
+/// Crea (idempotente) e verifica in modo hardened la directory base privata
+/// `${runtime_dir}/.pap-priv`, così che il PARENT IMMEDIATO della copia
+/// per-processo non sia la runtime-dir largamente scrivibile ma una directory
+/// che l'app crea e possiede.
+///
+/// Controlli symlink-safe (lstat via `symlink_metadata`, che NON segue i
+/// symlink): la base deve essere una directory reale (non un symlink, non un
+/// file), su Unix di proprietà dell'uid corrente e con permessi 0700. Se
+/// esiste già ma fallisce un qualunque controllo (owner/mode sbagliati, è un
+/// symlink, è un file) si FALLISCE CHIUSI con un errore di integrità invece di
+/// usarla.
+///
+/// ONESTÀ sul residuo: questo NON rende a prova d'attacco l'intera catena di
+/// parent. Un attaccante di uid diverso con permesso di scrittura su
+/// `runtime_dir` (scenario che richiede una data-dir group/other-writable, NON
+/// il default) può ancora rinominare `.pap-priv` stessa e tentare una race
+/// sulla directory privata. È una mitigazione, non un'eliminazione completa
+/// (vedi il commento in `init_session_pure`).
+fn base_privata_hardened(runtime_dir: &Path) -> Result<PathBuf, PapErrore> {
+    fs::create_dir_all(runtime_dir)
+        .map_err(|e| PapErrore::dominio("Impossibile preparare la directory runtime di onnxruntime.", e))?;
+    let base = runtime_dir.join(NOME_BASE_PRIVATA);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        match fs::DirBuilder::new().mode(0o700).create(&base) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => {
+                return Err(PapErrore::dominio(
+                    "Impossibile creare la directory privata di libonnxruntime.",
+                    e,
+                ))
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        match fs::create_dir(&base) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => {
+                return Err(PapErrore::dominio(
+                    "Impossibile creare la directory privata di libonnxruntime.",
+                    e,
+                ))
+            }
+        }
+    }
+
+    verifica_base_privata(runtime_dir, &base)?;
+    Ok(base)
+}
+
+/// Controllo hardened, symlink-safe, della directory base privata. Fail-closed
+/// su qualunque anomalia (usato sia sul path creato ora sia su uno pre-esistente).
+fn verifica_base_privata(runtime_dir: &Path, base: &Path) -> Result<(), PapErrore> {
+    // lstat: NON segue i symlink, così un `.pap-priv` piazzato come symlink
+    // dall'attaccante viene rilevato e rifiutato invece di essere seguito.
+    let meta = fs::symlink_metadata(base)
+        .map_err(|e| PapErrore::dominio("Impossibile ispezionare la directory privata di libonnxruntime.", e))?;
+    if meta.file_type().is_symlink() {
+        return Err(PapErrore::Generico(format!(
+            "Verifica integrità fallita per la directory privata {}: è un symlink, \
+             non una directory reale; operazione interrotta.",
+            base.display()
+        )));
+    }
+    if !meta.is_dir() {
+        return Err(PapErrore::Generico(format!(
+            "Verifica integrità fallita per la directory privata {}: non è una \
+             directory; operazione interrotta.",
+            base.display()
+        )));
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        use std::os::unix::fs::PermissionsExt;
+        let uid_atteso = uid_corrente(runtime_dir)?;
+        if meta.uid() != uid_atteso {
+            return Err(PapErrore::Generico(format!(
+                "Verifica integrità fallita per la directory privata {}: proprietario \
+                 inatteso (uid {}, atteso {}); operazione interrotta.",
+                base.display(),
+                meta.uid(),
+                uid_atteso
+            )));
+        }
+        let mode = meta.permissions().mode() & 0o777;
+        if mode != 0o700 {
+            return Err(PapErrore::Generico(format!(
+                "Verifica integrità fallita per la directory privata {}: permessi {mode:o} \
+                 inattesi (atteso 700); operazione interrotta.",
+                base.display()
+            )));
+        }
+    }
+    let _ = runtime_dir; // usato solo su unix (uid probe)
+    Ok(())
+}
+
+/// Apprende l'uid del processo corrente senza dipendere da `libc`, leggendo il
+/// proprietario di un file-probe temporaneo che creiamo — e che quindi
+/// possediamo per certo. Il probe è cancellato all'uscita di funzione.
+#[cfg(unix)]
+fn uid_corrente(runtime_dir: &Path) -> Result<u32, PapErrore> {
+    use std::os::unix::fs::MetadataExt;
+    let probe = tempfile::Builder::new()
+        .prefix(".uid-probe-")
+        .tempfile_in(runtime_dir)
+        .map_err(|e| PapErrore::dominio("Impossibile determinare l'utente del processo.", e))?;
+    let uid = probe
+        .as_file()
+        .metadata()
+        .map_err(|e| PapErrore::dominio("Impossibile leggere i metadati del probe uid.", e))?
+        .uid();
+    Ok(uid)
 }
 
 // ─────────── Status command ───────────
@@ -589,17 +753,43 @@ pub fn init_session_pure(
         ));
     }
 
-    // Fix #458 (review MEDIUM): la verifica SHA-256 avveniva solo al
-    // download. Ri-verifichiamo ORA, ad ogni avvio, PRIMA di impostare
-    // ORT_DYLIB_PATH o caricare la Session — fail-closed se un artefatto
-    // in cache è stato alterato dopo la verifica iniziale.
+    // Fix #458 (review MEDIUM): fail-fast. La verifica SHA-256 avveniva solo
+    // al download; la ri-eseguiamo ORA, ad ogni avvio, così un artefatto in
+    // cache alterato produce subito un errore chiaro — modello e tokenizer
+    // compresi — prima ancora dello staging della libreria nativa.
     verifica_artefatti_cache_su_disco(&dir_modello, &lib_path)?;
 
-    // Punta ort a libonnxruntime via env var. Sicuro perché siamo single-thread
-    // qui (Tauri command sequenziati su mutex), e l'env var è letta solo al
-    // primo Session::create.
+    // Fix TOCTOU (CWE-367): NON puntare ORT_DYLIB_PATH al file in cache.
+    // `ort` fa `dlopen(ORT_DYLIB_PATH)` in modo indipendente DOPO la nostra
+    // verifica; puntando alla cache condivisa i byte verificati e i byte
+    // caricati potrebbero differire, perché un writer della data-dir può
+    // sostituire il file nella finestra check→load → esecuzione di codice
+    // nativo arbitrario in-process. Copiamo invece la libreria in una dir
+    // privata per-processo 0700 (dentro una base `.pap-priv` che creiamo e
+    // possediamo), ri-verifichiamo il SHA-256 della COPIA e puntiamo ort a
+    // quella.
+    //
+    // COSA CHIUDE: lo swap statico/in-place del file in cache — i byte
+    // verificati sono ora esattamente i byte caricati, perché la copia è
+    // ri-verificata e vive in una dir 0700 per-processo tenuta viva per tutta
+    // la vita del processo (campo `lib_privata`).
+    //
+    // RESIDUO (onesto): un attaccante di UID DIVERSO che può scrivere la
+    // runtime-dir può ancora tentare una race di `rename(2)` sulla dir privata
+    // `.pap-priv` tra la verifica e il `dlopen`. Ciò richiede però una data-dir
+    // group/other-writable (NON il default) E la vittoria di una race stretta.
+    // Un attaccante dello STESSO UID è fuori dalla portata di qualunque
+    // approccio path-based, perché `ort` non offre un load da file descriptor.
+    let runtime_dir = percorso_runtime_dir(vault_state);
+    let (_, _, sha256_lib_atteso) = ort_release_filename()?;
+    let (tmp_lib, lib_privata_path) =
+        stage_lib_verificata(&runtime_dir, &lib_path, sha256_lib_atteso)?;
+
+    // Punta ort alla COPIA privata via env var. Sicuro perché siamo
+    // single-thread qui (Tauri command sequenziati su mutex), e l'env var è
+    // letta solo al primo Session::create.
     // SAFETY: set_var è unsafe in edition 2024+ ma stable in 2021.
-    std::env::set_var("ORT_DYLIB_PATH", &lib_path);
+    std::env::set_var("ORT_DYLIB_PATH", &lib_privata_path);
 
     let model_path = dir_modello.join("model.onnx");
     let tokenizer_path = dir_modello.join("tokenizer.json");
@@ -613,6 +803,11 @@ pub fn init_session_pure(
 
     let mut guard = rt_state.inner.lock().unwrap_or_else(|p| p.into_inner());
     *guard = Some(EmbeddingsLoaded { session, tokenizer });
+    // Fix TOCTOU (CWE-367): trattieni il TempDir della copia privata finché il
+    // processo vive. `ort` mantiene la libreria mappata; dropparla ora
+    // cancellerebbe il file da sotto la Session. Sostituisce l'eventuale copia
+    // di un caricamento precedente (post idle-unload), che viene così ripulita.
+    *rt_state.lib_privata.lock().unwrap_or_else(|p| p.into_inner()) = Some(tmp_lib);
     // Marca l'init come "uso recente" così il timer di idle-unload non
     // droppa subito una Session appena caricata.
     *rt_state.last_used.lock().unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
@@ -1226,5 +1421,118 @@ mod test {
         assert_ne!(SHA256_TOKENIZER_JSON, placeholder_zero);
         assert_eq!(SHA256_MODEL_ONNX.len(), 64);
         assert_eq!(SHA256_TOKENIZER_JSON.len(), 64);
+    }
+
+    // ─────────── Fix TOCTOU (CWE-367): staging copia privata verificata ───────────
+    //
+    // NB: il path completo di `dlopen` (ORT_DYLIB_PATH → Session::create) NON è
+    // testabile a livello di unit test, perché richiede la libreria nativa reale
+    // e il caricamento in-process di `ort`. Qui copriamo la logica attorno: lo
+    // staging verificato e l'hardening della directory base.
+
+    #[test]
+    fn stage_lib_verificata_copia_e_verifica_ok() {
+        // La copia privata deve materializzarsi dentro `.pap-priv`, avere lo
+        // stesso contenuto della cache e superare la ri-verifica SHA-256.
+        let dir = tempfile::tempdir().unwrap();
+        let runtime_dir = dir.path().join("onnxruntime").join(ORT_VERSION);
+        std::fs::create_dir_all(&runtime_dir).unwrap();
+        let lib_cache = runtime_dir.join(nome_libonnxruntime());
+        let contenuto = b"finta-libonnxruntime-bytes";
+        std::fs::write(&lib_cache, contenuto).unwrap();
+        let atteso = sha256_hex(contenuto);
+
+        let (tmp, copia) = stage_lib_verificata(&runtime_dir, &lib_cache, &atteso).unwrap();
+        assert!(copia.starts_with(runtime_dir.join(NOME_BASE_PRIVATA)));
+        assert_eq!(std::fs::read(&copia).unwrap(), contenuto);
+        // Il TempDir tiene viva la copia finché non viene droppato.
+        drop(tmp);
+    }
+
+    #[test]
+    fn stage_lib_verificata_hash_errato_fail_closed() {
+        let dir = tempfile::tempdir().unwrap();
+        let runtime_dir = dir.path().join("onnxruntime").join(ORT_VERSION);
+        std::fs::create_dir_all(&runtime_dir).unwrap();
+        let lib_cache = runtime_dir.join(nome_libonnxruntime());
+        std::fs::write(&lib_cache, b"contenuto-reale").unwrap();
+        let atteso_sbagliato = "0".repeat(64);
+
+        let r = stage_lib_verificata(&runtime_dir, &lib_cache, &atteso_sbagliato);
+        assert!(r.is_err());
+        assert!(r.unwrap_err().to_string().contains("integrità"));
+    }
+
+    #[test]
+    fn base_privata_hardened_crea_dir_0700() {
+        let dir = tempfile::tempdir().unwrap();
+        let runtime_dir = dir.path().join("rt");
+        let base = base_privata_hardened(&runtime_dir).unwrap();
+        assert_eq!(base, runtime_dir.join(NOME_BASE_PRIVATA));
+        assert!(base.is_dir());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::symlink_metadata(&base)
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(mode, 0o700, "la base deve essere creata 0700");
+        }
+        // Idempotente: una seconda chiamata riusa la stessa base senza errori.
+        assert!(base_privata_hardened(&runtime_dir).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn base_privata_hardened_rifiuta_symlink() {
+        // Un attaccante che piazza `.pap-priv` come symlink deve far fallire
+        // chiuso la verifica: lstat rileva il symlink e NON lo segue.
+        let dir = tempfile::tempdir().unwrap();
+        let runtime_dir = dir.path().join("rt");
+        std::fs::create_dir_all(&runtime_dir).unwrap();
+        let bersaglio = dir.path().join("altrove");
+        std::fs::create_dir_all(&bersaglio).unwrap();
+        std::os::unix::fs::symlink(&bersaglio, runtime_dir.join(NOME_BASE_PRIVATA)).unwrap();
+
+        let r = base_privata_hardened(&runtime_dir);
+        assert!(r.is_err());
+        let msg = r.unwrap_err().to_string();
+        assert!(msg.contains("integrità"), "msg: {msg}");
+        assert!(msg.contains("symlink"), "msg: {msg}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn base_privata_hardened_rifiuta_permessi_larghi() {
+        // `.pap-priv` pre-esistente con permessi troppo larghi (0777) → la
+        // verifica hardened fallisce chiusa invece di usarla.
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let runtime_dir = dir.path().join("rt");
+        let base = runtime_dir.join(NOME_BASE_PRIVATA);
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o777)).unwrap();
+
+        let r = base_privata_hardened(&runtime_dir);
+        assert!(r.is_err());
+        let msg = r.unwrap_err().to_string();
+        assert!(msg.contains("integrità"), "msg: {msg}");
+        assert!(msg.contains("permessi"), "msg: {msg}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn base_privata_hardened_rifiuta_file_al_posto_della_dir() {
+        // `.pap-priv` è un file regolare (non una directory) → fail-closed.
+        let dir = tempfile::tempdir().unwrap();
+        let runtime_dir = dir.path().join("rt");
+        std::fs::create_dir_all(&runtime_dir).unwrap();
+        std::fs::write(runtime_dir.join(NOME_BASE_PRIVATA), b"non-una-dir").unwrap();
+
+        let r = base_privata_hardened(&runtime_dir);
+        assert!(r.is_err());
+        assert!(r.unwrap_err().to_string().contains("integrità"));
     }
 }

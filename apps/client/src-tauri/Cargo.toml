@@ -91,9 +91,13 @@ zip = { version = "8.6", default-features = false, features = ["deflate"] }
 # eseguire codice nativo (libonnxruntime) o dati non verificati se il
 # download è stato manomesso (MITM, mirror compromesso, ecc.).
 sha2 = "0.11"
+# Fix TOCTOU (CWE-367): staging della copia privata per-processo di
+# libonnxruntime in una directory 0700 (mkdtemp). Promossa da dev-dependency
+# a dependency perché ora usata anche a runtime da `init_session_pure`
+# (vedi `stage_lib_verificata` in embeddings.rs).
+tempfile = "3"
 
 [dev-dependencies]
-tempfile = "3"
 # Benchmark harness per quality gate Step 10 (P95 ricerca ibrida < 100ms su
 # 10k prompt). Standard de-facto Rust per micro-benchmarks su stabile.
 criterion = { version = "0.8", default-features = false, features = ["plotters", "cargo_bench_support"] }

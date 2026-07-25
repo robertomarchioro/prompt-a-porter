@@ -1139,10 +1139,16 @@ pub(crate) fn export_markdown_zip_pure(
             .entry(folder_zip.clone())
             .or_default();
         let filename = if nomi_in_folder.contains(&base_filename) {
-            // Collisione: suffix id-short
+            // Collisione: suffix id-short. `id` proviene da import
+            // non fidato: prendi i primi 8 char (mai troncare a meta'
+            // di un carattere multibyte -> niente panic) e passa il
+            // risultato dallo stesso sanitizer di titoli/folder, cosi'
+            // separatori e caratteri di path non finiscono nel nome
+            // dell'entry zip (niente zip-slip / path traversal).
             let id_short = id.strip_prefix("prm-").unwrap_or(id);
-            let suffix_len = id_short.len().min(8);
-            format!("{titolo_safe}-{}.md", &id_short[..suffix_len])
+            let suffix: String = id_short.chars().take(8).collect();
+            let suffix_safe = sanitize_filename(&suffix);
+            format!("{titolo_safe}-{suffix_safe}.md")
         } else {
             base_filename
         };
@@ -2840,5 +2846,62 @@ mod test {
         // Entrambi presenti, uno con suffisso id-short
         assert!(names.contains(&"Duplicato.md".to_string()));
         assert!(names.iter().any(|n| n.starts_with("Duplicato-")), "atteso suffisso id, got {names:?}");
+    }
+
+    #[test]
+    fn export_zip_id_multibyte_non_panica_su_collisione() {
+        let conn = db_test();
+        // Due prompt con lo stesso titolo: il secondo processato riceve
+        // il suffisso id-short. Entrambi hanno un id con un carattere
+        // multibyte (😀 = 4 byte) a cavallo del byte 8, quindi qualunque
+        // dei due venga suffissato esercita il troncamento. La vecchia
+        // slice per byte `&id_short[..8]` andava in panic su questo
+        // confine; `chars().take(8)` no.
+        inserisci_prompt(&conn, "prm-aaaaa\u{1F600}bbb", "Multi", "uno");
+        inserisci_prompt(&conn, "prm-ccccc\u{1F600}ddd", "Multi", "due");
+
+        let mut buf = std::io::Cursor::new(Vec::new());
+        // Nessun panic: l'export completa.
+        let n = super::export_markdown_zip_pure(&conn, None, &mut buf).unwrap();
+        assert_eq!(n, 2);
+        let entries = unzip_entries(&buf.into_inner());
+        let names: Vec<String> = entries.iter().map(|(n, _)| n.clone()).collect();
+        assert!(names.contains(&"Multi.md".to_string()), "got {names:?}");
+        let suffixed = names
+            .iter()
+            .find(|n| n.starts_with("Multi-"))
+            .expect("atteso un entry disambiguato con suffisso id");
+        // Nome entry valido: non vuoto, estensione .md, nessun separatore.
+        assert!(suffixed.ends_with(".md"), "{suffixed}");
+        assert!(suffixed.len() > "Multi-.md".len(), "vuoto: {suffixed}");
+        assert!(!suffixed.contains('/'), "separatore: {suffixed}");
+    }
+
+    #[test]
+    fn export_zip_id_traversal_neutralizzato_su_collisione() {
+        let conn = db_test();
+        // id importati non fidati con metacaratteri di path. Sul secondo
+        // prompt (stesso titolo) l'id-short finisce nel nome dell'entry
+        // zip: senza sanitize produrrebbe qualcosa come "Trav-../../x.md"
+        // -> zip-slip / path traversal in fase di estrazione.
+        inserisci_prompt(&conn, "prm-../../x", "Trav", "uno");
+        inserisci_prompt(&conn, "prm-../../y", "Trav", "due");
+
+        let mut buf = std::io::Cursor::new(Vec::new());
+        let n = super::export_markdown_zip_pure(&conn, None, &mut buf).unwrap();
+        assert_eq!(n, 2);
+        let entries = unzip_entries(&buf.into_inner());
+        let names: Vec<String> = entries.iter().map(|(n, _)| n.clone()).collect();
+        let suffixed = names
+            .iter()
+            .find(|n| n.starts_with("Trav-"))
+            .expect("atteso un entry disambiguato con suffisso id");
+        // I separatori di path derivati dall'id sono neutralizzati dallo
+        // stesso sanitizer dei titoli: l'entry resta un singolo componente
+        // e non puo' risalire la gerarchia (niente zip-slip / traversal).
+        assert!(!suffixed.contains('/'), "separatore '/': {suffixed}");
+        assert!(!suffixed.contains('\\'), "separatore '\\\\': {suffixed}");
+        assert!(!suffixed.starts_with(".."), "risalita iniziale: {suffixed}");
+        assert!(!suffixed.contains("/.."), "risalita: {suffixed}");
     }
 }
