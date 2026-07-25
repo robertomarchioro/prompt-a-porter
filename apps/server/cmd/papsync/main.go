@@ -87,7 +87,7 @@ func main() {
 	}
 
 	allowedOrigins := config.AllowedOriginsFromEnv()
-	hub := ws.NewHub(jwtSecret, allowedOrigins)
+	hub := ws.NewHub(db, jwtSecret, allowedOrigins)
 
 	trustedProxyCIDRs, err := config.TrustedProxyCIDRsFromEnv()
 	if err != nil {

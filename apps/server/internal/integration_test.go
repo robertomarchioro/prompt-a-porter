@@ -71,7 +71,7 @@ func setupTestServerWithOptions(t *testing.T, opts testServerOptions) (*chi.Mux,
 		loginRateLimitWindow = server.DefaultLoginRateLimitWindow
 	}
 
-	hub := ws.NewHub(jwtSecret, opts.allowedOrigins)
+	hub := ws.NewHub(db, jwtSecret, opts.allowedOrigins)
 
 	authH := &auth.Handler{
 		DB:        db,

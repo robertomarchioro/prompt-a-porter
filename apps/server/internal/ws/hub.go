@@ -2,6 +2,7 @@ package ws
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/auth"
 	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/config"
+	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/database"
 	"github.com/robertomarchioro/prompt-a-porter/apps/server/internal/models"
 )
 
@@ -70,6 +72,7 @@ func (c *client) writeMessage(messageType int, data []byte) error {
 type Hub struct {
 	mu             sync.RWMutex
 	clients        map[*client]struct{}
+	db             *database.DB
 	jwtSecret      []byte
 	allowedOrigins []string
 	upgrader       websocket.Upgrader
@@ -82,9 +85,10 @@ type Hub struct {
 // hijacking). Le richieste senza header Origin (client non-browser, es. il
 // client desktop Tauri o strumenti da riga di comando) sono sempre
 // consentite: solo i browser inviano Origin in modo affidabile.
-func NewHub(jwtSecret []byte, allowedOrigins []string) *Hub {
+func NewHub(db *database.DB, jwtSecret []byte, allowedOrigins []string) *Hub {
 	h := &Hub{
 		clients:        make(map[*client]struct{}),
+		db:             db,
 		jwtSecret:      jwtSecret,
 		allowedOrigins: allowedOrigins,
 	}
@@ -150,6 +154,21 @@ func (h *Hub) HandleWs(w http.ResponseWriter, r *http.Request) {
 	}, jwt.WithValidMethods([]string{"HS256"}))
 	if err != nil || !token.Valid {
 		http.Error(w, `{"error":"token non valido"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// Il JWT è crittograficamente valido, ma i claim hanno TTL di 24h: va
+	// ricontrollato sul DB che l'utente sia ancora attivo e appartenga al
+	// workspace del token, altrimenti un utente rimosso/disattivato manterrebbe
+	// il flusso di sync via WebSocket fino alla scadenza (CWE-613). Stesso
+	// controllo di /sync/pull e /sync/push (auth.RevalidateUser).
+	if err := auth.RevalidateUser(h.db, claims); err != nil {
+		if errors.Is(err, auth.ErrSessioneNonPiuValida) {
+			http.Error(w, `{"error":"sessione non più valida"}`, http.StatusUnauthorized)
+			return
+		}
+		log.Printf("Errore rivalidazione utente %s: %v", claims.UserId, err)
+		http.Error(w, `{"error":"errore interno"}`, http.StatusInternalServerError)
 		return
 	}
 
