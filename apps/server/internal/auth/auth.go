@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -47,6 +48,21 @@ func mustDummyPasswordHash() string {
 	return hash
 }
 
+// sanitizzaPerLog neutralizza i valori controllati dall'utente prima che
+// finiscano in un log: sostituisce CR, LF e ogni altro carattere di controllo
+// C0 (più DEL) con '?'. Senza questa bonifica un'email malevola come
+// "x\n2026-07-24 Login riuscito: admin@corp" inviata a /auth/login potrebbe
+// spezzare la riga di log e iniettare voci fabbricate (CWE-117, Log Injection).
+// Un'email legittima (nessun carattere di controllo) resta invariata.
+func sanitizzaPerLog(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return '?'
+		}
+		return r
+	}, s)
+}
+
 type Claims struct {
 	UserId      string `json:"userId"`
 	WorkspaceId string `json:"workspaceId"`
@@ -78,13 +94,13 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		// per equalizzare i tempi di risposta col ramo "password errata"
 		// sotto — vedi il commento su dummyPasswordHash.
 		database.VerifyPassword(req.Password, dummyPasswordHash)
-		log.Printf("Login fallito per %s: utente non trovato", req.Email)
+		log.Printf("Login fallito per %s: utente non trovato", sanitizzaPerLog(req.Email))
 		http.Error(w, `{"error":"credenziali non valide"}`, http.StatusUnauthorized)
 		return
 	}
 
 	if !database.VerifyPassword(req.Password, user.PasswordHash) {
-		log.Printf("Login fallito per %s: password errata", req.Email)
+		log.Printf("Login fallito per %s: password errata", sanitizzaPerLog(req.Email))
 		http.Error(w, `{"error":"credenziali non valide"}`, http.StatusUnauthorized)
 		return
 	}
@@ -109,7 +125,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Login riuscito: %s", req.Email)
+	log.Printf("Login riuscito: %s", sanitizzaPerLog(req.Email))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(models.LoginResponse{
