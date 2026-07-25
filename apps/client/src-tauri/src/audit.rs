@@ -332,11 +332,34 @@ pub(crate) fn export_csv_pure(
     Ok(out)
 }
 
+/// Neutralizza l'iniezione di formule nei fogli di calcolo (CWE-1236).
+///
+/// Se il primo carattere della cella è uno dei prefissi che Excel/LibreOffice/
+/// Sheets interpretano come inizio di formula (`= + - @`) o un separatore che
+/// può spostare il contesto (`\t \r`), antepone un apice singolo così la cella
+/// viene mostrata come testo letterale. Restituisce `true` se ha modificato il
+/// valore, per forzare il quoting a valle e far sopravvivere l'apice al parsing.
+fn neutralizza_formula(s: &str) -> (String, bool) {
+    match s.chars().next() {
+        Some('=' | '+' | '-' | '@' | '\t' | '\r') => (format!("'{s}"), true),
+        _ => (s.to_string(), false),
+    }
+}
+
 fn csv_quote(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') {
-        format!("\"{}\"", s.replace('"', "\"\""))
+    let (val, neutralizzato) = neutralizza_formula(s);
+    // `\r` forza il quoting oltre a `, " \n`: un CR nudo in un campo non quotato
+    // è trattato come terminatore di record da Excel/LibreOffice e potrebbe far
+    // nascere una nuova cella (bypass della neutralizzazione).
+    let deve_quotare = neutralizzato
+        || val.contains(',')
+        || val.contains('"')
+        || val.contains('\n')
+        || val.contains('\r');
+    if deve_quotare {
+        format!("\"{}\"", val.replace('"', "\"\""))
     } else {
-        s.to_string()
+        val
     }
 }
 
@@ -506,6 +529,37 @@ mod test {
         assert_eq!(csv_quote("con,virgola"), "\"con,virgola\"");
         assert_eq!(csv_quote("con \"virgolette\""), "\"con \"\"virgolette\"\"\"");
         assert_eq!(csv_quote("a\nb"), "\"a\nb\"");
+    }
+
+    #[test]
+    fn csv_quote_neutralizza_prefissi_formula() {
+        // CWE-1236: cella che inizia con = + - @ o \t \r viene prefissata da un
+        // apice e quotata così l'apice sopravvive al round-trip.
+        assert_eq!(csv_quote("=1+1"), "\"'=1+1\"");
+        assert_eq!(csv_quote("+SOMMA(A1)"), "\"'+SOMMA(A1)\"");
+        assert_eq!(csv_quote("-2+3"), "\"'-2+3\"");
+        assert_eq!(csv_quote("@cmd"), "\"'@cmd\"");
+        assert_eq!(csv_quote("\ttab"), "\"'\ttab\"");
+        assert_eq!(csv_quote("\rcr"), "\"'\rcr\"");
+    }
+
+    #[test]
+    fn csv_quote_cr_incorporato_resta_in_una_cella() {
+        // Objection: un CR nudo NON in testa non veniva né neutralizzato né
+        // quotato -> Excel lo trattava come fine record e `=1+1` diventava una
+        // nuova cella-formula. Ora `\r` forza il quoting: il CR resta dentro
+        // un'unica cella e non può generarne una nuova.
+        assert_eq!(csv_quote("x\r=1+1"), "\"x\r=1+1\"");
+        assert_eq!(csv_quote("x\r\ny"), "\"x\r\ny\"");
+    }
+
+    #[test]
+    fn csv_quote_celle_benigne_invariate() {
+        // Nessun prefisso pericoloso e nessun , " \n \r -> byte-identiche.
+        assert_eq!(csv_quote("titolo=Alpha"), "titolo=Alpha");
+        assert_eq!(csv_quote("prompt.creato"), "prompt.creato");
+        assert_eq!(csv_quote("1-2-3"), "1-2-3");
+        assert_eq!(csv_quote(""), "");
     }
 
     #[test]

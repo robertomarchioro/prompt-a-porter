@@ -622,14 +622,37 @@ pub(crate) fn report_pure(
     Ok(out)
 }
 
-/// Genera CSV (RFC 4180) del report. Le colonne testuali sono
-/// quoted-escaped solo se contengono `,` `"` `\n`.
+/// Genera CSV (RFC 4180) del report. Le colonne testuali sono neutralizzate
+/// contro la formula-injection (CWE-1236) e quoted-escaped se contengono
+/// `,` `"` `\n` `\r`.
 pub(crate) fn report_csv_pure(rows: &[RegressionReportRow]) -> String {
     fn esc(s: &str) -> String {
-        if s.contains(',') || s.contains('"') || s.contains('\n') {
-            format!("\"{}\"", s.replace('"', "\"\""))
+        // Neutralizza la formula-injection nei fogli di calcolo (CWE-1236):
+        // una cella che inizia con `= + - @` (o TAB/CR) viene valutata come
+        // formula da Excel/LibreOffice/Sheets. Prefissando un apice singolo il
+        // foglio la importa come testo. Il prefisso va PRIMA del quoting
+        // RFC-4180, così l'apice resta dentro il campo quotato e fa round-trip.
+        let pericolosa =
+            matches!(s.chars().next(), Some('=' | '+' | '-' | '@' | '\t' | '\r'));
+        let cella = if pericolosa {
+            format!("'{s}")
         } else {
             s.to_string()
+        };
+        // Forza il quoting RFC-4180 se abbiamo neutralizzato oppure se il valore
+        // contiene `,` `"` `\n` `\r`. Il `\r` è cruciale: un CR "nudo" (non
+        // seguito da LF) in un campo NON quotato è trattato come terminatore di
+        // record, così il testo dopo il CR partirebbe come nuova cella,
+        // aggirando la neutralizzazione del carattere iniziale.
+        if pericolosa
+            || cella.contains(',')
+            || cella.contains('"')
+            || cella.contains('\n')
+            || cella.contains('\r')
+        {
+            format!("\"{}\"", cella.replace('"', "\"\""))
+        } else {
+            cella
         }
     }
     let mut out = String::new();
@@ -1593,6 +1616,66 @@ mod test {
         let line = csv.lines().last().unwrap();
         // Tre campi opzionali consecutivi vuoti + ultima_run_at vuoto + drift vuoto.
         assert!(line.contains(",,,,"), "campi NULL devono essere stringa vuota");
+    }
+
+    fn riga_con_titolo(titolo: &str) -> RegressionReportRow {
+        RegressionReportRow {
+            prompt_id: "prm-1".into(),
+            prompt_titolo: titolo.into(),
+            provider: "ollama".into(),
+            model: "x".into(),
+            num_run: 1,
+            num_passed: 1,
+            num_failed: 0,
+            similarita_media: None,
+            similarita_ultima: None,
+            ultima_run_at: None,
+            drift_percentuale: None,
+        }
+    }
+
+    #[test]
+    fn report_csv_neutralizza_formula_injection() {
+        // Ogni carattere iniziale pericoloso deve essere prefissato con un apice
+        // e il campo deve risultare quotato (l'apice resta dentro le virgolette).
+        for titolo in ["=SUM(A1)", "+1+1", "-1", "@SUM(1)", "\tX", "\rX"] {
+            let csv = report_csv_pure(&[riga_con_titolo(titolo)]);
+            let cella = format!("\"'{}\"", titolo.replace('"', "\"\""));
+            assert!(
+                csv.contains(&cella),
+                "cella con leading `{titolo:?}` deve essere neutralizzata e quotata: {csv:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn report_csv_cr_nudo_resta_in_una_cella() {
+        // Un CR "nudo" a metà stringa NON deve poter chiudere il record: il
+        // campo va quotato, così `=1+1` non diventa una nuova cella-formula.
+        let csv = report_csv_pure(&[riga_con_titolo("x\r=1+1")]);
+        assert!(
+            csv.contains("\"x\r=1+1\""),
+            "CR nudo deve restare dentro un campo quotato: {csv:?}"
+        );
+    }
+
+    #[test]
+    fn report_csv_celle_benigne_invariate() {
+        // Nessun carattere iniziale pericoloso e nessun `, " \n \r`:
+        // il campo resta identico byte-per-byte (nessun apice, nessun quoting).
+        let csv = report_csv_pure(&[riga_con_titolo("Riassumi a=b in italiano")]);
+        assert!(
+            csv.contains(",Riassumi a=b in italiano,"),
+            "un `=` a metà stringa non è pericoloso e non va alterato: {csv:?}"
+        );
+        // Cella vuota resta vuota (nessun apice iniziale).
+        let mut vuota = riga_con_titolo("x");
+        vuota.prompt_titolo = String::new();
+        let csv_vuota = report_csv_pure(&[vuota]);
+        assert!(
+            csv_vuota.lines().last().unwrap().starts_with("prm-1,,ollama,"),
+            "cella vuota deve restare vuota: {csv_vuota:?}"
+        );
     }
 
     #[test]
