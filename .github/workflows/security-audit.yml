@@ -74,27 +74,17 @@ jobs:
         working-directory: apps/cli
         run: govulncheck ./...
 
-  pnpm-audit:
-    name: pnpm audit (workspace)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "22"
-          cache: "pnpm"
-
-      - name: Audit deps (no install richiesto)
-        run: pnpm audit --audit-level=moderate
-        continue-on-error: true
+  # Nessun job npm: la copertura è affidata agli alert Dependabot + security
+  # updates (attivi dal 2026-07-30), che interrogano lo stesso database di
+  # advisory in continuo, tengono stato per singola voce e aprono le PR di
+  # rimedio. Il job `pnpm audit` che stava qui era `continue-on-error: true`,
+  # quindi il suo esito non arrivava mai a `notifica-fallimento`: trovava le
+  # vulnerabilità e le scartava.
 
   notifica-fallimento:
     name: Apri issue su fallimento
     runs-on: ubuntu-latest
-    needs: [rust-audit, go-audit-server, go-audit-cli, pnpm-audit]
+    needs: [rust-audit, go-audit-server, go-audit-cli]
     if: failure()
     permissions:
       issues: write
