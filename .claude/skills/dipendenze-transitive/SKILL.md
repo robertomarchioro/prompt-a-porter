@@ -35,26 +35,45 @@ segnalalo nel referto e **fermati**: si tratta a mano.
 
 ---
 
-## Le due corsie, e perché hanno politiche diverse
+## Le tre destinazioni, e perché hanno politiche diverse
 
-Ogni alert transitivo finisce in una delle due. La distinzione è il cuore della skill:
-non appiattirla.
+Ogni alert transitivo con un fix disponibile finisce in **una di tre** destinazioni.
+La distinzione è il cuore della skill: non appiattirla.
 
-| | **Corsia A — rinfresco** | **Corsia B — override** |
-|---|---|---|
-| Quando | il range del genitore **già permette** la versione corretta | il range del genitore **non** la permette |
-| Come | `pnpm update` | voce in `pnpm.overrides` |
-| Cosa stai facendo | applichi l'intenzione del genitore | **scavalchi** l'intenzione del genitore |
-| Dove può rompersi | a build time → la CI lo prende | **a runtime** → la CI può non prenderlo |
-| Merge | ✅ **automatico su CI verde** | ⛔ **mai automatico: PR aperta, decide l'utente** |
+| | **Corsia A — rinfresco** | **Corsia B — override** | **Bloccato a monte** |
+|---|---|---|---|
+| Quando | il range del genitore **già permette** il fix | il range non lo permette, ma un override è applicabile | **nessuna** mossa sicura: il genitore non ha una versione che risolve |
+| Come | `pnpm update` | voce in `pnpm.overrides` | **niente** — si aspetta |
+| Cosa stai facendo | applichi l'intenzione del genitore | **scavalchi** l'intenzione del genitore | riconosci il limite |
+| Dove può rompersi | a build time → la CI lo prende | **a runtime** → la CI può non prenderlo | — |
+| Esito | ✅ **auto-merge su CI verde** | ⛔ **PR aperta, decide l'utente** | 📋 **nel referto, con la condizione per riprovare** |
 
-Esempio reale di corsia A: `@hono/node-server` dichiara `hono: ^4`, installato
-`4.12.16`, fix `4.12.25`. `^4` lo permette già → un `pnpm update` basta, senza rischio.
+Esempio reale di corsia A: `@modelcontextprotocol/sdk` dichiara `hono: ^4.11.4`,
+installato `4.12.16`, fix `4.12.27`. Il range lo permette già → `pnpm update` basta.
 
 Il motivo per cui la corsia B non si auto-mergia: forzare una transitiva di
 `@modelcontextprotocol/sdk` a una versione che l'SDK non ha mai dichiarato di
 supportare può rompere il server MCP **a runtime**. La CI verde non dimostra che
 Claude Desktop ci parla ancora.
+
+### Perché «bloccato a monte» è una categoria separata, e non corsia B
+
+Confonderle porta a proporre override che rompono. Casi reali visti al primo giro:
+
+- **`vite` + `esbuild`**: la leva sarebbe bumpare `vitepress` (dipendenza diretta), ma
+  **l'ultima vitepress dichiara ancora `vite: ^5.4.14`** — non esiste una versione che
+  risolve. Forzare vite 6 dentro vitepress 1.x romperebbe la build del sito.
+- **`@hono/node-server` → `2.0.5`**: major, e l'SDK dichiara `^1.19.9`. Nessun override
+  sensato; si aspetta che l'SDK bumpi.
+
+Nella corsia B **esiste** una mossa e la domanda è se accettarne il rischio. Nel
+bloccato **non esiste**, e l'unica azione corretta è registrare la condizione per
+riprovare (es. *«quando vitepress passa a vite ≥6»*).
+
+Quando classifichi un alert come bloccato, **valuta anche l'esposizione reale** e
+scrivila nel referto: spesso è nulla, e questo cambia l'urgenza. Esempi: vite/esbuild
+costruiscono il sito e non vengono spediti; `@hono/node-server` è un adattatore HTTP
+mai istanziato perché il server MCP usa `StdioServerTransport`.
 
 ---
 
@@ -94,22 +113,51 @@ Poi separa subito:
 
 ---
 
-## Passo 2 — Triage: corsia A o corsia B
+## Passo 2 — Triage
 
-Per ogni transitiva con fix, stabilisci se il range del genitore permette già la
-versione corretta.
+Per ogni transitiva con fix, servono tre informazioni: **chi la tira dentro**, **quale
+range il genitore dichiara**, e **quale versione è installata**.
+
+### ⚠️ Il range NON si legge dal lockfile
+
+`pnpm-lock.yaml` memorizza le versioni **risolte**, non i range dichiarati dai
+genitori (i range compaiono solo per le `peerDependencies`). Cercare `hono: ^4` nel
+lockfile funziona per caso e non in generale — al primo giro reale questo passo ha
+prodotto dati inutilizzabili.
+
+**La fonte autorevole è il registry:**
 
 ```bash
-# chi lo tira dentro, e con quale range
+# 1. chi tira dentro il pacchetto, e in che catena
 pnpm why <pacchetto> --recursive
-grep -B3 -A3 "<pacchetto>@" pnpm-lock.yaml | head -20
+
+# 2. che range dichiara il genitore (AUTOREVOLE)
+npm view <genitore>@<versione-installata> dependencies.<pacchetto>
+
+# 3. che versione è installata (attenzione: possono essercene più di una)
+grep -oE "^  '?<pacchetto>@[0-9][^':]*" pnpm-lock.yaml | sort -uV
 ```
 
-Nel lockfile cerca la riga del genitore, es. `'@hono/node-server@1.19.14':` seguita da
-`hono: ^4`. Confronta quel range con la versione di fix:
+Sul punto 3: se ci sono **più versioni installate**, verifica quale è quella
+vulnerabile. Capita che la copia recente sia già sana e solo una vecchia catena sia
+esposta (es. `vite` presente in 5.4.21 *e* 8.1.5: solo la 5.x era vulnerabile).
+
+### Come instradare
+
+Confronta il range dichiarato con la versione di fix:
 
 - il fix **rientra** nel range → **corsia A**
-- il fix **non rientra** (serve un major, o il genitore pinna esatto) → **corsia B**
+- il fix **non rientra** (serve un major, o il genitore pinna esatto) → verifica se
+  esiste una versione **del genitore** che risolve:
+  - **sì** → è un bump del genitore: se è una dipendenza diretta lo fa Dependabot,
+    altrimenti è **corsia B**
+  - **no** (nemmeno l'ultima versione del genitore) → **bloccato a monte**
+
+```bash
+# esiste una versione del genitore che risolve?
+npm view <genitore> version                      # ultima pubblicata
+npm view <genitore>@latest dependencies.<pacchetto>
+```
 
 ### ⚠️ Controllo obbligatorio: gli override esistenti sono ancora validi?
 
@@ -124,21 +172,42 @@ versioni più alte. È già capitato in questo repo:
 successivo (`>=4.0.0 <=4.1.0`, fix `4.1.1`). L'override sembrava una protezione
 attiva e non lo era più.
 
-Per ogni voce già presente in `pnpm.overrides`, verifica che il range **escluda** la
-finestra vulnerabile corrente. Se non la esclude, è una voce di corsia B da aggiornare,
-e segnalalo esplicitamente: è la classe di errore più insidiosa qui.
+C'è di peggio, e va sempre verificato: **`ajv` dichiara `fast-uri: ^3.0.1`**. Da sola
+la risoluzione sarebbe rimasta sulla linea 3.x, che non è vulnerabile. **È stato
+l'override a spingere su 4.x, creando l'esposizione che poi doveva prevenire.**
+
+Quindi per ogni voce in `pnpm.overrides` fai **due** controlli:
+
+1. il range **esclude** la finestra vulnerabile corrente?
+2. che versione si otterrebbe **senza** l'override (`npm view <genitore>@<ver>
+   dependencies.<pacchetto>`)? Se senza override si starebbe su una linea sana, i
+   rimedi sono **due e opposti** — alzare il vincolo, oppure **rimuovere l'override**.
+   Presentali entrambi all'utente, con il motivo per cui l'override fu aggiunto (cercalo
+   in `git log -p -- package.json`): rimuoverlo è sicuro solo se l'advisory originario
+   non riguarda più la linea a cui si tornerebbe.
+
+È la classe di errore più insidiosa qui: non decidere da sola.
 
 ### Referto di triage
 
 Presenta in chat, prima di toccare qualsiasi file:
 
+Conta gli **alert**, non i pacchetti — ma indica anche quanti pacchetti distinti sono:
+è il numero che dice quanto lavoro c'è davvero (al primo giro, 32 alert erano 10
+pacchetti).
+
 ```
-CORSIA A (rinfresco, auto-merge su verde)     — N voci: hono, ...
-CORSIA B (override, richiede tua decisione)   — N voci: fast-uri (override stantio), ...
-FUORI PERIMETRO (cargo/go)                    — N voci
-SENZA FIX A MONTE                             — N voci
-ANOMALIE (direct non gestite da Dependabot)   — N voci
+CORSIA A (rinfresco, auto-merge su verde)   — N alert / M pacchetti: hono ×15, undici ×7, ...
+CORSIA B (override, richiede tua decisione) — N alert: fast-uri (override stantio) ...
+BLOCCATO A MONTE                            — N alert: vite ×3 (vitepress ferma a ^5.4.14) ...
+FUORI PERIMETRO (cargo/go)                  — N alert
+SENZA FIX A MONTE                           — N alert
+ANOMALIE (direct non gestite da Dependabot) — N alert
 ```
+
+Per ogni voce **bloccata** aggiungi la **condizione per riprovare** e l'**esposizione
+reale**. Senza quelle due informazioni il referto dice solo "non si può fare", che è
+inutile al prossimo giro.
 
 Con `--solo-censimento`: **fermati qui.**
 
@@ -266,6 +335,7 @@ Sempre, anche quando tutto va bene:
 Alert aperti prima  : N
 Chiusi da corsia A  : N   (PR #nnn, mergiata)
 In attesa corsia B  : N   (PR #nnn, aperta — serve tua decisione)
+Bloccato a monte    : N   (condizione per riprovare: ...)
 Fuori perimetro     : N   (cargo/go — a mano)
 Senza fix a monte   : N   (decisione consapevole)
 Alert aperti dopo   : N
