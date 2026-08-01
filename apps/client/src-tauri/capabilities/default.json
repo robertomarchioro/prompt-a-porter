@@ -18,6 +18,7 @@
     "updater:default",
     "autostart:default",
     "process:allow-restart",
-    "opener:default"
+    "opener:allow-open-url",
+    "opener:allow-default-urls"
   ]
 }
