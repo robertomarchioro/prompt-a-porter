@@ -693,6 +693,16 @@ fn estrai_da_zip(archive_bytes: &[u8], path_in_archive: &str, dest: &Path) -> Re
 /// `estrai_libonnxruntime` falliva sempre con "file non trovato
 /// nell'archivio". Su Linux/Windows il prefisso non c'è, quindi il bug non
 /// era mai emerso lì.
+/// ⚠️ INVARIANTE DI SICUREZZA — il risultato è SOLO una chiave di confronto
+/// fra entry dell'archivio in memoria, non deve MAI diventare un percorso su
+/// filesystem. Per questo qui filtriamo solo `CurDir` e lasciamo passare
+/// `ParentDir` (`..`) e `RootDir` (`/`): un'entry ostile con quei componenti
+/// semplicemente non combacia col target calcolato dall'app, e non c'è nulla
+/// da attraversare. Se un domani questa funzione venisse riusata per costruire
+/// un path di scrittura (es. un helper generico "estrai tutto l'archivio"),
+/// quei due componenti diventerebbero una primitiva di path traversal: in quel
+/// caso va prima cambiata in fail-closed, rifiutando `ParentDir`/`RootDir`/
+/// `Prefix`. Vedi la security review della PR #566.
 fn normalizza_path_archivio(p: &Path) -> PathBuf {
     p.components()
         .filter(|c| !matches!(c, Component::CurDir))
