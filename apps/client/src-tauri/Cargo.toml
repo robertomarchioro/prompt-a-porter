@@ -101,6 +101,10 @@ tempfile = "3"
 # registrato una webview Tauri non naviga fuori dall'app: i vecchi
 # `<a target="_blank">` nel frontend non hanno mai funzionato.
 tauri-plugin-opener = "2"
+# Issue #558 punto 2: dialog nativo "salva con nome" per l'export ZIP dei
+# log — prima scriveva sempre nella stessa cartella fissa. Permesso in
+# capabilities/default.json ristretto a `dialog:allow-save` (vedi lib.rs).
+tauri-plugin-dialog = "2"
 
 [dev-dependencies]
 # Benchmark harness per quality gate Step 10 (P95 ricerca ibrida < 100ms su

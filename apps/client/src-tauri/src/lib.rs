@@ -4,6 +4,7 @@
 pub mod audit;
 pub mod cartelle;
 pub mod cestino;
+pub mod changelog;
 pub mod debug_log;
 pub mod editor;
 pub mod embeddings;
@@ -369,6 +370,18 @@ pub fn run() {
         // webview. Il frontend usa `apri-url.ts`, che valida lo schema
         // (solo http/https) prima di invocare questo plugin.
         .plugin(tauri_plugin_opener::init())
+        // Issue #558 punto 2: l'export ZIP dei log chiede ora all'utente
+        // dove salvare, invece di scrivere sempre nella stessa cartella
+        // fissa. Fix HIGH (review avversariale pre-merge PR #570): il
+        // dialog si apre dal comando Rust `debug_log_esporta_zip`
+        // (`DialogExt::dialog().file().blocking_save_file()`), MAI più
+        // invocato via IPC dal frontend — quindi **nessun permesso
+        // `dialog:*` in capabilities/default.json**: l'ACL Tauri gate
+        // solo il boundary IPC JS→Rust, non le chiamate dirette tra
+        // funzioni Rust. Il plugin resta comunque registrato qui perché
+        // `DialogExt::dialog()` legge lo stato gestito che `init()`
+        // inserisce nell'AppHandle.
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data_dir = app
                 .path()
@@ -653,6 +666,7 @@ pub fn run() {
             debug_log::debug_log_pulisci,
             debug_log::debug_log_esporta_zip,
             debug_log::debug_log_leggi,
+            changelog::changelog_sezione_remota,
             registra_hotkey,
             app_is_portable,
         ])

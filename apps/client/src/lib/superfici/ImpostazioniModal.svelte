@@ -56,6 +56,9 @@
   import { nomeFileExport, scaricaBlob } from "$lib/util/dati-export";
   import { renderNotesHtml } from "$lib/util/updater-notes";
   import { apriUrlEsterno } from "$lib/util/apri-url";
+  import { gestisciClickLinkMarkdown } from "$lib/util/markdown-click";
+  import { recuperaNoteRilascio, type NoteRilascio } from "$lib/util/note-rilascio";
+  import { eseguiEsportaLogZip } from "./debug-log-export-logic";
   import {
     statoTema,
     salvaTemaTono,
@@ -915,14 +918,34 @@
     }
   }
 
+  // Issue #558 punto 2: prima l'export scriveva sempre nella stessa
+  // cartella fissa (`app_data_dir()/debug-exports`); ora chiede
+  // esplicitamente dove salvare.
+  //
+  // Fix HIGH (review avversariale pre-merge PR #570): il dialog nativo di
+  // salvataggio si apre ora **dentro** il comando Rust
+  // (`debug_log.rs::debug_log_esporta_zip`, `tauri-plugin-dialog`
+  // `blocking_save_file`), non più qui. Il frontend non passa più alcun
+  // percorso di destinazione: farlo avrebbe permesso a qualunque JS della
+  // webview di far scrivere/troncare un file arbitrario del filesystem,
+  // perché questa app non ha un manifest ACL (`permissions/`) e i comandi
+  // applicativi di una finestra locale saltano `resolve_access`.
   async function esportaLogZip(): Promise<void> {
     debugErrore = "";
     debugOpInCorso = "esporta";
     try {
-      const zipPath = await invoke<string>("debug_log_esporta_zip");
-      debugMessaggio = `ZIP esportato: ${zipPath}`;
-    } catch (e) {
-      debugErrore = `Export ZIP fallito: ${String(e)}`;
+      const risultato = await eseguiEsportaLogZip(
+        invoke as (cmd: "debug_log_esporta_zip") => Promise<string | null>,
+      );
+      if (risultato.annullato) {
+        // Utente ha annullato il dialog nativo: non è un errore.
+        return;
+      }
+      if (!risultato.ok) {
+        debugErrore = `Export ZIP fallito: ${risultato.errore}`;
+        return;
+      }
+      debugMessaggio = `ZIP esportato: ${risultato.zipPath}`;
     } finally {
       debugOpInCorso = "";
     }
@@ -949,16 +972,30 @@
 
   let updaterStato = $state<StatoUpdater>({ kind: "idle" });
 
+  // #552 — Le note "vere" sono la sezione di CHANGELOG.md della versione
+  // offerta (recuperata da remoto via cmd `changelog_sezione_remota`, vedi
+  // note-rilascio.ts); `updaterStato.notes` (corpo della release GitHub,
+  // template fisso di release.yml) resta come fallback esplicito se il
+  // recupero fallisce o la sezione non esiste — mai un box vuoto.
+  let noteRilascio = $state<NoteRilascio>({ testo: "", fonte: "nessuna" });
+
   // Markdown → HTML sanificato delle note di rilascio, precalcolato qui
   // invece che inline nel markup (convenzione {@html} di DiffViewer.svelte).
   const updaterNoteHtml = $derived.by(() =>
-    updaterStato.kind === "available"
-      ? renderNotesHtml(updaterStato.notes)
-      : "",
+    noteRilascio.testo ? renderNotesHtml(noteRilascio.testo) : "",
   );
+
+  async function aggiornaNoteRilascio(versione: string, corpoRelease: string): Promise<void> {
+    noteRilascio = await recuperaNoteRilascio({
+      versione,
+      corpoRelease,
+      invocaChangelog: (v) => invoke<string>("changelog_sezione_remota", { versione: v }),
+    });
+  }
 
   async function verificaAggiornamenti(): Promise<void> {
     updaterStato = { kind: "checking" };
+    noteRilascio = { testo: "", fonte: "nessuna" };
     try {
       // Import dinamico per evitare di caricare il plugin se non serve
       const { check } = await import("@tauri-apps/plugin-updater");
@@ -967,12 +1004,14 @@
         updaterStato = { kind: "no-update" };
         return;
       }
+      const corpoRelease = update.body ?? "";
       updaterStato = {
         kind: "available",
         version: update.version ?? "?",
         date: update.date ?? "",
-        notes: update.body ?? "",
+        notes: corpoRelease,
       };
+      void aggiornaNoteRilascio(updaterStato.version, corpoRelease);
     } catch (e) {
       updaterStato = { kind: "error", message: String(e) };
     }
@@ -2660,10 +2699,26 @@
                       </span>
                     </div>
                   {/if}
-                  {#if updaterStato.notes}
+                  {#if updaterNoteHtml}
                     <details class="sviluppo-elenco">
                       <summary>Note di rilascio</summary>
-                      <div class="updater-notes">
+                      {#if noteRilascio.fonte === "release"}
+                        <p class="hint">
+                          Changelog non raggiungibile: qui sotto il testo
+                          della release GitHub.
+                        </p>
+                      {/if}
+                      <!-- svelte-ignore a11y_no_static_element_interactions -->
+                      <!-- svelte-ignore a11y_click_events_have_key_events -->
+                      <!-- Delega di click (event delegation) verso i link
+                           `<a>` dentro il markdown renderizzato: sono loro
+                           gli elementi interattivi/accessibili da tastiera,
+                           questo contenitore serve solo a intercettarne il
+                           click (vedi markdown-click.ts). -->
+                      <div
+                        class="updater-notes"
+                        onclick={(evento) => void gestisciClickLinkMarkdown(evento)}
+                      >
                         {@html updaterNoteHtml}
                       </div>
                     </details>
