@@ -17,6 +17,7 @@
     "log:default",
     "updater:default",
     "autostart:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "opener:default"
   ]
 }

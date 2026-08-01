@@ -29,6 +29,7 @@
   } from "$lib/stores/menu-contestuale.svelte";
   import { apriModale } from "$lib/stores/modale.svelte";
   import { scaricaBlob, slugFile } from "$lib/util/dati-export";
+  import { apriUrlEsterno } from "$lib/util/apri-url";
   import {
     caricaStato,
     salvaStato,
@@ -41,6 +42,17 @@
     id: string;
     nome: string;
     colore: string;
+  }
+
+  // Fix #555 (empty-state "primi passi"): `target="_blank"` non naviga in
+  // una webview Tauri; il click viene intercettato per aprire l'URL con
+  // il plugin opener.
+  async function apriGuida(evento: MouseEvent) {
+    evento.preventDefault();
+    const risultato = await apriUrlEsterno(urlDoc("getting-started"));
+    if (!risultato.ok) {
+      console.error("[list-pane] apertura guida fallita", risultato);
+    }
   }
 
   interface PromptCardData {
@@ -853,7 +865,8 @@
             class="empty-link"
             href={urlDoc("getting-started")}
             target="_blank"
-            rel="noopener noreferrer">Leggi la guida ai primi passi ↗</a
+            rel="noopener noreferrer"
+            onclick={apriGuida}>Leggi la guida ai primi passi ↗</a
           >
         </p>
       </div>

@@ -362,6 +362,13 @@ pub fn run() {
         // frontend chiama `relaunch()` da `@tauri-apps/plugin-process` dopo
         // `downloadAndInstall()` per garantire il riavvio su tutte le piattaforme.
         .plugin(tauri_plugin_process::init())
+        // Fix #554/#555/#557: apre link esterni (documentazione, sito,
+        // repository, note di rilascio) nel browser di sistema. Nessun
+        // plugin opener era mai stato registrato: i vecchi
+        // `<a target="_blank">` nel frontend non hanno mai funzionato in
+        // webview. Il frontend usa `apri-url.ts`, che valida lo schema
+        // (solo http/https) prima di invocare questo plugin.
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let data_dir = app
                 .path()

@@ -6,6 +6,7 @@
   import { onMount } from "svelte";
   import { getVersion } from "@tauri-apps/api/app";
   import { CODENAME } from "$lib/codename";
+  import { apriUrlEsterno } from "$lib/util/apri-url";
   import { ExternalLink } from "lucide-svelte";
 
   // Sorgente unica dei link al progetto. Allineata a docs-links.ts
@@ -28,6 +29,16 @@
       href: `${REPO}/blob/main/LICENSE`,
     },
   ];
+
+  // Fix #557: `target="_blank"` non naviga in una webview Tauri; il click
+  // viene intercettato per aprire l'URL con il plugin opener.
+  async function apri(evento: MouseEvent, href: string) {
+    evento.preventDefault();
+    const risultato = await apriUrlEsterno(href);
+    if (!risultato.ok) {
+      console.error("[about-sezione] apertura link fallita", risultato);
+    }
+  }
 
   let versione = $state("");
   onMount(async () => {
@@ -64,6 +75,7 @@
           target="_blank"
           rel="noopener noreferrer"
           aria-label={`${voce.etichetta} (si apre nel browser)`}
+          onclick={(evento) => apri(evento, voce.href)}
         >
           <span class="about-voce-testo">{voce.etichetta}</span>
           <ExternalLink size={13} aria-hidden="true" />

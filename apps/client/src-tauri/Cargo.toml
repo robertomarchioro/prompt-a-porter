@@ -96,6 +96,11 @@ sha2 = "0.11"
 # a dependency perché ora usata anche a runtime da `init_session_pure`
 # (vedi `stage_lib_verificata` in embeddings.rs).
 tempfile = "3"
+# Fix #554/#555/#557: apre link esterni (guida online, sito, repository,
+# note di rilascio) nel browser di sistema. Senza un plugin opener
+# registrato una webview Tauri non naviga fuori dall'app: i vecchi
+# `<a target="_blank">` nel frontend non hanno mai funzionato.
+tauri-plugin-opener = "2"
 
 [dev-dependencies]
 # Benchmark harness per quality gate Step 10 (P95 ricerca ibrida < 100ms su
