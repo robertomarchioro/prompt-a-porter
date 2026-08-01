@@ -5,6 +5,7 @@
   import Switch from "./Switch.svelte";
   import Toast from "./Toast.svelte";
   import Badge from "./Badge.svelte";
+  import { modelloPredefinito } from "$lib/modelli-provider";
 
   interface ProviderConfigItem {
     provider: string;
@@ -39,7 +40,7 @@
       nome: "Anthropic",
       icona: "🟠",
       descrizione: "Claude (Sonnet, Opus, Haiku) via console.anthropic.com",
-      placeholderModel: "claude-sonnet-4-6",
+      placeholderModel: modelloPredefinito("anthropic"),
       placeholderBaseUrl: "https://api.anthropic.com",
       richiedeApiKey: true,
     },
@@ -47,8 +48,8 @@
       kind: "openai",
       nome: "OpenAI",
       icona: "🟢",
-      descrizione: "GPT-4o, GPT-5 via platform.openai.com",
-      placeholderModel: "gpt-4o",
+      descrizione: "Modelli GPT via platform.openai.com",
+      placeholderModel: modelloPredefinito("openai"),
       placeholderBaseUrl: "https://api.openai.com/v1",
       richiedeApiKey: true,
     },
@@ -75,7 +76,7 @@
       nome: "Google (Gemini)",
       icona: "🔷",
       descrizione: "Gemini (Flash, Pro) via aistudio.google.com/apikey",
-      placeholderModel: "gemini-2.5-flash",
+      placeholderModel: modelloPredefinito("gemini"),
       placeholderBaseUrl: "https://generativelanguage.googleapis.com",
       richiedeApiKey: true,
     },
