@@ -135,7 +135,7 @@ Non ancora aperto (gate domanda-driven). Vedi [`v2.0-enterprise.md`](./v2.0-ente
 | Item | Marker | Note |
 |---|---|---|
 | **Segreti (`sync_token`) nel keychain OS** | 🔒 → v1.x | Oggi `sync_token` è salvato in chiaro in `preferenze.json` (mitigato: `0600` su Unix, AppData per-utente su Windows). `preferenze.rs:193` prevede lo spostamento nel keychain OS (crate `keyring`). **Unico debito con implicazioni di sicurezza.** |
-| **Tabella prezzi `pricing.rs` indicativa** | 🎨 → manutenzione | La stima del `costo_stimato` dei golden usa prezzi hardcoded (USD/1M token) + token di input stimati euristicamente; da aggiornare quando cambiano i listini dei provider. |
+| ~~**Tabella prezzi `pricing.rs` indicativa**~~ | ✅ risolto | I prezzi non sono più una tabella a parte: `pricing.rs` legge il registro condiviso `src/lib/modelli-registro.json`, aggiornato dal workflow settimanale `modelli-refresh.yml`. Resta euristica la sola **stima dei token di input** (~4 caratteri/token), perché i provider non li restituiscono. Per gli id fuori registro c'è un fallback per famiglia. |
 | **Conteggio token euristico** (`statistiche.rs`) | 🎨 | "~N token medi" via euristica lunghezza; tokenizer reale rinviato (bassa priorità). |
 | **Workflow CI non auto-listati nei propri path filter**: `cli-build.yml`, `mcp-server-build.yml`, `server-build.yml`. Modifiche a questi YAML non triggerano una run di validazione | 🎨 → v1.x | Quick win ~1 ora. Vedi `docs/contribuire/ci-workflows.md`. |
 | **Fallback `candle-core` per ONNX** se `ort` torna instabile | 🔧 | Piano B documentato in `docs/architettura/decisioni/onnx-bundle.md`. Non attivato (ort stabile da v0.3.0). |
