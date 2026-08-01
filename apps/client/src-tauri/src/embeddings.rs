@@ -27,7 +27,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{Emitter, State};
@@ -178,6 +178,17 @@ fn modello_completo(path: &Path) -> bool {
     FILES_HF
         .iter()
         .all(|(_, locale, _)| path.join(locale).is_file())
+}
+
+/// `true` solo se sia il modello (model.onnx + tokenizer.json) SIA
+/// libonnxruntime sono presenti su disco. Estratta da `embeddings_status`
+/// (fix #556, sintomo 3) per essere testabile senza costruire uno State
+/// Tauri: prima del fix lo stato controllava SOLO `modello_completo`, quindi
+/// dichiarava "Pronto" anche quando la libreria nativa non era mai stata
+/// scaricata — mentre `init_session_pure` rifiutava con "libonnxruntime non
+/// scaricata". Lo stato mentiva all'utente.
+fn pronto_su_disco(dir_modello: &Path, lib_path: &Path) -> bool {
+    modello_completo(dir_modello) && lib_path.is_file()
 }
 
 // ─────────── Verifica integrità (fix #458) ───────────
@@ -409,7 +420,9 @@ pub fn embeddings_status(
         });
     }
     let path = percorso_modello(&state);
-    if !path.exists() || !modello_completo(&path) {
+    // Fix #556 (sintomo 3): `pronto_su_disco` controlla ANCHE la presenza di
+    // libonnxruntime, non solo modello+tokenizer (vedi doc sulla funzione).
+    if !path.exists() || !pronto_su_disco(&path, &percorso_libonnxruntime(&state)) {
         return Ok(EmbeddingsStato::NonScaricato {
             model_id: MODEL_ID.to_string(),
             path_atteso: path.display().to_string(),
@@ -619,6 +632,20 @@ fn ort_release_filename() -> Result<(String, String, &'static str), PapErrore> {
     Ok((suffix, sub, sha256_atteso))
 }
 
+/// Estrae `path_in_archive` in `dest`.
+///
+/// Fix #556: estrazione atomica via file temporaneo + `rename` (stesso
+/// pattern già usato da `scarica_file` per model.onnx/tokenizer.json). Senza
+/// questo, un errore a metà copia (I/O, processo interrotto, disco pieno)
+/// avrebbe lasciato un `dest` parzialmente scritto ma comunque presente sul
+/// filesystem: la prossima `embeddings_download` lo avrebbe scambiato per
+/// "già scaricato" (`lib_path.is_file()`) e non l'avrebbe MAI ri-scaricato,
+/// mentre `init_session_pure` avrebbe continuato a rifiutarlo con "Verifica
+/// integrità fallita" senza che l'utente avesse un modo per uscirne se non
+/// cancellando il file a mano. Con l'estrazione atomica questo stato
+/// inconsistente non può più prodursi: `dest` esiste solo dopo una copia
+/// completa e riuscita — non serve quindi nessuna pulizia/invalidazione
+/// aggiuntiva di `dir_modello` a monte.
 fn estrai_libonnxruntime(
     archive_bytes: &[u8],
     path_in_archive: &str,
@@ -629,43 +656,184 @@ fn estrai_libonnxruntime(
             .ok_or_else(|| PapErrore::Generico("dest senza parent".into()))?,
     )?;
 
-    if std::env::consts::OS == "windows" {
-        // ZIP
-        let cursor = std::io::Cursor::new(archive_bytes);
-        let mut archive = zip::ZipArchive::new(cursor)
-            .map_err(|e| PapErrore::dominio("Archivio del modello di embedding non valido.", e))?;
-        let mut entry = archive
-            .by_name(path_in_archive)
-            .map_err(|e| PapErrore::dominio("Contenuto del modello di embedding mancante o corrotto nell'archivio.", e))?;
-        let mut out = fs::File::create(dest)?;
-        std::io::copy(&mut entry, &mut out)?;
+    let dest_tmp = dest.with_extension("extract-partial");
+    let risultato = if std::env::consts::OS == "windows" {
+        estrai_da_zip(archive_bytes, path_in_archive, &dest_tmp)
     } else {
-        // tar.gz
+        estrai_da_tar_gz(archive_bytes, path_in_archive, &dest_tmp)
+    };
+    if risultato.is_err() {
+        let _ = fs::remove_file(&dest_tmp);
+        return risultato;
+    }
+    fs::rename(&dest_tmp, dest)?;
+    Ok(())
+}
+
+fn estrai_da_zip(archive_bytes: &[u8], path_in_archive: &str, dest: &Path) -> Result<(), PapErrore> {
+    let cursor = std::io::Cursor::new(archive_bytes);
+    let mut archive = zip::ZipArchive::new(cursor)
+        .map_err(|e| PapErrore::dominio("Archivio del modello di embedding non valido.", e))?;
+    let mut entry = archive
+        .by_name(path_in_archive)
+        .map_err(|e| PapErrore::dominio("Contenuto del modello di embedding mancante o corrotto nell'archivio.", e))?;
+    let mut out = fs::File::create(dest)?;
+    std::io::copy(&mut entry, &mut out)?;
+    Ok(())
+}
+
+/// Normalizza un path di un'entry tar rimuovendo un eventuale componente
+/// `.`/`./` iniziale (`Component::CurDir`).
+///
+/// Fix #556 (sintomo 1): il tarball macOS di onnxruntime (verificato
+/// empiricamente su `onnxruntime-osx-arm64-1.23.0.tgz`) emette tutte le
+/// entry con prefisso `./` (es. `./onnxruntime-osx-arm64-1.23.0/lib/...`),
+/// mentre `path_in_archive` costruito da `ort_release_filename()` non ce
+/// l'ha. Il confronto per stringa esatta non trovava mai corrispondenza:
+/// `estrai_libonnxruntime` falliva sempre con "file non trovato
+/// nell'archivio". Su Linux/Windows il prefisso non c'è, quindi il bug non
+/// era mai emerso lì.
+/// ⚠️ INVARIANTE DI SICUREZZA — il risultato è SOLO una chiave di confronto
+/// fra entry dell'archivio in memoria, non deve MAI diventare un percorso su
+/// filesystem. Per questo qui filtriamo solo `CurDir` e lasciamo passare
+/// `ParentDir` (`..`) e `RootDir` (`/`): un'entry ostile con quei componenti
+/// semplicemente non combacia col target calcolato dall'app, e non c'è nulla
+/// da attraversare. Se un domani questa funzione venisse riusata per costruire
+/// un path di scrittura (es. un helper generico "estrai tutto l'archivio"),
+/// quei due componenti diventerebbero una primitiva di path traversal: in quel
+/// caso va prima cambiata in fail-closed, rifiutando `ParentDir`/`RootDir`/
+/// `Prefix`. Vedi la security review della PR #566.
+fn normalizza_path_archivio(p: &Path) -> PathBuf {
+    p.components()
+        .filter(|c| !matches!(c, Component::CurDir))
+        .collect()
+}
+
+/// Risolve `link_target` (relativo, letto da un'entry symlink) rispetto alla
+/// directory che contiene il symlink (`symlink_dir`), gestendo `.` e `..`
+/// senza toccare il filesystem: i path esistono solo dentro l'archivio in
+/// memoria, non su disco.
+fn risolvi_path_relativo(symlink_dir: &Path, link_target: &Path) -> PathBuf {
+    let mut componenti: Vec<Component<'_>> = symlink_dir.components().collect();
+    for c in link_target.components() {
+        match c {
+            Component::ParentDir => {
+                componenti.pop();
+            }
+            Component::CurDir => {}
+            altro => componenti.push(altro),
+        }
+    }
+    componenti.iter().collect()
+}
+
+/// Numero massimo di hop di symlink seguiti dentro l'archivio prima di
+/// arrendersi con un errore esplicito (anti-loop su un tarball
+/// malformato/malevolo).
+const MAX_HOP_SYMLINK: u8 = 8;
+
+/// Segue una catena di symlink dentro un archivio tar.gz in memoria, fino a
+/// trovare il path normalizzato dell'entry regolare finale.
+///
+/// Fix #556 (sintomo 2, bug indipendente dal prefisso `./`, riprodotto su
+/// Linux): nei tarball onnxruntime linux/macOS `lib/libonnxruntime.so` (o
+/// `.dylib`) è spesso un symlink verso `libonnxruntime.so.<versione>`.
+/// Leggere il *contenuto* di un'entry symlink con `tar::Entry::read` non
+/// segue il link: restituisce 0 byte, non i dati del target. Estrarla così
+/// produce una libreria vuota che poi fallisce la verifica SHA-256 con un
+/// messaggio fuorviante ("hash non corrisponde") invece del vero problema
+/// ("mai seguito il symlink").
+///
+/// Il decoding gzip riparte da `archive_bytes` (in memoria, quindi
+/// riavvolgibile) ad ogni hop: il tar crate legge solo in streaming forward,
+/// non supporta un accesso random per path.
+fn risolvi_symlink_in_archivio(
+    archive_bytes: &[u8],
+    path_normalizzato: &Path,
+) -> Result<PathBuf, PapErrore> {
+    let mut corrente = path_normalizzato.to_path_buf();
+    for _ in 0..MAX_HOP_SYMLINK {
         let dec = flate2::read::GzDecoder::new(archive_bytes);
         let mut archive = tar::Archive::new(dec);
-        let mut found = false;
+        let mut esito_entry: Option<Option<PathBuf>> = None; // None = non trovata; Some(None) = trovata, non symlink; Some(Some(target)) = trovata, symlink
         for entry in archive
             .entries()
             .map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?
         {
-            let mut entry = entry.map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?;
+            let entry = entry.map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?;
             let entry_path = entry
                 .path()
                 .map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?
-                .to_string_lossy()
-                .to_string();
-            if entry_path == path_in_archive {
-                let mut out = fs::File::create(dest)?;
-                std::io::copy(&mut entry, &mut out)?;
-                found = true;
-                break;
+                .into_owned();
+            if normalizza_path_archivio(&entry_path) != corrente {
+                continue;
             }
+            if entry.header().entry_type().is_symlink() {
+                let link_name = entry
+                    .link_name()
+                    .map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?
+                    .ok_or_else(|| {
+                        PapErrore::Generico(format!(
+                            "tar: entry symlink {} senza link target",
+                            corrente.display()
+                        ))
+                    })?
+                    .into_owned();
+                let dir_symlink = corrente.parent().unwrap_or_else(|| Path::new(""));
+                esito_entry = Some(Some(normalizza_path_archivio(&risolvi_path_relativo(
+                    dir_symlink,
+                    &link_name,
+                ))));
+            } else {
+                esito_entry = Some(None);
+            }
+            break;
         }
-        if !found {
-            return Err(PapErrore::Generico(format!(
-                "tar: file {path_in_archive} non trovato nell'archivio"
-            )));
+        match esito_entry {
+            None => {
+                return Err(PapErrore::Generico(format!(
+                    "tar: file {} non trovato nell'archivio",
+                    corrente.display()
+                )))
+            }
+            Some(None) => return Ok(corrente),
+            Some(Some(target)) => corrente = target,
         }
+    }
+    Err(PapErrore::Generico(format!(
+        "tar: catena di symlink troppo lunga (>{MAX_HOP_SYMLINK}) risolvendo {}",
+        path_normalizzato.display()
+    )))
+}
+
+fn estrai_da_tar_gz(archive_bytes: &[u8], path_in_archive: &str, dest: &Path) -> Result<(), PapErrore> {
+    let target_normalizzato = normalizza_path_archivio(Path::new(path_in_archive));
+    let target_risolto = risolvi_symlink_in_archivio(archive_bytes, &target_normalizzato)?;
+
+    let dec = flate2::read::GzDecoder::new(archive_bytes);
+    let mut archive = tar::Archive::new(dec);
+    let mut found = false;
+    for entry in archive
+        .entries()
+        .map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?
+    {
+        let mut entry = entry.map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?;
+        let entry_path = entry
+            .path()
+            .map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?
+            .into_owned();
+        if normalizza_path_archivio(&entry_path) == target_risolto {
+            let mut out = fs::File::create(dest)?;
+            std::io::copy(&mut entry, &mut out)?;
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        return Err(PapErrore::Generico(format!(
+            "tar: file {} non trovato nell'archivio",
+            target_risolto.display()
+        )));
     }
     Ok(())
 }
@@ -1068,6 +1236,24 @@ mod test {
         assert!(!modello_completo(p));
         std::fs::write(p.join("tokenizer.json"), b"stub").unwrap();
         assert!(modello_completo(p));
+    }
+
+    #[test]
+    fn pronto_su_disco_falso_se_manca_libonnxruntime() {
+        // Fix #556 (sintomo 3): modello+tokenizer presenti ma libonnxruntime
+        // assente → non pronto. Prima del fix, `embeddings_status` non
+        // controllava affatto la lib e avrebbe dichiarato "Pronto" qui.
+        let dir = tempfile::tempdir().unwrap();
+        let dir_modello = dir.path().join("modello");
+        std::fs::create_dir_all(&dir_modello).unwrap();
+        std::fs::write(dir_modello.join("model.onnx"), b"stub").unwrap();
+        std::fs::write(dir_modello.join("tokenizer.json"), b"stub").unwrap();
+        let lib_path = dir.path().join("libonnxruntime.so");
+
+        assert!(!pronto_su_disco(&dir_modello, &lib_path));
+
+        std::fs::write(&lib_path, b"stub").unwrap();
+        assert!(pronto_su_disco(&dir_modello, &lib_path));
     }
 
     #[test]
@@ -1534,5 +1720,160 @@ mod test {
         let r = base_privata_hardened(&runtime_dir);
         assert!(r.is_err());
         assert!(r.unwrap_err().to_string().contains("integrità"));
+    }
+
+    // ─────────── #556: estrazione tar.gz — prefisso `./` + entry symlink ───────────
+    //
+    // Diagnosi verificata empiricamente scaricando ed aprendo
+    // `onnxruntime-osx-arm64-1.23.0.tgz` con questa stessa versione di `tar`
+    // (0.4.46): tutte le entry hanno prefisso `./`, che il confronto per
+    // stringa esatta di `path_in_archive` non gestiva (sintomo 1, la causa
+    // diretta del bug macOS #556). Indipendentemente, `lib/libonnxruntime.*`
+    // è spesso un symlink verso `libonnxruntime.*.<versione>`: leggerne il
+    // contenuto senza risolvere il link dà 0 byte (sintomo 2, riprodotto su
+    // Linux). Questo archivio sintetico riproduce ENTRAMBE le stranezze in
+    // un colpo solo.
+
+    /// Costruisce in memoria un tar.gz con:
+    /// - `./onnxruntime-test/lib/libonnxruntime.so.1.23.0` — file regolare,
+    ///   contenuto reale della "libreria";
+    /// - `./onnxruntime-test/lib/libonnxruntime.so` — symlink relativo verso
+    ///   `libonnxruntime.so.1.23.0` (stesso schema del tarball reale).
+    ///
+    /// Entrambe le entry hanno il prefisso `./` come nel tarball macOS reale.
+    fn tar_gz_sintetico_con_prefisso_e_symlink(contenuto_lib: &[u8]) -> Vec<u8> {
+        let mut builder = tar::Builder::new(Vec::new());
+
+        let mut header_file = tar::Header::new_gnu();
+        header_file.set_size(contenuto_lib.len() as u64);
+        header_file.set_mode(0o644);
+        header_file.set_cksum();
+        builder
+            .append_data(
+                &mut header_file,
+                "./onnxruntime-test/lib/libonnxruntime.so.1.23.0",
+                contenuto_lib,
+            )
+            .unwrap();
+
+        let mut header_link = tar::Header::new_gnu();
+        header_link.set_size(0);
+        header_link.set_mode(0o777);
+        header_link.set_entry_type(tar::EntryType::Symlink);
+        builder
+            .append_link(
+                &mut header_link,
+                "./onnxruntime-test/lib/libonnxruntime.so",
+                "libonnxruntime.so.1.23.0",
+            )
+            .unwrap();
+
+        let tar_bytes = builder.into_inner().unwrap();
+        let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        enc.write_all(&tar_bytes).unwrap();
+        enc.finish().unwrap()
+    }
+
+    #[test]
+    fn estrai_da_tar_gz_risolve_prefisso_puntoslash_e_symlink() {
+        // Regressione #556: senza i due fix (normalizzazione `./` +
+        // risoluzione symlink) questo test falliva con "file non trovato
+        // nell'archivio" (sintomo 1) o produceva un file da 0 byte
+        // (sintomo 2, se solo la normalizzazione fosse stata applicata).
+        let contenuto = b"contenuto-fittizio-libonnxruntime";
+        let archive = tar_gz_sintetico_con_prefisso_e_symlink(contenuto);
+
+        // `path_in_archive`, come costruito da `ort_release_filename`: SENZA
+        // prefisso `./`, punta all'entry symlink (non al file reale).
+        let path_in_archive = "onnxruntime-test/lib/libonnxruntime.so";
+
+        let dest_dir = tempfile::tempdir().unwrap();
+        let dest = dest_dir.path().join("libonnxruntime.so");
+
+        estrai_da_tar_gz(&archive, path_in_archive, &dest).unwrap();
+
+        let estratto = std::fs::read(&dest).unwrap();
+        assert_eq!(estratto, contenuto, "deve estrarre il contenuto REALE del target, non 0 byte");
+    }
+
+    #[test]
+    fn estrai_da_tar_gz_file_assente_errore_esplicito() {
+        let archive = tar_gz_sintetico_con_prefisso_e_symlink(b"x");
+        let dest_dir = tempfile::tempdir().unwrap();
+        let dest = dest_dir.path().join("out");
+
+        let r = estrai_da_tar_gz(&archive, "percorso/inesistente", &dest);
+        assert!(r.is_err());
+        assert!(r.unwrap_err().to_string().contains("non trovato"));
+    }
+
+    #[test]
+    fn estrai_libonnxruntime_su_errore_non_lascia_dest_parziale() {
+        // `estrai_libonnxruntime` (il wrapper pubblico, non `estrai_da_tar_gz`
+        // direttamente) deve estrarre atomicamente: su un archivio dove il
+        // path richiesto non esiste, `dest` non deve comparire sul
+        // filesystem né restare in uno stato parzialmente scritto — così un
+        // successivo `embeddings_download` non scambia un residuo per
+        // "libonnxruntime già scaricata" (vedi doc su `estrai_libonnxruntime`).
+        let archive = tar_gz_sintetico_con_prefisso_e_symlink(b"x");
+        let dest_dir = tempfile::tempdir().unwrap();
+        let dest = dest_dir.path().join("libonnxruntime.so");
+
+        let r = estrai_libonnxruntime(&archive, "percorso/inesistente", &dest);
+        assert!(r.is_err());
+        assert!(!dest.exists(), "dest non deve esistere dopo un'estrazione fallita");
+        assert!(
+            fs::read_dir(dest_dir.path()).unwrap().next().is_none(),
+            "nessun file temporaneo residuo nella dest dir"
+        );
+    }
+
+    #[test]
+    fn estrai_libonnxruntime_su_successo_scrive_dest_definitiva() {
+        let contenuto = b"contenuto-fittizio-libonnxruntime";
+        let archive = tar_gz_sintetico_con_prefisso_e_symlink(contenuto);
+        let dest_dir = tempfile::tempdir().unwrap();
+        let dest = dest_dir.path().join("libonnxruntime.so");
+
+        estrai_libonnxruntime(&archive, "onnxruntime-test/lib/libonnxruntime.so", &dest).unwrap();
+
+        assert_eq!(std::fs::read(&dest).unwrap(), contenuto);
+        // Solo il file finale, niente residui `.extract-partial`.
+        let file_nella_dir: Vec<_> = fs::read_dir(dest_dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(file_nella_dir, vec![std::ffi::OsString::from("libonnxruntime.so")]);
+    }
+
+    #[test]
+    fn normalizza_path_archivio_rimuove_prefisso_curdir() {
+        assert_eq!(
+            normalizza_path_archivio(Path::new("./a/b/c")),
+            PathBuf::from("a/b/c")
+        );
+        // Path già senza prefisso: invariato.
+        assert_eq!(
+            normalizza_path_archivio(Path::new("a/b/c")),
+            PathBuf::from("a/b/c")
+        );
+    }
+
+    #[test]
+    fn risolvi_path_relativo_link_nella_stessa_dir() {
+        let risolto = risolvi_path_relativo(
+            Path::new("onnxruntime-test/lib"),
+            Path::new("libonnxruntime.so.1.23.0"),
+        );
+        assert_eq!(risolto, PathBuf::from("onnxruntime-test/lib/libonnxruntime.so.1.23.0"));
+    }
+
+    #[test]
+    fn risolvi_path_relativo_gestisce_parent_dir() {
+        let risolto = risolvi_path_relativo(
+            Path::new("onnxruntime-test/lib"),
+            Path::new("../lib64/libonnxruntime.so"),
+        );
+        assert_eq!(risolto, PathBuf::from("onnxruntime-test/lib64/libonnxruntime.so"));
     }
 }
