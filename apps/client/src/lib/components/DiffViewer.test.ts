@@ -25,4 +25,47 @@ describe("DiffViewer", () => {
     // non essere silenziosamente scartato o interpretato.
     expect(container.textContent).toContain("<script>alert(1)</script>");
   });
+
+  // #506/#514/#553: il layout del diff dipende dalla modalità `altezza`.
+  // "contenitore" (default) è usata da CronologiaTab dentro un pannello ad
+  // altezza fissa e NON deve regredire; "contenuto" è usata da
+  // RitoccoModal, che delega lo scroll a un antenato con solo `max-height`.
+  // Il componente espone la modalità attiva via `data-altezza` sul nodo
+  // radice, cosa che il CSS usa per decidere fra flex:1/overflow:hidden
+  // (contenitore) e flex:none/overflow:visible (contenuto) — vedi lo
+  // <style> del componente per il dettaglio del perché.
+  it("usa la modalità 'contenitore' di default (comportamento storico di CronologiaTab)", () => {
+    const { container } = render(DiffViewer, {
+      props: { bodyA: "a", bodyB: "b" },
+    });
+
+    const radice = container.querySelector(".diff-viewer");
+    expect(radice?.getAttribute("data-altezza")).toBe("contenitore");
+  });
+
+  it("passa a 'contenuto' quando richiesto esplicitamente (usato da RitoccoModal)", () => {
+    const { container } = render(DiffViewer, {
+      props: { bodyA: "a", bodyB: "b", altezza: "contenuto" },
+    });
+
+    const radice = container.querySelector(".diff-viewer");
+    expect(radice?.getAttribute("data-altezza")).toBe("contenuto");
+  });
+
+  it("renderizza il diff in entrambe le modalità senza perdere contenuto", () => {
+    const bodyA = "riga uno\nriga due\nriga tre";
+    const bodyB = "riga uno\nriga due modificata\nriga tre";
+
+    for (const altezza of ["contenitore", "contenuto"] as const) {
+      const { container, unmount } = render(DiffViewer, {
+        props: { bodyA, bodyB, altezza },
+      });
+
+      expect(container.querySelector(".render")?.textContent).toContain(
+        "riga due modificata",
+      );
+
+      unmount();
+    }
+  });
 });
