@@ -79,6 +79,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
 
+      # Senza cache il runner ricompila da zero tutte le ~640 dipendenze del
+      # lock, e lo fa DUE volte: `cargo check` e `cargo llvm-cov` usano flag
+      # diversi (la coverage strumenta il codice), quindi cargo li tratta come
+      # compilazioni distinte e non condivide gli artefatti fra i due step.
+      # La cache non elimina quel doppio lavoro dentro il singolo run — elimina
+      # il ricompilare le dipendenze a ogni run, per entrambi gli step.
+      #
+      # Stesso SHA già usato da release.yml: nessuna superficie nuova. Chiave
+      # gestita dall'action su rustc + Cargo.lock + job, con potatura degli
+      # artefatti del crate locale (che si ricompila comunque a ogni commit).
+      #
+      # Scope separato da quello di release.yml: una cache di verifica non
+      # entra mai nella catena che produce i binari firmati.
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: apps/client/src-tauri
+
       # cargo-llvm-cov: tooling di line/region coverage per Rust su stable.
       # Usa l'action ufficiale taiki-e per fetch del binario pre-compilato
       # (no compile, ~5 sec invece dei ~3 minuti di cargo install).
