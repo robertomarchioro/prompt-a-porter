@@ -21,10 +21,10 @@
 use std::path::PathBuf;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use rand::distributions::WeightedIndex;
+use rand::distr::weighted::WeightedIndex;
 use rand::prelude::Distribution;
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use rusqlite::{params, Connection};
 
 use pap_lib::embeddings_store;
@@ -113,13 +113,13 @@ fn populate(conn: &Connection, n: usize) {
         let id = format!("prm-{i:06}");
         let usa_it = weights.sample(&mut rng) == 0;
         let parole = if usa_it { &parole_it[..] } else { &parole_en[..] };
-        let titolo = (0..rng.gen_range(2..=5))
-            .map(|_| parole[rng.gen_range(0..parole.len())])
+        let titolo = (0..rng.random_range(2..=5))
+            .map(|_| parole[rng.random_range(0..parole.len())])
             .collect::<Vec<_>>()
             .join(" ");
-        let len_words = rng.gen_range(15..=60);
+        let len_words = rng.random_range(15..=60);
         let body = (0..len_words)
-            .map(|_| parole[rng.gen_range(0..parole.len())])
+            .map(|_| parole[rng.random_range(0..parole.len())])
             .collect::<Vec<_>>()
             .join(" ");
 
@@ -143,7 +143,7 @@ fn populate(conn: &Connection, n: usize) {
 
 fn embedding_random(rng: &mut StdRng) -> Vec<f32> {
     let mut v: Vec<f32> = (0..EMBEDDING_DIM)
-        .map(|_| rng.gen_range(-1.0_f32..1.0))
+        .map(|_| rng.random_range(-1.0_f32..1.0))
         .collect();
     let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
     if norm > 1e-12 {
