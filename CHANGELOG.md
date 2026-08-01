@@ -1,5 +1,25 @@
 # Changelog — Prompt a Porter
 
+## v0.8.43 — Audit di sicurezza chiuso (2026-08-01)
+
+> Chiude per intero l'audit di sicurezza su client e server: dieci rilevazioni verificate, tutte corrette. Non ci sono novità né cambi visibili nell'uso quotidiano — è una release di sola sicurezza e manutenzione.
+
+### Sicurezza
+
+- **Indirizzo del server Ollama validato ovunque** (#539): il Ritocco del prompt e i Test Golden costruivano la connessione al modello locale usando l'indirizzo ricevuto dall'interfaccia **senza** passare dal controllo già applicato altrove (#457). Un indirizzo manipolato poteva far raggiungere all'app host interni alla rete o servizi di metadata, e nel caso del Ritocco la risposta tornava indietro a chi l'aveva richiesta. Ora la validazione è la stessa in tutti i punti; gli indirizzi legittimi (`localhost`, `https`) restano invariati.
+- **Accesso al sync revocabile davvero** (#539): le rotte di sincronizzazione si fidavano dei soli dati contenuti nel token di sessione, valido 24 ore. Un utente disattivato o rimosso dallo spazio di lavoro continuava quindi a sincronizzare fino alla scadenza naturale del token. Ogni richiesta di pull, push e connessione in tempo reale ora rivalida l'utente sul database: la revoca ha effetto immediato.
+- **Export CSV: formule neutralizzate** (#540): nell'export del log di audit e dei report di regressione, una cella che iniziava per `=`, `+`, `-` o `@` veniva scritta tale e quale. Un titolo di prompt costruito ad arte e arrivato da un pacchetto di terze parti diventava così una formula eseguita all'apertura del file in Excel, LibreOffice o Sheets — con possibile esfiltrazione delle celle vicine. Le celle a rischio sono ora neutralizzate prima della scrittura.
+- **Runtime di ricerca semantica verificato sulla copia caricata** (#541): la libreria ONNX veniva controllata con la sua impronta SHA-256 su disco, ma il caricamento riapriva lo stesso file — con una finestra, per chi avesse accesso in scrittura alla cartella dati, per sostituirla tra il controllo e l'uso ed eseguire codice nativo. Ora la libreria viene copiata in una cartella riservata al singolo processo, l'impronta è verificata **sulla copia** ed è la copia a essere caricata. Modello e tokenizer restano verificati in loco: sono dati, non codice eseguibile.
+- **Log del server non più falsificabili** (#541): l'indirizzo richiesto e l'email inviata al login finivano nel log così com'erano ricevuti. Caratteri di controllo inseriti apposta permettevano di fabbricare righe di log inesistenti — e per l'indirizzo bastava una richiesta non autenticata. Entrambi passano ora da un sanificatore prima di essere scritti.
+- **Export markdown: niente crash né percorsi fuori cartella** (#541): il suffisso dei nomi file derivava dall'identificativo del prompt tagliando i primi 8 **byte** — un carattere accentato o un'emoji a cavallo del taglio faceva terminare l'app — e non veniva ripulito, così un identificativo importato contenente `../` poteva far scrivere file fuori dalla cartella scelta. Ora il taglio è per caratteri e il nome passa dalla stessa ripulitura usata per titoli e cartelle.
+
+### Manutenzione
+
+- **Documentazione riallineata al codice** (#533, #535, #536, #537): riordino generale in vista della 1.0 — link al sito ufficiale, template svecchiati, la guida ai workflow di CI allineata ai 10 reali, `api-server.md` riportato a ciò che il codice fa davvero (con correzione dell'immagine base Docker, Go 1.23 → 1.25) e la nota, verificata dal vivo, che con certificato EV SmartScreen non mostra più alcun avviso. Il materiale di lavorazione della roadmap è stato spostato in archivio privato (#534).
+- **Aggiornamento dipendenze** (#529, #542, #548, #550): rinfresco del lockfile npm che chiude **27 segnalazioni di sicurezza su dipendenze indirette** senza forzare alcuna versione (`pnpm audit` da 31 a 4); patch/minor su svelte 5.56.8, driver.js 1.8.0 e i font; lato Rust `serde` 1.0.229 e **`ort` 2.0.0-rc.12 → rc.13**, il runtime della ricerca semantica; `actions/checkout` 7.0.1.
+- **Pulizia della CI** (#538, #544, #545): ripinnato `taiki-e/install-action` a uno SHA raggiungibile dopo un retag upstream che teneva rossa la scheda Dependabot pur con la CI verde; rimosso il job `pnpm audit`, ridondante e con l'esito comunque scartato; rimosso `bootstrap.yml`, workflow one-shot ormai esaurito e già rotto.
+- **Strumenti di sviluppo** (#532, #546, #547, #549): nuove procedure interne per la verifica post-pubblicazione delle release firmate e per lo svuotamento degli alert su dipendenze indirette, entrambe corrette dopo il primo giro reale.
+
 ## v0.8.42 — Rifiniture updater e vault (2026-07-22)
 
 > Due rifiniture dal triage delle segnalazioni: le note di rilascio nell'updater ora si leggono come testo formattato, e il minimo della password del vault torna a 8 caratteri.
