@@ -6,7 +6,6 @@
 
 | File | Trigger | Job principali |
 |---|---|---|
-| `bootstrap.yml` | `workflow_dispatch` (manuale) | Genera `pnpm-lock.yaml` + icone Tauri |
 | `cli-build.yml` | `push:main` + `pull_request` su `apps/cli/**` (no md) + `workflow_dispatch` | `lint-and-test` (Go + golangci-lint + coverage report, no gate), `cross-compile` matrix 6 OS/arch |
 | `client-build.yml` | `push:main` + `pull_request` su `apps/client/**` ∪ `packages/**` ∪ `pnpm-workspace.yaml` ∪ `pnpm-lock.yaml` ∪ `.github/workflows/client-build.yml` (no md) + `workflow_dispatch` | `lint-and-test` (TypeScript, **coverage gate 70%**), `rust-test` (cargo-llvm-cov **gate 80% line**, `--locked`) |
 | `mcp-server-build.yml` | `push:main` + `pull_request` su `apps/mcp-server/**` ∪ `pnpm-workspace.yaml` ∪ `pnpm-lock.yaml` (no md) + `workflow_dispatch` | `lint-and-build` (TS type check + build + **coverage gate 80%** su `@pap/shared-schema` e `@pap/mcp-server`) |
@@ -14,6 +13,7 @@
 | `release.yml` | `push:tags:v*` | `build` matrix 3 runner / 4 target: Windows (NSIS + portable zip), Linux (deb + AppImage), macOS **universale** arm64+x86_64 (app + dmg) → asset draft release via `tauri-action`; job `cli` allega i binari della CLI `pap` |
 | `security-audit.yml` | `workflow_dispatch` + `schedule cron giornaliero 05:23 UTC` | `cargo audit`, `govulncheck` server+CLI, `pnpm audit`; su failure il job `notifica-fallimento` apre/aggiorna la issue "Security Audit fallito: intervenire" |
 | `dep-canary.yml` | `workflow_dispatch` + `schedule cron mar/ven 05:17 UTC` | Canary **non bloccante**: toolchain Rust latest senza pin + `cargo update` (ignora il lock) per scoprire rotture upstream; su failure apre/aggiorna una issue con label `dep-canary` |
+| `modelli-refresh.yml` | `workflow_dispatch` + `schedule cron lunedì 06:17 UTC` | Aggiorna `apps/client/src/lib/modelli-registro.json` da [models.dev](https://models.dev) (pubblico, **senza chiave**); se il listino è cambiato esegue lint+test e apre una PR. ⚠️ La CI **non** gira sulla PR generata (limite delle PR aperte con `GITHUB_TOKEN`): il gate è il client-build su main dopo il merge |
 | `macos-smoke.yml` | `workflow_dispatch` (solo manuale) | Smoke build Tauri unsigned su `macos-14` (artifact di workflow, retention 7 gg, mai su release). Nato pre-certificato Apple; utile per validare cambi alla toolchain macOS senza taggare |
 | `site-deploy.yml` | `push:main` su `apps/site/**` ∪ `docs/**` ∪ `pnpm-workspace.yaml` ∪ `pnpm-lock.yaml` ∪ `.github/workflows/site-deploy.yml` + `workflow_dispatch` — **niente trigger su PR** | `build` (VitePress) → `deploy` su GitHub Pages (www.promptaporter.it) |
 
@@ -32,9 +32,9 @@
 | `.github/workflows/mcp-server-build.yml` | ⚠️ **nessuno** (non auto-listato) |
 | `.github/workflows/server-build.yml` | ⚠️ **nessuno** (non auto-listato) |
 | `.github/workflows/release.yml` | ⚠️ **nessuno** su PR — solo su push di tag `v*` |
-| `.github/workflows/bootstrap.yml` | ⚠️ **nessuno** (solo manuale) |
 | `.github/workflows/security-audit.yml` | ⚠️ **nessuno** su PR (schedule + manuale) |
 | `.github/workflows/dep-canary.yml` | ⚠️ **nessuno** su PR (schedule + manuale) |
+| `.github/workflows/modelli-refresh.yml` | ⚠️ **nessuno** (schedule + manuale) |
 | `.github/workflows/macos-smoke.yml` | ⚠️ **nessuno** (solo manuale) |
 | `.github/workflows/site-deploy.yml` | ⚠️ **nessuno** su PR — **site-deploy** al merge su main (auto-listato) |
 | `apps/site/**` | ⚠️ **nessuno** su PR — **site-deploy** al merge su main |
@@ -42,6 +42,7 @@
 | `CHANGELOG.md` (root) | ⚠️ **nessuno** |
 | `README.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (root) | ⚠️ **nessuno** |
 | `Cargo.lock`, `apps/client/src-tauri/Cargo.toml/lock` | **client-build** (sotto `apps/client/**`) |
+| `apps/client/src/lib/modelli-registro.json` | **client-build** (sotto `apps/client/**`) |
 | Tag `v*` (push) | **release** (build cross-OS + draft release) |
 
 ⚠️ = nessun job CI di PR validation. Significa **PR mergiabile senza green check**: vanno valutate manualmente o con audit locale.

@@ -826,8 +826,8 @@
           <span class="batch-label">Modello</span>
           {#if providerHaModelliNoti(modaleBatch.providerScelto)}
             <select class="batch-input" bind:value={modaleBatch.modelScelto}>
-              {#each opzioniModello(modaleBatch.providerScelto, modaleBatch.modelScelto) as m (m)}
-                <option value={m}>{m}</option>
+              {#each opzioniModello(modaleBatch.providerScelto, modaleBatch.modelScelto) as m (m.value)}
+                <option value={m.value}>{m.etichetta}</option>
               {/each}
             </select>
           {:else}
@@ -864,8 +864,8 @@
                   class="batch-input"
                   bind:value={modaleBatch.judgeModelScelto}
                 >
-                  {#each opzioniModello(modaleBatch.judgeProviderScelto, modaleBatch.judgeModelScelto) as m (m)}
-                    <option value={m}>{m}</option>
+                  {#each opzioniModello(modaleBatch.judgeProviderScelto, modaleBatch.judgeModelScelto) as m (m.value)}
+                    <option value={m.value}>{m.etichetta}</option>
                   {/each}
                 </select>
               {:else}
@@ -978,8 +978,8 @@
           <span class="batch-label">Modello</span>
           {#if providerHaModelliNoti(modaleRun.providerScelto)}
             <select class="batch-input" bind:value={modaleRun.modelScelto}>
-              {#each opzioniModello(modaleRun.providerScelto, modaleRun.modelScelto) as m (m)}
-                <option value={m}>{m}</option>
+              {#each opzioniModello(modaleRun.providerScelto, modaleRun.modelScelto) as m (m.value)}
+                <option value={m.value}>{m.etichetta}</option>
               {/each}
             </select>
           {:else}
@@ -1016,8 +1016,8 @@
                   class="batch-input"
                   bind:value={modaleRun.judgeModelScelto}
                 >
-                  {#each opzioniModello(modaleRun.judgeProviderScelto, modaleRun.judgeModelScelto) as m (m)}
-                    <option value={m}>{m}</option>
+                  {#each opzioniModello(modaleRun.judgeProviderScelto, modaleRun.judgeModelScelto) as m (m.value)}
+                    <option value={m.value}>{m.etichetta}</option>
                   {/each}
                 </select>
               {:else}

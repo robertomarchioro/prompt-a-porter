@@ -15,7 +15,8 @@
     "lint": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "modelli:aggiorna": "tsx scripts/aggiorna-modelli.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -52,6 +53,7 @@
     "svelte": "^5.56.8",
     "svelte-check": "^4.7.3",
     "tslib": "^2.8.0",
+    "tsx": "^4.23.1",
     "typescript": "^6.0.3",
     "vite": "^8.1.5",
     "vitest": "^4.1.10"

@@ -1,0 +1,103 @@
+name: Modelli AI — aggiornamento registro
+
+# Tiene aggiornato `apps/client/src/lib/modelli-registro.json`, l'unica fonte
+# degli elenchi di modelli mostrati nell'app. Gira una volta a settimana,
+# apre una PR se il listino è cambiato, e la modifica entra nella release
+# successiva di PAP.
+#
+# Fonte: https://models.dev/api.json — pubblica e SENZA chiave. È una scelta
+# deliberata: le API ufficiali dei provider richiederebbero tre secret di
+# terze parti nel repo e non restituiscono comunque i prezzi.
+#
+# La PR NON va mergiata al buio: il registro è dati di terzi che finiscono in
+# un binario firmato. Va letto il diff.
+#
+# ⚠️ Le PR aperte con GITHUB_TOKEN non fanno partire i workflow: sulla PR la
+# CI NON gira. Il gate reale è il Client Build su main dopo il merge.
+
+on:
+  schedule:
+    # Lunedì 06:17 UTC — orario dispari per non accodarsi ai picchi.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  aggiorna:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Installa dipendenze
+        run: pnpm install --frozen-lockfile
+
+      # Fallisce (exit 2) se il listino è irraggiungibile, ha cambiato schema
+      # o è sospetto: in quel caso il registro NON viene toccato e il run
+      # diventa rosso. Nessun `continue-on-error`: un aggiornamento saltato
+      # in silenzio sarebbe peggio di un fallimento visibile.
+      - name: Aggiorna il registro
+        run: pnpm --filter @pap/client modelli:aggiorna | tee delta.txt
+
+      - name: C'è qualcosa da proporre?
+        id: stato
+        run: |
+          if git diff --quiet -- apps/client/src/lib/modelli-registro.json; then
+            echo "cambiato=no" >> "$GITHUB_OUTPUT"
+            echo "Nessuna novità nel listino."
+          else
+            echo "cambiato=si" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Il registro cambia, ma i consumatori restano verdi? Se il filtro o la
+      # fusione si rompono, meglio saperlo qui che in una PR già aperta.
+      - name: Lint e test con il registro nuovo
+        if: steps.stato.outputs.cambiato == 'si'
+        run: |
+          pnpm --filter @pap/client lint
+          pnpm --filter @pap/client test
+
+      - name: Apri la PR
+        if: steps.stato.outputs.cambiato == 'si'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          RAMO="chore/modelli-$(date -u +%Y%m%d)"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$RAMO"
+          git add apps/client/src/lib/modelli-registro.json
+          git commit -m "chore(modelli): aggiorna il registro dei modelli AI"
+          git push -u origin "$RAMO"
+
+          {
+            echo "Aggiornamento settimanale di \`modelli-registro.json\` da [models.dev](https://models.dev)."
+            echo
+            echo '```'
+            cat delta.txt
+            echo '```'
+            echo
+            echo "I modelli spariti dal listino **non** vengono rimossi: restano in elenco marcati \`obsoleto\`, così chi li ha già configurati non se li vede sparire."
+            echo
+            echo "> ⚠️ La CI non gira su questa PR (limite delle PR aperte con \`GITHUB_TOKEN\`)."
+            echo "> Lint e test sono stati eseguiti nel run che l'ha generata; il gate finale è il Client Build su main."
+          } > corpo.md
+
+          gh pr create \
+            --title "chore(modelli): aggiorna il registro dei modelli AI" \
+            --body-file corpo.md \
+            --base main \
+            --head "$RAMO"

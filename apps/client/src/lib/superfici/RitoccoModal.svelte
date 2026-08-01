@@ -150,8 +150,8 @@
         <span>Modello</span>
         {#if providerHaModelliNoti(providerScelto)}
           <select bind:value={modelScelto}>
-            {#each opzioniModello(providerScelto, modelScelto) as m (m)}
-              <option value={m}>{m}</option>
+            {#each opzioniModello(providerScelto, modelScelto) as m (m.value)}
+              <option value={m.value}>{m.etichetta}</option>
             {/each}
           </select>
         {:else}
