@@ -376,6 +376,9 @@ mod test {
         conn
     }
 
+    // Helper di test: la lista di parametri rispecchia le colonne da
+    // popolare, raggrupparle in una struct non aggiungerebbe chiarezza.
+    #[allow(clippy::too_many_arguments)]
     fn inserisci_prompt(
         conn: &Connection,
         id: &str,

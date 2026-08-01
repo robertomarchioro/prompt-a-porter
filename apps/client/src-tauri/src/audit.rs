@@ -136,10 +136,8 @@ pub(crate) fn lista_pure(
             rusqlite::named_params! { ":tipo": tipo, ":limite": lim },
             row_mapper,
         )?;
-        for r in iter {
-            if let Ok(v) = r {
-                voci.push(v);
-            }
+        for v in iter.flatten() {
+            voci.push(v);
         }
     } else {
         let mut stmt = conn.prepare(
@@ -152,22 +150,21 @@ pub(crate) fn lista_pure(
             rusqlite::named_params! { ":limite": lim },
             row_mapper,
         )?;
-        for r in iter {
-            if let Ok(v) = r {
-                voci.push(v);
-            }
+        for v in iter.flatten() {
+            voci.push(v);
         }
     }
     Ok(voci)
 }
 
+/// Parametri SQL nominati (`:nome`) con il rispettivo valore già boxato.
+type ParametriNamed = Vec<(&'static str, Box<dyn rusqlite::ToSql>)>;
+
 /// Costruisce la WHERE clause + parametri SQL dai filtri.
 /// Restituisce (clausola_where, parametri_named).
-fn componi_where(
-    filtro: &AuditFiltro,
-) -> (String, Vec<(&'static str, Box<dyn rusqlite::ToSql>)>) {
+fn componi_where(filtro: &AuditFiltro) -> (String, ParametriNamed) {
     let mut conds: Vec<&'static str> = Vec::new();
-    let mut params: Vec<(&'static str, Box<dyn rusqlite::ToSql>)> = Vec::new();
+    let mut params: ParametriNamed = Vec::new();
 
     if let Some(v) = filtro.da.as_ref().filter(|s| !s.is_empty()) {
         conds.push("OccurredAt >= :da");

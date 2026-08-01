@@ -589,7 +589,7 @@ mod test {
             let lbl = (c as char).to_string();
             assert!(labels.contains(&lbl), "etichetta '{lbl}' mancante");
         }
-        assert!(!labels.contains(&"A".to_string()));
+        assert!(!labels.iter().any(|l| l == "A"));
     }
 
     #[test]

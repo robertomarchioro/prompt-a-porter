@@ -444,8 +444,10 @@ mod test {
         let dir = tempfile::tempdir().unwrap();
         let pref_state = PreferenzeState::new(dir.path().to_path_buf());
 
-        let mut prefs = Preferenze::default();
-        prefs.tema = "light".to_string();
+        let prefs = Preferenze {
+            tema: "light".to_string(),
+            ..Default::default()
+        };
         // Nessun `VaultState` in scope: se questa funzione lo richiedesse
         // ancora, il codice non compilerebbe nemmeno.
         salva_pure(pref_state.data_dir(), &prefs).unwrap();

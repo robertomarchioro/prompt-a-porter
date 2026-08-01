@@ -174,12 +174,13 @@ pub fn rrf_fuse(
     combined
 }
 
+/// Dettagli di un prompt come letti dalla riga SQL:
+/// (titolo, descrizione, body, visibilità, preferito, conteggio usi).
+type DettagliPrompt = (String, String, String, String, bool, i64);
+
 /// Carica i dettagli di un singolo prompt per id. Ritorna `None` se non
 /// trovato o eliminato.
-fn carica_prompt(
-    conn: &Connection,
-    id: &str,
-) -> Result<Option<(String, String, String, String, bool, i64)>, PapErrore> {
+fn carica_prompt(conn: &Connection, id: &str) -> Result<Option<DettagliPrompt>, PapErrore> {
     let r = conn.query_row(
         "SELECT Title, COALESCE(Description, ''), Body, Visibility, IsFavorite, UseCount
          FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",

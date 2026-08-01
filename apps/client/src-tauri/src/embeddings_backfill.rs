@@ -249,14 +249,14 @@ mod test {
     // di embeddings_store. Niente test unit diretti qui — verifica
     // manuale post-merge nel client real-world.
 
-    #[test]
-    fn batch_size_e_max_total_sensati() {
-        // Sentinel: se qualcuno cambia accidentalmente i valori a numeri
-        // assurdi (es. BATCH_SIZE > MAX_TOTAL), questo test rileva.
-        assert!(super::BATCH_SIZE > 0);
-        assert!(super::MAX_TOTAL > super::BATCH_SIZE);
-        assert!(super::BATCH_SIZE <= 100, "batch troppo grande, blocca lock troppo a lungo");
-    }
+    // Sentinel sui valori: valutato a **compile time**, così un valore assurdo
+    // (es. BATCH_SIZE > MAX_TOTAL) rompe la build, non un test.
+    const _: () = assert!(super::BATCH_SIZE > 0);
+    const _: () = assert!(super::MAX_TOTAL > super::BATCH_SIZE);
+    const _: () = assert!(
+        super::BATCH_SIZE <= 100,
+        "batch troppo grande, blocca lock troppo a lungo"
+    );
 
     #[test]
     fn esito_backfill_segnale_grace_degradation() {
