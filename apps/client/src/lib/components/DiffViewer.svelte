@@ -38,11 +38,27 @@
     }
   }
 
+  /**
+   * "contenitore" (default): il DiffViewer riempie un antenato ad altezza
+   * DEFINITA (height:100%) e scrolla al proprio interno. Comportamento
+   * storico, usato da CronologiaTab dentro un pannello ad altezza fissa —
+   * NON toccare per non farlo regredire.
+   *
+   * "contenuto": il DiffViewer si dimensiona sulla propria altezza
+   * intrinseca (senza flex:1/flex-basis:0) e delega lo scroll a un
+   * antenato del consumer. Serve a RitoccoModal, il cui wrapper ha solo
+   * `max-height` (vedi #506/#514/#553 — i due tentativi precedenti
+   * patchavano il consumer con `:global()`, qui il prop lo rende un caso
+   * di prima classe del componente).
+   */
+  type Altezza = "contenitore" | "contenuto";
+
   interface Props {
     bodyA: string;
     bodyB: string;
     etichettaA?: string;
     etichettaB?: string;
+    altezza?: Altezza;
   }
 
   let {
@@ -50,6 +66,7 @@
     bodyB,
     etichettaA = "Versione A",
     etichettaB = "Versione B",
+    altezza = "contenitore",
   }: Props = $props();
 
   let preferenzaUtente = $state<Modalita>(caricaModalita());
@@ -97,7 +114,7 @@
   });
 </script>
 
-<div class="diff-viewer">
+<div class="diff-viewer" data-altezza={altezza}>
   <header class="header">
     <span class="lbl">Diff</span>
     <div class="toggle" role="group" aria-label="Modalità diff">
@@ -141,9 +158,25 @@
   .diff-viewer {
     display: flex;
     flex-direction: column;
-    height: 100%;
     background: var(--bg-canvas);
+  }
+
+  /* Modalità "contenitore": altezza definita dal genitore, scroll interno.
+     Comportamento storico (v. CronologiaTab). */
+  .diff-viewer[data-altezza="contenitore"] {
+    height: 100%;
     overflow: hidden;
+  }
+
+  /* Modalità "contenuto": altezza intrinseca, nessuno scroll qui — lo
+     scroll è responsabilità di un antenato del consumer (v. RitoccoModal
+     `.diff-scroll`). Niente flex:1/flex-basis:0 sui discendenti: quella
+     combinazione dentro un flex column ad altezza `auto` è il caso limite
+     che #514 non aveva risolto (Chromium e WebView2 lo risolvono
+     diversamente — vedi nota nel `.render` sotto). */
+  .diff-viewer[data-altezza="contenuto"] {
+    height: auto;
+    overflow: visible;
   }
 
   .header {
@@ -195,12 +228,36 @@
     color: var(--text-default);
   }
 
+  /* line-height e font-size sono dichiarati qui esplicitamente (non
+     lasciati all'eredità) perché si propagano sull'HTML iniettato via
+     `{@html}`: diff2html non fissa un proprio line-height e posiziona i
+     numeri di riga con `position:absolute` senza top/left, assumendo
+     un'altezza di riga stabile e coerente in tutto l'albero — un valore
+     ambiguo o ereditato da un antenato del consumer produce lo scenario
+     "le righe si sovrappongono" di #553. */
   .render {
-    flex: 1;
     overflow: auto;
     font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.5;
+  }
+
+  .diff-viewer[data-altezza="contenitore"] .render {
+    /* min-height:0 evita che il contenuto forzi l'altezza del flex item
+       oltre il contenitore ad altezza definita (classico bug flex+overflow). */
+    flex: 1;
+    min-height: 0;
+  }
+
+  .diff-viewer[data-altezza="contenuto"] .render {
+    /* Nessun flex:1 qui: in un antenato ad altezza `auto` (data-altezza
+       "contenuto"), flex-basis:0 + flex-grow:1 crea una dipendenza
+       circolare fra l'altezza del contenitore (auto, dal contenuto) e
+       quella dell'item (dal container) — Chromium e WebView2 la
+       risolvono diversamente. `flex: none` fa sì che .render segua
+       semplicemente la propria altezza intrinseca. */
+    flex: none;
+    overflow: visible;
   }
 
   .vuoto {
