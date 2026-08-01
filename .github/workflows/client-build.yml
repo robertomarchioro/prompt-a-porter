@@ -87,6 +87,17 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
+      # Punto cieco chiuso: il gate di coverage qui sotto gira su `--lib`, quindi
+      # compila SOLO la libreria. Esempi e bench potevano marcire indefinitamente
+      # senza che nulla segnalasse niente — ed è successo: `genera_dataset` e il
+      # bench `ricerca_ibrida` erano rimasti all'API di rand 0.8 dopo il bump a
+      # 0.10, con `cargo test` rotto in locale per chiunque e la CI verde (#562).
+      # `check` invece di `build`: cattura la stessa classe di errori (import e
+      # metodi spariti) in una frazione del tempo.
+      - name: Compila tutti i target (lib, test, esempi, bench)
+        working-directory: apps/client/src-tauri
+        run: cargo check --all-targets --locked
+
       # Threshold floor 80% anti-regressione (M7 v1.0 PR-6).
       # Coverage attuale ~80.2% line post M7 PR-1..PR-6 (vault 91%, audit 93%,
       # cartelle 90%, libreria 92%, preferenze 91%, prompt 84%).

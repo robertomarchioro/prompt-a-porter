@@ -7,7 +7,7 @@
 | File | Trigger | Job principali |
 |---|---|---|
 | `cli-build.yml` | `push:main` + `pull_request` su `apps/cli/**` (no md) + `workflow_dispatch` | `lint-and-test` (Go + golangci-lint + coverage report, no gate), `cross-compile` matrix 6 OS/arch |
-| `client-build.yml` | `push:main` + `pull_request` su `apps/client/**` ∪ `packages/**` ∪ `pnpm-workspace.yaml` ∪ `pnpm-lock.yaml` ∪ `.github/workflows/client-build.yml` (no md) + `workflow_dispatch` | `lint-and-test` (TypeScript, **coverage gate 70%**), `rust-test` (cargo-llvm-cov **gate 80% line**, `--locked`) |
+| `client-build.yml` | `push:main` + `pull_request` su `apps/client/**` ∪ `packages/**` ∪ `pnpm-workspace.yaml` ∪ `pnpm-lock.yaml` ∪ `.github/workflows/client-build.yml` (no md) + `workflow_dispatch` | `lint-and-test` (TypeScript, **coverage gate 70%**), `rust-test` (`cargo check --all-targets` + cargo-llvm-cov **gate 80% line**, `--locked`) |
 | `mcp-server-build.yml` | `push:main` + `pull_request` su `apps/mcp-server/**` ∪ `pnpm-workspace.yaml` ∪ `pnpm-lock.yaml` (no md) + `workflow_dispatch` | `lint-and-build` (TS type check + build + **coverage gate 80%** su `@pap/shared-schema` e `@pap/mcp-server`) |
 | `server-build.yml` | `push:main` + `pull_request` su `apps/server/**` (no md) + `workflow_dispatch` | `lint-and-test` (Go vet + test `-race` + **coverage gate 50%**) |
 | `release.yml` | `push:tags:v*` | `build` matrix 3 runner / 4 target: Windows (NSIS + portable zip), Linux (deb + AppImage), macOS **universale** arm64+x86_64 (app + dmg) → asset draft release via `tauri-action`; job `cli` allega i binari della CLI `pap` |
@@ -60,6 +60,20 @@ Attenzione però: **al merge su main** dei path `docs/**` / `apps/site/**` parte
 Solo `client-build.yml` è auto-listato nei propri `paths`. Per gli altri workflow, una modifica al loro YAML **non scatta una run di validazione**. **Vissuto**: PR #53 (coverage CI) — modificai solo `client-build.yml` + `docs/operativo/coverage.md`, e il workflow non partiva. Risolto aggiungendo `.github/workflows/client-build.yml` ai propri `paths`.
 
 Per testare modifiche a workflow non auto-listati: usare `workflow_dispatch` manuale dopo merge, oppure includere nella stessa PR un cambio dummy al codice coperto dai `paths` (anche solo un commento), oppure estendere temporaneamente i `paths` per testare.
+
+### ❌ Dare per scontato che un gate copra ciò che non compila
+
+Un gate che gira su `--lib` compila **solo la libreria**: esempi, bench e binari
+possono smettere di compilare senza che nulla diventi rosso. **Vissuto**: dopo il
+bump di `rand` da 0.8 a 0.10, `examples/genera_dataset.rs` e
+`benches/ricerca_ibrida.rs` sono rimasti all'API vecchia — `cargo test` falliva
+in locale per chiunque mentre la CI restava verde, e nessuno se n'è accorto per
+mesi (scoperto durante #561, chiuso in #562).
+
+Da qui lo step `cargo check --all-targets --locked` in `rust-test`: il gate di
+coverage misura la libreria, questo verifica che **tutto il crate** compili
+ancora. Regola generale: quando si aggiunge un gate, chiedersi cosa **non**
+guarda.
 
 ### ❌ Tag senza prima passare via PR + main
 
