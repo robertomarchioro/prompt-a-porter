@@ -4,6 +4,7 @@
 pub mod audit;
 pub mod cartelle;
 pub mod cestino;
+pub mod changelog;
 pub mod debug_log;
 pub mod editor;
 pub mod embeddings;
@@ -369,6 +370,15 @@ pub fn run() {
         // webview. Il frontend usa `apri-url.ts`, che valida lo schema
         // (solo http/https) prima di invocare questo plugin.
         .plugin(tauri_plugin_opener::init())
+        // Issue #558 punto 2: l'export ZIP dei log chiede ora all'utente
+        // dove salvare, invece di scrivere sempre nella stessa cartella
+        // fissa. Permesso in capabilities/default.json ristretto a
+        // `dialog:allow-save` — NON `dialog:default`, che include anche
+        // `allow-open` (file/dir picker per LEGGERE risorse arbitrarie dal
+        // filesystem, non necessario qui) e `allow-message` (dialoghi di
+        // conferma/alert, idem): principio del minimo privilegio, stessa
+        // scelta già fatta per `opener:allow-open-url` sopra.
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data_dir = app
                 .path()
@@ -653,6 +663,7 @@ pub fn run() {
             debug_log::debug_log_pulisci,
             debug_log::debug_log_esporta_zip,
             debug_log::debug_log_leggi,
+            changelog::changelog_sezione_remota,
             registra_hotkey,
             app_is_portable,
         ])

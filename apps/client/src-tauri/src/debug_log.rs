@@ -10,8 +10,11 @@
 //! - `debug_log_info` — path + lista file rotati con size/mtime
 //! - `debug_log_apri_cartella` — apre LogDir con file manager OS
 //! - `debug_log_pulisci` — truncate file corrente (mantiene i rotati)
-//! - `debug_log_esporta_zip` — crea ZIP in temp con file log + metadata,
-//!   ritorna path per attach a GitHub issue
+//! - `debug_log_esporta_zip` — crea uno ZIP con file log + metadata nel
+//!   percorso scelto dall'utente (issue #558 punto 2: prima scriveva
+//!   sempre nella stessa cartella fissa; il frontend ora apre un dialog
+//!   di salvataggio — `tauri-plugin-dialog`, permesso `dialog:allow-save`
+//!   — e passa qui il percorso scelto)
 
 use std::fs::{self, File};
 use std::io::{BufWriter, Read, Write};
@@ -54,22 +57,6 @@ fn log_dir(app: &tauri::AppHandle) -> Result<PathBuf, PapErrore> {
     app.path()
         .app_log_dir()
         .map_err(|e| PapErrore::dominio("Impossibile determinare la cartella dei log.", e))
-}
-
-/// #462 (security review, LOW): lo ZIP di export del debug log NON deve
-/// finire in `std::env::temp_dir()` (`/tmp` è world-readable su sistemi
-/// Unix multi-utente, ed era comunque un nome di file prevedibile). Usiamo
-/// `app_data_dir()` — già per-utente sia su Unix che su Windows — in una
-/// sottocartella dedicata, e su Unix restringiamo i permessi a 0600 come
-/// fatto in `preferenze.rs::salva_pure`.
-fn export_dir(app: &tauri::AppHandle) -> Result<PathBuf, PapErrore> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| PapErrore::dominio("Impossibile determinare la cartella dati.", e))?
-        .join("debug-exports");
-    fs::create_dir_all(&dir)?;
-    Ok(dir)
 }
 
 /// Crea (o sovrascrive) il file ZIP di export già con permessi 0600 su
@@ -228,13 +215,20 @@ pub fn debug_log_pulisci(app: tauri::AppHandle) -> Result<(), PapErrore> {
 }
 
 /// Crea uno ZIP con il file log corrente + i rotati + un file `metadata.txt`
-/// (versione app, OS, timestamp) in `app_data_dir()/debug-exports` (Unix:
-/// permessi 0600, solo owner — vedi `export_dir`/`restringi_permessi_owner`).
+/// (versione app, OS, timestamp) nel percorso `destinazione` scelto
+/// dall'utente tramite il dialog di salvataggio nativo (issue #558 punto
+/// 2: prima l'export finiva sempre nella stessa cartella fissa
+/// `app_data_dir()/debug-exports`, senza possibilità di scegliere dove).
+/// Il file nasce comunque con permessi 0600 su Unix (solo owner — vedi
+/// `crea_file_export`/`restringi_permessi_owner`), a prescindere da dove
+/// l'utente lo salvi.
 ///
-/// Ritorna il path assoluto al file ZIP creato; il frontend può poi
-/// proporre "salva con nome" o aprire il file manager su quel path.
+/// Ritorna il path assoluto al file ZIP creato.
 #[tauri::command]
-pub fn debug_log_esporta_zip(app: tauri::AppHandle) -> Result<String, PapErrore> {
+pub fn debug_log_esporta_zip(
+    app: tauri::AppHandle,
+    destinazione: String,
+) -> Result<String, PapErrore> {
     let dir = log_dir(&app)?;
     let files = raccogli_file_log(&dir);
 
@@ -244,10 +238,12 @@ pub fn debug_log_esporta_zip(app: tauri::AppHandle) -> Result<String, PapErrore>
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0) as i64;
-        // ':' sostituiti con '-' per compatibilità filename Windows
-        format_iso_utc(s).replace(':', "-")
+        format_iso_utc(s)
     };
-    let zip_path = export_dir(&app)?.join(format!("pap-debug-log-{timestamp}.zip"));
+    let zip_path = PathBuf::from(destinazione);
+    if let Some(parent) = zip_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
 
     let file = crea_file_export(&zip_path)
         .map_err(|e| PapErrore::dominio("Creazione dell'archivio dei log non riuscita.", e))?;
@@ -316,8 +312,20 @@ pub struct RigaLog {
     pub raw: String,
 }
 
-/// Parsing best-effort del formato default di tauri-plugin-log:
-/// `[YYYY-MM-DD][HH:MM:SS.mmm +TZ][LEVEL][target] message`
+/// Parsing best-effort del formato REALMENTE prodotto dal formatter di
+/// default di `tauri-plugin-log` (verificato riproducendo `Builder::default()`
+/// del crate — `time::format_description!` + `format_args!("{}[{}][{}] {}",
+/// timestamp, record.target(), record.level(), message)`):
+///
+/// `[YYYY-MM-DD][HH:MM:SS][target][LEVEL] message`
+///
+/// **Nota storica (bug #558 punto 1):** la doc precedente di questa
+/// funzione assumeva l'ordine `[LEVEL][target]`, invertito rispetto a
+/// quello vero. Con l'ordine sbagliato `r.level` finiva per contenere il
+/// module path (es. "pap_lib::editor") invece di "INFO"/"WARN"/ecc.: il
+/// filtro per livello nel viewer non trovava mai corrispondenze (ogni
+/// riga finiva silenziosamente esclusa non appena si selezionava un
+/// livello), e ogni riga risultava etichettata/colorata in modo errato.
 ///
 /// Se il formato non corrisponde (es. linea di continuazione panic
 /// trace), ritorna RigaLog con campi vuoti tranne `raw` e `message=raw`.
@@ -354,21 +362,21 @@ fn parse_riga(line: &str) -> RigaLog {
         };
     };
     resto = r2;
-    let Some((level, r3)) = estrai_bracket(resto) else {
+    let Some((target, r3)) = estrai_bracket(resto) else {
         return RigaLog {
-            timestamp: String::new(),
+            timestamp: format!("{data} {ora}"),
             level: String::new(),
             target: String::new(),
-            message: raw.clone(),
+            message: resto.trim().to_string(),
             raw,
         };
     };
     resto = r3;
-    let Some((target, r4)) = estrai_bracket(resto) else {
+    let Some((level, r4)) = estrai_bracket(resto) else {
         return RigaLog {
             timestamp: format!("{data} {ora}"),
-            level: level.to_string(),
-            target: String::new(),
+            level: String::new(),
+            target: target.to_string(),
             message: resto.trim().to_string(),
             raw,
         };
@@ -382,6 +390,16 @@ fn parse_riga(line: &str) -> RigaLog {
         message,
         raw,
     }
+}
+
+/// Nucleo puro di `debug_log_leggi`: dato il contenuto testuale del file
+/// e `n`, ritorna le ultime `n` righe parsate. Estratta a parte per poter
+/// scrivere test su un "file fittizio" (stringa in memoria o scritta su
+/// un file temporaneo) senza dover simulare un `AppHandle` Tauri.
+fn ultime_righe_parsate(contenuto: &str, n: usize) -> Vec<RigaLog> {
+    let righe: Vec<&str> = contenuto.lines().collect();
+    let inizio = righe.len().saturating_sub(n);
+    righe[inizio..].iter().map(|l| parse_riga(l)).collect()
 }
 
 /// Legge le ultime `n` righe dal file `pap.log` corrente. `n` clampato
@@ -400,10 +418,7 @@ pub fn debug_log_leggi(
     }
     let contenuto = fs::read_to_string(&path)
         .map_err(|e| PapErrore::dominio("Lettura dei log non riuscita.", e))?;
-    let righe: Vec<&str> = contenuto.lines().collect();
-    let inizio = righe.len().saturating_sub(n);
-    let parsed: Vec<RigaLog> = righe[inizio..].iter().map(|l| parse_riga(l)).collect();
-    Ok(parsed)
+    Ok(ultime_righe_parsate(&contenuto, n))
 }
 
 #[cfg(test)]
@@ -454,9 +469,13 @@ mod test {
 
     #[test]
     fn parse_riga_formato_standard() {
-        let line = "[2026-05-11][14:23:12.345 +02:00][INFO][pap_lib::editor] prompt salvato id=abc";
+        // Ordine REALE del formatter di default di tauri-plugin-log:
+        // [data][ora][target][LIVELLO] messaggio — verificato riproducendo
+        // `Builder::default()` del crate (bug #558 punto 1: la doc/i test
+        // precedenti assumevano l'ordine [LIVELLO][target], invertito).
+        let line = "[2026-05-11][14:23:12][pap_lib::editor][INFO] prompt salvato id=abc";
         let r = parse_riga(line);
-        assert_eq!(r.timestamp, "2026-05-11 14:23:12.345 +02:00");
+        assert_eq!(r.timestamp, "2026-05-11 14:23:12");
         assert_eq!(r.level, "INFO");
         assert_eq!(r.target, "pap_lib::editor");
         assert_eq!(r.message, "prompt salvato id=abc");
@@ -464,11 +483,15 @@ mod test {
 
     #[test]
     fn parse_riga_formato_3_brackets_solo() {
-        // Manca target bracket, parser deve estrarre level e mettere il resto in message
-        let line = "[2026-05-11][14:23:12][WARN] panic in module";
+        // Manca il bracket del livello: parser deve estrarre il target e
+        // mettere il resto in message (fallback difensivo — righe così
+        // non dovrebbero comparire dal formatter reale, che emette sempre
+        // 4 gruppi, ma una riga tronca/malformata non deve far panicare
+        // né perdere silenziosamente il testo).
+        let line = "[2026-05-11][14:23:12][pap_lib::vault] panic in module";
         let r = parse_riga(line);
-        assert_eq!(r.level, "WARN");
-        assert!(r.target.is_empty());
+        assert!(r.level.is_empty());
+        assert_eq!(r.target, "pap_lib::vault");
         assert_eq!(r.message, "panic in module");
     }
 
@@ -484,11 +507,62 @@ mod test {
 
     #[test]
     fn parse_riga_messaggio_vuoto() {
-        let line = "[2026-05-11][14:23:12][ERROR][pap_lib::vault] ";
+        let line = "[2026-05-11][14:23:12][pap_lib::vault][ERROR] ";
         let r = parse_riga(line);
         assert_eq!(r.level, "ERROR");
         assert_eq!(r.target, "pap_lib::vault");
         assert_eq!(r.message, "");
+    }
+
+    // ─── #558 punto 1: ultime_righe_parsate / debug_log_leggi ───
+
+    #[test]
+    fn ultime_righe_parsate_rispetta_il_clamp_e_l_ordine() {
+        let contenuto = "\
+[2026-05-11][10:00:00][pap_lib::a][INFO] uno
+[2026-05-11][10:00:01][pap_lib::b][WARN] due
+[2026-05-11][10:00:02][pap_lib::c][ERROR] tre
+";
+        let righe = ultime_righe_parsate(contenuto, 2);
+        assert_eq!(righe.len(), 2);
+        assert_eq!(righe[0].message, "due");
+        assert_eq!(righe[1].message, "tre");
+        assert_eq!(righe[1].level, "ERROR");
+    }
+
+    #[test]
+    fn ultime_righe_parsate_n_maggiore_delle_righe_disponibili() {
+        let contenuto = "[2026-05-11][10:00:00][pap_lib::a][INFO] unica\n";
+        let righe = ultime_righe_parsate(contenuto, 200);
+        assert_eq!(righe.len(), 1);
+    }
+
+    #[test]
+    fn ultime_righe_parsate_file_vuoto() {
+        assert!(ultime_righe_parsate("", 200).is_empty());
+    }
+
+    /// Riproduce `debug_log_leggi` end-to-end su un file di log fittizio
+    /// scritto su disco (non un `AppHandle` reale — non necessario: la
+    /// sola dipendenza da Tauri in `debug_log_leggi` è la risoluzione
+    /// della directory, già coperta da `log_dir`/`raccogli_file_log`).
+    #[test]
+    fn debug_log_leggi_pipeline_su_file_fittizio() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pap.log");
+        let righe_scritte: Vec<String> = (0..5)
+            .map(|i| format!("[2026-05-11][10:00:0{i}][pap_lib::editor][INFO] evento numero {i}"))
+            .collect();
+        fs::write(&path, righe_scritte.join("\n") + "\n").unwrap();
+
+        let contenuto = fs::read_to_string(&path).unwrap();
+        let righe = ultime_righe_parsate(&contenuto, 3);
+
+        assert_eq!(righe.len(), 3);
+        assert_eq!(righe[0].message, "evento numero 2");
+        assert_eq!(righe[2].message, "evento numero 4");
+        assert!(righe.iter().all(|r| r.level == "INFO"));
+        assert!(righe.iter().all(|r| r.target == "pap_lib::editor"));
     }
 
     // ─── #462: export ZIP non più in /tmp con nome prevedibile ───
