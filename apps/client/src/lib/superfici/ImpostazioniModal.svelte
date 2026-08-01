@@ -58,6 +58,7 @@
   import { apriUrlEsterno } from "$lib/util/apri-url";
   import { gestisciClickLinkMarkdown } from "$lib/util/markdown-click";
   import { recuperaNoteRilascio, type NoteRilascio } from "$lib/util/note-rilascio";
+  import { eseguiEsportaLogZip } from "./debug-log-export-logic";
   import {
     statoTema,
     salvaTemaTono,
@@ -917,35 +918,34 @@
     }
   }
 
-  /** Nome file suggerito nel dialog di salvataggio, es. "pap-debug-log-2026-08-01-17-49-52.zip". */
-  function nomeFileZipLogSuggerito(): string {
-    const iso = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    return `pap-debug-log-${iso}.zip`;
-  }
-
   // Issue #558 punto 2: prima l'export scriveva sempre nella stessa
   // cartella fissa (`app_data_dir()/debug-exports`); ora chiede
-  // esplicitamente dove salvare tramite il dialog nativo del SO
-  // (`tauri-plugin-dialog`, permesso ristretto a `dialog:allow-save`).
+  // esplicitamente dove salvare.
+  //
+  // Fix HIGH (review avversariale pre-merge PR #570): il dialog nativo di
+  // salvataggio si apre ora **dentro** il comando Rust
+  // (`debug_log.rs::debug_log_esporta_zip`, `tauri-plugin-dialog`
+  // `blocking_save_file`), non più qui. Il frontend non passa più alcun
+  // percorso di destinazione: farlo avrebbe permesso a qualunque JS della
+  // webview di far scrivere/troncare un file arbitrario del filesystem,
+  // perché questa app non ha un manifest ACL (`permissions/`) e i comandi
+  // applicativi di una finestra locale saltano `resolve_access`.
   async function esportaLogZip(): Promise<void> {
     debugErrore = "";
     debugOpInCorso = "esporta";
     try {
-      // Import dinamico: come per updater/process, evita di caricare il
-      // plugin se questa azione non viene mai usata.
-      const { save } = await import("@tauri-apps/plugin-dialog");
-      const destinazione = await save({
-        defaultPath: nomeFileZipLogSuggerito(),
-        filters: [{ name: "Archivio ZIP", extensions: ["zip"] }],
-      });
-      if (!destinazione) {
-        // Utente ha annullato il dialog: non è un errore.
+      const risultato = await eseguiEsportaLogZip(
+        invoke as (cmd: "debug_log_esporta_zip") => Promise<string | null>,
+      );
+      if (risultato.annullato) {
+        // Utente ha annullato il dialog nativo: non è un errore.
         return;
       }
-      const zipPath = await invoke<string>("debug_log_esporta_zip", { destinazione });
-      debugMessaggio = `ZIP esportato: ${zipPath}`;
-    } catch (e) {
-      debugErrore = `Export ZIP fallito: ${String(e)}`;
+      if (!risultato.ok) {
+        debugErrore = `Export ZIP fallito: ${risultato.errore}`;
+        return;
+      }
+      debugMessaggio = `ZIP esportato: ${risultato.zipPath}`;
     } finally {
       debugOpInCorso = "";
     }

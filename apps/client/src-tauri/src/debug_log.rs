@@ -10,11 +10,24 @@
 //! - `debug_log_info` — path + lista file rotati con size/mtime
 //! - `debug_log_apri_cartella` — apre LogDir con file manager OS
 //! - `debug_log_pulisci` — truncate file corrente (mantiene i rotati)
-//! - `debug_log_esporta_zip` — crea uno ZIP con file log + metadata nel
-//!   percorso scelto dall'utente (issue #558 punto 2: prima scriveva
-//!   sempre nella stessa cartella fissa; il frontend ora apre un dialog
-//!   di salvataggio — `tauri-plugin-dialog`, permesso `dialog:allow-save`
-//!   — e passa qui il percorso scelto)
+//! - `debug_log_esporta_zip` — apre il dialog di salvataggio nativo e
+//!   crea uno ZIP con file log + metadata nel percorso scelto
+//!   dall'utente (issue #558 punto 2: prima scriveva sempre nella stessa
+//!   cartella fissa)
+//!
+//! **Nota di sicurezza (review avversariale pre-merge PR #570, HIGH):**
+//! il dialog di salvataggio viene aperto **qui**, lato Rust, con
+//! `tauri_plugin_dialog::DialogExt::dialog().file().blocking_save_file()`
+//! — il comando non accetta più un percorso di destinazione come
+//! argomento dal frontend. Questa app non ha un manifest ACL
+//! (`permissions/`), quindi l'IPC dispatch per i comandi applicativi
+//! (non `plugin:*`) di una finestra locale salta `resolve_access`
+//! (vedi `tauri` 2.11.5, `src/webview/mod.rs`): un `destinazione: String`
+//! passato dal frontend sarebbe stato un path scelto da qualunque JS
+//! nella webview, scritto con `truncate(true)` — sovrascrittura
+//! arbitraria di file, non solo lettura. Il permesso `dialog:allow-save`
+//! non c'entra: regola l'apertura del dialogo nativo, non l'argomento di
+//! un comando Rust.
 
 use std::fs::{self, File};
 use std::io::{BufWriter, Read, Write};
@@ -23,6 +36,7 @@ use std::process::Command;
 
 use serde::Serialize;
 use tauri::Manager;
+use tauri_plugin_dialog::DialogExt;
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
 
@@ -207,31 +221,41 @@ pub fn debug_log_pulisci(app: tauri::AppHandle) -> Result<(), PapErrore> {
     if !path.exists() {
         return Ok(());
     }
-    File::create(&path).map_err(|e| {
-        PapErrore::dominio("Pulizia dei log non riuscita.", e)
-    })?;
+    File::create(&path).map_err(|e| PapErrore::dominio("Pulizia dei log non riuscita.", e))?;
     log::info!("Debug log pulito (truncate)");
     Ok(())
 }
 
-/// Crea uno ZIP con il file log corrente + i rotati + un file `metadata.txt`
-/// (versione app, OS, timestamp) nel percorso `destinazione` scelto
-/// dall'utente tramite il dialog di salvataggio nativo (issue #558 punto
-/// 2: prima l'export finiva sempre nella stessa cartella fissa
+/// Nome file suggerito nel dialog di salvataggio nativo, es.
+/// `pap-debug-log-2026-08-01-17-49-52.zip`.
+fn nome_file_zip_suggerito(timestamp_iso: &str) -> String {
+    // "YYYY-MM-DDTHH:MM:SSZ" -> "YYYY-MM-DD-HH-MM-SS" (stesso schema che
+    // aveva il frontend prima di questo fix, in nomeFileZipLogSuggerito()).
+    let senza_zona = timestamp_iso.trim_end_matches('Z');
+    let slug = senza_zona.replace([':', 'T'], "-");
+    format!("pap-debug-log-{slug}.zip")
+}
+
+/// Apre il dialog di salvataggio nativo e crea uno ZIP con il file log
+/// corrente + i rotati + un file `metadata.txt` (versione app, OS,
+/// timestamp) nel percorso scelto dall'utente (issue #558 punto 2: prima
+/// l'export finiva sempre nella stessa cartella fissa
 /// `app_data_dir()/debug-exports`, senza possibilità di scegliere dove).
 /// Il file nasce comunque con permessi 0600 su Unix (solo owner — vedi
 /// `crea_file_export`/`restringi_permessi_owner`), a prescindere da dove
 /// l'utente lo salvi.
 ///
-/// Ritorna il path assoluto al file ZIP creato.
-#[tauri::command]
-pub fn debug_log_esporta_zip(
-    app: tauri::AppHandle,
-    destinazione: String,
-) -> Result<String, PapErrore> {
-    let dir = log_dir(&app)?;
-    let files = raccogli_file_log(&dir);
-
+/// Il dialog viene aperto **qui**, non nel frontend: vedi la nota di
+/// sicurezza in testa al modulo (review avversariale pre-merge PR #570).
+/// `blocking_save_file` pompa una nested event loop nativa e non deve
+/// girare sul thread principale — questo comando è marcato `async` così
+/// l'IPC lo esegue fuori da quel thread (stesso pattern usato da
+/// `tauri-plugin-dialog` stesso nel comando `save` interno).
+///
+/// Ritorna `None` se l'utente ha annullato il dialog (non è un errore),
+/// altrimenti il path assoluto al file ZIP creato.
+#[tauri::command(async)]
+pub fn debug_log_esporta_zip(app: tauri::AppHandle) -> Result<Option<String>, PapErrore> {
     let timestamp = {
         use std::time::{SystemTime, UNIX_EPOCH};
         let s = SystemTime::now()
@@ -240,7 +264,24 @@ pub fn debug_log_esporta_zip(
             .unwrap_or(0) as i64;
         format_iso_utc(s)
     };
-    let zip_path = PathBuf::from(destinazione);
+
+    let destinazione = app
+        .dialog()
+        .file()
+        .set_file_name(nome_file_zip_suggerito(&timestamp))
+        .add_filter("Archivio ZIP", &["zip"])
+        .blocking_save_file();
+    let Some(destinazione) = destinazione else {
+        // Utente ha annullato il dialog: non è un errore.
+        return Ok(None);
+    };
+    let zip_path = destinazione
+        .into_path()
+        .map_err(|e| PapErrore::dominio("Percorso di destinazione non valido.", e))?;
+
+    let dir = log_dir(&app)?;
+    let files = raccogli_file_log(&dir);
+
     if let Some(parent) = zip_path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -290,7 +331,7 @@ pub fn debug_log_esporta_zip(
         .map_err(|e| PapErrore::dominio("Creazione dell'archivio dei log non riuscita.", e))?;
     restringi_permessi_owner(&zip_path);
     log::info!("Debug log esportato: {}", zip_path.display());
-    Ok(zip_path.to_string_lossy().to_string())
+    Ok(Some(zip_path.to_string_lossy().to_string()))
 }
 
 // ─── v0.8.7 PR-C: lettura log per viewer in-app ───
@@ -581,7 +622,10 @@ mod test {
         restringi_permessi_owner(&path);
 
         let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode, 0o600, "il file esportato deve essere leggibile solo dall'owner");
+        assert_eq!(
+            mode, 0o600,
+            "il file esportato deve essere leggibile solo dall'owner"
+        );
     }
 
     #[test]
@@ -629,5 +673,34 @@ mod test {
         drop(file);
 
         assert_eq!(fs::metadata(&path).unwrap().len(), 0);
+    }
+
+    // ─── HIGH review avversariale pre-merge PR #570: dialog spostato lato Rust ───
+
+    #[test]
+    fn nome_file_zip_suggerito_ha_lo_schema_atteso() {
+        let nome = nome_file_zip_suggerito("2026-08-01T17:49:52Z");
+        assert_eq!(nome, "pap-debug-log-2026-08-01-17-49-52.zip");
+    }
+
+    /// Verifica statica (a tempo di compilazione, non a runtime): la firma
+    /// del comando accetta solo l'`AppHandle`, nessun parametro
+    /// `destinazione` proveniente dal chiamante IPC. Se in futuro
+    /// qualcuno reintroducesse `destinazione: String`, questa riga
+    /// smetterebbe di compilare — l'arità/i tipi non coinciderebbero più
+    /// con la coercizione a `fn(tauri::AppHandle) -> ...` — e la build/i
+    /// test fallirebbero.
+    ///
+    /// Il resto del comportamento (dialog aperto lato Rust, annullamento
+    /// gestito senza errore restituendo `Ok(None)`) non è verificabile
+    /// con un `AppHandle` reale in questo crate — la feature `tauri::test`
+    /// non è attualmente cablata nei dev-dependencies del progetto — ed è
+    /// invece coperto lato frontend in
+    /// `debug-log-export-logic.test.ts` (`eseguiEsportaLogZip`), che
+    /// verifica esplicitamente che l'annullamento (`null`) non produca un
+    /// errore e che l'invocazione non passi più alcun argomento.
+    #[test]
+    fn debug_log_esporta_zip_non_accetta_piu_un_percorso_dal_chiamante() {
+        let _f: fn(tauri::AppHandle) -> Result<Option<String>, PapErrore> = debug_log_esporta_zip;
     }
 }

@@ -372,12 +372,15 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         // Issue #558 punto 2: l'export ZIP dei log chiede ora all'utente
         // dove salvare, invece di scrivere sempre nella stessa cartella
-        // fissa. Permesso in capabilities/default.json ristretto a
-        // `dialog:allow-save` — NON `dialog:default`, che include anche
-        // `allow-open` (file/dir picker per LEGGERE risorse arbitrarie dal
-        // filesystem, non necessario qui) e `allow-message` (dialoghi di
-        // conferma/alert, idem): principio del minimo privilegio, stessa
-        // scelta già fatta per `opener:allow-open-url` sopra.
+        // fissa. Fix HIGH (review avversariale pre-merge PR #570): il
+        // dialog si apre dal comando Rust `debug_log_esporta_zip`
+        // (`DialogExt::dialog().file().blocking_save_file()`), MAI più
+        // invocato via IPC dal frontend — quindi **nessun permesso
+        // `dialog:*` in capabilities/default.json**: l'ACL Tauri gate
+        // solo il boundary IPC JS→Rust, non le chiamate dirette tra
+        // funzioni Rust. Il plugin resta comunque registrato qui perché
+        // `DialogExt::dialog()` legge lo stato gestito che `init()`
+        // inserisce nell'AppHandle.
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data_dir = app

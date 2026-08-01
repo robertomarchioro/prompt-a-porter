@@ -24,6 +24,12 @@ const HTTP_TIMEOUT_SEC: u64 = 10;
 /// grandezza più piccolo; evita di accumulare in memoria una risposta
 /// anomala (mirror compromesso, redirect verso una risorsa enorme).
 const MAX_BYTES_RISPOSTA: u64 = 2 * 1024 * 1024;
+/// Cap difensivo sulla lunghezza della stringa loggata nel ramo di errore
+/// di `versione_valida` (review avversariale pre-merge PR #570, LOW): il
+/// `Debug` di Rust esegue già l'escape dei caratteri di controllo (niente
+/// CRLF injection nel log), ma senza un tetto una stringa comunque
+/// abnorme finirebbe intera nel file di log.
+const MAX_CHARS_LOG_VERSIONE_RIFIUTATA: usize = 64;
 
 /// Valida che `versione` sia un identificatore semver plausibile
 /// (`X.Y.Z` con eventuale suffisso pre-release/build alfanumerico) prima
@@ -66,11 +72,33 @@ pub fn estrai_sezione(changelog: &str, versione: &str) -> Option<String> {
     }
 }
 
+/// Formatta `versione` per un messaggio di log, con `{:?}` (che esegue
+/// l'escape dei caratteri di controllo — niente CRLF injection) e un cap
+/// difensivo di lunghezza (review avversariale pre-merge PR #570, LOW).
+fn formatta_versione_rifiutata_per_log(versione: &str) -> String {
+    let troncata: String = versione
+        .chars()
+        .take(MAX_CHARS_LOG_VERSIONE_RIFIUTATA)
+        .collect();
+    if versione.chars().count() > MAX_CHARS_LOG_VERSIONE_RIFIUTATA {
+        format!("{troncata:?}…")
+    } else {
+        format!("{troncata:?}")
+    }
+}
+
 fn scarica_changelog(versione: &str) -> Result<String, PapErrore> {
     let url = format!("{REPO_RAW_BASE}/v{versione}/CHANGELOG.md");
     let agent = ureq::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(5))
         .timeout_read(Duration::from_secs(HTTP_TIMEOUT_SEC))
+        // Fix LOW (review avversariale pre-merge PR #570): in ureq 2.x
+        // `timeout_connect`/`timeout_read` sono per-operazione, non una
+        // scadenza complessiva della richiesta (es. un peer che invia
+        // pochi byte alla volta entro ogni finestra di 10s può tenere
+        // occupata la richiesta a tempo indefinito). `.timeout(...)` sul
+        // builder aggiunge un tetto complessivo indipendente.
+        .timeout(Duration::from_secs(15))
         .build();
     let resp = agent.get(&url).call().map_err(|e| {
         PapErrore::dominio(
@@ -97,7 +125,10 @@ pub fn changelog_sezione_remota(versione: String) -> Result<String, PapErrore> {
     if !versione_valida(&versione) {
         return Err(PapErrore::dominio(
             "Numero di versione non valido.",
-            format!("versione rifiutata dalla validazione: {versione:?}"),
+            format!(
+                "versione rifiutata dalla validazione: {}",
+                formatta_versione_rifiutata_per_log(&versione)
+            ),
         ));
     }
     let testo = scarica_changelog(&versione)?;
@@ -180,6 +211,27 @@ Corpo v41.
         assert!(!versione_valida("v0.8.43")); // il "v" lo antepone il codice, non l'input
         assert!(!versione_valida("0.8.43 "));
         assert!(!versione_valida(&"9".repeat(64)));
+    }
+
+    #[test]
+    fn formatta_versione_rifiutata_per_log_non_tronca_stringhe_corte() {
+        assert_eq!(
+            formatta_versione_rifiutata_per_log("../evil"),
+            "\"../evil\""
+        );
+    }
+
+    #[test]
+    fn formatta_versione_rifiutata_per_log_tronca_e_marca_le_stringhe_lunghe() {
+        let input = "9".repeat(500);
+        let risultato = formatta_versione_rifiutata_per_log(&input);
+        // Il cap si applica al contenuto tra virgolette: 64 caratteri +
+        // 2 virgolette + il marcatore di troncamento.
+        assert_eq!(
+            risultato,
+            format!("{:?}…", "9".repeat(MAX_CHARS_LOG_VERSIONE_RIFIUTATA))
+        );
+        assert!(risultato.len() < input.len());
     }
 
     #[test]
