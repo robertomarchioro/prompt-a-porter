@@ -5,6 +5,7 @@
   // solo le porte d'ingresso. Il tour guidato (Fase 1) si aggancerà qui.
   import { urlDoc, titoloDoc, type ChiaveDoc } from "./docs-links";
   import { richiediTourBenvenuto } from "./tour.svelte";
+  import { apriUrlEsterno } from "$lib/util/apri-url";
   import { Play, Info } from "lucide-svelte";
 
   interface Props {
@@ -19,6 +20,16 @@
   interface Gruppo {
     titolo: string;
     voci: ChiaveDoc[];
+  }
+
+  // Fix #554: `target="_blank"` non naviga in una webview Tauri; il click
+  // viene intercettato per aprire l'URL con il plugin opener.
+  async function apri(evento: MouseEvent, chiave: ChiaveDoc) {
+    evento.preventDefault();
+    const risultato = await apriUrlEsterno(urlDoc(chiave));
+    if (!risultato.ok) {
+      console.error("[aiuto-sezione] apertura guida fallita", risultato);
+    }
   }
 
   const gruppi: Gruppo[] = [
@@ -67,6 +78,7 @@
             target="_blank"
             rel="noopener noreferrer"
             aria-label={`${titoloDoc(chiave)} (si apre nel browser)`}
+            onclick={(evento) => apri(evento, chiave)}
           >
             <span class="aiuto-voce-testo">{titoloDoc(chiave)}</span>
             <span class="aiuto-voce-ext" aria-hidden="true">↗</span>

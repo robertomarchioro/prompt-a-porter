@@ -3,6 +3,7 @@
   // documentazione corrispondente nel browser di sistema. Accessibile per
   // natura (è un <a> focalizzabile, con aria-label esplicito).
   import { urlDoc, titoloDoc, type ChiaveDoc } from "./docs-links";
+  import { apriUrlEsterno } from "$lib/util/apri-url";
 
   interface Props {
     /** Quale pagina di documentazione aprire. */
@@ -20,6 +21,17 @@
   const dim = $derived(Math.max(18, dimensione));
   const titolo = $derived(etichetta ?? titoloDoc(chiave));
   const aria = $derived(`Apri la guida: ${titolo} (si apre nel browser)`);
+
+  // Fix #555: una webview Tauri non naviga fuori dall'app su un semplice
+  // `target="_blank"`. L'href resta per accessibilità/copia-link; il click
+  // viene intercettato per aprire l'URL con il plugin opener.
+  async function apri(evento: MouseEvent) {
+    evento.preventDefault();
+    const risultato = await apriUrlEsterno(urlDoc(chiave));
+    if (!risultato.ok) {
+      console.error("[aiuto-link] apertura guida fallita", risultato);
+    }
+  }
 </script>
 
 <a
@@ -31,6 +43,7 @@
   title={`${titolo} — apri la guida`}
   style:width={`${dim}px`}
   style:height={`${dim}px`}
+  onclick={apri}
 >
   <span aria-hidden="true">?</span>
 </a>

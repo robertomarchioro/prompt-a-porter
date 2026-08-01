@@ -55,6 +55,7 @@
   import LogViewer from "$lib/components/LogViewer.svelte";
   import { nomeFileExport, scaricaBlob } from "$lib/util/dati-export";
   import { renderNotesHtml } from "$lib/util/updater-notes";
+  import { apriUrlEsterno } from "$lib/util/apri-url";
   import {
     statoTema,
     salvaTemaTono,
@@ -133,6 +134,17 @@
   // Repo URL hardcoded per link doc utente (no env var per evitare
   // dipendenza build, valore stabile).
   const REPO_ORG_REPO = "robertomarchioro/prompt-a-porter";
+
+  // Fix #554 (link "Dati"/auto-update): `target="_blank"` non naviga in
+  // una webview Tauri; il click viene intercettato per aprire l'URL con
+  // il plugin opener.
+  async function apriLinkDoc(evento: MouseEvent, href: string) {
+    evento.preventDefault();
+    const risultato = await apriUrlEsterno(href);
+    if (!risultato.ok) {
+      console.error("[impostazioni] apertura link doc fallita", risultato);
+    }
+  }
 
   interface ImportRisultato {
     nomeFile: string;
@@ -1871,13 +1883,23 @@
           <a
             href="https://github.com/{REPO_ORG_REPO}/blob/main/docs/utente/markdown-import-export.md"
             target="_blank"
-            rel="noopener">guida Markdown</a
+            rel="noopener"
+            onclick={(evento) =>
+              apriLinkDoc(
+                evento,
+                `https://github.com/${REPO_ORG_REPO}/blob/main/docs/utente/markdown-import-export.md`,
+              )}>guida Markdown</a
           >
           e il
           <a
             href="https://github.com/{REPO_ORG_REPO}/blob/main/docs/utente/formato-export-json.md"
             target="_blank"
-            rel="noopener">formato JSON</a
+            rel="noopener"
+            onclick={(evento) =>
+              apriLinkDoc(
+                evento,
+                `https://github.com/${REPO_ORG_REPO}/blob/main/docs/utente/formato-export-json.md`,
+              )}>formato JSON</a
           > per i dettagli.
         </p>
 
@@ -2591,6 +2613,11 @@
                 href="https://github.com/robertomarchioro/prompt-a-porter/blob/main/docs/utente/auto-update.md"
                 target="_blank"
                 rel="noopener"
+                onclick={(evento) =>
+                  apriLinkDoc(
+                    evento,
+                    "https://github.com/robertomarchioro/prompt-a-porter/blob/main/docs/utente/auto-update.md",
+                  )}
               >
                 docs auto-update
               </a>
