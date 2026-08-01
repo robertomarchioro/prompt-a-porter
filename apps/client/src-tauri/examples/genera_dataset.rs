@@ -16,9 +16,10 @@
 //   reale, ma riproduce le proprietà di shape e norma per il bench di
 //   sqlite-vec search_nearest)
 
-use rand::distributions::{Alphanumeric, Distribution, WeightedIndex};
+use rand::distr::weighted::WeightedIndex;
+use rand::distr::{Alphanumeric, Distribution};
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use rusqlite::{params, Connection};
 use std::path::PathBuf;
 
@@ -197,9 +198,9 @@ fn inserisci_prompt(conn: &Connection, rng: &mut StdRng, n: usize) {
         embeddings_store::upsert_embedding(conn, &id, &emb).unwrap();
 
         // 0-4 tag random.
-        let n_tag = rng.gen_range(0..=4);
+        let n_tag = rng.random_range(0..=4);
         for _ in 0..n_tag {
-            let tag_idx = rng.gen_range(0..NUM_TAG);
+            let tag_idx = rng.random_range(0..NUM_TAG);
             let tag_id = format!("t-{tag_idx:03}");
             // INSERT OR IGNORE per evitare duplicati su stessa coppia (prompt, tag).
             conn.execute(
@@ -216,23 +217,23 @@ fn inserisci_prompt(conn: &Connection, rng: &mut StdRng, n: usize) {
 }
 
 fn genera_titolo(rng: &mut StdRng, parole: &[&str]) -> String {
-    let n = rng.gen_range(2..=5);
+    let n = rng.random_range(2..=5);
     (0..n)
-        .map(|_| parole[rng.gen_range(0..parole.len())])
+        .map(|_| parole[rng.random_range(0..parole.len())])
         .collect::<Vec<_>>()
         .join(" ")
 }
 
 fn genera_body(rng: &mut StdRng, parole: &[&str]) -> String {
     // Distribuzione log-normale di lunghezza in parole (P50 ~25, max ~80).
-    let len_log: f64 = rng.gen_range(2.5..=4.5);
+    let len_log: f64 = rng.random_range(2.5..=4.5);
     let n: usize = (len_log.exp() as usize).clamp(8, 80);
     let mut frasi: Vec<String> = Vec::with_capacity(n);
     for _ in 0..n {
-        frasi.push(parole[rng.gen_range(0..parole.len())].to_string());
+        frasi.push(parole[rng.random_range(0..parole.len())].to_string());
     }
     // Aggiungo qualche segnaposto random per realismo (1 su 5 prompt).
-    if rng.gen_bool(0.2) {
+    if rng.random_bool(0.2) {
         let suffix: String = (0..5).map(|_| rng.sample(Alphanumeric) as char).collect();
         frasi.push(format!("{{{{ {suffix} }}}}"));
     }
@@ -240,7 +241,7 @@ fn genera_body(rng: &mut StdRng, parole: &[&str]) -> String {
 }
 
 fn embedding_random(rng: &mut StdRng) -> Vec<f32> {
-    let mut v: Vec<f32> = (0..EMBEDDING_DIM).map(|_| rng.gen_range(-1.0_f32..1.0)).collect();
+    let mut v: Vec<f32> = (0..EMBEDDING_DIM).map(|_| rng.random_range(-1.0_f32..1.0)).collect();
     let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
     if norm > 1e-12 {
         for x in v.iter_mut() {
