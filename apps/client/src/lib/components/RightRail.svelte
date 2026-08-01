@@ -17,6 +17,7 @@
   import { estraiSegnaposti } from "$lib/template";
   import { estraiImports } from "$lib/util/estrai-imports";
   import { MODELLI_TARGET } from "$lib/modelli-target";
+  import { eseguiCreaVariante } from "./crea-variante-logic";
   import Modale from "$lib/components/Modale.svelte";
   import Button from "$lib/components/Button.svelte";
   import Input from "$lib/components/Input.svelte";
@@ -278,24 +279,21 @@
   async function confermaCreaVariante(): Promise<void> {
     modaleVariante.salvataggio = true;
     modaleVariante.errore = "";
-    try {
-      const etichetta = modaleVariante.etichetta.trim();
-      const newId = await invoke<string>("prompt_crea_variante", {
-        parentId: promptId,
-        etichetta: etichetta.length > 0 ? etichetta : null,
-      });
+    const risultato = await eseguiCreaVariante(
+      promptId,
+      modaleVariante.etichetta,
+      invoke,
+      () => window.dispatchEvent(new CustomEvent("pap:lista-mutata")),
+      (id) =>
+        window.dispatchEvent(new CustomEvent("pap:apri-prompt", { detail: id })),
+    );
+    if (risultato.ok) {
       await caricaVarianti();
-      // Apri la nuova variante (stesso pattern di import: CustomEvent
-      // intercettato da Shell/router).
-      window.dispatchEvent(
-        new CustomEvent("pap:apri-prompt", { detail: newId }),
-      );
       modaleVariante.aperto = false;
-    } catch (e) {
-      modaleVariante.errore = String(e).replace(/^Error: /, "");
-    } finally {
-      modaleVariante.salvataggio = false;
+    } else {
+      modaleVariante.errore = risultato.errore ?? "Impossibile creare la variante.";
     }
+    modaleVariante.salvataggio = false;
   }
 
   function gestisciKeydownModale(e: KeyboardEvent): void {
