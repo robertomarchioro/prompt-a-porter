@@ -248,13 +248,11 @@ mod test {
         assert_eq!(r.len(), 0);
     }
 
-    #[test]
-    fn soglia_costanti_sensate() {
-        // Sentinel: se qualcuno cambia accidentalmente i parametri.
-        assert!(SOGLIA_DISTANZA > 0.0 && SOGLIA_DISTANZA <= 2.0);
-        assert!(DEFAULT_LIMIT > 0 && DEFAULT_LIMIT <= MAX_LIMIT);
-        assert!(MIN_TAG_PER_SEMANTIC > 0);
-    }
+    // Sentinel sui parametri: valutato a **compile time**, così una modifica
+    // accidentale rompe la build invece di aspettare l'esecuzione dei test.
+    const _: () = assert!(SOGLIA_DISTANZA > 0.0 && SOGLIA_DISTANZA <= 2.0);
+    const _: () = assert!(DEFAULT_LIMIT > 0 && DEFAULT_LIMIT <= MAX_LIMIT);
+    const _: () = assert!(MIN_TAG_PER_SEMANTIC > 0);
 
     // ─────────── Smoke test: fallback grace senza Session ───────────
 

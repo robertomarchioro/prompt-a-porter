@@ -263,7 +263,7 @@ pub fn ritocco_esegui(
         let troncato = provider_kind == "anthropic"
             && out
                 .tokens_used
-                .map_or(false, |t| t + 40 >= RITOCCO_MAX_TOKENS);
+                .is_some_and(|t| t + 40 >= RITOCCO_MAX_TOKENS);
 
         Ok(RitoccoEsito {
             suggerimenti: risposta.suggerimenti,

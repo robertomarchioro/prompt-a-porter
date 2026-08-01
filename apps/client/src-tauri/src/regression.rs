@@ -542,6 +542,19 @@ pub struct RegressionReportRow {
     pub drift_percentuale: Option<f64>,
 }
 
+/// Riga aggregata come esce dalla query di `report_pure`:
+/// (prompt_id, titolo, provider, model, n, n_passed, media, ultima_at).
+type RigaAggregata = (
+    String,
+    String,
+    String,
+    String,
+    i64,
+    i64,
+    Option<f64>,
+    Option<String>,
+);
+
 /// Aggrega le observations degli ultimi `giorni` raggruppando per
 /// (prompt × provider × model). Il drift indica quanto l'ultimo run
 /// differisce dalla media: utile per individuare regressioni dopo un
@@ -568,7 +581,7 @@ pub(crate) fn report_pure(
          ORDER BY ultima_at DESC",
     )?;
 
-    let righe: Vec<(String, String, String, String, i64, i64, Option<f64>, Option<String>)> =
+    let righe: Vec<RigaAggregata> =
         stmt.query_map([&cutoff], |r| {
             Ok((
                 r.get(0)?,
@@ -754,6 +767,14 @@ pub fn regression_report_csv(
 /// `similarity_fn` del golden è `llm-judge`. Possono coincidere col
 /// provider principale o esserne diversi (es. eseguire con OpenAI ma
 /// giudicare con Anthropic per evitare bias del giudice).
+//
+// `too_many_arguments`: la firma di un `#[tauri::command]` **è** il contratto
+// IPC col frontend. Raggrupparla in una struct cambierebbe la forma della
+// `invoke` (gli argomenti top-level vengono convertiti in camelCase, i campi
+// di una struct no: userebbero i nomi serde) — un rischio reale su una rotta
+// che fa chiamate di rete, in cambio di zero beneficio funzionale. Sei dei
+// parametri arrivano dal frontend, due sono iniezioni di stato di Tauri.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn golden_esegui(
     golden_id: String,
@@ -1437,6 +1458,9 @@ mod test {
 
     // ─────────── Test report (Step 8g) ───────────
 
+    // Helper di test: la lista di parametri rispecchia le colonne da
+    // popolare, raggrupparle in una struct non aggiungerebbe chiarezza.
+    #[allow(clippy::too_many_arguments)]
     fn inserisci_observation(
         conn: &Connection,
         id: &str,

@@ -207,6 +207,7 @@ fn applica_variabili_scoped(body: &str, vars: &[(String, String)]) -> String {
 ///    Folders.Path + Title come ultimo segmento
 /// 2. Path è solo il titolo: match Prompts.Title (NOCASE) per prompt
 ///    a livello root
+///
 /// Ritorna `None` se nessun match.
 pub fn resolve_path(conn: &Connection, path: &str) -> Result<Option<String>, PapErrore> {
     let pulito = path.trim().trim_start_matches('/');
@@ -556,7 +557,7 @@ pub fn import_rimuovi_da_dipendenti_pure(
         crate::versioning::snapshot_versione(&tx, &dip.id, "usr-locale")?;
 
         // Rimuove dal fondo per mantenere validi gli offset precedenti.
-        ranges.sort_by(|a, b| b.0.cmp(&a.0));
+        ranges.sort_by_key(|(start, _)| std::cmp::Reverse(*start));
         let mut nuovo = body.clone();
         for (start, end) in ranges {
             nuovo.replace_range(start..end, "");
