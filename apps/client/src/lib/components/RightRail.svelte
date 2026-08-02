@@ -18,6 +18,7 @@
   import { estraiImports } from "$lib/util/estrai-imports";
   import { MODELLI_TARGET } from "$lib/modelli-target";
   import { eseguiCreaVariante } from "./crea-variante-logic";
+  import { eseguiPromuoviVariante } from "./promuovi-variante-logic";
   import { conferma, avvisa } from "$lib/util/conferma";
   import Modale from "$lib/components/Modale.svelte";
   import Button from "$lib/components/Button.svelte";
@@ -122,6 +123,14 @@
   }
 
   // M3 PR-5: promuovi questa variante a principale.
+  //
+  // #572: il bottone opera sulla variante GIÀ APERTA (variantId === promptId
+  // corrente) — un caso che il percorso gemello `promuoviVariante` sotto non
+  // copre mai, perché lì si promuove sempre una pillola diversa da quella
+  // attiva. `eseguiPromuoviVariante` dispatcha comunque `pap:prompt-promosso`
+  // anche a id invariato: è quell'evento (non `pap:apri-prompt`, no-op sulla
+  // reattività di Svelte 5 quando l'id non cambia) che fa ripartire il
+  // refetch del dettaglio in DetailPane.
   async function promuoviAPrincipale(): Promise<void> {
     if (!parentPromptId) return; // safe-guard: il bottone non dovrebbe essere visibile
     const ok = await conferma(
@@ -133,14 +142,21 @@
         `La migration automatica e' in backlog.`,
     );
     if (!ok) return;
-    try {
-      await invoke<void>("prompt_promuovi_variante", { variantId: promptId });
-      // Reload varianti immediato + dispatch evento per altri pannelli
-      // (DetailPane refetcha dettaglio, Libreria refetcha lista).
-      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
-      window.dispatchEvent(new CustomEvent("pap:apri-prompt", { detail: promptId }));
-    } catch (e) {
-      await avvisa(`Errore durante la promozione: ${String(e).replace(/^Error: /, "")}`);
+    const risultato = await eseguiPromuoviVariante(
+      promptId,
+      invoke,
+      () => window.dispatchEvent(new CustomEvent("pap:lista-mutata")),
+      (id) => window.dispatchEvent(new CustomEvent("pap:apri-prompt", { detail: id })),
+      (id) =>
+        window.dispatchEvent(
+          new CustomEvent("pap:prompt-promosso", { detail: { promptId: id } }),
+        ),
+    );
+    if (risultato.ok) {
+      await caricaVarianti();
+      await avvisa("Variante promossa a principale.");
+    } else {
+      await avvisa(`Errore durante la promozione: ${risultato.errore}`);
     }
   }
 
@@ -171,13 +187,21 @@
       "Promuovere questa variante a principale? Lo stato attuale del prompt principale diventerà variante.",
     );
     if (!ok) return;
-    try {
-      await invoke<void>("prompt_promuovi_variante", { variantId: id });
+    const risultato = await eseguiPromuoviVariante(
+      id,
+      invoke,
+      () => window.dispatchEvent(new CustomEvent("pap:lista-mutata")),
+      (pid) => window.dispatchEvent(new CustomEvent("pap:apri-prompt", { detail: pid })),
+      (pid) =>
+        window.dispatchEvent(
+          new CustomEvent("pap:prompt-promosso", { detail: { promptId: pid } }),
+        ),
+    );
+    if (risultato.ok) {
       await caricaVarianti();
-      window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
-      window.dispatchEvent(new CustomEvent("pap:apri-prompt", { detail: id }));
-    } catch (e) {
-      await avvisa(`Errore durante la promozione: ${String(e).replace(/^Error: /, "")}`);
+      await avvisa("Variante promossa a principale.");
+    } else {
+      await avvisa(`Errore durante la promozione: ${risultato.errore}`);
     }
   }
 

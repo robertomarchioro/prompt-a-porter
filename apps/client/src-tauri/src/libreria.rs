@@ -185,7 +185,25 @@ pub fn lista_pure(
 
         let ordine = match filtro.ordine.as_str() {
             "popolare" => "p.UseCount DESC, p.UpdatedAt DESC",
-            "alfabetico" => "p.Title COLLATE NOCASE ASC",
+            // #573: l'ordinamento raggruppa esplicitamente ogni variante sotto
+            // il proprio principale (COALESCE sul titolo del padre effettivo,
+            // letto via sottoquery — niente JOIN aggiuntivo prima del GROUP BY
+            // p.Id). Prima si affidava a un trucco testuale (crea_variante_pure
+            // decora il titolo variante come "Padre (Label)", quindi "Padre" <
+            // "Padre (B)" per puro ordinamento lessicografico): promuovi_pure
+            // scambia SOLO ParentPromptId/IsVariant/VariantLabel, MAI il Title,
+            // quindi dopo una promozione il trucco si rompeva al contrario.
+            // p.IsVariant ASC porta il principale (0) prima delle sue varianti
+            // (1); VariantLabel ASC ordina le varianti fra loro (il principale
+            // ha VariantLabel NULL, COALESCE lo tratta come "").
+            "alfabetico" => {
+                "COALESCE(
+                    (SELECT pp.Title FROM Prompts pp WHERE pp.Id = p.ParentPromptId),
+                    p.Title
+                 ) COLLATE NOCASE ASC,
+                 p.IsVariant ASC,
+                 COALESCE(p.VariantLabel, '') COLLATE NOCASE ASC"
+            }
             // Migliori: rating medio degli ultimi 90 giorni (decrescente).
             // Prompt senza rating finiscono in fondo (COALESCE = -2,
             // sotto al minimo possibile -1). A parità di media, vince chi
@@ -976,6 +994,54 @@ mod test {
         assert!(
             trova("p-principale").parent_prompt_id.is_none(),
             "il principale non ha parent"
+        );
+    }
+
+    #[test]
+    fn lista_pure_alfabetico_raggruppa_varianti_sotto_il_principale_dopo_promozione() {
+        // #573: scenario della issue — variante di variante, poi promozione,
+        // poi verifica dell'ordine A-Z. `promuovi_pure` scambia SOLO
+        // ParentPromptId/IsVariant/VariantLabel, MAI il Title (vedi
+        // `promuovi_preserva_body_e_titolo` in varianti.rs). Il vecchio
+        // ordinamento testuale (`p.Title COLLATE NOCASE ASC`) si affidava a
+        // "Padre" < "Padre (Label)" — dopo la promozione l'ex principale
+        // ("Padre") precedeva la nuova principale ("Padre (C)"): l'inversione
+        // descritta nella issue. Questo test fallisce prima del fix.
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO Prompts (Id, WorkspaceId, AuthorUserId, Title, Body, Visibility,
+             Version, CreatedAt, UpdatedAt)
+             VALUES ('prm-padre', 'ws-personale', 'usr-locale', 'Padre', 'body', 'private', 1,
+                     datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        crate::versioning::snapshot_versione(&conn, "prm-padre", "usr-locale").unwrap();
+
+        let id_b = crate::varianti::crea_variante_pure(&conn, "prm-padre", Some("B")).unwrap();
+        // Variante di variante: crea_variante_pure ri-aggancia al grandparent
+        // reale (prm-padre), quindi id_c e' sister di id_b, non figlia.
+        let id_c = crate::varianti::crea_variante_pure(&conn, &id_b, Some("C")).unwrap();
+
+        crate::varianti::promuovi_pure(&conn, &id_c).unwrap();
+
+        let mut filtro = filtro_default("tutti");
+        filtro.ordine = "alfabetico".to_string();
+        let cards = lista_pure(&conn, &filtro).unwrap();
+        let ids: Vec<String> = cards.iter().map(|c| c.id.clone()).collect();
+
+        let pos_c = ids.iter().position(|i| i == &id_c).expect("id_c presente");
+        let pos_b = ids.iter().position(|i| i == &id_b).expect("id_b presente");
+        let pos_padre = ids
+            .iter()
+            .position(|i| i == "prm-padre")
+            .expect("prm-padre presente");
+
+        assert_eq!(
+            (pos_c, pos_b, pos_padre),
+            (0, 1, 2),
+            "atteso principale (nuovo) poi varianti per label: [{id_c}, {id_b}, prm-padre], trovato {ids:?}"
         );
     }
 

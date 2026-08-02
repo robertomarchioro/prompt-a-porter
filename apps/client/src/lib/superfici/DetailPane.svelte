@@ -244,6 +244,27 @@
     })();
   }
 
+  // #572: dopo una promozione a principale (RightRail → promuoviAPrincipale)
+  // l'id del prompt aperto spesso NON cambia — è la stessa variante che
+  // diventa principale. Riassegnare `promptSelezionato` allo stesso valore
+  // in Shell è un no-op per la reattività di Svelte 5, quindi l'`$effect`
+  // sopra (che dipende solo da `promptId`) non riparte e `dettaglio` resta
+  // stale (`parent_prompt_id` vecchio, bottone "Promuovi" ancora visibile).
+  // Stesso pattern di `onPromptRipristinato` (#425): forza il refetch
+  // confrontando esplicitamente l'id promosso col `promptId` corrente.
+  function onPromptPromosso(e: Event): void {
+    const detail = (e as CustomEvent<{ promptId: string }>).detail;
+    if (!detail || detail.promptId !== promptId) return;
+    if (timerAutosave) {
+      clearTimeout(timerAutosave);
+      timerAutosave = undefined;
+    }
+    void (async () => {
+      await caricaDettaglio(promptId);
+      dirty = false;
+    })();
+  }
+
   onMount(async () => {
     try {
       cartelleCache = await invoke<Cartella[]>("folder_lista");
@@ -252,6 +273,7 @@
     }
     window.addEventListener("pap:goto-line", onGotoLine);
     window.addEventListener("pap:prompt-ripristinato", onPromptRipristinato);
+    window.addEventListener("pap:prompt-promosso", onPromptPromosso);
     window.addEventListener("beforeunload", onBeforeUnload);
   });
 
@@ -259,6 +281,7 @@
     if (timerAutosave) clearTimeout(timerAutosave);
     window.removeEventListener("pap:goto-line", onGotoLine);
     window.removeEventListener("pap:prompt-ripristinato", onPromptRipristinato);
+    window.removeEventListener("pap:prompt-promosso", onPromptPromosso);
     window.removeEventListener("beforeunload", onBeforeUnload);
   });
 

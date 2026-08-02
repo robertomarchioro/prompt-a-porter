@@ -126,8 +126,11 @@
   // #403: mappa id→titolo per nominare il prompt padre nel tooltip variante.
   const titoliById = $derived(new Map(prompts.map((p) => [p.id, p.titolo])));
   // L'evidenziazione varianti (rientro + connettore "↳") ha senso solo con
-  // ordine "A-Z", dove i titoli — e quindi le sister — tendono a stare
-  // vicini. Con gli altri criteri la lista resta piatta.
+  // ordine "A-Z": è l'unico criterio dove il backend raggruppa esplicitamente
+  // ogni variante sotto il proprio principale (#573 — `libreria.rs::lista_pure`
+  // ordina per titolo del principale effettivo, poi IsVariant, poi
+  // VariantLabel; niente più trucco testuale sul Title della variante). Con
+  // gli altri criteri la lista resta piatta.
   const mostraVarianti = $derived(stato.ordine === "alfabetico");
   function varianteTitle(p: PromptCardData): string {
     if (!p.parent_prompt_id) return "";
