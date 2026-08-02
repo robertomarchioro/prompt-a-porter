@@ -14,30 +14,84 @@
  *
  * Rilevamento piattaforma: riusa `sistemaOperativo` di `./os.ts` (già
  * testato in os.test.ts), niente nuovo plugin/permesso.
+ *
+ * Strumentazione diagnostica (nessun cambio di comportamento): #585
+ * (cancellazione prompt non fa nulla su Windows), #572 (promozione
+ * variante non fa nulla), #584 («Pulisci log» non pulisce, Windows). Ogni
+ * chiamata a `conferma()` logga durata, ramo, esito grezzo e piattaforma —
+ * vedi `conferma-log.ts` per il perché della soglia sulla durata e il
+ * vincolo di privacy (mai il testo del messaggio, solo la lunghezza).
  */
 
-import { sistemaOperativo } from "./os";
+import { sistemaOperativo, classificaPiattaforma } from "./os";
 import { accodaConferma, accodaAvviso } from "$lib/stores/dialogo.svelte";
+import { logInfoApp } from "./log-app";
+import {
+  formattaRigaConferma,
+  formattaRigaAvviso,
+  type RamoConferma,
+} from "./conferma-log";
+
+function ramoCorrente(): RamoConferma {
+  return sistemaOperativo === "macos" ? "macos" : "nativo";
+}
+
+function platformCorrente(): string {
+  return typeof navigator !== "undefined" ? navigator.platform : "";
+}
 
 /**
  * Chiede conferma per un'azione (tipicamente distruttiva). Su macOS mostra
  * una Modale in-app (via `DialogoHost.svelte`); altrove è `window.confirm`
  * nativo, invariato rispetto a oggi.
+ *
+ * `azione` è un identificativo diagnostico opzionale (es.
+ * "elimina-prompt"), MAI testo utente — usato solo nella riga di log, non
+ * cambia il comportamento della funzione. Parametro opzionale: nessun
+ * chiamante esistente si rompe.
  */
-export async function conferma(messaggio: string): Promise<boolean> {
-  if (sistemaOperativo === "macos") {
-    return accodaConferma(messaggio);
-  }
-  return window.confirm(messaggio);
+export async function conferma(
+  messaggio: string,
+  azione?: string,
+): Promise<boolean> {
+  const ramo = ramoCorrente();
+  const platform = platformCorrente();
+  const inizio = performance.now();
+  const esito =
+    ramo === "macos" ? await accodaConferma(messaggio) : window.confirm(messaggio);
+  const durataMs = performance.now() - inizio;
+  logInfoApp(
+    formattaRigaConferma({
+      azione: azione ?? "(non specificata)",
+      ramo,
+      durataMs,
+      lunghezzaMessaggio: messaggio.length,
+      tipoEsito: typeof esito,
+      valoreEsito: esito,
+      platform,
+      piattaformaClassificata: classificaPiattaforma(platform),
+    }),
+  );
+  return esito;
 }
 
 /**
  * Mostra un messaggio (tipicamente un errore) all'utente. Su macOS mostra
  * un Toast in-app (via `DialogoHost.svelte`); altrove è `window.alert`
  * nativo, invariato rispetto a oggi.
+ *
+ * `azione`: vedi `conferma()` sopra, stesso vincolo di privacy.
  */
-export async function avvisa(messaggio: string): Promise<void> {
-  if (sistemaOperativo === "macos") {
+export async function avvisa(messaggio: string, azione?: string): Promise<void> {
+  const ramo = ramoCorrente();
+  logInfoApp(
+    formattaRigaAvviso({
+      azione: azione ?? "(non specificata)",
+      ramo,
+      lunghezzaMessaggio: messaggio.length,
+    }),
+  );
+  if (ramo === "macos") {
     return accodaAvviso(messaggio);
   }
   window.alert(messaggio);

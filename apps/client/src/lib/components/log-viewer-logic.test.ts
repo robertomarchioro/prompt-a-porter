@@ -4,6 +4,8 @@ import {
   erroreRegex,
   filtraRighe,
   ordinaRecentiPrimi,
+  formattaRigaRicaricaAvvio,
+  formattaRigaRicaricaEsito,
   N_RIGHE_DEFAULT,
   N_RIGHE_MAX,
   OPZIONI_N_RIGHE,
@@ -164,6 +166,67 @@ describe("log-viewer-logic — compilaRegex / erroreRegex", () => {
   it("ritorna null e un messaggio d'errore per un pattern non valido", () => {
     expect(compilaRegex("(")).toBeNull();
     expect(erroreRegex("(")).not.toBe("");
+  });
+});
+
+describe("log-viewer-logic — strumentazione diagnostica ricarica() (#558 punto 1)", () => {
+  it("formattaRigaRicaricaAvvio riporta origine, filtro livello e stato aperto", () => {
+    const riga = formattaRigaRicaricaAvvio({
+      origine: "apertura-pannello",
+      livelloFiltro: "WARN",
+      aperto: true,
+    });
+
+    expect(riga).toContain("origine=apertura-pannello");
+    expect(riga).toContain('livelloFiltro="WARN"');
+    expect(riga).toContain("aperto=true");
+  });
+
+  it('formattaRigaRicaricaAvvio mostra "Tutti" quando il filtro livello è la stringa vuota', () => {
+    const riga = formattaRigaRicaricaAvvio({
+      origine: "mount",
+      livelloFiltro: "",
+      aperto: false,
+    });
+
+    expect(riga).toContain('livelloFiltro="Tutti"');
+  });
+
+  it("formattaRigaRicaricaEsito riporta la coppia di conteggi backend/filtrate", () => {
+    const riga = formattaRigaRicaricaEsito({
+      origine: "manuale",
+      nRigheBackend: 1000,
+      nRigheFiltrate: 0,
+      errore: "",
+    });
+
+    expect(riga).toContain("nRigheBackend=1000");
+    expect(riga).toContain("nRigheFiltrate=0");
+    expect(riga).not.toContain("errore=");
+  });
+
+  it("formattaRigaRicaricaEsito include l'errore quando presente", () => {
+    const riga = formattaRigaRicaricaEsito({
+      origine: "cambio-righe",
+      nRigheBackend: 0,
+      nRigheFiltrate: 0,
+      errore: "connessione al backend fallita",
+    });
+
+    expect(riga).toContain('errore="connessione al backend fallita"');
+  });
+
+  it("non include mai il contenuto delle righe di log (solo conteggi)", () => {
+    // Le funzioni non accettano nemmeno le righe come parametro: per
+    // costruzione non possono farne trapelare il contenuto.
+    const riga = formattaRigaRicaricaEsito({
+      origine: "mount",
+      nRigheBackend: 3,
+      nRigheFiltrate: 3,
+      errore: "",
+    });
+
+    expect(riga).not.toMatch(/message|target|timestamp/i);
   });
 });
 

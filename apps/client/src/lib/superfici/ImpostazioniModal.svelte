@@ -957,13 +957,24 @@
         "(vecchi, es. pap_2026-08-02_14-30-00.log) verranno ELIMINATI. " +
         "Il file di diagnostica dei crash (pap-crash.log) viene invece " +
         "conservato. Non è reversibile.",
+      "pulisci-log",
     );
+    // #584: punto di controllo — la conferma ha ritornato true/false?
+    logInfo(`[impostazioni] pulisci-log: conferma ritornata esito=${ok}`);
     if (!ok) return;
     debugErrore = "";
     debugMessaggio = "";
     debugOpInCorso = "pulisci";
     try {
+      logInfo("[impostazioni] pulisci-log: invoke debug_log_pulisci — avvio");
       const esito = await invoke<EsitoPulizia>("debug_log_pulisci");
+      // #584: i campi di EsitoPulizia sono già calcolati lato Rust — qui
+      // servono solo per correlarli col lato frontend nello stesso log.
+      logInfo(
+        "[impostazioni] pulisci-log: invoke debug_log_pulisci — completato " +
+          `sizePrima=${esito.size_prima} sizeDopo=${esito.size_dopo ?? "null"} ` +
+          `rotatiRimossi=${esito.rotati_rimossi.length} rotatiFalliti=${esito.rotati_falliti.length}`,
+      );
       const nRimossi = esito.rotati_rimossi.length;
       const nFalliti = esito.rotati_falliti.length;
       if (nFalliti > 0) {
@@ -983,6 +994,7 @@
       }
       await caricaDebugInfo();
     } catch (e) {
+      logErrore(`[impostazioni] pulisci-log: invoke debug_log_pulisci — errore ${String(e)}`);
       debugErrore = `Pulizia fallita: ${String(e)}`;
     } finally {
       debugOpInCorso = "";

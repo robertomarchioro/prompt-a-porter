@@ -23,6 +23,7 @@
   import { segnaPasso } from "$lib/aiuto/primi-passi.svelte";
   import { scaricaBlob, slugFile } from "$lib/util/dati-export";
   import { conferma, avvisa } from "$lib/util/conferma";
+  import { logInfoApp, logErroreApp } from "$lib/util/log-app";
 
   const META_KEY = "pap.detail.meta-collapsed";
   function caricaMetaCollapsed(): boolean {
@@ -434,7 +435,11 @@
 
   /** Soft-delete effettivo + cleanup + chiusura. Condiviso dai due percorsi. */
   async function eseguiSoftDelete(): Promise<void> {
+    // #585: punto di controllo — l'azione è partita davvero? Nessun
+    // percorso di questo codice loggava alcunché prima di questo fix.
+    logInfoApp("[detail] elimina-prompt: invoke prompt_elimina — avvio");
     await invoke("prompt_elimina", { id: promptId });
+    logInfoApp("[detail] elimina-prompt: invoke prompt_elimina — completato");
     // Cancel autosave pending: eviterebbe di riscrivere il prompt
     // appena cancellato.
     if (timerAutosave) {
@@ -462,13 +467,17 @@
     }
     const ok = await conferma(
       `Eliminare il prompt "${titoloVis}"?\n\nIl prompt verrà spostato nel Cestino, da cui potrai ripristinarlo o eliminarlo definitivamente.`,
+      "elimina-prompt",
     );
+    // #585: punto di controllo — la conferma ha ritornato true/false?
+    logInfoApp(`[detail] elimina-prompt: conferma ritornata esito=${ok}`);
     if (!ok) return;
     try {
       await eseguiSoftDelete();
     } catch (e) {
+      logErroreApp(`[detail] elimina-prompt: invoke prompt_elimina — errore ${String(e)}`);
       console.error("[detail] elimina", e);
-      await avvisa("Errore nell'eliminazione del prompt: " + String(e));
+      await avvisa("Errore nell'eliminazione del prompt: " + String(e), "elimina-prompt");
     }
   }
 
@@ -480,8 +489,9 @@
       await eseguiSoftDelete();
       warnImport = { aperto: false, deps: [], lavorando: false };
     } catch (e) {
+      logErroreApp(`[detail] elimina-prompt (con import): errore ${String(e)}`);
       console.error("[detail] rimuovi import e cancella", e);
-      await avvisa("Errore durante la rimozione degli import: " + String(e));
+      await avvisa("Errore durante la rimozione degli import: " + String(e), "elimina-prompt");
       warnImport.lavorando = false;
     }
   }

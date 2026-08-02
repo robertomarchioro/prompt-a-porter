@@ -226,3 +226,64 @@ describe("eseguiPromuoviVariante: errore backend — nessun dispatch", () => {
     expect(risultato.errore).toBe("Impossibile promuovere la variante.");
   });
 });
+
+describe("eseguiPromuoviVariante: strumentazione diagnostica (#572)", () => {
+  it("senza il parametro log opzionale, non lancia e si comporta come prima", async () => {
+    const invokeFn = vi.fn<InvokePromuoviFn>().mockResolvedValue(undefined);
+
+    await expect(
+      eseguiPromuoviVariante(
+        "prm-variante-1",
+        invokeFn,
+        vi.fn<DispatchListaMutataFn>(),
+        vi.fn<DispatchApriPromptFn>(),
+        vi.fn<DispatchPromptPromossoFn>(),
+      ),
+    ).resolves.toEqual({ ok: true });
+  });
+
+  it("logga invoke e i tre dispatch, in ordine, al successo", async () => {
+    const invokeFn = vi.fn<InvokePromuoviFn>().mockResolvedValue(undefined);
+    const log = vi.fn<(messaggio: string) => void>();
+
+    await eseguiPromuoviVariante(
+      "prm-variante-1",
+      invokeFn,
+      vi.fn<DispatchListaMutataFn>(),
+      vi.fn<DispatchApriPromptFn>(),
+      vi.fn<DispatchPromptPromossoFn>(),
+      log,
+    );
+
+    const righe = log.mock.calls.map((c) => c[0]);
+    expect(righe).toEqual([
+      "[promuovi-variante] invoke prompt_promuovi_variante — avvio",
+      "[promuovi-variante] invoke prompt_promuovi_variante — completato",
+      "[promuovi-variante] dispatch pap:lista-mutata",
+      "[promuovi-variante] dispatch pap:apri-prompt",
+      "[promuovi-variante] dispatch pap:prompt-promosso",
+    ]);
+  });
+
+  it("logga solo avvio ed errore quando il backend fallisce, nessun dispatch", async () => {
+    const invokeFn = vi
+      .fn<InvokePromuoviFn>()
+      .mockRejectedValue(new Error("DB error"));
+    const log = vi.fn<(messaggio: string) => void>();
+
+    await eseguiPromuoviVariante(
+      "prm-variante-1",
+      invokeFn,
+      vi.fn<DispatchListaMutataFn>(),
+      vi.fn<DispatchApriPromptFn>(),
+      vi.fn<DispatchPromptPromossoFn>(),
+      log,
+    );
+
+    const righe = log.mock.calls.map((c) => c[0]);
+    expect(righe).toEqual([
+      "[promuovi-variante] invoke prompt_promuovi_variante — avvio",
+      "[promuovi-variante] invoke prompt_promuovi_variante — errore DB error",
+    ]);
+  });
+});
