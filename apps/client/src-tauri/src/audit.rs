@@ -771,4 +771,58 @@ mod test {
             .unwrap();
         assert_eq!(totale, 5);
     }
+
+    /// Ancora al comportamento reale (non alla sola formulazione del testo
+    /// TS) la promessa mostrata in Impostazioni — "non registra il
+    /// contenuto dei prompt" — corretta dalla review della issue #587:
+    /// crea un prompt passando per `editor::prompt_crea_in_db` (lo stesso
+    /// codice invocato dal comando Tauri `prompt_crea`, solo senza
+    /// l'incapsulamento in `tauri::State` — vedi doc su quella funzione) e
+    /// verifica che NESSUNA riga di `Metadata` in `AuditLog` contenga il
+    /// `Body` o la `Description` del prompt. Se un domani un call site
+    /// aggiungesse per errore il corpo o la descrizione ai metadati,
+    /// questo test fallirebbe anche se la stringa TS restasse invariata.
+    #[test]
+    fn titolo_nei_metadati_non_include_body_ne_descrizione() {
+        let conn = db_test();
+        let rt = crate::embeddings::EmbeddingsState::new();
+        let dati = crate::editor::NuovoPrompt {
+            titolo: "Preventivo Cliente Rossi".to_string(),
+            descrizione: "DESCRIZIONE-SEGRETA-non-deve-uscire".to_string(),
+            body: "CORPO-SEGRETO-non-deve-mai-finire-nei-metadati".to_string(),
+            visibilita: "private".to_string(),
+            tag_nomi: vec![],
+            target_model: None,
+            folder_id: None,
+        };
+        let id = crate::editor::prompt_crea_in_db(&conn, &rt, &dati).unwrap();
+
+        let mut stmt = conn
+            .prepare("SELECT Metadata FROM AuditLog WHERE EntityId = ?1")
+            .unwrap();
+        let metadati: Vec<Option<String>> = stmt
+            .query_map([&id], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(!metadati.is_empty(), "prompt_crea_in_db deve registrare almeno una voce audit");
+
+        for meta in metadati.into_iter().flatten() {
+            assert!(
+                !meta.contains(&dati.body),
+                "Metadata ({meta:?}) non deve contenere il Body del prompt"
+            );
+            assert!(
+                !meta.contains(&dati.descrizione),
+                "Metadata ({meta:?}) non deve contenere la Description del prompt"
+            );
+            // Controfattuale: il titolo, invece, è atteso nei metadati —
+            // se questo assert iniziasse a fallire vorrebbe dire che il
+            // test non starebbe più verificando nulla di significativo.
+            assert!(
+                meta.contains(dati.titolo.trim()),
+                "Metadata ({meta:?}) dovrebbe contenere il titolo, per costruzione"
+            );
+        }
+    }
 }

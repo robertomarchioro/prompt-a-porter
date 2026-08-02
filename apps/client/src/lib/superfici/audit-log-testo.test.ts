@@ -27,6 +27,12 @@ describe("testi sezione Registro attività (issue #583)", () => {
     expect(AUDIT_COSA.toLowerCase()).toContain("prompt");
   });
 
+  test("«cosa» avvisa che titoli ed etichette finiscono nei metadati e nel CSV (#587)", () => {
+    expect(AUDIT_COSA.toLowerCase()).toContain("titoli");
+    expect(AUDIT_COSA.toLowerCase()).toContain("etichette");
+    expect(AUDIT_COSA.toLowerCase()).toContain("csv");
+  });
+
   test("«dove» chiarisce che i dati restano in locale", () => {
     expect(AUDIT_DOVE.toLowerCase()).toContain("locale");
     expect(AUDIT_DOVE.toLowerCase()).toContain("computer");

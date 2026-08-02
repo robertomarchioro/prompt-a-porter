@@ -12,6 +12,18 @@
  * provider AI (`provider.salvato`, `provider.eliminato`) riguardano il
  * salvataggio/l'eliminazione della sua configurazione — mai le richieste
  * inviate al modello, che non vengono registrate.
+ *
+ * Precisazione post-review (#587, rilievo HIGH): il campo `Metadata` di
+ * `AuditLog` contiene titoli/etichette liberi scritti dall'utente — es.
+ * `dati.titolo` in `editor::prompt_crea`/`prompt_aggiorna`, `parsed.titolo`
+ * in `import_export.rs`, la `label` di variante in `varianti.rs`,
+ * `dati.etichetta` nei golden test in `regression.rs` — che possono
+ * contenere nomi di clienti/progetti. NON contengono mai `Body`/
+ * `Description` (verificato in tutti i call site di `audit::registra`;
+ * ancorato lato Rust dal test
+ * `audit::test::titolo_nei_metadati_non_include_body_ne_descrizione`).
+ * `AUDIT_COSA` deve riflettere entrambe le cose: cosa resta fuori E cosa
+ * (titoli/etichette) finisce nei metadati e quindi nell'export CSV.
  */
 
 export const AUDIT_LABEL_SIDEBAR = "Registro attività";
@@ -22,8 +34,12 @@ export const AUDIT_COSA =
   "Registra le azioni compiute sul vault e sui prompt: creazione, " +
   "modifica, spostamento, eliminazione di prompt e cartelle, import/" +
   "export, versioni, valutazioni e configurazione dei provider AI. " +
-  "Non registra il contenuto dei prompt né le conversazioni, e non " +
-  "traccia le richieste inviate ai modelli AI.";
+  "Non registra il contenuto dei prompt (corpo e descrizione) né le " +
+  "conversazioni, e non traccia le richieste inviate ai modelli AI. " +
+  "Registra però titoli ed etichette (ad es. il titolo di un prompt o " +
+  "l'etichetta di un golden test) per identificare a quale elemento si " +
+  "riferisce ogni voce: se contengono nomi di clienti o progetti, " +
+  "finiscono anche nell'export CSV.";
 
 export const AUDIT_DOVE =
   "Le voci restano nel database locale del vault, sul tuo computer: " +

@@ -220,45 +220,57 @@ pub(crate) fn ricostruisci_fts(conn: &Connection) -> Result<(), PapErrore> {
     Ok(())
 }
 
+/// Corpo di `prompt_crea` estratto dal comando Tauri (che si limita a
+/// sbloccare `state`/`rt_state` e delegare qui) così da poter essere
+/// invocato da un test unitario senza costruire un `tauri::State` — la
+/// feature `tauri::test` non è cablata nei dev-dependencies del progetto
+/// (vedi nota in `debug_log.rs`). Usato da `audit.rs` per verificare che
+/// i metadati scritti in `AuditLog` non contengano mai `Body`/`Description`.
+pub(crate) fn prompt_crea_in_db(
+    conn: &Connection,
+    rt_state: &EmbeddingsState,
+    dati: &NuovoPrompt,
+) -> Result<String, PapErrore> {
+    let id = format!("prm-{}", genera_id()?);
+    let target = normalizza_target_model(&dati.target_model);
+    let folder = normalizza_target_model(&dati.folder_id);
+    let body_clean = dati.body.trim();
+    conn.execute(
+        "INSERT INTO Prompts
+            (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
+             Visibility, TargetModel, FolderId, Version, CreatedAt, UpdatedAt)
+         VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, ?4, ?5, ?6, ?7, 1,
+                 datetime('now'), datetime('now'))",
+        rusqlite::params![
+            id,
+            dati.titolo.trim(),
+            dati.descrizione.trim(),
+            body_clean,
+            dati.visibilita,
+            target,
+            folder,
+        ],
+    )?;
+    sincronizza_tags(conn, rt_state, &id, &dati.tag_nomi)?;
+    // Snapshot v1 in PromptVersions (Fase 2 versioning).
+    crate::versioning::snapshot_versione(conn, &id, "usr-locale")?;
+    ricostruisci_fts(conn)?;
+    // Hook embedding (Fase 3 Step 3): no-op se Session non loaded.
+    aggiorna_embedding(conn, rt_state, &id, body_clean)?;
+    // Hook import graph (Fase 3 Step 8): popola PromptImports.
+    prompt_componibili::aggiorna_imports(conn, &id, body_clean)?;
+    crate::audit::registra(conn, "prompt.creato", "Prompt", &id, Some(dati.titolo.trim()));
+    log::info!("Prompt creato: {id}");
+    Ok(id)
+}
+
 #[tauri::command]
 pub fn prompt_crea(
     dati: NuovoPrompt,
     state: State<'_, VaultState>,
     rt_state: State<'_, EmbeddingsState>,
 ) -> Result<String, PapErrore> {
-    state.with_conn(|conn| {
-        let id = format!("prm-{}", genera_id()?);
-        let target = normalizza_target_model(&dati.target_model);
-        let folder = normalizza_target_model(&dati.folder_id);
-        let body_clean = dati.body.trim();
-        conn.execute(
-            "INSERT INTO Prompts
-                (Id, WorkspaceId, AuthorUserId, Title, Description, Body,
-                 Visibility, TargetModel, FolderId, Version, CreatedAt, UpdatedAt)
-             VALUES (?1, 'ws-personale', 'usr-locale', ?2, ?3, ?4, ?5, ?6, ?7, 1,
-                     datetime('now'), datetime('now'))",
-            rusqlite::params![
-                id,
-                dati.titolo.trim(),
-                dati.descrizione.trim(),
-                body_clean,
-                dati.visibilita,
-                target,
-                folder,
-            ],
-        )?;
-        sincronizza_tags(conn, &rt_state, &id, &dati.tag_nomi)?;
-        // Snapshot v1 in PromptVersions (Fase 2 versioning).
-        crate::versioning::snapshot_versione(conn, &id, "usr-locale")?;
-        ricostruisci_fts(conn)?;
-        // Hook embedding (Fase 3 Step 3): no-op se Session non loaded.
-        aggiorna_embedding(conn, &rt_state, &id, body_clean)?;
-        // Hook import graph (Fase 3 Step 8): popola PromptImports.
-        prompt_componibili::aggiorna_imports(conn, &id, body_clean)?;
-        crate::audit::registra(conn, "prompt.creato", "Prompt", &id, Some(dati.titolo.trim()));
-        log::info!("Prompt creato: {id}");
-        Ok(id)
-    })
+    state.with_conn(|conn| prompt_crea_in_db(conn, &rt_state, &dati))
 }
 
 #[tauri::command]
