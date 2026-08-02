@@ -771,4 +771,122 @@ mod test {
             .unwrap();
         assert_eq!(totale, 5);
     }
+
+    /// Ancora al comportamento reale (non alla sola formulazione del testo
+    /// TS) la promessa mostrata in Impostazioni — "non registra il
+    /// contenuto dei prompt" — corretta dalla review della issue #587:
+    /// crea un prompt passando per `editor::prompt_crea_in_db` (lo stesso
+    /// codice invocato dal comando Tauri `prompt_crea`, solo senza
+    /// l'incapsulamento in `tauri::State` — vedi doc su quella funzione) e
+    /// verifica che NESSUNA riga di `Metadata` in `AuditLog` contenga il
+    /// `Body` o la `Description` del prompt. Se un domani un call site
+    /// aggiungesse per errore il corpo o la descrizione ai metadati,
+    /// questo test fallirebbe anche se la stringa TS restasse invariata.
+    #[test]
+    fn titolo_nei_metadati_non_include_body_ne_descrizione() {
+        let conn = db_test();
+        let rt = crate::embeddings::EmbeddingsState::new();
+        let dati = crate::editor::NuovoPrompt {
+            titolo: "Preventivo Cliente Rossi".to_string(),
+            descrizione: "DESCRIZIONE-SEGRETA-non-deve-uscire".to_string(),
+            body: "CORPO-SEGRETO-non-deve-mai-finire-nei-metadati".to_string(),
+            visibilita: "private".to_string(),
+            tag_nomi: vec![],
+            target_model: None,
+            folder_id: None,
+        };
+        let id = crate::editor::prompt_crea_in_db(&conn, &rt, &dati).unwrap();
+
+        let mut stmt = conn
+            .prepare("SELECT Metadata FROM AuditLog WHERE EntityId = ?1")
+            .unwrap();
+        let metadati: Vec<Option<String>> = stmt
+            .query_map([&id], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(!metadati.is_empty(), "prompt_crea_in_db deve registrare almeno una voce audit");
+
+        for meta in metadati.into_iter().flatten() {
+            assert!(
+                !meta.contains(&dati.body),
+                "Metadata ({meta:?}) non deve contenere il Body del prompt"
+            );
+            assert!(
+                !meta.contains(&dati.descrizione),
+                "Metadata ({meta:?}) non deve contenere la Description del prompt"
+            );
+            // Controfattuale: il titolo, invece, è atteso nei metadati —
+            // se questo assert iniziasse a fallire vorrebbe dire che il
+            // test non starebbe più verificando nulla di significativo.
+            assert!(
+                meta.contains(dati.titolo.trim()),
+                "Metadata ({meta:?}) dovrebbe contenere il titolo, per costruzione"
+            );
+        }
+    }
+
+    /// Ancora al comportamento reale — non solo alla formulazione del
+    /// testo TS — l'altra metà della correzione della issue #587 (rilievo
+    /// HIGH residuo): il percorso gerarchico completo di una cartella
+    /// finisce nei metadati sia alla creazione (`folder.creato`) sia alla
+    /// rinomina (`folder.rinominato`), passando per `cartelle::crea_pure`/
+    /// `rinomina_pure` — lo stesso codice invocato dai comandi Tauri
+    /// `folder_crea`/`folder_rinomina`, solo senza l'incapsulamento in
+    /// `tauri::State`. Usa una gerarchia a 2 livelli con un nome che
+    /// somiglia a un cliente reale, per rendere esplicito quanto sia più
+    /// rivelatore di un semplice titolo.
+    #[test]
+    fn path_cartella_nei_metadati_di_folder_creato_e_rinominato() {
+        let conn = db_test();
+        let padre = crate::cartelle::crea_pure(
+            &conn,
+            &crate::cartelle::NuovaCartella {
+                nome: "Clienti".to_string(),
+                parent_folder_id: None,
+            },
+        )
+        .unwrap();
+        let figlia_id = crate::cartelle::crea_pure(
+            &conn,
+            &crate::cartelle::NuovaCartella {
+                nome: "Rossi Spa".to_string(),
+                parent_folder_id: Some(padre.clone()),
+            },
+        )
+        .unwrap();
+
+        let meta_creazione: String = conn
+            .query_row(
+                "SELECT Metadata FROM AuditLog WHERE Action = 'folder.creato' AND EntityId = ?1",
+                [&figlia_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            meta_creazione, "/Clienti/Rossi Spa",
+            "Metadata di folder.creato deve contenere il percorso completo, non solo il nome"
+        );
+
+        crate::cartelle::rinomina_pure(
+            &conn,
+            &crate::cartelle::RinominaCartella {
+                id: figlia_id.clone(),
+                nuovo_nome: "Rossi Spa (ex Bianchi)".to_string(),
+            },
+        )
+        .unwrap();
+
+        let meta_rinomina: String = conn
+            .query_row(
+                "SELECT Metadata FROM AuditLog WHERE Action = 'folder.rinominato' AND EntityId = ?1",
+                [&figlia_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            meta_rinomina, "Rossi Spa (ex Bianchi)",
+            "Metadata di folder.rinominato deve contenere il nuovo nome scelto dall'utente"
+        );
+    }
 }

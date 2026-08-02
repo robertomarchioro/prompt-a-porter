@@ -85,6 +85,13 @@ pub fn sync_token_salva(token: String, state: State<'_, VaultState>) -> Result<(
     state.with_conn(|conn| sync_token_salva_pure(conn, &token))
 }
 
+/// Nota (#587, rilievo INFO): `AuditLog` è deliberatamente ESCLUSO dal
+/// delta di sync — solo `prompts`/`tags`/`promptTags` viaggiano. È su
+/// questo che si basa `AUDIT_DOVE` in `audit-log-testo.ts` ("Le voci
+/// restano nel database locale del vault ... non vengono inviate
+/// altrove"): se in futuro `AuditLog` venisse aggiunto qui (sync
+/// bidirezionale del registro), quella frase andrebbe aggiornata insieme
+/// a questo delta, non lasciata implicitamente falsa.
 #[derive(Debug, Deserialize)]
 pub struct SyncDelta {
     pub prompts: Vec<SyncPrompt>,
