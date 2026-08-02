@@ -240,6 +240,21 @@
     font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.5;
+    /* #574 — causa reale delle recidive #506/#514/#553: diff2html
+       posiziona `.d2h-code-linenumber`/`.d2h-code-side-linenumber` con
+       `position:absolute` ma NON dichiara `position:relative` su nessun
+       proprio antenato (`.d2h-file-wrapper`, `.d2h-file-diff`,
+       `.d2h-code-line` sono tutti `static`). Senza un containing block
+       nell'albero, l'unico antenato posizionato risultava il backdrop
+       `fixed` della modale (v. Modale.svelte) — il gutter restava
+       ancorato lì invece che scorrere col contenuto, causando
+       l'overlap. `overflow:auto` da solo NON crea un containing block
+       per un discendente `absolute`: serve `position:relative` qui, sul
+       nodo che contiene l'HTML iniettato via `{@html}` — in entrambe le
+       modalità `data-altezza` questo nodo è sempre dentro l'antenato
+       che scrolla davvero (se stesso in "contenitore", `.diff-scroll`
+       del consumer in "contenuto"), mai fuori da esso. */
+    position: relative;
   }
 
   .diff-viewer[data-altezza="contenitore"] .render {
