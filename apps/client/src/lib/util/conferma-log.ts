@@ -12,17 +12,22 @@
  * `conferma-log.test.ts`: un test dimostra esplicitamente che un titolo
  * riconoscibile passato a `conferma()` non compare nella riga prodotta.
  *
- * Perché la durata è il discriminante più importante: `window.confirm` è
- * **bloccante**. Se il dialogo compare davvero e l'utente risponde, la
- * durata è di almeno decine di millisecondi. Una durata sotto
- * `SOGLIA_DIALOGO_NON_MOSTRATO_MS` sul ramo nativo (Windows/Linux) indica
- * che la funzione è tornata subito: il dialogo non è mai apparso. Questo
- * separa da solo «il dialogo non compare» (causa nel ramo nativo/WebView2)
- * da «il dialogo compare ma l'esito viene ignorato» (causa a valle, nel
- * chiamante) — due difetti diversi con due correzioni diverse.
+ * Perché la durata resta utile: misura quanto passa fra la richiesta e la
+ * risposta dell'utente. Una durata di pochi millisecondi indica che nessuno
+ * ha risposto davvero, cioè che il dialogo non è stato mostrato o è stato
+ * risolto da codice — utile a distinguere «l'utente ha annullato» da «la
+ * conferma non è mai arrivata all'utente».
+ *
+ * Il ramo `"nativo"` (`window.confirm`/`window.alert`) NON è più usato: le
+ * funzioni globali della webview sono sostituite da `tauri-plugin-dialog`
+ * con chiamate a un comando inesistente, quindi sollevavano sempre
+ * un'eccezione fuori da macOS (vedi il commento di `conferma.ts` per i
+ * riferimenti al sorgente della crate). Il valore resta nel tipo perché
+ * compare nelle righe di log raccolte **prima** della correzione, e chi le
+ * rilegge deve poterle interpretare.
  */
 
-export type RamoConferma = "macos" | "nativo";
+export type RamoConferma = "macos" | "nativo" | "in-app";
 
 /**
  * Sotto questa soglia, su ramo "nativo", `window.confirm` non può aver

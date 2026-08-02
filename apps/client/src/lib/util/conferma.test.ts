@@ -2,20 +2,27 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 
 /**
- * Test per i sostituti macOS di `window.confirm`/`window.alert`
- * (`conferma.ts`). Copre:
- * - fuori da macOS: delega invariata a `window.confirm`/`window.alert`
- * - su macOS: la richiesta viene accodata in `dialogo.svelte.ts` (nessun
- *   dialogo nativo), e la Promise si risolve solo quando l'host chiama
- *   `risolvi` sulla richiesta in coda — esattamente come farebbe
- *   `DialogoHost.svelte` in risposta al click dell'utente.
- * - strumentazione diagnostica (#585/#572/#584): la riga di log scritta a
- *   ogni chiamata non contiene mai il testo del messaggio dell'utente.
+ * Test per `conferma()`/`avvisa()` (`conferma.ts`), che dalla correzione del
+ * blocco dell'aggiornamento automatico usano la coda in-app **su tutte le
+ * piattaforme**.
+ *
+ * Il test più importante di questo file è la guardia anti-regressione:
+ * `window.confirm`/`window.alert` non devono MAI essere chiamate. Quelle
+ * funzioni globali sono sostituite da `tauri-plugin-dialog` con invocazioni
+ * di `plugin:dialog|confirm`, comando che la crate non registra: ogni
+ * chiamata fallisce con «not allowed by ACL». È la causa unica di #585,
+ * #572, #584 e del blocco su «Installa e riavvia». Se qualcuno
+ * reintroducesse quella dipendenza, questi test devono diventare rossi.
+ *
+ * Copre inoltre:
+ * - la Promise si risolve solo quando l'host risolve la richiesta in coda,
+ *   esattamente come farebbe `DialogoHost.svelte` al click dell'utente;
+ * - il vincolo di privacy: la riga di log non contiene mai il testo del
+ *   messaggio, che tipicamente include il titolo di un prompt.
  *
  * `vi.resetModules()` + import dinamico dopo aver mockato
- * `navigator.platform`: stessa strategia di os.test.ts, necessaria perché
- * `sistemaOperativo` (da cui dipende conferma.ts) è calcolato una volta al
- * module load.
+ * `navigator.platform`: stessa strategia di os.test.ts, qui usata per
+ * verificare che il comportamento sia identico su Windows, Linux e macOS.
  */
 
 // `@tauri-apps/plugin-log` chiama `invoke()` di `@tauri-apps/api/core`, che
@@ -48,6 +55,24 @@ async function importConPiattaforma(platform: string) {
   return { ...conferma, dialogo };
 }
 
+/**
+ * Simula `DialogoHost.svelte`: attende che la richiesta compaia in coda e la
+ * risolve con l'esito indicato, come farebbe il click dell'utente.
+ */
+async function rispondiAllaCoda(
+  dialogo: typeof import("$lib/stores/dialogo.svelte"),
+  esito: boolean,
+): Promise<void> {
+  for (let i = 0; i < 20 && dialogo.statoDialoghi.coda.length === 0; i++) {
+    await Promise.resolve();
+  }
+  const richiesta = dialogo.statoDialoghi.coda[0];
+  expect(richiesta, "la richiesta deve essere stata accodata").toBeDefined();
+  if (richiesta.tipo === "conferma") richiesta.risolvi(esito);
+  else richiesta.risolvi();
+  dialogo.rimuoviDallaCoda(richiesta.id);
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   infoSpy.mockClear();
@@ -56,136 +81,88 @@ afterEach(() => {
   }
 });
 
-describe("conferma() fuori da macOS", () => {
-  it("delega a window.confirm e ne ritorna il valore", async () => {
-    const { conferma } = await importConPiattaforma("Win32");
-    const spy = vi.spyOn(window, "confirm").mockReturnValue(true);
+describe("conferma() — coda in-app su ogni piattaforma", () => {
+  for (const [nome, platform] of [
+    ["Windows", "Win32"],
+    ["Linux", "Linux x86_64"],
+    ["macOS", "MacIntel"],
+  ] as const) {
+    it(`su ${nome} accoda invece di chiamare window.confirm`, async () => {
+      const { conferma, dialogo } = await importConPiattaforma(platform);
+      const confirmSpy = vi.spyOn(window, "confirm");
 
-    await expect(conferma("Sicuro?")).resolves.toBe(true);
+      const promessa = conferma("Eliminare il prompt?", "elimina-prompt");
+      await rispondiAllaCoda(dialogo, true);
 
-    expect(spy).toHaveBeenCalledWith("Sicuro?");
+      expect(await promessa).toBe(true);
+      expect(confirmSpy).not.toHaveBeenCalled();
+    });
+  }
+
+  it("ritorna false quando l'host risolve con un rifiuto", async () => {
+    const { conferma, dialogo } = await importConPiattaforma("Win32");
+    const promessa = conferma("Eliminare il prompt?", "elimina-prompt");
+    await rispondiAllaCoda(dialogo, false);
+    expect(await promessa).toBe(false);
   });
 
-  it("propaga l'annullamento (false) di window.confirm", async () => {
-    const { conferma } = await importConPiattaforma("Linux x86_64");
-    vi.spyOn(window, "confirm").mockReturnValue(false);
-
-    await expect(conferma("Sicuro?")).resolves.toBe(false);
-  });
-});
-
-describe("avvisa() fuori da macOS", () => {
-  it("delega a window.alert con lo stesso messaggio", async () => {
-    const { avvisa } = await importConPiattaforma("Win32");
-    const spy = vi.spyOn(window, "alert").mockImplementation(() => {});
-
-    await avvisa("Errore nel salvataggio");
-
-    expect(spy).toHaveBeenCalledWith("Errore nel salvataggio");
-  });
-});
-
-describe("conferma() su macOS", () => {
-  it("accoda la richiesta invece di chiamare window.confirm", async () => {
-    const { conferma, dialogo } = await importConPiattaforma("MacIntel");
-    const spy = vi.spyOn(window, "confirm");
-
-    const promessa = conferma("Eliminare il prompt?");
-
-    expect(spy).not.toHaveBeenCalled();
-    expect(dialogo.statoDialoghi.coda).toHaveLength(1);
+  it("il messaggio accodato è quello passato dal chiamante", async () => {
+    const { conferma, dialogo } = await importConPiattaforma("Win32");
+    const promessa = conferma("Eliminare il prompt?", "elimina-prompt");
+    for (let i = 0; i < 20 && dialogo.statoDialoghi.coda.length === 0; i++) {
+      await Promise.resolve();
+    }
     expect(dialogo.statoDialoghi.coda[0].messaggio).toBe(
       "Eliminare il prompt?",
     );
-
-    const richiesta = dialogo.statoDialoghi.coda[0];
-    if (richiesta.tipo !== "conferma") throw new Error("tipo inatteso");
-    richiesta.risolvi(true);
-
-    await expect(promessa).resolves.toBe(true);
-  });
-
-  it("risolve false quando l'host annulla (es. Esc/click su Annulla)", async () => {
-    const { conferma, dialogo } = await importConPiattaforma("MacARM");
-
-    const promessa = conferma("Svuotare il cestino?");
-    const richiesta = dialogo.statoDialoghi.coda[0];
-    if (richiesta.tipo !== "conferma") throw new Error("tipo inatteso");
-    richiesta.risolvi(false);
-
-    await expect(promessa).resolves.toBe(false);
+    await rispondiAllaCoda(dialogo, true);
+    await promessa;
   });
 });
 
-describe("avvisa() su macOS", () => {
-  it("accoda un avviso invece di chiamare window.alert", async () => {
-    const { avvisa, dialogo } = await importConPiattaforma("MacIntel");
-    const spy = vi.spyOn(window, "alert");
+describe("avvisa() — Toast in-app su ogni piattaforma", () => {
+  it("accoda invece di chiamare window.alert", async () => {
+    const { avvisa, dialogo } = await importConPiattaforma("Win32");
+    const alertSpy = vi.spyOn(window, "alert");
 
-    const promessa = avvisa("Errore nell'eliminazione");
+    const promessa = avvisa("Errore durante l'eliminazione", "elimina-prompt");
+    await rispondiAllaCoda(dialogo, true);
 
-    expect(spy).not.toHaveBeenCalled();
-    expect(dialogo.statoDialoghi.coda).toHaveLength(1);
-
-    const richiesta = dialogo.statoDialoghi.coda[0];
-    if (richiesta.tipo !== "avviso") throw new Error("tipo inatteso");
-    richiesta.risolvi();
-
-    await expect(promessa).resolves.toBeUndefined();
+    await promessa;
+    expect(alertSpy).not.toHaveBeenCalled();
   });
 });
 
-describe("conferma()/avvisa() — strumentazione diagnostica (#585 #572 #584)", () => {
-  it("logga una riga di diagnostica ad ogni conferma(), senza testo utente", async () => {
-    const { conferma } = await importConPiattaforma("Win32");
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-
+describe("strumentazione diagnostica (#585 #572 #584)", () => {
+  it("logga azione, ramo e lunghezza, mai il testo del messaggio", async () => {
+    const { conferma, dialogo } = await importConPiattaforma("Win32");
     const titoloSensibile = 'Eliminare il prompt "Preventivo Rossi Spa"?';
-    await conferma(titoloSensibile, "elimina-prompt");
 
-    expect(infoSpy).toHaveBeenCalledTimes(1);
+    const promessa = conferma(titoloSensibile, "elimina-prompt");
+    await rispondiAllaCoda(dialogo, true);
+    await promessa;
+
     const riga = infoSpy.mock.calls[0][0] as string;
     expect(riga).toContain("azione=elimina-prompt");
-    expect(riga).toContain("ramo=nativo");
-    expect(riga).toContain("esitoTipo=boolean esitoValore=true");
+    expect(riga).toContain("ramo=in-app");
+    expect(riga).toContain(`lunghezzaMessaggio=${titoloSensibile.length}`);
+    // Il vincolo che conta: nessun frammento del titolo nel log.
     expect(riga).not.toContain("Preventivo Rossi Spa");
     expect(riga).not.toContain(titoloSensibile);
   });
 
-  it("azione è opzionale: i chiamanti esistenti senza terzo argomento non si rompono", async () => {
-    const { conferma } = await importConPiattaforma("Win32");
-    vi.spyOn(window, "confirm").mockReturnValue(false);
+  it("avvisa() logga senza far trapelare il messaggio", async () => {
+    const { avvisa, dialogo } = await importConPiattaforma("Win32");
+    const messaggio =
+      'Errore sul prompt "Preventivo Rossi Spa": accesso negato';
 
-    await expect(conferma("Sicuro?")).resolves.toBe(false);
-
-    const riga = infoSpy.mock.calls[0][0] as string;
-    expect(riga).toContain("azione=(non specificata)");
-  });
-
-  it("distingue nella riga il ramo macos da quello nativo", async () => {
-    const { conferma, dialogo } = await importConPiattaforma("MacIntel");
-
-    const promessa = conferma("Promuovere questa variante?", "promuovi-variante");
-    const richiesta = dialogo.statoDialoghi.coda[0];
-    if (richiesta.tipo !== "conferma") throw new Error("tipo inatteso");
-    richiesta.risolvi(true);
+    const promessa = avvisa(messaggio, "elimina-prompt");
+    await rispondiAllaCoda(dialogo, true);
     await promessa;
 
     const riga = infoSpy.mock.calls[0][0] as string;
-    expect(riga).toContain("ramo=macos");
-    expect(riga).toContain("azione=promuovi-variante");
-  });
-
-  it("avvisa() logga azione e lunghezza, mai il testo del messaggio", async () => {
-    const { avvisa } = await importConPiattaforma("Win32");
-    vi.spyOn(window, "alert").mockImplementation(() => {});
-
-    const messaggioSensibile = 'Errore durante la promozione di "Preventivo Rossi Spa"';
-    await avvisa(messaggioSensibile, "promuovi-variante");
-
-    const riga = infoSpy.mock.calls[0][0] as string;
-    expect(riga).toContain("azione=promuovi-variante");
-    expect(riga).toContain(`lunghezzaMessaggio=${messaggioSensibile.length}`);
+    expect(riga).toContain("[avvisa]");
+    expect(riga).toContain("ramo=in-app");
     expect(riga).not.toContain("Preventivo Rossi Spa");
   });
 });
