@@ -1119,7 +1119,12 @@
      ~600px visibili; con questa regola torna a 605px e i contenitori
      interni — `.cm-scroller` di CodeMirror, `.render` di DiffViewer —
      tornano scrollabili). `:global()` perché il nodo è renderizzato da
-     paneforge, fuori dallo scope di questo componente. */
+     paneforge, fuori dallo scope di questo componente.
+     `min-height:0` è DIFENSIVO, non necessario oggi: paneforge imposta già
+     `overflow:hidden` inline sul nodo, e per Flexbox §4.5 questo fa sì che
+     `min-height:auto` si comporti come 0. Resta esplicito perché quella
+     premessa dipende da una libreria di terze parti che potrebbe smettere
+     di impostare `overflow` — non rimuoverlo dandolo per ridondante. */
   :global(.pane-contenuto) {
     display: flex;
     flex-direction: column;
