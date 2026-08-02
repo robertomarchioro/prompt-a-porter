@@ -19,7 +19,7 @@
   import { onMount, onDestroy, untrack } from "svelte";
   import { eseguiInstallaAggiornamento } from "./installa-aggiornamento-logic";
   import { conferma } from "$lib/util/conferma";
-  import { info as logInfoPlugin, error as logErrorePlugin } from "@tauri-apps/plugin-log";
+  import { logInfoApp, logErroreApp } from "$lib/util/log-app";
   import {
     Palette,
     List as ListIcon,
@@ -960,17 +960,17 @@
       "pulisci-log",
     );
     // #584: punto di controllo — la conferma ha ritornato true/false?
-    logInfo(`[impostazioni] pulisci-log: conferma ritornata esito=${ok}`);
+    logInfoApp(`[impostazioni] pulisci-log: conferma ritornata esito=${ok}`);
     if (!ok) return;
     debugErrore = "";
     debugMessaggio = "";
     debugOpInCorso = "pulisci";
     try {
-      logInfo("[impostazioni] pulisci-log: invoke debug_log_pulisci — avvio");
+      logInfoApp("[impostazioni] pulisci-log: invoke debug_log_pulisci — avvio");
       const esito = await invoke<EsitoPulizia>("debug_log_pulisci");
       // #584: i campi di EsitoPulizia sono già calcolati lato Rust — qui
       // servono solo per correlarli col lato frontend nello stesso log.
-      logInfo(
+      logInfoApp(
         "[impostazioni] pulisci-log: invoke debug_log_pulisci — completato " +
           `sizePrima=${esito.size_prima} sizeDopo=${esito.size_dopo ?? "null"} ` +
           `rotatiRimossi=${esito.rotati_rimossi.length} rotatiFalliti=${esito.rotati_falliti.length}`,
@@ -994,7 +994,9 @@
       }
       await caricaDebugInfo();
     } catch (e) {
-      logErrore(`[impostazioni] pulisci-log: invoke debug_log_pulisci — errore ${String(e)}`);
+      // `String(e)` è sicuro qui solo perché `PapErrore` è opaco per
+      // costruzione — invariante non coperta da un test dedicato.
+      logErroreApp(`[impostazioni] pulisci-log: invoke debug_log_pulisci — errore ${String(e)}`);
       debugErrore = `Pulizia fallita: ${String(e)}`;
     } finally {
       debugOpInCorso = "";
@@ -1068,21 +1070,6 @@
     noteRilascio.testo ? renderNotesHtml(noteRilascio.testo) : "",
   );
 
-  // Scrive nel file di log via tauri-plugin-log (permesso `log:default`,
-  // già presente in capabilities/default.json). Fallback su console.* se il
-  // comando non è disponibile (es. preview senza backend Tauri): il logging
-  // non deve mai far fallire il flusso di installazione che avvolge.
-  function logInfo(messaggio: string): void {
-    void logInfoPlugin(messaggio).catch(() => {
-      console.info(messaggio);
-    });
-  }
-  function logErrore(messaggio: string): void {
-    void logErrorePlugin(messaggio).catch(() => {
-      console.error(messaggio);
-    });
-  }
-
   async function aggiornaNoteRilascio(versione: string, corpoRelease: string): Promise<void> {
     noteRilascio = await recuperaNoteRilascio({
       versione,
@@ -1143,8 +1130,8 @@
         conferma,
         check,
         relaunch,
-        logInfo,
-        logErrore,
+        logInfo: logInfoApp,
+        logErrore: logErroreApp,
         onConfermato: () => {
           updaterStato = { kind: "installing" };
         },
@@ -1174,7 +1161,7 @@
       // eseguiInstallaAggiornamento (es. gli import() dinamici dei plugin):
       // quella funzione cattura già le proprie, ma qui non deve sfuggire
       // nulla senza log, per lo stesso motivo descritto sopra.
-      logErrore(
+      logErroreApp(
         `[updater] installaAggiornamento: eccezione al di fuori della logica principale — ${String(e)}`,
       );
       updaterStato = { kind: "error", message: String(e) };

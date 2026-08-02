@@ -156,12 +156,16 @@
           new CustomEvent("pap:prompt-promosso", { detail: { promptId: id } }),
         ),
       logInfoApp,
+      // Review PR #592: riga d'errore dedicata a livello errore (prima
+      // finiva a `logInfoApp`, invisibile col filtro di default `warn`).
+      // Il messaggio è già scritto qui da `eseguiPromuoviVariante`: niente
+      // più `logErroreApp` duplicato sotto.
+      logErroreApp,
     );
     if (risultato.ok) {
       await caricaVarianti();
       await avvisa("Variante promossa a principale.", "promuovi-variante");
     } else {
-      logErroreApp(`[right-rail] promuovi-variante: errore ${risultato.errore}`);
       await avvisa(`Errore durante la promozione: ${risultato.errore}`, "promuovi-variante");
     }
   }
@@ -206,12 +210,13 @@
           new CustomEvent("pap:prompt-promosso", { detail: { promptId: pid } }),
         ),
       logInfoApp,
+      // Vedi commento gemello in promuoviAPrincipale() sopra.
+      logErroreApp,
     );
     if (risultato.ok) {
       await caricaVarianti();
       await avvisa("Variante promossa a principale.", "promuovi-variante");
     } else {
-      logErroreApp(`[right-rail] promuovi-variante: errore ${risultato.errore}`);
       await avvisa(`Errore durante la promozione: ${risultato.errore}`, "promuovi-variante");
     }
   }
@@ -239,6 +244,8 @@
       }
       window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
     } catch (e) {
+      // `String(e)` è sicuro qui solo perché `PapErrore` è opaco per
+      // costruzione — invariante non coperta da un test dedicato.
       logErroreApp(`[right-rail] elimina-variante: invoke prompt_elimina — errore ${String(e)}`);
       await avvisa(
         `Errore durante l'eliminazione: ${String(e).replace(/^Error: /, "")}`,

@@ -19,9 +19,18 @@
  *
  * Strumentazione diagnostica (#572, nessun cambio di comportamento): il
  * parametro opzionale `log`, se passato, riceve una riga per l'invoke
- * (avvio/completato/errore) e una per ciascuno dei tre eventi dispatchati —
- * per distinguere «il backend non è mai stato chiamato» da «il backend ha
+ * (avvio/completato) e una per ciascuno dei tre eventi dispatchati — per
+ * distinguere «il backend non è mai stato chiamato» da «il backend ha
  * risposto ma l'evento non arriva a `DetailPane`».
+ *
+ * La riga d'errore va invece a `logErrore` (parametro opzionale separato,
+ * di default uguale a `log` per retrocompatibilità coi chiamanti/test che
+ * ne passano uno solo): un errore scritto allo stesso livello delle righe
+ * informative sarebbe invisibile col filtro di default dell'app (`warn`,
+ * vedi `log-app.ts`), che lascia passare `info` solo con "Debug log"
+ * attivo. Review PR #592: prima di questo fix il 6° parametro era sempre
+ * `logInfoApp` in `RightRail.svelte`, quindi la riga d'errore finiva a
+ * livello info.
  */
 
 export interface RisultatoPromuoviVariante {
@@ -35,8 +44,12 @@ export interface RisultatoPromuoviVariante {
  * `pap:lista-mutata`, `pap:apri-prompt` e `pap:prompt-promosso`.
  *
  * I callback sono iniettati per consentire test puri senza DOM né runtime
- * Tauri. `log` è opzionale (default: nessun log) per non rompere i
- * chiamanti/test esistenti.
+ * Tauri. `log` e `logErrore` sono entrambi opzionali (default: `log` non fa
+ * nulla, `logErrore` ricade su `log`) per non rompere i chiamanti/test
+ * esistenti che ne passano uno solo — ma i chiamanti nuovi dovrebbero
+ * passare `logErrore` distinto (livello errore) così l'unica riga d'errore
+ * emessa qui non finisce silenziata dal filtro di default del log
+ * applicativo.
  */
 export async function eseguiPromuoviVariante(
   variantId: string,
@@ -45,6 +58,7 @@ export async function eseguiPromuoviVariante(
   dispatchApriPrompt: (id: string) => void,
   dispatchPromptPromosso: (id: string) => void,
   log: (messaggio: string) => void = () => {},
+  logErrore: (messaggio: string) => void = log,
 ): Promise<RisultatoPromuoviVariante> {
   try {
     log("[promuovi-variante] invoke prompt_promuovi_variante — avvio");
@@ -58,13 +72,16 @@ export async function eseguiPromuoviVariante(
     log("[promuovi-variante] dispatch pap:prompt-promosso");
     return { ok: true };
   } catch (err: unknown) {
+    // Il messaggio propagato nel log è sicuro qui solo perché `PapErrore` è
+    // opaco per costruzione (nessun dettaglio interno) — invariante non
+    // coperta da un test dedicato.
     const msg =
       err instanceof Error
         ? err.message
         : typeof err === "string"
           ? err.replace(/^Error:\s*/i, "")
           : "Impossibile promuovere la variante.";
-    log(`[promuovi-variante] invoke prompt_promuovi_variante — errore ${msg}`);
+    logErrore(`[promuovi-variante] invoke prompt_promuovi_variante — errore ${msg}`);
     return { ok: false, errore: msg };
   }
 }

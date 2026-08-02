@@ -2,14 +2,15 @@
  * Wrapper condiviso per scrivere nel log applicativo via `tauri-plugin-log`
  * (permesso `log:default`, già presente in capabilities/default.json).
  *
- * Stesso identico meccanismo già in uso in
- * `$lib/superfici/installa-aggiornamento-logic.ts` e in
- * `ImpostazioniModal.svelte` (funzioni locali `logInfo`/`logErrore`):
- * fallback su `console.*` se il comando IPC non è disponibile (es. preview
- * senza backend Tauri, o test) — il logging diagnostico non deve mai far
- * fallire il flusso applicativo che avvolge. Estratto qui per essere
- * riusato dai punti di controllo aggiunti a `conferma.ts` e ai chiamanti,
- * invece di ripetere lo stesso try/catch in ogni file (DRY).
+ * Stesso identico meccanismo che prima era duplicato come funzioni locali
+ * `logInfo`/`logErrore` in `ImpostazioniModal.svelte` (ora migrato a questo
+ * wrapper) e passato via dependency injection a
+ * `$lib/superfici/installa-aggiornamento-logic.ts`: fallback su `console.*`
+ * se il comando IPC non è disponibile (es. preview senza backend Tauri, o
+ * test) — il logging diagnostico non deve mai far fallire il flusso
+ * applicativo che avvolge. Estratto qui per essere riusato dai punti di
+ * controllo aggiunti a `conferma.ts` e ai chiamanti, invece di ripetere lo
+ * stesso try/catch in ogni file (DRY).
  *
  * Livello scelto: `info`. **Non basta di per sé**: il target file di
  * `tauri-plugin-log` accetta `info`/`debug` solo quando l'utente ha

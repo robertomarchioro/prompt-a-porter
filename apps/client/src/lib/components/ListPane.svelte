@@ -365,6 +365,8 @@
         new CustomEvent("pap:prompt-eliminato", { detail: id }),
       );
     } catch (e) {
+      // `String(e)` è sicuro qui solo perché `PapErrore` è opaco per
+      // costruzione — invariante non coperta da un test dedicato.
       logErroreApp(`[list-pane] elimina-prompt: invoke prompt_elimina — errore ${String(e)}`);
       console.error("[list-pane] elimina", e);
     }
@@ -584,6 +586,8 @@
       }
       logInfoApp("[list-pane] elimina-prompt-multiplo: invoke prompt_elimina — completato");
     } catch (e) {
+      // `String(e)` è sicuro qui solo perché `PapErrore` è opaco per
+      // costruzione — invariante non coperta da un test dedicato.
       logErroreApp(
         `[list-pane] elimina-prompt-multiplo: invoke prompt_elimina — errore ${String(e)}`,
       );

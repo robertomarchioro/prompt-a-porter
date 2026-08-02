@@ -91,11 +91,22 @@
     } finally {
       inAttesa = false;
       if (origine) {
+        // Il conteggio filtrato va calcolato QUI applicando `filtraRighe`
+        // direttamente a `righe` appena assegnata, invece di leggere il
+        // `$derived` `righeFiltrate`: quest'ultimo non garantisce di essere
+        // già stato ricalcolato in questo stesso blocco sincrono, col
+        // rischio di loggare il conteggio della ricarica PRECEDENTE. È il
+        // numero chiave del discriminante #558 (dati non arrivati vs
+        // arrivati-ma-non-disegnati): se è sfasato il discriminante mente.
         logInfoApp(
           formattaRigaRicaricaEsito({
             origine,
             nRigheBackend: righe.length,
-            nRigheFiltrate: righeFiltrate.length,
+            nRigheFiltrate: filtraRighe(
+              ordinaRecentiPrimi(righe),
+              livello,
+              compilaRegex(regexInput),
+            ).length,
             errore: erroreRilevato,
           }),
         );

@@ -475,6 +475,9 @@
     try {
       await eseguiSoftDelete();
     } catch (e) {
+      // `String(e)` è sicuro qui solo perché `PapErrore` è opaco per
+      // costruzione (nessun dettaglio interno nel messaggio propagato da
+      // `prompt_elimina`) — invariante non coperta da un test dedicato.
       logErroreApp(`[detail] elimina-prompt: invoke prompt_elimina — errore ${String(e)}`);
       console.error("[detail] elimina", e);
       await avvisa("Errore nell'eliminazione del prompt: " + String(e), "elimina-prompt");
