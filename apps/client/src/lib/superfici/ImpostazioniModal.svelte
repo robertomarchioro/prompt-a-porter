@@ -63,6 +63,14 @@
   import { recuperaNoteRilascio, type NoteRilascio } from "$lib/util/note-rilascio";
   import { eseguiEsportaLogZip } from "./debug-log-export-logic";
   import {
+    AUDIT_A_COSA_SERVE,
+    AUDIT_COME,
+    AUDIT_COSA,
+    AUDIT_DOVE,
+    AUDIT_LABEL_SIDEBAR,
+    AUDIT_TITOLO,
+  } from "./audit-log-testo";
+  import {
     statoTema,
     salvaTemaTono,
     statoEditor,
@@ -472,12 +480,6 @@
         "vettore",
       ],
     },
-    {
-      id: "audit",
-      label: "Audit log AI",
-      gruppo: "ai",
-      keywords: ["audit", "log", "csv", "export", "cleanup", "retention"],
-    },
     // ── Sicurezza & Sync ──
     {
       id: "sicurezza",
@@ -499,6 +501,25 @@
       label: "Sync",
       gruppo: "sicurezza-sync",
       keywords: ["sync", "sincronizza", "logout", "stato", "remoto"],
+    },
+    {
+      // Issue #583: prima viveva nel gruppo "ai" con label "Audit log AI",
+      // fuorviante — il registro traccia azioni generiche su vault/prompt,
+      // non le chiamate AI. Spostata qui perché concettualmente è un log
+      // di sicurezza/attività, non una feature AI.
+      id: "audit",
+      label: AUDIT_LABEL_SIDEBAR,
+      gruppo: "sicurezza-sync",
+      keywords: [
+        "audit",
+        "log",
+        "attività",
+        "cronologia",
+        "csv",
+        "export",
+        "cleanup",
+        "retention",
+      ],
     },
     // ── Sistema ──
     {
@@ -2283,7 +2304,11 @@
           </div>
         {/if}
       {:else if sezione === "audit"}
-        <h3>Audit log AI</h3>
+        <h3>{AUDIT_TITOLO}</h3>
+        <p class="hint">{AUDIT_COSA}</p>
+        <p class="hint">{AUDIT_DOVE}</p>
+        <p class="hint">{AUDIT_COME}</p>
+        <p class="hint">{AUDIT_A_COSA_SERVE}</p>
         <div class="campo">
           <span class="campo-label">Esporta cronologia</span>
           <button
@@ -2298,7 +2323,7 @@
             </span>
           </button>
           <p class="hint">
-            Tutte le voci audit del vault in CSV.
+            Tutte le voci del registro in CSV.
           </p>
         </div>
         <div class="campo">
@@ -2323,7 +2348,7 @@
             </button>
           </div>
           <p class="hint">
-            Rimuove voci audit antecedenti al numero di giorni
+            Rimuove voci del registro antecedenti al numero di giorni
             indicato. Operazione irreversibile.
           </p>
         </div>
