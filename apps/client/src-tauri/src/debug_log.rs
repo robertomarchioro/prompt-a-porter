@@ -51,6 +51,8 @@
 //! (review PR #588) elimina anche i rotati, che prima restavano intatti
 //! per sempre con `RotationStrategy::KeepAll` (CWE-532 pre-v0.8.44
 //! altrimenti mai rimediabile per chi ha già quei file su disco).
+//! `pap-crash.log` è deliberatamente ESCLUSO da questa eliminazione — vedi
+//! nota dedicata più sotto e doc di `pulisci_log_in_dir`.
 //!
 //! **Rettifica schema nomi dei rotati (review PR #588, MEDIUM):** i
 //! commenti di versioni precedenti di questo modulo (e i relativi test)
@@ -82,6 +84,39 @@
 //! l'ipotesi più credibile (flush fallito che lascia il buffer pieno) e
 //! per i limiti noti che restano comunque irrisolti. **Non chiude la
 //! #584**: la causa del sintomo riportato su Windows resta ignota.
+//!
+//! **`pap-crash.log` nell'export (H1, review post-merge PR #589):** il file
+//! di crash scritto da `panic_diagnostics` soddisfa il filtro di
+//! `raccogli_file_log` (`starts_with("pap")` + `.log`) e finisce quindi
+//! anche lui nello ZIP. `redigi_testo_log_storico` è stateful e ancorata al
+//! prefisso `[data][ora][target][LIVELLO]` (vedi doc di `log_redazione`): le
+//! sezioni `=== PANIC ... ===` non hanno quel prefisso, quindi la redazione
+//! a freddo non riconoscerebbe mai un target su cui agire. Da questa PR in
+//! poi `panic_diagnostics` redige già il contenuto PRIMA di scriverlo su
+//! disco (difesa primaria), ma qui — per un file scritto da una versione
+//! precedente dell'app, prima di quella fix — si applica comunque, come
+//! difesa in profondità, la stessa redazione content-based
+//! (`log_redazione::redigi_valori_header`) all'INTERO contenuto invece della
+//! logica per-prefisso: il blocco di panic va trattato come sospetto senza
+//! bisogno di un target riconosciuto.
+//!
+//! **`pap-crash.log` in «Pulisci log» (fusione PR #588 × #589): esclusione
+//! deliberata, non un effetto collaterale.** `pulisci_log_in_dir` (Azione 9,
+//! PR #588) riusa lo stesso `raccogli_file_log` dell'export per individuare
+//! i «rotati» da eliminare — e `pap-crash.log` soddisfa quel filtro tanto
+//! quanto un rotato vero. Eliminarlo qui sarebbe stato tecnicamente
+//! semplice, ma è stato scartato apposta: il file esiste PROPRIO perché
+//! `panic_diagnostics` lo scrive apposta per essere diagnosticabile e
+//! «allegato a una segnalazione pubblica» (vedi doc di modulo di
+//! `panic_diagnostics`) — cancellarlo come side-effect silenzioso di un
+//! pulsante «Pulisci log» la cui conferma UI parla di «file rotati» e
+//! dichiara che `pap-crash.log` viene invece conservato (vedi
+//! `ImpostazioniModal.svelte::pulisciLog`) tradirebbe proprio lo scopo per
+//! cui esiste, subito dopo il crash che l'utente vorrebbe segnalare. Il
+//! rischio residuo di segreti in chiaro su un `pap-crash.log` scritto da
+//! una versione dell'app precedente a questa PR resta comunque coperto in
+//! profondità dalla redazione content-based nell'export ZIP descritta
+//! sopra — «Pulisci log» non è l'unica via di rimedio per quel file.
 
 use std::fs::{self, File};
 use std::io::{BufWriter, Read, Write};
@@ -96,6 +131,7 @@ use zip::ZipWriter;
 
 use crate::errore::PapErrore;
 use crate::log_redazione;
+use crate::panic_diagnostics;
 
 /// Nome del file di log configurato in `lib.rs::run` (tauri-plugin-log
 /// TargetKind::LogDir { file_name: Some("pap".to_string()) }).
@@ -241,6 +277,26 @@ fn raccogli_file_log(dir: &Path) -> Vec<FileLog> {
         .collect();
     out.sort_by(|a, b| a.name.cmp(&b.name));
     out
+}
+
+/// Sceglie la redazione a freddo giusta per un file destinato all'export ZIP,
+/// in base al nome. Estratta a parte (H1, review post-merge PR #589) per
+/// poterla testare senza `AppHandle`, sullo stesso modello di
+/// `ultime_righe_parsate`/`nome_file_zip_suggerito` già estratte per lo
+/// stesso motivo altrove in questo modulo.
+///
+/// `pap-crash.log` (`panic_diagnostics::NOME_CRASH_LOG`) prende la strada
+/// content-based (`redigi_valori_header` sull'INTERO testo, vedi nota di
+/// sicurezza in testa al modulo): non ha il prefisso a 4 parentesi da cui la
+/// redazione per-prefisso ricava il target, quindi quella non lo toccherebbe
+/// mai. Tutti gli altri file (`pap.log`, `pap_<data>_<ora>.log`, …) restano sulla
+/// redazione stateful esistente, che dipende da quel prefisso.
+fn redigi_testo_per_export(nome_file: &str, testo: &str) -> String {
+    if nome_file == panic_diagnostics::NOME_CRASH_LOG {
+        log_redazione::redigi_valori_header(testo)
+    } else {
+        log_redazione::redigi_testo_log_storico(testo)
+    }
 }
 
 #[tauri::command]
@@ -413,6 +469,16 @@ pub struct EsitoPulizia {
 /// (propagato come `Err`): i fallimenti sui singoli rotati sono soft,
 /// finiscono in `EsitoPulizia::rotati_falliti` e non interrompono la
 /// pulizia degli altri file.
+///
+/// **`pap-crash.log` è escluso deliberatamente** (fusione PR #588 × #589,
+/// vedi nota di sicurezza in testa al modulo): soddisfa lo stesso filtro
+/// di `raccogli_file_log` usato per individuare i rotati, ma non è un
+/// rotato — è la diagnostica di crash che l'utente potrebbe voler allegare
+/// a una segnalazione subito dopo l'evento che l'ha generata. Cancellarlo
+/// qui sarebbe stato un effetto collaterale non dichiarato della fusione
+/// dei due rami, non una scelta intenzionale: la conferma UI di «Pulisci
+/// log» (`ImpostazioniModal.svelte::pulisciLog`) parla solo di file
+/// rotati, non del crash log.
 fn pulisci_log_in_dir(dir: &Path) -> std::io::Result<EsitoPulizia> {
     let path_corrente = dir.join(format!("{NOME_LOG}.log"));
 
@@ -427,6 +493,10 @@ fn pulisci_log_in_dir(dir: &Path) -> std::io::Result<EsitoPulizia> {
     for f in raccogli_file_log(dir) {
         if f.name == format!("{NOME_LOG}.log") {
             continue; // il corrente è gestito sopra, non va eliminato
+        }
+        if f.name == panic_diagnostics::NOME_CRASH_LOG {
+            // Escluso deliberatamente — vedi doc della funzione sopra.
+            continue;
         }
         let path_rotato = dir.join(&f.name);
         match fs::remove_file(&path_rotato) {
@@ -452,7 +522,8 @@ fn pulisci_log_in_dir(dir: &Path) -> std::io::Result<EsitoPulizia> {
 /// Truncate il file `pap.log` corrente **ed elimina anche i file
 /// rotati** (schema reale `pap_<YYYY-MM-DD>_<HH-MM-SS>.log`, v. doc di
 /// `NOME_LOG`). Best-effort sul file corrente: se non esiste è un no-op
-/// (non un errore) per quella parte.
+/// (non un errore) per quella parte. `pap-crash.log` NON viene toccato —
+/// esclusione deliberata, v. doc di `pulisci_log_in_dir`.
 ///
 /// **Azione 9 (review PR #588), fix di un HIGH preesistente (CWE-532):**
 /// prima di questa PR i rotati non venivano mai toccati da "Pulisci
@@ -632,7 +703,7 @@ pub fn debug_log_esporta_zip(app: tauri::AppHandle) -> Result<Option<String>, Pa
         // è comunque testo prodotto da `log`/`write!`, quindi UTF-8 valido
         // nella quasi totalità dei casi reali.
         let testo = String::from_utf8_lossy(&buf);
-        let testo_redatto = log_redazione::redigi_testo_log_storico(&testo);
+        let testo_redatto = redigi_testo_per_export(&f.name, &testo);
         zip.start_file(&f.name, opts)
             .map_err(|e| PapErrore::dominio("Creazione dell'archivio dei log non riuscita.", e))?;
         zip.write_all(testo_redatto.as_bytes())
@@ -829,6 +900,67 @@ mod test {
                 "pap_2026-01-01_00-00-00.log".to_string(),
             ]
         );
+    }
+
+    /// `pap-crash.log` (`panic_diagnostics::NOME_CRASH_LOG`) soddisfa il
+    /// filtro (`starts_with("pap")` + `.log`) — è proprio questo il punto di
+    /// partenza del rilievo H1: senza una gestione dedicata, il file di
+    /// crash finirebbe nello ZIP come qualunque altro `pap.log*`.
+    #[test]
+    fn raccogli_include_anche_pap_crash_log() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("pap.log"), b"line1\n").unwrap();
+        fs::write(dir.path().join(panic_diagnostics::NOME_CRASH_LOG), b"crash\n").unwrap();
+
+        let files = raccogli_file_log(dir.path());
+        let nomi: Vec<String> = files.iter().map(|f| f.name.clone()).collect();
+        assert!(nomi.contains(&panic_diagnostics::NOME_CRASH_LOG.to_string()));
+    }
+
+    // ─── H1 (review post-merge PR #589): redazione dedicata di pap-crash.log
+    // nell'export ZIP — la redazione a freddo per-prefisso non si applica
+    // mai a quel file (nessun prefisso `[data][ora][target][LIVELLO]`). ───
+
+    #[test]
+    fn redigi_testo_per_export_su_pap_crash_log_redige_per_contenuto() {
+        // Forma realistica di `panic_diagnostics::formatta_crash`: nessun
+        // prefisso a 4 parentesi, header sensibile su una riga propria.
+        let testo = "\n=== PANIC (unix 1785000000) ===\n\
+                      messaggio:\n\
+                      x-api-key: sk-ant-vecchia-in-chiaro\n\
+                      posizione: src/foo.rs:1:1\n\
+                      backtrace:\n\
+                      0: qualche_funzione\n\
+                      === fine panic ===\n";
+        let redatto = redigi_testo_per_export(panic_diagnostics::NOME_CRASH_LOG, testo);
+        assert!(!redatto.contains("sk-ant-vecchia-in-chiaro"), "{redatto}");
+        assert!(redatto.contains("x-api-key: ***"), "{redatto}");
+    }
+
+    /// Contro-prova: la redazione a freddo per-prefisso (usata per
+    /// `pap.log`/`pap.log.N`) NON avrebbe redatto lo stesso testo — prova
+    /// che la gestione dedicata di `pap-crash.log` non è ridondante.
+    #[test]
+    fn redazione_per_prefisso_da_sola_non_redige_il_blocco_di_panic() {
+        let testo = "\n=== PANIC (unix 1785000000) ===\n\
+                      messaggio:\n\
+                      x-api-key: sk-ant-vecchia-in-chiaro\n\
+                      === fine panic ===\n";
+        let non_redatto = log_redazione::redigi_testo_log_storico(testo);
+        assert!(
+            non_redatto.contains("sk-ant-vecchia-in-chiaro"),
+            "atteso: la redazione per-prefisso non tocca un blocco senza prefisso a 4 \
+             parentesi — se questo assert fallisce, la premessa di H1 è cambiata: {non_redatto}"
+        );
+    }
+
+    #[test]
+    fn redigi_testo_per_export_su_pap_log_usa_ancora_la_redazione_per_prefisso() {
+        // File normale, redazione stateful per target esistente — invariata.
+        let testo = "[2026-08-01][10:00:00][ureq::unit][DEBUG] x-api-key: sk-vecchia\r\n";
+        let redatto = redigi_testo_per_export("pap.log", testo);
+        assert!(!redatto.contains("sk-vecchia"), "{redatto}");
+        assert!(redatto.contains("x-api-key: ***"), "{redatto}");
     }
 
     #[test]
@@ -1390,6 +1522,49 @@ mod test {
         assert!(
             dir.path().join("pap.log").exists(),
             "il corrente deve restare (troncato, non eliminato)"
+        );
+    }
+
+    /// Fusione PR #588 × #589: `pap-crash.log` soddisfa lo stesso filtro di
+    /// `raccogli_file_log` usato per individuare i rotati, ma
+    /// `pulisci_log_in_dir` deve escluderlo esplicitamente — v. doc della
+    /// funzione. Senza l'esclusione questo test fallirebbe (il file
+    /// finirebbe in `rotati_rimossi` e sparirebbe dal disco).
+    #[test]
+    fn pulisci_log_in_dir_preserva_pap_crash_log() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("pap.log"), "corrente\n").unwrap();
+        fs::write(
+            dir.path().join(panic_diagnostics::NOME_CRASH_LOG),
+            "=== PANIC (unix 1785000000) ===\nmessaggio:\npanico di prova\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("pap_2026-01-01_00-00-00.log"),
+            "rotato reale",
+        )
+        .unwrap();
+
+        let esito = pulisci_log_in_dir(dir.path()).unwrap();
+
+        let nomi_rimossi: Vec<String> = esito
+            .rotati_rimossi
+            .iter()
+            .map(|f| f.name.clone())
+            .collect();
+        assert_eq!(
+            nomi_rimossi,
+            vec!["pap_2026-01-01_00-00-00.log".to_string()],
+            "solo il rotato vero deve finire in rotati_rimossi, non pap-crash.log"
+        );
+        assert!(esito.rotati_falliti.is_empty());
+        assert!(
+            dir.path().join(panic_diagnostics::NOME_CRASH_LOG).exists(),
+            "pap-crash.log deve sopravvivere a «Pulisci log» — esclusione deliberata"
+        );
+        assert!(
+            !dir.path().join("pap_2026-01-01_00-00-00.log").exists(),
+            "il rotato vero, invece, deve essere stato eliminato come sempre"
         );
     }
 

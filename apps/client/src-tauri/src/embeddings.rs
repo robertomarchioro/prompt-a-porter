@@ -313,9 +313,10 @@ fn verifica_modello_cache_su_disco(dir_modello: &Path) -> Result<(), PapErrore> 
     for (_, nome_locale, sha256_atteso) in FILES_HF {
         let path = dir_modello.join(nome_locale);
         let bytes = fs::read(&path).map_err(|e| {
-            PapErrore::Generico(format!(
-                "Impossibile leggere {nome_locale} per la verifica di integrità: {e}"
-            ))
+            PapErrore::dominio(
+                "Impossibile leggere il modello di embedding per la verifica di integrità.",
+                format!("{e} — file: {nome_locale}, percorso: {}", path.display()),
+            )
         })?;
         verifica_sha256(&bytes, sha256_atteso, nome_locale, &path.display().to_string())?;
     }
@@ -328,9 +329,10 @@ fn verifica_modello_cache_su_disco(dir_modello: &Path) -> Result<(), PapErrore> 
 /// errore l'hash dell'ARCHIVIO invece che quello del file estratto.
 fn verifica_lib_cache_su_disco(lib_path: &Path, sha256_atteso: &str) -> Result<(), PapErrore> {
     let lib_bytes = fs::read(lib_path).map_err(|e| {
-        PapErrore::Generico(format!(
-            "Impossibile leggere libonnxruntime per la verifica di integrità: {e}"
-        ))
+        PapErrore::dominio(
+            "Impossibile leggere libonnxruntime per la verifica di integrità.",
+            format!("{e} — percorso: {}", lib_path.display()),
+        )
     })?;
     verifica_sha256(&lib_bytes, sha256_atteso, "libonnxruntime", &lib_path.display().to_string())
 }
@@ -432,19 +434,30 @@ fn verifica_base_privata(runtime_dir: &Path, base: &Path) -> Result<(), PapError
     // dall'attaccante viene rilevato e rifiutato invece di essere seguito.
     let meta = fs::symlink_metadata(base)
         .map_err(|e| PapErrore::dominio("Impossibile ispezionare la directory privata di libonnxruntime.", e))?;
+    // Fix #575 (residuo): tutte le violazioni sotto costruivano
+    // `PapErrore::Generico` a mano — nessuna finiva mai nel log, a differenza
+    // di `errore_integrita()`/`PapErrore::dominio` (gli unici punti che
+    // chiamano `log::error!`). Corretto qui in seconda battuta (review
+    // post-merge PR #589, M1 — CWE-209): il messaggio verso l'utente NON
+    // deve contenere `base.display()`, che su una home directory reale
+    // rivela lo username di sistema (es. `/home/<utente>/...`) — la stessa
+    // classe di dato già eliminata dai messaggi utente dalla #512. Messaggio
+    // opaco verso l'utente, dettaglio con path/uid/permessi solo nel log
+    // (stesso pattern già usato dal ramo "piattaforma non supportata" di
+    // `ort_release_filename`).
     if meta.file_type().is_symlink() {
-        return Err(PapErrore::Generico(format!(
-            "Verifica integrità fallita per la directory privata {}: è un symlink, \
-             non una directory reale; operazione interrotta.",
-            base.display()
-        )));
+        return Err(PapErrore::dominio(
+            "Verifica integrità fallita per la directory privata di libonnxruntime: è un \
+             symlink, non una directory reale; operazione interrotta.",
+            format!("directory privata {}: è un symlink", base.display()),
+        ));
     }
     if !meta.is_dir() {
-        return Err(PapErrore::Generico(format!(
-            "Verifica integrità fallita per la directory privata {}: non è una \
-             directory; operazione interrotta.",
-            base.display()
-        )));
+        return Err(PapErrore::dominio(
+            "Verifica integrità fallita per la directory privata di libonnxruntime: non è \
+             una directory; operazione interrotta.",
+            format!("directory privata {}: non è una directory", base.display()),
+        ));
     }
 
     #[cfg(unix)]
@@ -453,21 +466,27 @@ fn verifica_base_privata(runtime_dir: &Path, base: &Path) -> Result<(), PapError
         use std::os::unix::fs::PermissionsExt;
         let uid_atteso = uid_corrente(runtime_dir)?;
         if meta.uid() != uid_atteso {
-            return Err(PapErrore::Generico(format!(
-                "Verifica integrità fallita per la directory privata {}: proprietario \
-                 inatteso (uid {}, atteso {}); operazione interrotta.",
-                base.display(),
-                meta.uid(),
-                uid_atteso
-            )));
+            return Err(PapErrore::dominio(
+                "Verifica integrità fallita per la directory privata di libonnxruntime: \
+                 proprietario inatteso; operazione interrotta.",
+                format!(
+                    "directory privata {}: proprietario inatteso (uid {}, atteso {})",
+                    base.display(),
+                    meta.uid(),
+                    uid_atteso
+                ),
+            ));
         }
         let mode = meta.permissions().mode() & 0o777;
         if mode != 0o700 {
-            return Err(PapErrore::Generico(format!(
-                "Verifica integrità fallita per la directory privata {}: permessi {mode:o} \
-                 inattesi (atteso 700); operazione interrotta.",
-                base.display()
-            )));
+            return Err(PapErrore::dominio(
+                "Verifica integrità fallita per la directory privata di libonnxruntime: \
+                 permessi inattesi; operazione interrotta.",
+                format!(
+                    "directory privata {}: permessi {mode:o} inattesi (atteso 700)",
+                    base.display()
+                ),
+            ));
         }
     }
     let _ = runtime_dir; // usato solo su unix (uid probe)
@@ -490,6 +509,127 @@ fn uid_corrente(runtime_dir: &Path) -> Result<u32, PapErrore> {
         .map_err(|e| PapErrore::dominio("Impossibile leggere i metadati del probe uid.", e))?
         .uid();
     Ok(uid)
+}
+
+// ─────────── Preflight dlopen (fix #586) ───────────
+
+/// Simbolo che ogni libreria onnxruntime valida deve esportare: il punto di
+/// ingresso della C API (`OrtGetApiBase`), lo stesso che `ort` risolve
+/// internamente dopo il suo `dlopen`.
+const SIMBOLO_ORT_API_BASE: &[u8] = b"OrtGetApiBase\0";
+
+/// Verifica esplicitamente, PRIMA che `ort::Session::builder()` tenti il suo
+/// `dlopen` interno, che la copia privata di libonnxruntime sia
+/// effettivamente caricabile e esponga `OrtGetApiBase`.
+///
+/// Perché: `ort` 2.0.0-rc.13 chiama `load_dynamic::init(&path).expect(...)`
+/// internamente — qualunque fallimento di `dlopen` (file non valido per la
+/// piattaforma, dipendenze di sistema mancanti, permessi, ecc.) diventa un
+/// **panic** dentro la crate, non un `Result` intercettabile. Con
+/// `panic = "abort"` (profilo release, vedi Cargo.toml) il processo termina
+/// con SIGABRT prima che qualunque log applicativo possa essere scritto
+/// (#586) — l'hook di panic globale (`panic_diagnostics`) mitiga la
+/// mancanza di traccia, ma intercettare l'errore QUI, prima del punto in
+/// cui `ort` panica, evita del tutto il crash quando la causa è rilevabile
+/// da un `dlopen` esplicito con `Result`.
+///
+/// ONESTÀ: questo preflight rende il fallimento del `dlopen`
+/// **diagnosticabile** con un errore di dominio loggato (percorso,
+/// dimensione file, errore di sistema) invece di un panic. NON garantisce
+/// che, se il preflight passa, anche il `dlopen` interno di `ort` subito
+/// dopo riuscirà: sono due chiamate distinte sullo stesso file — dovrebbero
+/// avere lo stesso esito salvo una race esterna (es. il file rimosso nella
+/// finestra fra le due chiamate), ma questa non è una garanzia formale del
+/// sistema operativo. Il ramo positivo (preflight riuscito, libreria reale
+/// onnxruntime) NON è coperto da test automatici su macOS/Windows — solo su
+/// Linux con `libc.so.6` come libreria di prova (vedi doc su
+/// `verifica_dlopen_generico`) — cioè proprio le piattaforme nominate dalla
+/// #586. Residuo noto, non colmabile in CI senza un artefatto ONNX Runtime
+/// reale per piattaforma.
+fn preflight_dlopen(lib_path: &Path) -> Result<(), PapErrore> {
+    verifica_dlopen_generico(lib_path, SIMBOLO_ORT_API_BASE, "onnxruntime")
+}
+
+/// Corpo generico del preflight `dlopen` + lookup simbolo, parametrizzato su
+/// percorso/simbolo/nome visibile: testabile con una libreria di sistema
+/// qualunque (es. `libc`) senza dover fabbricare un artefatto ONNX Runtime
+/// fittizio (i cui hash SHA-256 reali sono pinnati e non riproducibili in
+/// un test).
+///
+/// **Nota sui test**: usando `libc.so.6` come libreria di prova su Linux, il
+/// processo di test la tiene già residente/pinnata dal linker dinamico (il
+/// suo refcount interno al loader non torna mai a zero) — i test del ramo
+/// positivo NON esercitano quindi il caso reale in cui questa funzione è
+/// l'UNICO detentore del mapping (onnxruntime, non già caricata da altri).
+/// Il comportamento di `std::mem::forget` sotto (fix HIGH, review PR #589)
+/// resta corretto in entrambi i casi — non scarica mai la libreria — ma la
+/// sua necessità (evitare un ciclo dlopen→dlclose→dlopen reale) è verificata
+/// solo manualmente/a runtime su onnxruntime, non da questo test.
+fn verifica_dlopen_generico(
+    lib_path: &Path,
+    simbolo: &[u8],
+    nome_visibile: &str,
+) -> Result<(), PapErrore> {
+    let dimensione = fs::metadata(lib_path).map(|m| m.len()).unwrap_or(0);
+
+    // SAFETY: `Library::new`/`Symbol::get` sono unsafe perché caricare ed
+    // eseguire il codice di inizializzazione (costruttori globali C/C++) di
+    // una libreria nativa arbitraria non è verificabile dal type system.
+    // `lib_path`, nell'uso di produzione, è già stato verificato via
+    // SHA-256 dal chiamante (fix #458/#575) prima di questa chiamata: lo
+    // stesso livello di fiducia che avrebbe comunque il `dlopen` interno di
+    // `ort` subito dopo.
+    //
+    // SAFETY (fix HIGH, review post-merge PR #589): questa giustificazione
+    // copriva solo la provenienza dei byte, non la sicurezza del DOPPIO
+    // caricamento. `ort` 2.0.0-rc.13 tiene la propria `Library` viva in uno
+    // `static OnceLock` per tutta la vita del processo (mai scaricata). Se
+    // qui lasciassimo `libreria` uscire di scope normalmente, `Drop`
+    // chiamerebbe `dlclose` e il `dlopen` di `ort` subito dopo, sullo STESSO
+    // file, diventerebbe un ciclo completo dlopen→dlclose→dlopen invece di
+    // un singolo dlopen con refcount incrementato dal loader dinamico. Per
+    // una libreria nativa complessa come onnxruntime (threadpool interni,
+    // eventuale OpenMP/oneDNN, costruttori/distruttori statici, TLS) un
+    // ciclo di scarico e ricarico nello stesso processo non è garantito
+    // sicuro dal SO (classe di bug nota: "cannot allocate memory in static
+    // TLS block", thread pool non ripristinati dopo l'unload) — è
+    // esattamente il tipo di crash misterioso su `dlopen` (#586) che questo
+    // preflight vuole diagnosticare, non introdurne uno nuovo. `mem::forget`
+    // sotto, sul successo, lascia il mapping vivo: safe perché non libera
+    // memoria né esegue side-effect, si limita a non eseguire mai `Drop` su
+    // un handle di libreria che vogliamo restare caricato comunque.
+    unsafe {
+        let libreria = libloading::Library::new(lib_path).map_err(|e| {
+            PapErrore::dominio(
+                "Impossibile caricare la libreria nativa onnxruntime.",
+                format!(
+                    "preflight dlopen fallito — percorso: {}, dimensione: {dimensione} byte, \
+                     libreria: {nome_visibile}, errore di sistema: {e}",
+                    lib_path.display()
+                ),
+            )
+        })?;
+        let simbolo_risolto: Result<libloading::Symbol<'_, unsafe extern "C" fn()>, _> =
+            libreria.get(simbolo);
+        simbolo_risolto.map_err(|e| {
+            PapErrore::dominio(
+                "La libreria nativa onnxruntime non espone il punto di ingresso atteso.",
+                format!(
+                    "preflight: simbolo mancante — percorso: {}, dimensione: {dimensione} byte, \
+                     libreria: {nome_visibile}, errore di sistema: {e}",
+                    lib_path.display()
+                ),
+            )
+        })?;
+
+        // Fix HIGH (review post-merge PR #589): NON droppare `libreria` sul
+        // successo — vedi commento SAFETY sopra. Il `dlopen` successivo di
+        // `ort` sullo stesso file trova così la libreria già mappata e si
+        // limita a incrementare il refcount del loader dinamico, invece di
+        // un reload completo.
+        std::mem::forget(libreria);
+    }
+    Ok(())
 }
 
 // ─────────── Status command ───────────
@@ -605,7 +745,16 @@ fn scarica_file(
 ) -> Result<(), PapErrore> {
     let dest_tmp = dest.with_extension("download-partial");
     if let Some(parent) = dest_tmp.parent() {
-        fs::create_dir_all(parent)?;
+        // Fix #575 (residuo): `?` nudo su `io::Error` produce `PapErrore::Io`,
+        // che NON logga mai (a differenza di `PapErrore::dominio`). I
+        // fallimenti I/O di download/estrazione vanno loggati come tutto il
+        // resto di questo modulo.
+        fs::create_dir_all(parent).map_err(|e| {
+            PapErrore::dominio(
+                "Impossibile preparare la cartella del modello di embedding.",
+                format!("{e} — percorso: {}", parent.display()),
+            )
+        })?;
     }
 
     // Fix #569: rimuove un eventuale residuo — file regolare di un download
@@ -629,7 +778,12 @@ fn scarica_file(
         }
     };
 
-    fs::rename(&dest_tmp, dest)?;
+    fs::rename(&dest_tmp, dest).map_err(|e| {
+        PapErrore::dominio(
+            "Impossibile spostare il modello di embedding scaricato nella posizione finale.",
+            format!("{e} — da: {} a: {}", dest_tmp.display(), dest.display()),
+        )
+    })?;
     let _ = app.emit(
         "embeddings:download:progress",
         ProgressDownload {
@@ -678,7 +832,12 @@ fn scarica_e_verifica_in_tmp(
         if n == 0 {
             break;
         }
-        out.write_all(&buf[..n])?;
+        out.write_all(&buf[..n]).map_err(|e| {
+            PapErrore::dominio(
+                "Scrittura del modello di embedding sul disco non riuscita.",
+                format!("{e} — percorso: {}", dest_tmp.display()),
+            )
+        })?;
         hasher.update(&buf[..n]);
         acc += n as u64;
         if acc - last_emit_acc >= 256 * 1024 {
@@ -695,7 +854,12 @@ fn scarica_e_verifica_in_tmp(
             last_emit_acc = acc;
         }
     }
-    out.flush()?;
+    out.flush().map_err(|e| {
+        PapErrore::dominio(
+            "Scrittura del modello di embedding sul disco non riuscita.",
+            format!("{e} — percorso: {}", dest_tmp.display()),
+        )
+    })?;
     drop(out);
 
     // Fix #458: verifica integrità PRIMA di spostare il file nella
@@ -786,9 +950,10 @@ fn ort_release_filename() -> Result<(String, String, &'static str, &'static str)
             "b4b7f9aed3cf6b04000f595bddcbdf12e87214bc401d1b81beadae3dbf28d2bd",
         ),
         (os, arch) => {
-            return Err(PapErrore::Generico(format!(
-                "Piattaforma non supportata per onnxruntime: {os}/{arch}"
-            )))
+            return Err(PapErrore::dominio(
+                "Piattaforma non supportata per la ricerca semantica.",
+                format!("onnxruntime non disponibile per la piattaforma: {os}/{arch}"),
+            ))
         }
     };
     Ok((suffix, sub, sha256_archivio, sha256_lib_estratta))
@@ -813,10 +978,18 @@ fn estrai_libonnxruntime(
     path_in_archive: &str,
     dest: &Path,
 ) -> Result<(), PapErrore> {
-    fs::create_dir_all(
-        dest.parent()
-            .ok_or_else(|| PapErrore::Generico("dest senza parent".into()))?,
-    )?;
+    let dest_parent = dest.parent().ok_or_else(|| {
+        PapErrore::dominio(
+            "Percorso di estrazione del modello di embedding non valido.",
+            format!("dest senza parent: {}", dest.display()),
+        )
+    })?;
+    fs::create_dir_all(dest_parent).map_err(|e| {
+        PapErrore::dominio(
+            "Impossibile preparare la cartella di estrazione di libonnxruntime.",
+            format!("{e} — percorso: {}", dest_parent.display()),
+        )
+    })?;
 
     let dest_tmp = dest.with_extension("extract-partial");
     // Fix #569: rimuove un eventuale residuo — file regolare O symlink
@@ -833,7 +1006,12 @@ fn estrai_libonnxruntime(
         let _ = fs::remove_file(&dest_tmp);
         return risultato;
     }
-    fs::rename(&dest_tmp, dest)?;
+    fs::rename(&dest_tmp, dest).map_err(|e| {
+        PapErrore::dominio(
+            "Impossibile spostare libonnxruntime estratta nella posizione finale.",
+            format!("{e} — da: {} a: {}", dest_tmp.display(), dest.display()),
+        )
+    })?;
     Ok(())
 }
 
@@ -848,7 +1026,12 @@ fn estrai_da_zip(archive_bytes: &[u8], path_in_archive: &str, dest: &Path) -> Re
     // `File::create` per non seguire un eventuale symlink pre-piazzato. Il
     // residuo è già stato ripulito dal chiamante (`estrai_libonnxruntime`).
     let mut out = apri_tmp_symlink_safe(dest)?;
-    std::io::copy(&mut entry, &mut out)?;
+    std::io::copy(&mut entry, &mut out).map_err(|e| {
+        PapErrore::dominio(
+            "Estrazione del modello di embedding non riuscita.",
+            format!("{e} — voce archivio: {path_in_archive}, destinazione: {}", dest.display()),
+        )
+    })?;
     Ok(())
 }
 
@@ -955,10 +1138,10 @@ fn risolvi_symlink_in_archivio(
                     .link_name()
                     .map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?
                     .ok_or_else(|| {
-                        PapErrore::Generico(format!(
-                            "tar: entry symlink {} senza link target",
-                            corrente.display()
-                        ))
+                        PapErrore::dominio(
+                            "Estrazione del modello di embedding non riuscita.",
+                            format!("tar: entry symlink {} senza link target", corrente.display()),
+                        )
                     })?
                     .into_owned();
                 let dir_symlink = corrente.parent().unwrap_or_else(|| Path::new(""));
@@ -973,10 +1156,10 @@ fn risolvi_symlink_in_archivio(
                     .link_name()
                     .map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?
                     .ok_or_else(|| {
-                        PapErrore::Generico(format!(
-                            "tar: entry hard link {} senza link target",
-                            corrente.display()
-                        ))
+                        PapErrore::dominio(
+                            "Estrazione del modello di embedding non riuscita.",
+                            format!("tar: entry hard link {} senza link target", corrente.display()),
+                        )
                     })?
                     .into_owned();
                 esito_entry = Some(Some(normalizza_path_archivio(&link_name)));
@@ -987,19 +1170,22 @@ fn risolvi_symlink_in_archivio(
         }
         match esito_entry {
             None => {
-                return Err(PapErrore::Generico(format!(
-                    "tar: file {} non trovato nell'archivio",
-                    corrente.display()
-                )))
+                return Err(PapErrore::dominio(
+                    "Contenuto del modello di embedding mancante o corrotto nell'archivio.",
+                    format!("tar: file {} non trovato nell'archivio", corrente.display()),
+                ))
             }
             Some(None) => return Ok(corrente),
             Some(Some(target)) => corrente = target,
         }
     }
-    Err(PapErrore::Generico(format!(
-        "tar: catena di symlink troppo lunga (>{MAX_HOP_SYMLINK}) risolvendo {}",
-        path_normalizzato.display()
-    )))
+    Err(PapErrore::dominio(
+        "Estrazione del modello di embedding non riuscita.",
+        format!(
+            "tar: catena di symlink troppo lunga (>{MAX_HOP_SYMLINK}) risolvendo {}",
+            path_normalizzato.display()
+        ),
+    ))
 }
 
 fn estrai_da_tar_gz(archive_bytes: &[u8], path_in_archive: &str, dest: &Path) -> Result<(), PapErrore> {
@@ -1022,16 +1208,25 @@ fn estrai_da_tar_gz(archive_bytes: &[u8], path_in_archive: &str, dest: &Path) ->
             // Fix #569: `create_new` invece di `File::create`, come in
             // `estrai_da_zip`. Il residuo è già ripulito dal chiamante.
             let mut out = apri_tmp_symlink_safe(dest)?;
-            std::io::copy(&mut entry, &mut out)?;
+            std::io::copy(&mut entry, &mut out).map_err(|e| {
+                PapErrore::dominio(
+                    "Estrazione del modello di embedding non riuscita.",
+                    format!(
+                        "{e} — voce archivio: {}, destinazione: {}",
+                        target_risolto.display(),
+                        dest.display()
+                    ),
+                )
+            })?;
             found = true;
             break;
         }
     }
     if !found {
-        return Err(PapErrore::Generico(format!(
-            "tar: file {} non trovato nell'archivio",
-            target_risolto.display()
-        )));
+        return Err(PapErrore::dominio(
+            "Contenuto del modello di embedding mancante o corrotto nell'archivio.",
+            format!("tar: file {} non trovato nell'archivio", target_risolto.display()),
+        ));
     }
     Ok(())
 }
@@ -1045,7 +1240,12 @@ pub fn embeddings_download(
     rt_state: State<'_, EmbeddingsState>,
 ) -> Result<EmbeddingsStato, PapErrore> {
     let dir_modello = percorso_modello(&state);
-    fs::create_dir_all(&dir_modello)?;
+    fs::create_dir_all(&dir_modello).map_err(|e| {
+        PapErrore::dominio(
+            "Impossibile preparare la cartella del modello di embedding.",
+            format!("{e} — percorso: {}", dir_modello.display()),
+        )
+    })?;
 
     // Conteggio totale: 2 file modello + 1 tarball onnxruntime se mancante.
     let lib_path = percorso_libonnxruntime(&state);
@@ -1170,6 +1370,12 @@ pub fn init_session_pure(
 
     let model_path = dir_modello.join("model.onnx");
     let tokenizer_path = dir_modello.join("tokenizer.json");
+
+    // Fix #586: preflight esplicito del `dlopen` — vedi doc su
+    // `preflight_dlopen`. Un fallimento qui torna un `PapErrore` loggato
+    // invece di far panicare `ort` internamente (SIGABRT silenzioso su
+    // `panic = "abort"`).
+    preflight_dlopen(&lib_privata_path)?;
 
     let session = Session::builder()
         .map_err(|e| PapErrore::dominio("Inizializzazione del modello di embedding non riuscita.", e))?
@@ -1830,6 +2036,86 @@ mod test {
         assert!(msg.contains("integrità"), "Deve menzionare l'integrità: {msg}");
     }
 
+    // ─── Preflight dlopen (fix #586) ───
+
+    /// Ramo negativo: un file che esiste ma non è una libreria dinamica
+    /// valida (bytes casuali, non ELF/PE/Mach-O) deve far fallire il
+    /// preflight con un errore — non un panic — e la riga con percorso,
+    /// dimensione e errore di sistema deve finire DAVVERO nel log.
+    ///
+    /// Nota anti-trappola: un test che verificasse solo
+    /// `matches!(err, PapErrore::Generico(_))` non distinguerebbe questo
+    /// caso da un `Generico` costruito a mano senza log (`PapErrore::dominio`
+    /// ritorna anch'esso `Generico`) — `testing_logger` prova che la riga sia
+    /// arrivata al logger.
+    #[test]
+    fn preflight_dlopen_fallisce_su_libreria_non_valida_e_logga() {
+        testing_logger::setup();
+
+        let tmp = tempfile::tempdir().unwrap();
+        let lib_fasulla = tmp.path().join("non-e-una-libreria.so");
+        fs::write(&lib_fasulla, b"questo non e' un file ELF/PE valido").unwrap();
+
+        let r = preflight_dlopen(&lib_fasulla);
+        assert!(r.is_err(), "una libreria non valida deve far fallire il preflight");
+
+        // Messaggio verso l'utente opaco (CWE-209): niente path/dlopen grezzo.
+        let msg = r.unwrap_err().to_string();
+        assert!(
+            msg.contains("libreria nativa onnxruntime"),
+            "messaggio utente inatteso: {msg}"
+        );
+
+        testing_logger::validate(|righe| {
+            let trovata = righe.iter().any(|riga| {
+                riga.level == log::Level::Error
+                    && riga.body.contains("preflight dlopen fallito")
+                    && riga.body.contains("non-e-una-libreria.so")
+            });
+            let corpi: Vec<&str> = righe.iter().map(|r| r.body.as_str()).collect();
+            assert!(
+                trovata,
+                "il dettaglio (percorso, dimensione, errore di sistema) deve finire nel log: {corpi:?}"
+            );
+        });
+    }
+
+    /// Caso positivo (la trappola che questo progetto ha già preso una volta:
+    /// un test solo sul ramo negativo non vede il caso buono che si rompe):
+    /// contro una libreria dinamica REALMENTE caricabile e con un simbolo
+    /// REALMENTE presente, il preflight deve avere successo. Usa `libc` di
+    /// sistema (presente su ogni runner Linux della CI, vedi
+    /// `docs/contribuire/ci-workflows.md`) con un simbolo universale
+    /// (`malloc`) invece di fabbricare un artefatto onnxruntime fittizio (i
+    /// cui hash SHA-256 reali sono pinnati e non riproducibili in un test).
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn preflight_dlopen_passa_su_libreria_valida_con_simbolo_presente() {
+        let r = verifica_dlopen_libc_test();
+        assert!(r.is_ok(), "libc + simbolo 'malloc' deve superare il preflight: {r:?}");
+    }
+
+    /// Estratta per chiarezza: chiama `verifica_dlopen_generico` con una
+    /// libreria di sistema nota invece del percorso onnxruntime reale.
+    #[cfg(target_os = "linux")]
+    fn verifica_dlopen_libc_test() -> Result<(), PapErrore> {
+        verifica_dlopen_generico(Path::new("libc.so.6"), b"malloc\0", "libc (test)")
+    }
+
+    /// Simmetrico al caso positivo: stessa libreria valida, ma un simbolo
+    /// che non esiste — il preflight deve comunque fallire (non solo il
+    /// caso "file non è affatto una libreria").
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn preflight_dlopen_fallisce_su_simbolo_assente_in_libreria_valida() {
+        let r = verifica_dlopen_generico(
+            Path::new("libc.so.6"),
+            b"questo_simbolo_non_esiste_di_certo\0",
+            "libc (test)",
+        );
+        assert!(r.is_err(), "un simbolo assente deve far fallire il preflight");
+    }
+
     #[test]
     fn sha256_atteso_ort_hash_reale_non_placeholder() {
         // Sentinel anti-regressione: entrambi gli hash pinnati per la
@@ -1970,6 +2256,64 @@ mod test {
         assert!(r.unwrap_err().to_string().contains("integrità"));
     }
 
+    // ─── M1 (review post-merge PR #589, CWE-209): il messaggio utente non
+    // deve contenere il path della directory privata (rivelerebbe lo
+    // username di sistema su una home directory reale, es.
+    // `/home/<utente>/...`) — stesso principio già applicato dalla #512.
+    // Copre i 4 rami di `verifica_base_privata` toccati dalla review. ───
+
+    #[cfg(unix)]
+    #[test]
+    fn base_privata_hardened_messaggio_utente_simlink_non_contiene_il_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let runtime_dir = dir.path().join("rt");
+        std::fs::create_dir_all(&runtime_dir).unwrap();
+        let bersaglio = dir.path().join("altrove");
+        std::fs::create_dir_all(&bersaglio).unwrap();
+        std::os::unix::fs::symlink(&bersaglio, runtime_dir.join(NOME_BASE_PRIVATA)).unwrap();
+
+        let msg = base_privata_hardened(&runtime_dir).unwrap_err().to_string();
+        assert!(
+            !msg.contains(dir.path().to_str().unwrap()),
+            "il messaggio utente non deve contenere il path locale: {msg}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn base_privata_hardened_messaggio_utente_permessi_larghi_non_contiene_il_path() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let runtime_dir = dir.path().join("rt");
+        let base = runtime_dir.join(NOME_BASE_PRIVATA);
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o777)).unwrap();
+
+        let msg = base_privata_hardened(&runtime_dir).unwrap_err().to_string();
+        assert!(
+            !msg.contains(dir.path().to_str().unwrap()),
+            "il messaggio utente non deve contenere il path locale: {msg}"
+        );
+        // Il permesso numerico grezzo (0o777) resta un dettaglio tecnico:
+        // niente nel messaggio utente oltre a "permessi inattesi".
+        assert!(!msg.contains("777"), "msg: {msg}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn base_privata_hardened_messaggio_utente_file_al_posto_della_dir_non_contiene_il_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let runtime_dir = dir.path().join("rt");
+        std::fs::create_dir_all(&runtime_dir).unwrap();
+        std::fs::write(runtime_dir.join(NOME_BASE_PRIVATA), b"non-una-dir").unwrap();
+
+        let msg = base_privata_hardened(&runtime_dir).unwrap_err().to_string();
+        assert!(
+            !msg.contains(dir.path().to_str().unwrap()),
+            "il messaggio utente non deve contenere il path locale: {msg}"
+        );
+    }
+
     // ─────────── #556: estrazione tar.gz — prefisso `./` + entry symlink ───────────
     //
     // Diagnosi verificata empiricamente scaricando ed aprendo
@@ -2052,7 +2396,47 @@ mod test {
 
         let r = estrai_da_tar_gz(&archive, "percorso/inesistente", &dest);
         assert!(r.is_err());
-        assert!(r.unwrap_err().to_string().contains("non trovato"));
+        // Fix #575 (residuo): il messaggio verso l'utente è ora opaco (via
+        // `PapErrore::dominio`, coerente col resto del modulo) — il dettaglio
+        // grezzo "tar: file ... non trovato" finisce SOLO nel log, non più
+        // nel messaggio esposto (vedi `dominio_logga_dettaglio_file_assente`
+        // per la verifica del log).
+        assert!(r
+            .unwrap_err()
+            .to_string()
+            .contains("mancante o corrotto nell'archivio"));
+    }
+
+    /// Fix #575 (residuo): il ramo "file non trovato nell'archivio" di
+    /// `estrai_da_tar_gz` costruiva `PapErrore::Generico` a mano — nessuna
+    /// riga finiva mai nel log. Verifica che ora passi da `PapErrore::dominio`
+    /// (l'unico punto che chiama `log::error!`) controllando che la riga
+    /// coi dettagli grezzi arrivi davvero al logger, non solo che l'errore
+    /// sia `Generico(_)` (quel match da solo non distingue un errore
+    /// loggato da uno costruito a mano: `dominio()` produce anch'esso
+    /// `Generico`).
+    #[test]
+    fn dominio_logga_dettaglio_file_assente_in_tar() {
+        testing_logger::setup();
+        let archive = tar_gz_sintetico_con_prefisso_e_symlink(b"x");
+        let dest_dir = tempfile::tempdir().unwrap();
+        let dest = dest_dir.path().join("out");
+
+        let r = estrai_da_tar_gz(&archive, "percorso/davvero/inesistente", &dest);
+        assert!(r.is_err());
+
+        testing_logger::validate(|righe| {
+            let trovata = righe.iter().any(|riga| {
+                riga.level == log::Level::Error
+                    && riga.body.contains("percorso/davvero/inesistente")
+                    && riga.body.contains("non trovato")
+            });
+            let corpi: Vec<&str> = righe.iter().map(|r| r.body.as_str()).collect();
+            assert!(
+                trovata,
+                "il dettaglio grezzo deve finire nel log, righe: {corpi:?}"
+            );
+        });
     }
 
     #[test]

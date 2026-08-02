@@ -42,6 +42,15 @@
     rank_sem: number | null;
   }
 
+  /// Fix #582: prompt_cerca_ibrida ora risponde con un involucro
+  /// { risultati, modello_disponibile } invece del solo array — vedi
+  /// src-tauri/src/ricerca_ibrida.rs (RispostaRicercaIbrida) e, per il
+  /// trattamento UI completo del segnale, CommandPalette.svelte.
+  interface RispostaRicercaIbrida {
+    risultati: RisultatoIbrido[];
+    modello_disponibile: boolean;
+  }
+
   interface PreferenzeRicerca {
     ricerca_semantica_abilitata: boolean;
     ricerca_alpha: number;
@@ -114,12 +123,15 @@
   async function cerca(q: string): Promise<void> {
     try {
       if (prefRicercaSemantica && q.trim().length > 0) {
-        const ibridi = await invoke<RisultatoIbrido[]>("prompt_cerca_ibrida", {
-          query: q,
-          limit: 20,
-          alpha: alphaUtente,
-        });
-        risultati = ibridi;
+        const risposta = await invoke<RispostaRicercaIbrida>(
+          "prompt_cerca_ibrida",
+          {
+            query: q,
+            limit: 20,
+            alpha: alphaUtente,
+          },
+        );
+        risultati = risposta.risultati;
         usaIbrida = true;
       } else {
         risultati = await invoke<PromptRisultato[]>("prompt_cerca", {

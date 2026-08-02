@@ -22,9 +22,7 @@ use rusqlite::Connection;
 use serde::Serialize;
 use tauri::State;
 
-use crate::embeddings::{
-    assicura_session_caricata, compute_embedding_opt, EmbeddingsState,
-};
+use crate::embeddings::{assicura_session_caricata, compute_embedding_opt, EmbeddingsState};
 use crate::embeddings_store::search_nearest;
 use crate::errore::PapErrore;
 use crate::vault::VaultState;
@@ -52,6 +50,26 @@ pub struct RisultatoIbrido {
     pub rank_lex: Option<usize>,
     /// Posizione 1-based nella ranking semantica, `None` se non presente.
     pub rank_sem: Option<usize>,
+}
+
+/// Fix #582: risposta di `prompt_cerca_ibrida` con un segnale esplicito sulla
+/// disponibilità del modello di embedding, distinto da "nessun risultato".
+///
+/// Prima di questo fix, `cerca_semantica` scartava QUALUNQUE errore di
+/// `assicura_session_caricata` con `let _ = ...` e degradava silenziosamente
+/// a FTS5-only: dal punto di vista dell'utente, "il modello non è caricato"
+/// e "nessuna corrispondenza trovata" producevano la stessa UI (zero
+/// risultati semantici), senza modo di distinguerli senza aprire
+/// Impostazioni.
+#[derive(Debug, Serialize, Clone)]
+pub struct RispostaRicercaIbrida {
+    pub risultati: Vec<RisultatoIbrido>,
+    /// `false` quando la ricerca è stata degradata a FTS5-only perché il
+    /// modello di embedding non è (ancora) caricato — non scaricato,
+    /// inizializzazione fallita, o droppato per idle-unload e non
+    /// ricaricabile. Il frontend usa questo campo per mostrare un messaggio
+    /// distinto da "nessun risultato" (vedi CommandPalette.svelte).
+    pub modello_disponibile: bool,
 }
 
 fn sanitizza_fts(query: &str) -> String {
@@ -102,29 +120,64 @@ pub fn cerca_lessicale(
     Ok(ids)
 }
 
+/// Traduce l'esito di `assicura_session_caricata` in un segnale booleano
+/// esplicito per il chiamante, loggando (invece di scartare, fix #582)
+/// l'eventuale errore.
+///
+/// Estratta come funzione pura, indipendente da `EmbeddingsState`/
+/// `VaultState`, per poter testare sia il ramo positivo sia quello negativo
+/// senza dover forzare un vero caricamento `ort` (che richiederebbe un
+/// modello + libonnxruntime reali su disco — non riproducibile in un test
+/// unitario). Copre esattamente il punto in cui, prima del fix, l'errore
+/// veniva scartato con `let _ = ...`.
+fn valuta_disponibilita_modello(esito: Result<bool, PapErrore>) -> bool {
+    match esito {
+        Ok(_) => true,
+        Err(e) => {
+            log::warn!("Ricerca semantica degradata a FTS5-only: {e}");
+            false
+        }
+    }
+}
+
 /// Top-K prompt id più vicini all'embedding query in vec0, ordinati per
 /// distance ASC. Vec vuoto se Session non disponibile o se vec0 non ha
 /// embeddings.
 ///
 /// v0.6.0 Step 2: prima del compute embedding, tenta un riload on-demand
 /// della Session se è stata droppata dal timer idle-unload. Se il riload
-/// fallisce (es. modello non scaricato), degrada a Ok(vec![]) — la
-/// ricerca lessicale resta funzionante via FTS5.
+/// fallisce (es. modello non scaricato), degrada a `(vec![], false)` — la
+/// ricerca lessicale resta funzionante via FTS5, ma il chiamante riceve un
+/// segnale esplicito (fix #582) invece di un semplice "zero risultati".
+///
+/// Ritorna `(id_prompt_semantici, modello_disponibile)`.
 fn cerca_semantica(
     conn: &Connection,
     vault_state: &crate::vault::VaultState,
     rt_state: &EmbeddingsState,
     query: &str,
     k: usize,
-) -> Result<Vec<String>, PapErrore> {
-    // Riload on-demand. Errori (modello assente) → degrade silenzioso.
-    let _ = assicura_session_caricata(rt_state, vault_state);
+) -> Result<(Vec<String>, bool), PapErrore> {
+    // Fix #582: l'errore di riload NON viene più scartato con `let _ = ...`.
+    // Prima di questo fix era impossibile, dal solo comportamento
+    // dell'utente (zero risultati semantici) o dal log, capire se la causa
+    // era "nessuna corrispondenza" o "il modello non è caricato" — la ricerca
+    // ibrida degradava a FTS5-only senza lasciare traccia.
+    let modello_disponibile =
+        valuta_disponibilita_modello(assicura_session_caricata(rt_state, vault_state));
+
+    if !modello_disponibile {
+        return Ok((vec![], false));
+    }
 
     let Some(query_emb) = compute_embedding_opt(rt_state, query)? else {
-        return Ok(vec![]);
+        // Non dovrebbe accadere (la Session è appena stata assicurata
+        // caricata sopra), ma se succede trattiamolo comunque come "modello
+        // non disponibile" per coerenza col segnale esposto al chiamante.
+        return Ok((vec![], false));
     };
     let nearest = search_nearest(conn, &query_emb, k)?;
-    Ok(nearest.into_iter().map(|(id, _dist)| id).collect())
+    Ok((nearest.into_iter().map(|(id, _dist)| id).collect(), true))
 }
 
 /// Reciprocal Rank Fusion pesata.
@@ -210,18 +263,33 @@ pub fn prompt_cerca_ibrida(
     alpha: Option<f64>,
     state: State<'_, VaultState>,
     rt_state: State<'_, EmbeddingsState>,
-) -> Result<Vec<RisultatoIbrido>, PapErrore> {
+) -> Result<RispostaRicercaIbrida, PapErrore> {
     let limit = limit.unwrap_or(20).min(100) as usize;
     let alpha = alpha.unwrap_or(0.5).clamp(0.0, 1.0);
 
     state.with_conn(|conn| {
         let q = query.trim();
         if q.is_empty() {
-            return Ok(vec![]);
+            // Coerente col ramo query non vuota sotto (`cerca_semantica`,
+            // review post-merge PR #589 — minore): usa `assicura_session_caricata`
+            // (tenta il riload on-demand se la Session è stata droppata
+            // dal timer idle-unload) invece della sola lettura passiva
+            // `session_caricata`. Senza questo, un modello idle-unloaded ma
+            // ricaricabile risulterebbe `modello_disponibile: false` solo
+            // perché la query era vuota — incoerente col comportamento a
+            // query non vuota.
+            return Ok(RispostaRicercaIbrida {
+                risultati: vec![],
+                modello_disponibile: valuta_disponibilita_modello(assicura_session_caricata(
+                    &rt_state,
+                    state.inner(),
+                )),
+            });
         }
 
         let lex_ids = cerca_lessicale(conn, q, POOL_SIZE)?;
-        let sem_ids = cerca_semantica(conn, state.inner(), &rt_state, q, POOL_SIZE)?;
+        let (sem_ids, modello_disponibile) =
+            cerca_semantica(conn, state.inner(), &rt_state, q, POOL_SIZE)?;
 
         let fused = rrf_fuse(&lex_ids, &sem_ids, alpha, K_RRF);
 
@@ -244,7 +312,10 @@ pub fn prompt_cerca_ibrida(
                 });
             }
         }
-        Ok(risultati)
+        Ok(RispostaRicercaIbrida {
+            risultati,
+            modello_disponibile,
+        })
     })
 }
 
@@ -354,23 +425,83 @@ mod test {
     }
 
     #[test]
-    fn cerca_semantica_senza_session_loaded_ritorna_vuoto() {
+    fn cerca_semantica_senza_session_loaded_ritorna_vuoto_e_segnala_modello_non_disponibile() {
         // Quality gate Step 10 — grace degradation: se l'utente non ha
         // ancora abilitato/scaricato il modello, ricerca_ibrida deve
         // tornare risultati FTS-only senza errori.
-        // v0.6.0 Step 2: assicura_session_caricata interno a
-        // cerca_semantica fallisce silenziosamente se modello mancante,
-        // poi compute_embedding_opt ritorna None → vec vuoto.
+        // Fix #582: l'errore di assicura_session_caricata NON viene più
+        // scartato in silenzio — il chiamante riceve `modello_disponibile:
+        // false` invece che una semplice lista vuota indistinguibile da
+        // "nessuna corrispondenza".
         let conn = db_test();
         let dir = tempfile::tempdir().unwrap();
         let vault_state = crate::vault::VaultState::new(dir.path().to_path_buf());
         let rt_state = EmbeddingsState::new(); // session = None
 
-        let ids = cerca_semantica(&conn, &vault_state, &rt_state, "qualunque query", 10)
-            .unwrap();
+        let (ids, modello_disponibile) =
+            cerca_semantica(&conn, &vault_state, &rt_state, "qualunque query", 10).unwrap();
         assert!(
             ids.is_empty(),
             "senza Session, cerca_semantica ritorna vec vuoto, no errore"
         );
+        assert!(
+            !modello_disponibile,
+            "il chiamante deve poter distinguere 'modello non caricato' da 'nessun risultato'"
+        );
+    }
+
+    // ─── valuta_disponibilita_modello: ramo positivo + negativo (fix #582) ───
+    //
+    // `cerca_semantica` end-to-end non è testabile sul ramo POSITIVO senza un
+    // vero caricamento `ort` (modello + libonnxruntime reali su disco): per
+    // questo `valuta_disponibilita_modello` è estratta come funzione pura,
+    // testabile con un `Result<bool, PapErrore>` sintetico sia sul ramo Ok
+    // sia su quello Err — esattamente il punto che prima del fix scartava
+    // l'errore con `let _ = ...`.
+    //
+    // Trappola nota del progetto: un test che verificasse solo il valore di
+    // ritorno (`true`/`false`) non proverebbe che l'errore viene DAVVERO
+    // loggato (a differenza di essere scartato in silenzio) — da qui
+    // `testing_logger`.
+
+    #[test]
+    fn valuta_disponibilita_modello_ramo_positivo_true_e_nessun_warning() {
+        testing_logger::setup();
+
+        let disponibile = valuta_disponibilita_modello(Ok(true));
+        assert!(disponibile, "Ok(_) deve tradursi in modello_disponibile = true");
+
+        testing_logger::validate(|righe| {
+            let warning_degradazione = righe
+                .iter()
+                .any(|r| r.level == log::Level::Warn && r.body.contains("degradata"));
+            assert!(
+                !warning_degradazione,
+                "il ramo positivo non deve loggare una degradazione che non c'è stata"
+            );
+        });
+    }
+
+    #[test]
+    fn valuta_disponibilita_modello_ramo_negativo_false_loggato_non_scartato() {
+        testing_logger::setup();
+
+        let esito: Result<bool, PapErrore> =
+            Err(PapErrore::Generico("modello non scaricato (test)".into()));
+        let disponibile = valuta_disponibilita_modello(esito);
+        assert!(!disponibile, "Err(_) deve tradursi in modello_disponibile = false");
+
+        testing_logger::validate(|righe| {
+            let trovata = righe.iter().any(|r| {
+                r.level == log::Level::Warn
+                    && r.body.contains("degradata")
+                    && r.body.contains("modello non scaricato (test)")
+            });
+            let corpi: Vec<&str> = righe.iter().map(|r| r.body.as_str()).collect();
+            assert!(
+                trovata,
+                "l'errore deve finire nel log invece di essere scartato in silenzio: {corpi:?}"
+            );
+        });
     }
 }

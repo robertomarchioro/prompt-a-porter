@@ -67,7 +67,12 @@ regex = "1"
 # vedi ADR architettura/decisioni/onnx-bundle.md). ndarray richiesto per
 # costruire i tensor di input. tokenizer verrà aggiunto nella PR 3/3
 # di Step 1 (compute reale).
-ort = { version = "2.0.0-rc.12", default-features = false, features = ["load-dynamic", "api-23", "ndarray"] }
+# Fix (allineamento): il Cargo.lock risolveva già rc.13 (vincolo `^2.0.0-rc.12`
+# con nessuna `rc.12` più disponibile su crates.io) — la dichiarazione qui era
+# rimasta indietro. Non cambia la versione effettivamente compilata, solo la
+# dichiarazione, per non far credere a chi legge il file che sia ancora
+# rc.12.
+ort = { version = "2.0.0-rc.13", default-features = false, features = ["load-dynamic", "api-23", "ndarray"] }
 ndarray = "0.17"
 # HTTP client per scaricare il modello ONNX da HuggingFace al primo uso.
 # Feature tls-rustls (no openssl, build più portabile in CI).
@@ -96,6 +101,15 @@ sha2 = "0.11"
 # a dependency perché ora usata anche a runtime da `init_session_pure`
 # (vedi `stage_lib_verificata` in embeddings.rs).
 tempfile = "3"
+# Fix #586: preflight esplicito del `dlopen` di libonnxruntime PRIMA di
+# `ort::Session::builder()`. `ort` 2.0.0-rc.13 chiama al suo interno
+# `load_dynamic::init(&path).expect(...)`: qualunque fallimento di `dlopen`
+# diventa un panic dentro la crate (SIGABRT con `panic = "abort"`), non un
+# `Result` intercettabile. Già presente come dipendenza transitiva di `ort`
+# (vedi Cargo.lock, versione 0.9.0 risolta lì): qui diventa dipendenza
+# diretta, versione allineata, per farne la stessa chiamata di sistema in un
+# punto che PUÒ restituire un errore loggato invece di un panic.
+libloading = "0.9"
 # Fix #554/#555/#557: apre link esterni (guida online, sito, repository,
 # note di rilascio) nel browser di sistema. Senza un plugin opener
 # registrato una webview Tauri non naviga fuori dall'app: i vecchi
@@ -110,6 +124,13 @@ tauri-plugin-dialog = "2"
 # Benchmark harness per quality gate Step 10 (P95 ricerca ibrida < 100ms su
 # 10k prompt). Standard de-facto Rust per micro-benchmarks su stabile.
 criterion = { version = "0.8", default-features = false, features = ["plotters", "cargo_bench_support"] }
+# Fix #575 (residuo): un test che verifica solo `matches!(err,
+# PapErrore::Generico(_))` NON distingue un errore costruito a mano da uno
+# passato per `PapErrore::dominio` — entrambi producono la stessa variante.
+# `testing_logger` cattura le righe emesse via `log::` durante un test, per
+# provare che una riga finisce DAVVERO nel log invece di limitarsi a
+# ispezionare la variante dell'errore.
+testing_logger = "0.1.1"
 
 [[bench]]
 name = "ricerca_ibrida"

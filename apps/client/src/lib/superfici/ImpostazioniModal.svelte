@@ -954,8 +954,9 @@
     const ok = await conferma(
       "Pulire i log?\n\n" +
         "Il file di log corrente verrà svuotato e tutti i file rotati " +
-        "(vecchi, es. pap.log.1, pap.log.2, …) verranno ELIMINATI. " +
-        "Non è reversibile.",
+        "(vecchi, es. pap_2026-08-02_14-30-00.log) verranno ELIMINATI. " +
+        "Il file di diagnostica dei crash (pap-crash.log) viene invece " +
+        "conservato. Non è reversibile.",
     );
     if (!ok) return;
     debugErrore = "";
