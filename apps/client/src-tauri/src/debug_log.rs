@@ -10,7 +10,8 @@
 //! - `debug_log_info` — path + lista file rotati con size/mtime
 //! - `debug_log_apri_cartella` — apre LogDir con file manager OS
 //! - `debug_log_pulisci` — truncate del file corrente **ed elimina anche
-//!   i file rotati** (`pap.log.1`, `pap.log.2`, …) — vedi Azione 9,
+//!   i file rotati** (schema reale `pap_<YYYY-MM-DD>_<HH-MM-SS>.log`, non
+//!   `pap.log.N` — vedi nota sullo schema più sotto) — vedi Azione 9,
 //!   review PR #588: con `RotationStrategy::KeepAll` (`lib.rs`) i rotati
 //!   non vengono mai eliminati automaticamente, quindi chi ha usato
 //!   l'app prima della redazione CWE-532 (v0.8.44) può averli ancora
@@ -51,6 +52,18 @@
 //! per sempre con `RotationStrategy::KeepAll` (CWE-532 pre-v0.8.44
 //! altrimenti mai rimediabile per chi ha già quei file su disco).
 //!
+//! **Rettifica schema nomi dei rotati (review PR #588, MEDIUM):** i
+//! commenti di versioni precedenti di questo modulo (e i relativi test)
+//! usavano `pap.log.1`, `pap.log.2`, … — schema che l'app **non produce
+//! mai**. Verificato sul sorgente pinnato in `Cargo.lock`
+//! (`tauri-plugin-log-2.9.0/src/lib.rs`, `RotatingFile::rename_file_to_dated`
+//! e `LOG_DATE_FORMAT`): con `RotationStrategy::KeepAll` (configurata in
+//! `lib.rs::run`) un file ruotato si chiama
+//! `pap_<YYYY-MM-DD>_<HH-MM-SS>.log` (es. `pap_2026-01-01_00-00-00.log`),
+//! non `pap.log.N`. Il filtro in `raccogli_file_log` funziona comunque —
+//! matcha su `ends_with(".log")`, non su un suffisso numerico — ma prima
+//! di questa correzione nessun test esercitava il nome vero.
+//!
 //! **Indagine issue #584 ("pulisci log non pulisce nulla", segnalata su
 //! Windows, non riprodotta dal vivo — macchina di sviluppo Linux
 //! headless):** la conferma UI (`conferma()`, pass-through diretto a
@@ -86,8 +99,13 @@ use crate::log_redazione;
 
 /// Nome del file di log configurato in `lib.rs::run` (tauri-plugin-log
 /// TargetKind::LogDir { file_name: Some("pap".to_string()) }).
-/// Plugin appende `.log` automaticamente, e rotati si chiamano
-/// `pap.log.1`, `pap.log.2`, etc.
+/// Plugin appende `.log` automaticamente al corrente (`pap.log`). I
+/// rotati **non** si chiamano `pap.log.1`, `pap.log.2`, … — quello schema
+/// non è mai prodotto da questa configurazione. Con
+/// `RotationStrategy::KeepAll` (`lib.rs::run`) si chiamano
+/// `pap_<YYYY-MM-DD>_<HH-MM-SS>.log` (verificato in
+/// `tauri-plugin-log-2.9.0/src/lib.rs`,
+/// `RotatingFile::rename_file_to_dated` + `LOG_DATE_FORMAT`).
 const NOME_LOG: &str = "pap";
 
 #[derive(Debug, Serialize)]
@@ -204,7 +222,11 @@ fn raccogli_file_log(dir: &Path) -> Vec<FileLog> {
         .filter(|e| {
             let name = e.file_name();
             let s = name.to_string_lossy().to_string();
-            // Match pap.log, pap.log.1, pap.log.2, …
+            // Match pap.log (corrente) e pap_<data>_<ora>.log (rotati, v.
+            // doc di NOME_LOG). `.contains(".log.")` resta per robustezza
+            // — non è lo schema prodotto dall'app, v. doc di NOME_LOG —
+            // nel caso in cui il file venga rinominato a mano o da uno
+            // strumento esterno con un suffisso numerico.
             s.starts_with(NOME_LOG) && (s.ends_with(".log") || s.contains(".log."))
         })
         .filter_map(|e| {
@@ -368,7 +390,8 @@ pub struct EsitoPulizia {
     /// verificarla via stat (il truncate stesso è comunque riuscito a
     /// questo punto) — v. doc di `tronca_file_log`, Azione 6.
     pub size_dopo: Option<u64>,
-    /// File rotati (`pap.log.1`, `pap.log.2`, …) eliminati con successo.
+    /// File rotati (schema reale `pap_<YYYY-MM-DD>_<HH-MM-SS>.log`, v.
+    /// doc di `NOME_LOG`) eliminati con successo.
     pub rotati_rimossi: Vec<FileRotatoRimosso>,
     /// File rotati che NON è stato possibile eliminare. Il frontend deve
     /// controllare questo campo e non dichiarare successo pieno se non è
@@ -427,8 +450,9 @@ fn pulisci_log_in_dir(dir: &Path) -> std::io::Result<EsitoPulizia> {
 }
 
 /// Truncate il file `pap.log` corrente **ed elimina anche i file
-/// rotati** (`pap.log.1`, `pap.log.2`, …). Best-effort sul file
-/// corrente: se non esiste è un no-op (non un errore) per quella parte.
+/// rotati** (schema reale `pap_<YYYY-MM-DD>_<HH-MM-SS>.log`, v. doc di
+/// `NOME_LOG`). Best-effort sul file corrente: se non esiste è un no-op
+/// (non un errore) per quella parte.
 ///
 /// **Azione 9 (review PR #588), fix di un HIGH preesistente (CWE-532):**
 /// prima di questa PR i rotati non venivano mai toccati da "Pulisci
@@ -471,11 +495,19 @@ fn pulisci_log_in_dir(dir: &Path) -> std::io::Result<EsitoPulizia> {
 #[tauri::command(async)]
 pub fn debug_log_pulisci(app: tauri::AppHandle) -> Result<EsitoPulizia, PapErrore> {
     let dir = log_dir(&app)?;
-    if !dir.join(format!("{NOME_LOG}.log")).exists() {
-        log::info!("Debug log: pulizia richiesta ma il file corrente non esiste (no-op sul corrente).");
-    }
     let esito = pulisci_log_in_dir(&dir)
         .map_err(|e| PapErrore::dominio("Pulizia dei log non riuscita.", e))?;
+    // Niente doppio `.join(...).exists()` sullo stesso percorso del
+    // corrente (piccola violazione DRY segnalata in review PR #588,
+    // punto 3): l'esistenza del file prima del truncate è già accertata
+    // una sola volta dentro `pulisci_log_in_dir` — qui basta leggerla da
+    // `esito`, che con file assente o già vuoto riporta comunque
+    // `(0, Some(0))` (v. doc di `pulisci_log_in_dir`).
+    if esito.size_prima == 0 && esito.size_dopo == Some(0) {
+        log::info!(
+            "Debug log: pulizia richiesta ma il file corrente non esiste o era già vuoto (no-op sul corrente)."
+        );
+    }
     let size_dopo_msg = esito
         .size_dopo
         .map(|s| format!("{s} byte"))
@@ -489,7 +521,11 @@ pub fn debug_log_pulisci(app: tauri::AppHandle) -> Result<EsitoPulizia, PapError
         esito.rotati_falliti.len(),
     );
     for f in &esito.rotati_falliti {
-        log::warn!("Debug log: eliminazione rotato {} fallita: {}", f.name, f.errore);
+        log::warn!(
+            "Debug log: eliminazione rotato {} fallita: {}",
+            f.name,
+            f.errore
+        );
     }
     Ok(esito)
 }
@@ -769,13 +805,30 @@ mod test {
     fn raccogli_match_solo_pap_log() {
         let dir = tempdir().unwrap();
         fs::write(dir.path().join("pap.log"), b"line1\n").unwrap();
+        // Nome reale prodotto dal plugin per un rotato (v. doc di
+        // NOME_LOG): `pap_<YYYY-MM-DD>_<HH-MM-SS>.log`.
+        fs::write(
+            dir.path().join("pap_2026-01-01_00-00-00.log"),
+            b"rotato reale\n",
+        )
+        .unwrap();
+        // `pap.log.1` NON è uno schema mai prodotto dall'app (v. doc di
+        // NOME_LOG) — qui serve solo a dimostrare che il filtro resta
+        // robusto anche su un nome così, non a rappresentare il caso reale.
         fs::write(dir.path().join("pap.log.1"), b"old\n").unwrap();
         fs::write(dir.path().join("altro.txt"), b"skip").unwrap();
         fs::write(dir.path().join("README.md"), b"skip").unwrap();
 
         let files = raccogli_file_log(dir.path());
         let nomi: Vec<String> = files.iter().map(|f| f.name.clone()).collect();
-        assert_eq!(nomi, vec!["pap.log".to_string(), "pap.log.1".to_string()]);
+        assert_eq!(
+            nomi,
+            vec![
+                "pap.log".to_string(),
+                "pap.log.1".to_string(),
+                "pap_2026-01-01_00-00-00.log".to_string(),
+            ]
+        );
     }
 
     #[test]
@@ -1279,19 +1332,50 @@ mod test {
 
     /// Caso positivo: rotati presenti vengono davvero rimossi, e il conteggio
     /// byte/file torna corretto.
+    ///
+    /// **Nomi usati (rettifica review PR #588, MEDIUM):** `pap.log.1` e
+    /// `pap.log.2` NON sono lo schema che l'app produce mai — restano qui
+    /// solo come caso di robustezza del filtro (v. doc di
+    /// `raccogli_file_log`), dichiarato esplicitamente per quello che è.
+    /// `pap_2026-01-01_00-00-00.log` è invece lo schema REALE: verificato
+    /// in `tauri-plugin-log-2.9.0/src/lib.rs`,
+    /// `RotatingFile::rename_file_to_dated` + `LOG_DATE_FORMAT`, con
+    /// `RotationStrategy::KeepAll` (configurata in `lib.rs::run`). È
+    /// questo, non i nomi fittizi, a dimostrare che il CWE-532 è chiuso
+    /// davvero sui file che l'app produce.
     #[test]
     fn pulisci_log_in_dir_rimuove_davvero_i_rotati_presenti() {
         let dir = tempdir().unwrap();
         fs::write(dir.path().join("pap.log"), "corrente\n").unwrap();
-        fs::write(dir.path().join("pap.log.1"), "rotato vecchio 1, con chiave in chiaro").unwrap();
+        fs::write(
+            dir.path().join("pap.log.1"),
+            "rotato vecchio 1, con chiave in chiaro",
+        )
+        .unwrap();
         fs::write(dir.path().join("pap.log.2"), "rotato vecchio 2").unwrap();
+        fs::write(
+            dir.path().join("pap_2026-01-01_00-00-00.log"),
+            "rotato reale, con chiave in chiaro",
+        )
+        .unwrap();
 
         let esito = pulisci_log_in_dir(dir.path()).unwrap();
 
         assert_eq!(esito.size_dopo, Some(0));
         assert!(esito.rotati_falliti.is_empty());
-        let nomi: Vec<String> = esito.rotati_rimossi.iter().map(|f| f.name.clone()).collect();
-        assert_eq!(nomi, vec!["pap.log.1".to_string(), "pap.log.2".to_string()]);
+        let nomi: Vec<String> = esito
+            .rotati_rimossi
+            .iter()
+            .map(|f| f.name.clone())
+            .collect();
+        assert_eq!(
+            nomi,
+            vec![
+                "pap.log.1".to_string(),
+                "pap.log.2".to_string(),
+                "pap_2026-01-01_00-00-00.log".to_string(),
+            ]
+        );
         assert!(esito.rotati_rimossi.iter().all(|f| f.size_bytes > 0));
 
         assert!(
@@ -1299,6 +1383,10 @@ mod test {
             "il rotato deve essere sparito dal disco, non solo dal report"
         );
         assert!(!dir.path().join("pap.log.2").exists());
+        assert!(
+            !dir.path().join("pap_2026-01-01_00-00-00.log").exists(),
+            "il rotato con lo schema di nome REALMENTE prodotto dall'app deve essere sparito"
+        );
         assert!(
             dir.path().join("pap.log").exists(),
             "il corrente deve restare (troncato, non eliminato)"
