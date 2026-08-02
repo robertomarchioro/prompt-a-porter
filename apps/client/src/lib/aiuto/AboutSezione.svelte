@@ -10,9 +10,11 @@
   import { ExternalLink } from "lucide-svelte";
 
   // Sorgente unica dei link al progetto. Allineata a docs-links.ts
-  // (REPO_ORG_REPO) e al campo `repository` del package.
+  // (SITO_BASE) e al campo `repository` del package.
   const REPO = "https://github.com/robertomarchioro/prompt-a-porter";
-  const SITO = "https://prompt-a-porter.app";
+  // Fix #557: dominio placeholder mai registrato → sito pubblico reale
+  // (stesso switch di docs-links.ts SITO_BASE).
+  const SITO = "https://www.promptaporter.it";
 
   interface VoceLink {
     etichetta: string;

@@ -9,44 +9,86 @@
    * timestamp, level, target, message già parsati.
    */
   import { invoke } from "@tauri-apps/api/core";
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, untrack } from "svelte";
   import { Pause, Play, RefreshCw, X } from "lucide-svelte";
+  import {
+    compilaRegex,
+    erroreRegex,
+    filtraRighe,
+    ordinaRecentiPrimi,
+    N_RIGHE_DEFAULT,
+    OPZIONI_N_RIGHE,
+    type LivelloFiltro,
+    type RigaLog,
+  } from "./log-viewer-logic";
 
-  interface RigaLog {
-    timestamp: string;
-    level: string;
-    target: string;
-    message: string;
-    raw: string;
+  interface Props {
+    /**
+     * true se il pannello che ospita il viewer è visibile all'utente
+     * (es. il `<details>` "Visualizza log live" in ImpostazioniModal è
+     * aperto). Default `true` per retrocompatibilità con usi futuri fuori
+     * da un contenitore collassabile.
+     */
+    aperto?: boolean;
   }
 
-  type LivelloFiltro = "" | "TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR";
+  let { aperto = true }: Props = $props();
 
   const INTERVALLO_REFRESH_MS = 2000;
-  const N_RIGHE_DEFAULT = 200;
 
   let righe = $state<RigaLog[]>([]);
   let errore = $state("");
   let livello = $state<LivelloFiltro>("");
   let regexInput = $state("");
+  let nRighe = $state(N_RIGHE_DEFAULT);
   let autoRefresh = $state(true);
   let inAttesa = $state(false);
   let timerId: ReturnType<typeof setInterval> | undefined;
 
+  // Fix #558 punto 1: `ricarica` era già strutturalmente corretta (il
+  // try/catch/finally esistente garantiva già inAttesa=false su ogni esito
+  // e mostrava l'errore invece di ingoiarlo, mai stato "ingoiato"). Indagando
+  // il sintomo riportato dal collaudo macOS ("con Tutti non vedo niente e il
+  // pulsante resta bloccato, con un livello specifico si popola") non ho
+  // trovato riscontro nel codice: il predicato `if (livello)` in
+  // `filtraRighe` bypassa correttamente il filtro solo quando
+  // `livello === ""`, quindi "Tutti" mostra sempre tutte le `righe` già
+  // caricate — non può mostrare *meno* righe di un filtro specifico
+  // applicato sulla stessa lista. L'unica causa verificabile staticamente
+  // resta il primo caricamento: `<LogViewer>` monta (e quindi lancia
+  // `ricarica()`) non appena la sezione "Sviluppo" diventa attiva,
+  // indipendentemente dal fatto che il `<details>` "Visualizza log live"
+  // che lo contiene sia aperto o chiuso (vedi ImpostazioniModal.svelte). Se
+  // quel primo `invoke` restituisce dati non ancora aggiornati, l'utente
+  // che apre il pannello più tardi vede uno stato stantio finché non
+  // scatta il refresh automatico a 2s. L'`$effect` su `aperto` sotto chiude
+  // questa finestra ricaricando esplicitamente quando il pannello passa da
+  // chiuso ad aperto, indipendentemente dal timer.
   async function ricarica(): Promise<void> {
     if (inAttesa) return;
     inAttesa = true;
     try {
-      righe = await invoke<RigaLog[]>("debug_log_leggi", {
-        nRighe: N_RIGHE_DEFAULT,
-      });
+      righe = await invoke<RigaLog[]>("debug_log_leggi", { nRighe });
       errore = "";
     } catch (e) {
-      errore = String(e);
+      errore = e instanceof Error ? e.message : String(e);
     } finally {
       inAttesa = false;
     }
   }
+
+  // Ricarica ogni volta che `aperto` transita da false a true (pannello
+  // appena reso visibile). Non duplica il fetch di `onMount`: se `aperto`
+  // parte già a `true`, `apertoPrec` viene inizializzato allo stesso
+  // valore (via `untrack`) e la condizione sotto resta falsa al primo giro.
+  let apertoPrec = untrack(() => aperto);
+  $effect(() => {
+    const attuale = aperto;
+    if (attuale && !apertoPrec) {
+      void ricarica();
+    }
+    apertoPrec = attuale;
+  });
 
   function avviaTimer(): void {
     fermaTimer();
@@ -71,43 +113,16 @@
     fermaTimer();
   });
 
-  const regexCompilata = $derived.by(() => {
-    const s = regexInput.trim();
-    if (!s) return null;
-    try {
-      return new RegExp(s, "i");
-    } catch {
-      return null;
-    }
-  });
+  const regexCompilata = $derived.by(() => compilaRegex(regexInput));
+  const regexErrore = $derived.by(() => erroreRegex(regexInput));
 
-  const regexErrore = $derived.by(() => {
-    const s = regexInput.trim();
-    if (!s) return "";
-    try {
-      new RegExp(s, "i");
-      return "";
-    } catch (e) {
-      return String(e);
-    }
-  });
-
-  const righeFiltrate = $derived.by(() => {
-    let out = righe;
-    if (livello) {
-      out = out.filter((r) => r.level === livello);
-    }
-    if (regexCompilata) {
-      const re = regexCompilata;
-      out = out.filter(
-        (r) =>
-          re.test(r.message) ||
-          re.test(r.target) ||
-          re.test(r.raw),
-      );
-    }
-    return out;
-  });
+  // Fix #558 punto 3: il backend restituisce ordine cronologico crescente;
+  // il viewer mostra il più recente in cima senza mutare `righe` (pattern
+  // immutabile di progetto — `ordinaRecentiPrimi` usa `.slice().reverse()`).
+  const righeRecentiPrimi = $derived.by(() => ordinaRecentiPrimi(righe));
+  const righeFiltrate = $derived.by(() =>
+    filtraRighe(righeRecentiPrimi, livello, regexCompilata),
+  );
 
   function classeRiga(level: string): string {
     switch (level) {
@@ -167,6 +182,18 @@
           <X size={12} />
         </button>
       {/if}
+      <label class="log-filtro">
+        <span>Righe</span>
+        <select
+          bind:value={nRighe}
+          onchange={() => void ricarica()}
+          aria-label="Numero di righe caricate"
+        >
+          {#each OPZIONI_N_RIGHE as opzione (opzione)}
+            <option value={opzione}>{opzione}</option>
+          {/each}
+        </select>
+      </label>
     </div>
 
     <div class="log-azioni">

@@ -1,30 +1,57 @@
 import { describe, it, expect } from "vitest";
-import { DOCS, urlDoc, titoloDoc, type ChiaveDoc } from "./docs-links";
+import { DOCS, SITO_BASE, urlDoc, titoloDoc, type ChiaveDoc } from "./docs-links";
 
 const CHIAVI = Object.keys(DOCS) as ChiaveDoc[];
 
 describe("docs-links", () => {
-  it("ogni chiave risolve a un URL GitHub assoluto e https", () => {
+  // Fix #554/#555/#557: SITO_BASE punta ora al sito pubblico
+  // www.promptaporter.it (prima: placeholder mai registrato + fallback
+  // github.com/.../blob/main). Questo test asserisce esplicitamente il
+  // nuovo pattern per evitare regressioni verso GitHub o verso il vecchio
+  // dominio.
+  it("ogni chiave risolve a un URL del sito pubblico sotto /utente/", () => {
     for (const k of CHIAVI) {
       const url = urlDoc(k);
       expect(url).toMatch(
-        /^https:\/\/github\.com\/[^/]+\/[^/]+\/blob\/main\/docs\/utente\/[a-z0-9-]+\.md(#[a-z0-9-]+)?$/,
+        /^https:\/\/www\.promptaporter\.it\/utente\/[a-z0-9-]+(#[a-z0-9-]+)?$/,
       );
+    }
+  });
+
+  it("usa SITO_BASE come prefisso di ogni URL risolto", () => {
+    for (const k of CHIAVI) {
+      expect(urlDoc(k).startsWith(`${SITO_BASE}/utente/`)).toBe(true);
+    }
+  });
+
+  it("non punta più a github.com/.../blob/main (regressione #554/#555/#557)", () => {
+    for (const k of CHIAVI) {
+      expect(urlDoc(k)).not.toContain("github.com");
+      expect(urlDoc(k)).not.toContain("blob/main");
+      expect(urlDoc(k)).not.toContain(".md");
     }
   });
 
   it("include l'ancora quando la voce la definisce", () => {
     // segnaposti-globali punta a glossario-sintassi#segnaposti-globali
     expect(urlDoc("segnaposti-globali")).toBe(
-      "https://github.com/robertomarchioro/prompt-a-porter/blob/main/docs/utente/glossario-sintassi.md#segnaposti-globali",
+      "https://www.promptaporter.it/utente/glossario-sintassi#segnaposti-globali",
     );
   });
 
   it("non aggiunge l'ancora quando assente", () => {
     expect(urlDoc("getting-started")).toBe(
-      "https://github.com/robertomarchioro/prompt-a-porter/blob/main/docs/utente/getting-started.md",
+      "https://www.promptaporter.it/utente/getting-started",
     );
     expect(urlDoc("getting-started")).not.toContain("#");
+  });
+
+  it("costruisce correttamente file e ancora insieme per una chiave arbitraria", () => {
+    // export-json non ha ancora: verifica che urlDoc non ne inventi una e
+    // che il file risolto sia esattamente quello mappato in DOCS.
+    const voce = DOCS["export-json"];
+    expect(voce.ancora).toBeUndefined();
+    expect(urlDoc("export-json")).toBe(`${SITO_BASE}/utente/${voce.file}`);
   });
 
   it("ogni voce ha file (slug valido) e titolo non vuoto", () => {
