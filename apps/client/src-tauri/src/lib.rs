@@ -15,6 +15,7 @@ pub mod fork;
 pub mod import_export;
 pub mod libreria;
 pub mod linting;
+pub mod log_redazione;
 pub mod migrazione;
 pub mod preferenze;
 pub mod pricing;
@@ -328,9 +329,31 @@ pub fn run() {
         // - Stdout: solo in dev (cargo run / tauri dev)
         // - Webview: bridge console.* JS → log file backend (frontend
         //   chiama `attachConsole()` da @tauri-apps/plugin-log)
+        //
+        // Fix sicurezza MEDIUM (CWE-532): `ureq` logga a `debug!` l'intero
+        // preludio HTTP delle chiamate ai provider AI, mascherando da sé
+        // solo `Authorization`/`Cookie` — le chiavi API in `x-api-key`
+        // (Anthropic) e `x-goog-api-key` (Gemini) restavano in chiaro nel
+        // record. `.format()` sostituisce il formatter di default:
+        // `log_redazione::formatta_riga` riproduce ESATTAMENTE lo stesso
+        // layout `[data][ora][target][LIVELLO] messaggio` (da cui dipende
+        // `debug_log::parse_riga`) e redige il valore degli header
+        // sensibili SOLO nei record il cui target inizia per `ureq` — mai
+        // nei log applicativi (`pap_lib::…`), per non troncare messaggi
+        // che contengono per coincidenza un testo tipo "cookie:" (vedi
+        // doc del modulo `log_redazione`). Nessun record viene scartato:
+        // `ureq` non emette `info!`/`warn!`, solo `debug!`/`trace!`/
+        // `error!` — filtrare quei livelli renderebbe invisibile ogni
+        // chiamata fallita a un provider.
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Trace)
+                .format(|out, message, record| {
+                    let messaggio = message.to_string();
+                    let riga =
+                        log_redazione::formatta_riga(record.target(), record.level(), &messaggio);
+                    out.finish(format_args!("{riga}"));
+                })
                 .targets([
                     Target::new(TargetKind::LogDir {
                         file_name: Some("pap".to_string()),
