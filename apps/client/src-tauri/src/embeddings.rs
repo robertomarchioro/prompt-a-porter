@@ -228,6 +228,33 @@ fn errore_integrita(
     ))
 }
 
+/// Apre `path` in scrittura con `O_CREAT|O_EXCL` (fix #569): se il path
+/// esiste già — file regolare O symlink pre-piazzato — fallisce chiuso
+/// invece di seguirlo, come farebbe `File::create` (`O_CREAT|O_TRUNC`).
+///
+/// Rilievo LOW della security review di questa PR: senza questo wrapper i
+/// tre call-site propagavano l'errore con un `?` nudo, che la conversione
+/// generica `From<io::Error> for PapErrore` mappa su `PapErrore::Io` — e
+/// `Io`, a differenza di `PapErrore::dominio`, NON scrive nel log. Un
+/// `AlreadyExists` qui è però esattamente lo scenario per cui il controllo
+/// esiste: qualcuno ha ripiazzato qualcosa sul percorso temporaneo nella
+/// finestra fra il `remove_file` preventivo e questa `open`. Lo sfruttamento
+/// resta impedito (il link non viene seguito), ma senza una riga di log il
+/// tentativo non lascia alcuna traccia — incoerente con lo scopo dichiarato
+/// della PR, che è proprio far finire nel log i fallimenti di integrità.
+fn apri_tmp_symlink_safe(path: &Path) -> Result<fs::File, PapErrore> {
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|e| {
+            PapErrore::dominio(
+                "Impossibile preparare il file temporaneo del modello di embedding.",
+                format!("{} — percorso: {}", e, path.display()),
+            )
+        })
+}
+
 /// Verifica che l'hash SHA-256 di `bytes` corrisponda a `atteso`
 /// (confronto case-insensitive). Fail-closed: qualunque mismatch produce
 /// un errore esplicito invece di procedere silenziosamente con un
@@ -634,8 +661,9 @@ fn scarica_e_verifica_in_tmp(
     // Fix #569 (CWE-59-adjacent, TOCTOU su file temporanei): `create_new`
     // fallisce se il path esiste già (file O symlink), invece di seguire
     // un eventuale symlink pre-piazzato come farebbe `File::create`
-    // (O_CREAT|O_TRUNC senza O_EXCL).
-    let mut out = fs::OpenOptions::new().write(true).create_new(true).open(dest_tmp)?;
+    // (O_CREAT|O_TRUNC senza O_EXCL). Il fallimento passa da
+    // `apri_tmp_symlink_safe` così lascia una riga nel log.
+    let mut out = apri_tmp_symlink_safe(dest_tmp)?;
     let mut reader = http_get_streaming(url)?;
     let mut buf = [0u8; 64 * 1024];
     let mut acc: u64 = 0;
@@ -819,7 +847,7 @@ fn estrai_da_zip(archive_bytes: &[u8], path_in_archive: &str, dest: &Path) -> Re
     // Fix #569: come `scarica_e_verifica_in_tmp`, `create_new` invece di
     // `File::create` per non seguire un eventuale symlink pre-piazzato. Il
     // residuo è già stato ripulito dal chiamante (`estrai_libonnxruntime`).
-    let mut out = fs::OpenOptions::new().write(true).create_new(true).open(dest)?;
+    let mut out = apri_tmp_symlink_safe(dest)?;
     std::io::copy(&mut entry, &mut out)?;
     Ok(())
 }
@@ -993,7 +1021,7 @@ fn estrai_da_tar_gz(archive_bytes: &[u8], path_in_archive: &str, dest: &Path) ->
         if normalizza_path_archivio(&entry_path) == target_risolto {
             // Fix #569: `create_new` invece di `File::create`, come in
             // `estrai_da_zip`. Il residuo è già ripulito dal chiamante.
-            let mut out = fs::OpenOptions::new().write(true).create_new(true).open(dest)?;
+            let mut out = apri_tmp_symlink_safe(dest)?;
             std::io::copy(&mut entry, &mut out)?;
             found = true;
             break;
@@ -2164,6 +2192,44 @@ mod test {
     }
 
     // ─────────── #569: O_EXCL sui file temporanei ───────────
+
+    #[cfg(unix)]
+    #[test]
+    fn apri_tmp_symlink_safe_fallisce_su_symlink_pre_piazzato_senza_seguirlo() {
+        // Rilievo LOW della security review: il controllo O_EXCL deve
+        // fallire CHIUSO su un symlink pre-piazzato — senza scrivere
+        // attraverso il link — e l'errore deve passare da
+        // `PapErrore::dominio`, che è l'unico punto che scrive nel log
+        // (con un `?` nudo finiva in `PapErrore::Io`, silenzioso).
+        let dir = tempfile::tempdir().unwrap();
+        let bersaglio = dir.path().join("bersaglio-esterno");
+        std::fs::write(&bersaglio, b"contenuto-originale").unwrap();
+        let tmp = dir.path().join("vittima.download-partial");
+        std::os::unix::fs::symlink(&bersaglio, &tmp).unwrap();
+
+        let r = apri_tmp_symlink_safe(&tmp);
+
+        assert!(r.is_err(), "un symlink pre-piazzato deve far fallire l'apertura");
+        assert!(
+            matches!(r.unwrap_err(), PapErrore::Generico(_)),
+            "l'errore deve passare da PapErrore::dominio (che logga), non da PapErrore::Io"
+        );
+        assert_eq!(
+            std::fs::read(&bersaglio).unwrap(),
+            b"contenuto-originale",
+            "il bersaglio del symlink non deve essere stato toccato"
+        );
+    }
+
+    #[test]
+    fn apri_tmp_symlink_safe_crea_il_file_quando_il_path_e_libero() {
+        let dir = tempfile::tempdir().unwrap();
+        let tmp = dir.path().join("nuovo.download-partial");
+
+        apri_tmp_symlink_safe(&tmp).expect("su path libero l'apertura deve riuscire");
+
+        assert!(tmp.is_file());
+    }
 
     #[test]
     fn estrai_libonnxruntime_residuo_regolare_non_blocca_estrazione_successiva() {
