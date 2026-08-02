@@ -1,5 +1,26 @@
 # Changelog — Prompt a Porter
 
+## v0.8.46 — Il crash lascia traccia (2026-08-02)
+
+> Le prove su Windows dopo la v0.8.45 hanno fatto emergere alcuni difetti che il codice, da solo, non permetteva di spiegare: l'app che si chiudeva senza scrivere una riga, schermate che non scorrevano, un pulsante di pulizia che lasciava indietro proprio i file da ripulire. Questa release non chiude tutte quelle segnalazioni — alcune restano aperte apposta — ma fa in modo che il prossimo tentativo lasci finalmente delle tracce leggibili invece del silenzio.
+
+### Sicurezza
+
+- **«Pulisci log» elimina anche i log vecchi** (#584): finora svuotava soltanto il file di log corrente e lasciava intatti quelli archiviati automaticamente quando il log cresce troppo. È un problema, non un dettaglio: quei file archiviati possono contenere **chiavi API scritte in chiaro** dalle versioni precedenti alla v0.8.44, e l'app dichiarava «file di log svuotato» senza averli toccati. Ora vengono eliminati anche loro, con l'elenco di quelli eventualmente non rimossi, e la richiesta di conferma avverte che l'operazione **non è reversibile**. Il file di diagnostica dei crash viene invece conservato di proposito, ed è scritto nella conferma.
+- **Il registro attività dice cosa registra davvero** (#583): la sezione, prima chiamata «Audit log AI», stava fra le impostazioni dell'AI ma non registra affatto le richieste ai modelli — traccia le azioni su prompt, cartelle e vault. Ora si chiama **Registro attività**, sta sotto Sicurezza, e spiega quattro cose: cosa registra, dove finisce (un database locale, sul tuo computer), come si consulta (per ora solo esportando il CSV) e a cosa serve. Dichiara inoltre che **titoli, etichette e percorsi di cartella finiscono nei metadati e quindi nel CSV esportato**, mentre il testo dei prompt e le conversazioni no: se un percorso contiene un nome cliente, è bene saperlo prima di condividere quel file.
+- **Il file di diagnostica dei crash è protetto e ripulito**: viene creato in modo esclusivo e leggibile solo da te, e i valori degli header vengono oscurati prima di scriverli — così una segnalazione a cui lo alleghi non porta con sé credenziali.
+
+### Fix
+
+- **Editor e Cronologia tornano a scorrere** (#590): nell'editor dei prompt e nella vista Cronologia il testo che usciva dalla finestra era irraggiungibile, **nemmeno con la rotella del mouse**. Non era un problema della barra di scorrimento: mancava proprio un contenitore con un'altezza definita entro cui scorrere, perché il componente che divide i pannelli non lo predisponeva. Corretto anche il caso, che non era stato segnalato, dell'anteprima con contenuti molto lunghi.
+- **Un crash del modello semantico lascia una traccia** (#586): su Linux e macOS l'inizializzazione del modello poteva chiudere l'app di colpo **senza scrivere nulla nel log**, rendendo impossibile capire perché. Il motivo del silenzio era doppio: il messaggio finiva su un canale che un'applicazione con interfaccia grafica non ha, e il registro dell'app non intercettava quel tipo di errore. Ora il fallimento viene scritto con motivo, percorso e posizione, e il caricamento della libreria viene controllato prima, in modo che l'errore sia leggibile invece che fatale. **La causa del crash resta da individuare**: questa release non lo risolve, lo rende diagnosticabile.
+- **La ricerca semantica non fallisce più in silenzio** (#582): quando il modello non era caricato, la ricerca smetteva semplicemente di usarlo e restituiva i soli risultati testuali, senza dirlo. Il risultato era indistinguibile da «nessuna corrispondenza», e non c'era modo di accorgersi che metà della funzione non stava lavorando. Ora la mancanza del modello viene segnalata, distinta da una ricerca senza risultati.
+- **Errori di integrità del modello ora visibili nel log** (#575): diversi casi di fallimento — lettura della cache, cartella privata, estrazione dell'archivio, scaricamento — non lasciavano alcuna riga, nemmeno con il log di debug attivo. Ora ci finiscono tutti.
+
+### Manutenzione
+
+- **Punti di controllo per il prossimo collaudo** (#585, #572, #584, #558): quattro segnalazioni — cancellazione di un prompt, promozione di una variante, pulizia dei log e visualizzatore del log live — descrivono comportamenti che non è stato possibile spiegare leggendo il codice. Invece di lasciarle in attesa di una descrizione a parole, i percorsi coinvolti ora annotano nel log ciò che serve a distinguere le cause: quanto dura la richiesta di conferma (una finestra di conferma vera impiega molto più di pochi millesimi di secondo, quindi il tempo dice se sia mai comparsa), quale valore restituisce, se l'operazione è partita e come si è conclusa, e quante righe di log arrivano rispetto a quante ne vengono mostrate. Nessun testo dei tuoi prompt finisce in quelle annotazioni. **Per raccoglierle serve attivare «Debug log»** in Impostazioni → Sviluppo prima della prova.
+
 ## v0.8.45 — Il modello torna a caricarsi (2026-08-02)
 
 > Il secondo giro di prove su Mac ha scoperto che la ricerca semantica non poteva funzionare per nessuno: il controllo di integrità del motore, aggiunto in v0.8.43, confrontava due cose diverse e falliva sempre. Nella stessa release arrivano i collegamenti che portano finalmente al sito della documentazione, e le conferme prima di ogni operazione distruttiva su macOS.
