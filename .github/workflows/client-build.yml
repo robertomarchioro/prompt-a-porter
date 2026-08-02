@@ -101,7 +101,7 @@ jobs:
       # Usa l'action ufficiale taiki-e per fetch del binario pre-compilato
       # (no compile, ~5 sec invece dei ~3 minuti di cargo install).
       - name: Installa cargo-llvm-cov
-        uses: taiki-e/install-action@41049aa56687c35e0afa74eed4f09cec4f9afabf # v2.85.0 (cargo-llvm-cov)
+        uses: taiki-e/install-action@6a1bd70eaac3c8bdf093356838d7ee09fda951cf # v2.85.0 (cargo-llvm-cov)
         with:
           tool: cargo-llvm-cov
 
