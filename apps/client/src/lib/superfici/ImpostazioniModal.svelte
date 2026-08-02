@@ -857,6 +857,23 @@
     directory: string;
     files: FileLog[];
   }
+  // Azione 9 (review PR #588): "Pulisci log" ora elimina anche i rotati,
+  // non solo il corrente — l'esito riporta cosa è stato rimosso e cosa
+  // NON è stato possibile rimuovere, per non mostrare un falso successo.
+  interface FileRotatoRimosso {
+    name: string;
+    size_bytes: number;
+  }
+  interface FileRotatoNonRimosso {
+    name: string;
+    errore: string;
+  }
+  interface EsitoPulizia {
+    size_prima: number;
+    size_dopo: number | null;
+    rotati_rimossi: FileRotatoRimosso[];
+    rotati_falliti: FileRotatoNonRimosso[];
+  }
   let debugInfo = $state<InfoDebugLog | null>(null);
   let debugErrore = $state("");
   let debugOpInCorso = $state<"" | "esporta" | "pulisci">("");
@@ -910,16 +927,38 @@
   }
 
   async function pulisciLog(): Promise<void> {
+    // Azione 9 (review PR #588): il testo avvisa ora che i rotati vengono
+    // ELIMINATI (prima diceva il contrario) — l'operazione è più
+    // distruttiva di prima e l'utente deve saperlo PRIMA di confermare.
     const ok = await conferma(
-      "Pulire il file di log corrente?\n\nI file rotati (vecchi) NON verranno toccati.",
+      "Pulire i log?\n\n" +
+        "Il file di log corrente verrà svuotato e tutti i file rotati " +
+        "(vecchi, es. pap.log.1, pap.log.2, …) verranno ELIMINATI. " +
+        "Non è reversibile.",
     );
     if (!ok) return;
     debugErrore = "";
+    debugMessaggio = "";
     debugOpInCorso = "pulisci";
     try {
-      await invoke("debug_log_pulisci");
-      debugMessaggio = "File di log corrente svuotato.";
-      setTimeout(() => (debugMessaggio = ""), 3000);
+      const esito = await invoke<EsitoPulizia>("debug_log_pulisci");
+      const nRimossi = esito.rotati_rimossi.length;
+      const nFalliti = esito.rotati_falliti.length;
+      if (nFalliti > 0) {
+        // Fallimento parziale: NON è un successo pieno, va mostrato come
+        // tale — niente falsi successi (Azione 9, review PR #588).
+        const nomiFalliti = esito.rotati_falliti.map((f) => f.name).join(", ");
+        debugErrore =
+          `File corrente svuotato` +
+          (nRimossi > 0 ? ` e ${nRimossi} rotato/i eliminato/i` : "") +
+          `, ma ${nFalliti} file rotato/i NON eliminato/i: ${nomiFalliti}.`;
+      } else {
+        debugMessaggio =
+          nRimossi > 0
+            ? `File di log corrente svuotato e ${nRimossi} file rotato/i eliminato/i.`
+            : "File di log corrente svuotato.";
+        setTimeout(() => (debugMessaggio = ""), 3000);
+      }
       await caricaDebugInfo();
     } catch (e) {
       debugErrore = `Pulizia fallita: ${String(e)}`;
@@ -2639,7 +2678,7 @@
                 class="btn-warn"
                 onclick={pulisciLog}
                 disabled={debugOpInCorso !== ""}
-                title="Svuota il file di log corrente (i file rotati restano)"
+                title="Svuota il file di log corrente ed elimina anche i file rotati"
               >
                 <Eraser size={14} />
                 <span>
