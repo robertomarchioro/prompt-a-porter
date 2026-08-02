@@ -109,8 +109,8 @@
 //! `panic_diagnostics` lo scrive apposta per essere diagnosticabile e
 //! «allegato a una segnalazione pubblica» (vedi doc di modulo di
 //! `panic_diagnostics`) — cancellarlo come side-effect silenzioso di un
-//! pulsante «Pulisci log» la cui conferma UI parla esplicitamente solo di
-//! «file rotati (vecchi, es. pap.log.1, pap.log.2, …)» (vedi
+//! pulsante «Pulisci log» la cui conferma UI parla di «file rotati» e
+//! dichiara che `pap-crash.log` viene invece conservato (vedi
 //! `ImpostazioniModal.svelte::pulisciLog`) tradirebbe proprio lo scopo per
 //! cui esiste, subito dopo il crash che l'utente vorrebbe segnalare. Il
 //! rischio residuo di segreti in chiaro su un `pap-crash.log` scritto da
@@ -289,7 +289,7 @@ fn raccogli_file_log(dir: &Path) -> Vec<FileLog> {
 /// content-based (`redigi_valori_header` sull'INTERO testo, vedi nota di
 /// sicurezza in testa al modulo): non ha il prefisso a 4 parentesi da cui la
 /// redazione per-prefisso ricava il target, quindi quella non lo toccherebbe
-/// mai. Tutti gli altri file (`pap.log`, `pap.log.1`, …) restano sulla
+/// mai. Tutti gli altri file (`pap.log`, `pap_<data>_<ora>.log`, …) restano sulla
 /// redazione stateful esistente, che dipende da quel prefisso.
 fn redigi_testo_per_export(nome_file: &str, testo: &str) -> String {
     if nome_file == panic_diagnostics::NOME_CRASH_LOG {
