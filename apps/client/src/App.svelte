@@ -139,12 +139,16 @@
   <Shell />
 {/if}
 
-<!-- Host globale conferma()/avvisa() macOS (issue conferme distruttive
-     saltate): fuori dalla finestra palette, sempre montato per ultimo così
-     lo stack di conferma appare sopra qualunque altra modale aperta. -->
-{#if etichetta !== "palette"}
-  <DialogoHost />
-{/if}
+<!-- Host globale di conferma()/avvisa(), montato per ultimo così lo stack di
+     conferma appare sopra qualunque altra modale aperta.
+     Montato in TUTTE le finestre, palette inclusa: da quando `conferma()`
+     non usa più `window.confirm` (sostituita da tauri-plugin-dialog con una
+     chiamata a un comando inesistente — vedi $lib/util/conferma.ts), questa
+     coda è l'unica strada. Se l'host mancasse in una finestra, una conferma
+     chiamata da lì resterebbe appesa per sempre invece di fallire: un blocco
+     silenzioso è peggio di un errore. La coda resta vuota se nessuno la usa,
+     quindi montarlo non costa nulla. -->
+<DialogoHost />
 
 <style>
   .boot-attesa {

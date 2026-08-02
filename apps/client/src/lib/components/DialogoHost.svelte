@@ -6,8 +6,12 @@
    * testa, riusando i primitivi esistenti `Modale` (conferma) e `Toast`
    * (avviso) — nessun componente nuovo.
    *
-   * Attivo su tutte le piattaforme, ma la coda resta sempre vuota fuori da
-   * macOS: `conferma()`/`avvisa()` delegano lì a `window.confirm`/`alert`.
+   * Attivo su tutte le piattaforme ed è l'**unica** strada: da quando
+   * `tauri-plugin-dialog` sostituisce `window.confirm` con una chiamata a
+   * `plugin:dialog|confirm` — comando che la crate non registra —
+   * `conferma()`/`avvisa()` non possono più delegare alla webview (vedi
+   * `$lib/util/conferma.ts`). Montato in ogni finestra: se mancasse, una
+   * conferma chiamata da lì resterebbe appesa per sempre.
    */
   import Modale from "./Modale.svelte";
   import Toast from "./Toast.svelte";

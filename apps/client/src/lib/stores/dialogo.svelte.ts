@@ -1,13 +1,17 @@
 /**
  * Coda globale Svelte 5 per le conferme/avvisi in-app di `$lib/util/conferma.ts`.
  *
- * Perché esiste: su macOS `WKUIDelegate` di wry 0.55.1 non implementa
- * `runJavaScriptConfirmPanelWithMessage` né i pannelli alert/prompt (vedi
- * `src/wkwebview/class/wry_web_view_ui_delegate.rs`), quindi `window.confirm`
- * e `window.alert` non mostrano alcun dialogo — l'azione viene eseguita
- * come se l'utente avesse sempre confermato. Su macOS sostituiamo quei due
- * dialoghi nativi con una coda di richieste risolta da `DialogoHost.svelte`,
- * che riusa i componenti primitivi `Modale`/`Toast` già esistenti.
+ * Perché esiste, in due tempi. Nata per macOS: `WKUIDelegate` di wry 0.55.1
+ * non implementa `runJavaScriptConfirmPanelWithMessage` né i pannelli
+ * alert/prompt, quindi lì `window.confirm` non mostrava alcun dialogo e
+ * l'azione veniva eseguita come se l'utente avesse sempre confermato.
+ * Estesa poi a **tutte** le piattaforme: `tauri-plugin-dialog` (dalla #570,
+ * rilasciata in v0.8.44) sostituisce `window.confirm` con una chiamata a
+ * `plugin:dialog|confirm`, comando che la crate non registra — quindi fuori
+ * da macOS ogni conferma falliva con «not allowed by ACL». Vedi
+ * `$lib/util/conferma.ts` per i riferimenti al sorgente della crate.
+ * La coda è risolta da `DialogoHost.svelte`, che riusa i componenti
+ * primitivi `Modale`/`Toast` già esistenti.
  *
  * Una coda (non un solo slot) perché nulla vieta a due chiamate di
  * accodarsi quasi in contemporanea (es. due `catch` che scattano in rapida
