@@ -13,17 +13,35 @@
  * salvataggio/l'eliminazione della sua configurazione — mai le richieste
  * inviate al modello, che non vengono registrate.
  *
- * Precisazione post-review (#587, rilievo HIGH): il campo `Metadata` di
- * `AuditLog` contiene titoli/etichette liberi scritti dall'utente — es.
- * `dati.titolo` in `editor::prompt_crea`/`prompt_aggiorna`, `parsed.titolo`
- * in `import_export.rs`, la `label` di variante in `varianti.rs`,
- * `dati.etichetta` nei golden test in `regression.rs` — che possono
- * contenere nomi di clienti/progetti. NON contengono mai `Body`/
- * `Description` (verificato in tutti i call site di `audit::registra`;
- * ancorato lato Rust dal test
- * `audit::test::titolo_nei_metadati_non_include_body_ne_descrizione`).
- * `AUDIT_COSA` deve riflettere entrambe le cose: cosa resta fuori E cosa
- * (titoli/etichette) finisce nei metadati e quindi nell'export CSV.
+ * Precisazione post-review (#587, rilievo HIGH #1 + #2): il campo
+ * `Metadata` di `AuditLog` contiene testo libero scritto dall'utente in
+ * più call site, non solo il titolo di un prompt:
+ *   - `dati.titolo` in `editor::prompt_crea`/`prompt_aggiorna`;
+ *   - `parsed.titolo` in `import_export.rs`;
+ *   - `path`/`nuovo_nome` — il percorso gerarchico completo della
+ *     cartella, costruito da `calcola_path` sui nomi scelti dall'utente
+ *     (es. "Clienti/Rossi Spa/Preventivi 2026") — in `cartelle.rs`
+ *     (`folder.creato`, `folder.rinominato`, `folder.eliminato`);
+ *   - la `label` di variante in `varianti.rs` (`variante.creata`);
+ *   - `dati.etichetta` nei golden test in `regression.rs`.
+ * Di questi, il più rivelatore è il percorso di cartella: può portare
+ * l'intera gerarchia nome-cliente/nome-progetto, non un singolo titolo.
+ *
+ * Cosa è stato effettivamente verificato, e con quale portata:
+ * - che NESSUNO dei ~35 call site di `audit::registra` passi mai il
+ *   `Body` o la `Description` del prompt — verificato leggendo ogni call
+ *   site; ancorato lato Rust dai test `audit::test::
+ *   titolo_nei_metadati_non_include_body_ne_descrizione` (prompt) e
+ *   `audit::test::path_cartella_nei_metadati_di_folder_creato_e_rinominato`
+ *   (cartella).
+ * - l'elenco qui sopra dei call site che scrivono testo libero è quello
+ *   emerso da quella stessa lettura manuale: non c'è un test automatico
+ *   che lo tenga esaustivo per sempre — un futuro call site potrebbe
+ *   aggiungerne altri senza che questo commento se ne accorga.
+ *
+ * `AUDIT_COSA` deve riflettere entrambe le cose: cosa resta fuori
+ * (Body/Description/conversazioni) E cosa (titoli, etichette, percorsi
+ * di cartella) finisce nei metadati e quindi nell'export CSV.
  */
 
 export const AUDIT_LABEL_SIDEBAR = "Registro attività";
@@ -36,10 +54,13 @@ export const AUDIT_COSA =
   "export, versioni, valutazioni e configurazione dei provider AI. " +
   "Non registra il contenuto dei prompt (corpo e descrizione) né le " +
   "conversazioni, e non traccia le richieste inviate ai modelli AI. " +
-  "Registra però titoli ed etichette (ad es. il titolo di un prompt o " +
-  "l'etichetta di un golden test) per identificare a quale elemento si " +
-  "riferisce ogni voce: se contengono nomi di clienti o progetti, " +
-  "finiscono anche nell'export CSV.";
+  "Registra però testi liberi scelti da te, per identificare a quale " +
+  "elemento si riferisce ogni voce: il titolo di un prompt, " +
+  "l'etichetta di un golden test o di una variante e, soprattutto, il " +
+  "nome e il percorso completo di una cartella quando la crei o la " +
+  "rinomini (ad es. \"Clienti/Rossi Spa/Preventivi 2026\"). Se questi " +
+  "testi contengono nomi di clienti o progetti, finiscono anche " +
+  "nell'export CSV.";
 
 export const AUDIT_DOVE =
   "Le voci restano nel database locale del vault, sul tuo computer: " +

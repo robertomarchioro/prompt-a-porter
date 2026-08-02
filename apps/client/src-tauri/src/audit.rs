@@ -825,4 +825,68 @@ mod test {
             );
         }
     }
+
+    /// Ancora al comportamento reale — non solo alla formulazione del
+    /// testo TS — l'altra metà della correzione della issue #587 (rilievo
+    /// HIGH residuo): il percorso gerarchico completo di una cartella
+    /// finisce nei metadati sia alla creazione (`folder.creato`) sia alla
+    /// rinomina (`folder.rinominato`), passando per `cartelle::crea_pure`/
+    /// `rinomina_pure` — lo stesso codice invocato dai comandi Tauri
+    /// `folder_crea`/`folder_rinomina`, solo senza l'incapsulamento in
+    /// `tauri::State`. Usa una gerarchia a 2 livelli con un nome che
+    /// somiglia a un cliente reale, per rendere esplicito quanto sia più
+    /// rivelatore di un semplice titolo.
+    #[test]
+    fn path_cartella_nei_metadati_di_folder_creato_e_rinominato() {
+        let conn = db_test();
+        let padre = crate::cartelle::crea_pure(
+            &conn,
+            &crate::cartelle::NuovaCartella {
+                nome: "Clienti".to_string(),
+                parent_folder_id: None,
+            },
+        )
+        .unwrap();
+        let figlia_id = crate::cartelle::crea_pure(
+            &conn,
+            &crate::cartelle::NuovaCartella {
+                nome: "Rossi Spa".to_string(),
+                parent_folder_id: Some(padre.clone()),
+            },
+        )
+        .unwrap();
+
+        let meta_creazione: String = conn
+            .query_row(
+                "SELECT Metadata FROM AuditLog WHERE Action = 'folder.creato' AND EntityId = ?1",
+                [&figlia_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            meta_creazione, "/Clienti/Rossi Spa",
+            "Metadata di folder.creato deve contenere il percorso completo, non solo il nome"
+        );
+
+        crate::cartelle::rinomina_pure(
+            &conn,
+            &crate::cartelle::RinominaCartella {
+                id: figlia_id.clone(),
+                nuovo_nome: "Rossi Spa (ex Bianchi)".to_string(),
+            },
+        )
+        .unwrap();
+
+        let meta_rinomina: String = conn
+            .query_row(
+                "SELECT Metadata FROM AuditLog WHERE Action = 'folder.rinominato' AND EntityId = ?1",
+                [&figlia_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            meta_rinomina, "Rossi Spa (ex Bianchi)",
+            "Metadata di folder.rinominato deve contenere il nuovo nome scelto dall'utente"
+        );
+    }
 }
