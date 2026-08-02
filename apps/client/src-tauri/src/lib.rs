@@ -17,6 +17,7 @@ pub mod libreria;
 pub mod linting;
 pub mod log_redazione;
 pub mod migrazione;
+pub mod panic_diagnostics;
 pub mod preferenze;
 pub mod pricing;
 pub mod prompt;
@@ -300,6 +301,17 @@ fn copia_dir_ricorsiva(src: &std::path::Path, dst: &std::path::Path) -> std::io:
 }
 
 pub fn run() {
+    // Fix #586 — il PRIMA POSSIBILE, prima di ogni plugin/setup Tauri:
+    // installa l'hook di panic globale. Motivazione: `ort` 2.0.0-rc.13
+    // chiama `.expect(...)` internamente su un fallimento di `dlopen` di
+    // libonnxruntime — un panic dentro la crate, non un `Result` — e con
+    // `panic = "abort"` (profilo release) l'hook di panic di default scrive
+    // SOLO su stderr, che un'app GUI non ha: nessuna traccia arrivava mai nel
+    // log. L'hook viene invocato ANCHE con `panic = "abort"` (l'abort segue
+    // l'hook, non lo sostituisce) — vedi `panic_diagnostics` per i dettagli e
+    // l'onestà sui limiti di questa mitigazione (diagnosticabile ≠ eliminato).
+    panic_diagnostics::installa();
+
     // Registra sqlite-vec come auto-extension PRIMA che venga aperta qualunque
     // connessione SQLite (vault SQLCipher incluso). Idempotente via std::sync::Once.
     // Vedi docs/architettura/decisioni/sqlite-vec-sqlcipher.md.
@@ -410,6 +422,17 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .map_err(|e| format!("Impossibile ottenere la directory dati dell'app: {e}"))?;
+
+            // Fix #586: appena la directory dei log è risolvibile, la comunica
+            // all'hook di panic installato in cima a `run()` — così il file
+            // `pap-crash.log` finisce accanto a `pap.log` invece che nella
+            // temp-dir di fallback. Non-fatal se la risoluzione fallisce (resta
+            // il fallback); questo è best-effort diagnostico, non deve mai
+            // impedire l'avvio dell'app.
+            match app.path().app_log_dir() {
+                Ok(log_dir) => panic_diagnostics::imposta_directory_crash_log(log_dir),
+                Err(e) => log::warn!("Impossibile determinare la cartella dei log per il crash log: {e}"),
+            }
 
             // -- Migrazione one-shot dati legacy com.pap.app -> com.pap.client --
             // Prima esecuzione dopo il rename identifier (#389): sposta la

@@ -27,6 +27,16 @@
     rank_sem: number | null;
   }
 
+  /// Fix #582: risposta di prompt_cerca_ibrida (src-tauri/src/ricerca_ibrida.rs
+  /// RispostaRicercaIbrida). `modello_disponibile: false` distingue "il
+  /// modello di embedding non è caricato" da "nessun risultato" — prima di
+  /// questo fix l'errore di caricamento veniva scartato in silenzio lato
+  /// Rust e la UI mostrava zero risultati in entrambi i casi.
+  interface RispostaRicercaIbrida {
+    risultati: RisultatoIbrido[];
+    modello_disponibile: boolean;
+  }
+
   interface Preferenze {
     ricerca_semantica_abilitata: boolean;
     ricerca_alpha: number;
@@ -47,6 +57,13 @@
   /// contributo semantico). Usato per disambiguare badge "ibrida con
   /// match sem" vs "ibrida ma solo lex".
   let qualcheMatchSem = $state(false);
+  /// Fix #582: true quando l'ultima ricerca ibrida è stata degradata a
+  /// FTS5-only perché il modello di embedding non è caricato (non
+  /// scaricato, init fallita, o non ricaricabile) — distinto da "nessun
+  /// risultato". Mostrato nella UI invece del generico "Nessun risultato",
+  /// così l'utente non deve aprire Impostazioni per capire perché la
+  /// ricerca semantica non sta contribuendo.
+  let modelloSemanticoNonDisponibile = $state(false);
   let modalita = $state<"ricerca" | "compila">("ricerca");
   let promptSelezionato = $state<PromptRisultato | null>(null);
   let valoriSegnaposti = $state<Record<string, string>>({});
@@ -139,20 +156,25 @@
   async function cerca(q: string) {
     try {
       if (prefRicercaSemantica && q.trim().length > 0) {
-        const ibridi = await invoke<RisultatoIbrido[]>("prompt_cerca_ibrida", {
-          query: q,
-          limit: 20,
-          alpha: prefAlpha,
-        });
-        risultati = ibridi;
+        const risposta = await invoke<RispostaRicercaIbrida>(
+          "prompt_cerca_ibrida",
+          {
+            query: q,
+            limit: 20,
+            alpha: prefAlpha,
+          },
+        );
+        risultati = risposta.risultati;
         usaIbrida = true;
-        qualcheMatchSem = ibridi.some((r) => r.rank_sem !== null);
+        qualcheMatchSem = risposta.risultati.some((r) => r.rank_sem !== null);
+        modelloSemanticoNonDisponibile = !risposta.modello_disponibile;
       } else {
         risultati = await invoke<PromptRisultato[]>("prompt_cerca", {
           query: q,
         });
         usaIbrida = false;
         qualcheMatchSem = false;
+        modelloSemanticoNonDisponibile = false;
       }
       indiceSelezionato = 0;
       vaultChiuso = false;
@@ -161,6 +183,7 @@
       vaultChiuso = true;
       usaIbrida = false;
       qualcheMatchSem = false;
+      modelloSemanticoNonDisponibile = false;
     }
   }
 
@@ -366,6 +389,15 @@
           title="Ricerca ibrida lessicale + semantica attiva (α = {prefAlpha.toFixed(2)})"
           >🔎 sem</span
         >
+      {:else if usaIbrida && modelloSemanticoNonDisponibile}
+        <!-- Fix #582: la ricerca semantica è abilitata nelle preferenze ma
+             degradata a FTS5-only — segnale distinto dal badge "sem" attivo,
+             visibile anche quando ci sono comunque risultati lessicali. -->
+        <span
+          class="palette-badge-sem palette-badge-sem--non-disponibile"
+          title="Ricerca semantica abilitata ma il modello non è caricato: risultati solo testuali (FTS5)"
+          >🔎 non caricato</span
+        >
       {/if}
     </div>
 
@@ -376,12 +408,24 @@
         </div>
       {:else if risultati.length === 0}
         <div class="palette-vuoto">
-          <p class="muted">
-            {query ? "Nessun risultato" : "Nessun prompt ancora"}
-          </p>
-          <p class="subtle" style="font-size: var(--fs-xs)">
-            {query ? "Prova una ricerca diversa" : "Crea il tuo primo prompt dalla libreria"}
-          </p>
+          {#if query && modelloSemanticoNonDisponibile}
+            <!-- Fix #582: distinto da "Nessun risultato" — qui la ricerca
+                 lessicale FTS5 non ha trovato nulla E il modello semantico
+                 non è caricato, quindi non ha nemmeno potuto contribuire. -->
+            <p class="muted">Modello di ricerca semantica non disponibile</p>
+            <p class="subtle" style="font-size: var(--fs-xs)">
+              La ricerca ha usato solo il testo esatto (FTS5). Scarica o
+              inizializza il modello da Impostazioni → Ricerca &amp; Embeddings
+              per riattivare la ricerca semantica.
+            </p>
+          {:else}
+            <p class="muted">
+              {query ? "Nessun risultato" : "Nessun prompt ancora"}
+            </p>
+            <p class="subtle" style="font-size: var(--fs-xs)">
+              {query ? "Prova una ricerca diversa" : "Crea il tuo primo prompt dalla libreria"}
+            </p>
+          {/if}
         </div>
       {:else}
         <div class="palette-header-sezione">
@@ -540,6 +584,15 @@
     font-family: var(--font-mono);
     white-space: nowrap;
     cursor: help;
+  }
+
+  /* Fix #582: variante del badge "sem" per il degrado a FTS5-only —
+     colore neutro/avviso invece dell'accento "team", per non sembrare che
+     la ricerca semantica stia contribuendo quando in realtà non può. */
+  .palette-badge-sem--non-disponibile {
+    background: var(--bg-overlay);
+    border-color: var(--border-default);
+    color: var(--text-subtle);
   }
 
   /* ── Corpo ── */

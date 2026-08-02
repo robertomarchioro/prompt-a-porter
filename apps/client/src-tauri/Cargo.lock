@@ -3189,6 +3189,7 @@ dependencies = [
  "argon2",
  "criterion",
  "flate2",
+ "libloading 0.9.0",
  "log",
  "ndarray",
  "ort",
@@ -3211,6 +3212,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "tempfile",
+ "testing_logger",
  "tokenizers",
  "ureq",
  "url",
@@ -5034,6 +5036,15 @@ checksum = "c4790fc369d5a530f4b544b094e31388b9b3a37c0f4652ade4505945f5660d24"
 dependencies = [
  "new_debug_unreachable",
  "utf-8",
+]
+
+[[package]]
+name = "testing_logger"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d92b727cb45d33ae956f7f46b966b25f1bc712092aeef9dba5ac798fc89f720"
+dependencies = [
+ "log",
 ]
 
 [[package]]
