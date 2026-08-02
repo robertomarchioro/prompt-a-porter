@@ -22,6 +22,7 @@
   import { statoEditor } from "$lib/stores/preferenze.svelte";
   import { segnaPasso } from "$lib/aiuto/primi-passi.svelte";
   import { scaricaBlob, slugFile } from "$lib/util/dati-export";
+  import { conferma, avvisa } from "$lib/util/conferma";
 
   const META_KEY = "pap.detail.meta-collapsed";
   function caricaMetaCollapsed(): boolean {
@@ -436,7 +437,7 @@
       warnImport = { aperto: true, deps, lavorando: false };
       return;
     }
-    const ok = window.confirm(
+    const ok = await conferma(
       `Eliminare il prompt "${titoloVis}"?\n\nIl prompt verrà spostato nel Cestino, da cui potrai ripristinarlo o eliminarlo definitivamente.`,
     );
     if (!ok) return;
@@ -444,7 +445,7 @@
       await eseguiSoftDelete();
     } catch (e) {
       console.error("[detail] elimina", e);
-      window.alert("Errore nell'eliminazione del prompt: " + String(e));
+      await avvisa("Errore nell'eliminazione del prompt: " + String(e));
     }
   }
 
@@ -457,7 +458,7 @@
       warnImport = { aperto: false, deps: [], lavorando: false };
     } catch (e) {
       console.error("[detail] rimuovi import e cancella", e);
-      window.alert("Errore durante la rimozione degli import: " + String(e));
+      await avvisa("Errore durante la rimozione degli import: " + String(e));
       warnImport.lavorando = false;
     }
   }
@@ -471,7 +472,7 @@
     if (dirty) {
       const ok = await salvaManuale();
       if (!ok) {
-        window.alert("Impossibile salvare il prompt prima di aprire Compila.");
+        await avvisa("Impossibile salvare il prompt prima di aprire Compila.");
         return;
       }
     }
@@ -490,7 +491,7 @@
       window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
     } catch (e) {
       console.error("[detail] toggle preferito", e);
-      window.alert("Errore nel marcare il preferito: " + String(e));
+      await avvisa("Errore nel marcare il preferito: " + String(e));
     }
   }
 
@@ -505,7 +506,7 @@
       );
     } catch (e) {
       console.error("[detail] fork", e);
-      window.alert("Errore nel fork del prompt: " + String(e));
+      await avvisa("Errore nel fork del prompt: " + String(e));
     }
   }
 
@@ -518,7 +519,7 @@
       scaricaBlob(blob, `${slugFile(titolo || dettaglio.titolo)}.md`);
     } catch (e) {
       console.error("[detail] export markdown", e);
-      window.alert("Errore nell'esportazione Markdown: " + String(e));
+      await avvisa("Errore nell'esportazione Markdown: " + String(e));
     }
   }
 

@@ -23,6 +23,7 @@
   import CommandPalette from "$lib/superfici/CommandPalette.svelte";
   import Onboarding from "$lib/superfici/Onboarding.svelte";
   import Shell from "$lib/superfici/Shell.svelte";
+  import DialogoHost from "$lib/components/DialogoHost.svelte";
   import {
     statoTema,
     caricaTemaTono,
@@ -136,6 +137,13 @@
   />
 {:else}
   <Shell />
+{/if}
+
+<!-- Host globale conferma()/avvisa() macOS (issue conferme distruttive
+     saltate): fuori dalla finestra palette, sempre montato per ultimo così
+     lo stack di conferma appare sopra qualunque altra modale aperta. -->
+{#if etichetta !== "palette"}
+  <DialogoHost />
 {/if}
 
 <style>

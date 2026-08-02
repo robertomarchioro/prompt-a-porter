@@ -17,7 +17,9 @@
   } from "@tauri-apps/plugin-autostart";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { onMount, onDestroy, untrack } from "svelte";
-  import { eseguiRelaunchPostInstall } from "$lib/updater-relaunch";
+  import { eseguiInstallaAggiornamento } from "./installa-aggiornamento-logic";
+  import { conferma } from "$lib/util/conferma";
+  import { info as logInfoPlugin, error as logErrorePlugin } from "@tauri-apps/plugin-log";
   import {
     Palette,
     List as ListIcon,
@@ -901,9 +903,10 @@
   }
 
   async function pulisciLog(): Promise<void> {
-    if (!window.confirm("Pulire il file di log corrente?\n\nI file rotati (vecchi) NON verranno toccati.")) {
-      return;
-    }
+    const ok = await conferma(
+      "Pulire il file di log corrente?\n\nI file rotati (vecchi) NON verranno toccati.",
+    );
+    if (!ok) return;
     debugErrore = "";
     debugOpInCorso = "pulisci";
     try {
@@ -985,6 +988,21 @@
     noteRilascio.testo ? renderNotesHtml(noteRilascio.testo) : "",
   );
 
+  // Scrive nel file di log via tauri-plugin-log (permesso `log:default`,
+  // già presente in capabilities/default.json). Fallback su console.* se il
+  // comando non è disponibile (es. preview senza backend Tauri): il logging
+  // non deve mai far fallire il flusso di installazione che avvolge.
+  function logInfo(messaggio: string): void {
+    void logInfoPlugin(messaggio).catch(() => {
+      console.info(messaggio);
+    });
+  }
+  function logErrore(messaggio: string): void {
+    void logErrorePlugin(messaggio).catch(() => {
+      console.error(messaggio);
+    });
+  }
+
   async function aggiornaNoteRilascio(versione: string, corpoRelease: string): Promise<void> {
     noteRilascio = await recuperaNoteRilascio({
       versione,
@@ -1017,42 +1035,68 @@
     }
   }
 
+  // Issue log installazione update: nel tentativo osservato dal vivo
+  // (macOS, «Installa e riavvia») il file di log non conteneva UNA riga
+  // per trenta secondi, poi l'app si è riavviata restando alla versione
+  // precedente — nessun percorso di questo codice registrava nulla, quindi
+  // non è stato possibile stabilire la causa. La sequenza conferma → check
+  // → downloadAndInstall → relaunch (e ogni suo esito) è ora estratta in
+  // `eseguiInstallaAggiornamento`, loggata passo-passo. Fix #443: su
+  // Windows (NSIS) l'installer chiude e riavvia l'app da solo dopo
+  // downloadAndInstall(); su Linux (AppImage/.deb) e macOS il binario
+  // viene sostituito in-place ma il processo corrente resta vivo, serve
+  // chiamare esplicitamente relaunch().
+  //
+  // L'intera funzione — conferma inclusa — è sotto un solo try/catch: nella
+  // versione precedente `window.confirm` era chiamato FUORI dal try, quindi
+  // un'eventuale eccezione lì avrebbe rigettato la Promise senza che nulla
+  // la catturasse (nessun messaggio, nessun log, app invariata — proprio il
+  // sintomo osservato). Nota: questo intervento rende il caso diagnosticabile,
+  // non ne chiude la causa, che resta ignota.
   async function installaAggiornamento(): Promise<void> {
     if (updaterStato.kind !== "available") return;
-    const ok = window.confirm(
-      `Installare la versione ${updaterStato.version}?\n\nL'app verrà chiusa e riavviata. I tuoi dati restano intatti.`,
-    );
-    if (!ok) return;
-    updaterStato = { kind: "installing" };
+    const versione = updaterStato.version;
     try {
       const { check } = await import("@tauri-apps/plugin-updater");
-      const update = await check();
-      if (!update) {
-        updaterStato = {
-          kind: "error",
-          message: "Update non più disponibile (forse già installato?)",
-        };
-        return;
-      }
-      await update.downloadAndInstall();
-      // Fix #443: su Windows (NSIS) l'installer chiude e riavvia l'app da
-      // solo dopo downloadAndInstall(). Su Linux (AppImage/.deb) e macOS
-      // questo NON accade: il binario viene sostituito in-place ma il
-      // processo corrente resta in esecuzione con il vecchio codice.
-      // Chiamiamo esplicitamente relaunch() per garantire il riavvio ovunque.
       const { relaunch } = await import("@tauri-apps/plugin-process");
-      const risultatoRelaunch = await eseguiRelaunchPostInstall(relaunch);
-      if (risultatoRelaunch.kind === "riavvio_manuale_richiesto") {
-        console.error(
-          "[impostazioni] relaunch post-update fallito, riavvio manuale richiesto",
-        );
-        updaterStato = { kind: "error", message: risultatoRelaunch.messaggio };
-        return;
+      const risultato = await eseguiInstallaAggiornamento(versione, {
+        conferma,
+        check,
+        relaunch,
+        logInfo,
+        logErrore,
+        onConfermato: () => {
+          updaterStato = { kind: "installing" };
+        },
+      });
+      switch (risultato.kind) {
+        case "annullato":
+          return;
+        case "non_disponibile":
+          updaterStato = {
+            kind: "error",
+            message: "Update non più disponibile (forse già installato?)",
+          };
+          return;
+        case "riavvio_manuale":
+        case "errore":
+          updaterStato = { kind: "error", message: risultato.messaggio };
+          return;
+        case "riavviato":
+          // Se relaunch() ha successo il processo termina prima di
+          // arrivare qui sulla maggior parte delle piattaforme; il
+          // fallback resta idle.
+          updaterStato = { kind: "idle" };
+          return;
       }
-      // Se relaunch() ha successo il processo termina prima di arrivare
-      // qui sulla maggior parte delle piattaforme; il fallback resta idle.
-      updaterStato = { kind: "idle" };
     } catch (e) {
+      // Rete di sicurezza per un'eccezione fuori da
+      // eseguiInstallaAggiornamento (es. gli import() dinamici dei plugin):
+      // quella funzione cattura già le proprie, ma qui non deve sfuggire
+      // nulla senza log, per lo stesso motivo descritto sopra.
+      logErrore(
+        `[updater] installaAggiornamento: eccezione al di fuori della logica principale — ${String(e)}`,
+      );
       updaterStato = { kind: "error", message: String(e) };
     }
   }

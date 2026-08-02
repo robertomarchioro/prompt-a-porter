@@ -19,6 +19,7 @@
     apriMenu,
     type VoceMenu,
   } from "$lib/stores/menu-contestuale.svelte";
+  import { conferma } from "$lib/util/conferma";
 
   interface ConteggiViste {
     tutti: number;
@@ -174,13 +175,10 @@
   }
 
   async function eliminaCartella(cart: Cartella): Promise<void> {
-    if (
-      !confirm(
-        `Eliminare la cartella "${cart.nome}"? I prompt al suo interno torneranno alla libreria principale.`,
-      )
-    ) {
-      return;
-    }
+    const ok = await conferma(
+      `Eliminare la cartella "${cart.nome}"? I prompt al suo interno torneranno alla libreria principale.`,
+    );
+    if (!ok) return;
     try {
       await invoke<void>("folder_elimina", { id: cart.id });
       if (folderSelezionato === cart.id) onSelezionaFolder(null);
