@@ -41,6 +41,19 @@
 //! e allega `pap.log` a mano bypassa questa redazione — non c'è modo di
 //! intercettarlo lato Rust; l'unico modo per ripulire quel file è
 //! `debug_log_pulisci` prima di allegarlo.
+//!
+//! **Indagine issue #584 ("pulisci log non pulisce nulla", segnalata su
+//! Windows, non riprodotta dal vivo — macchina di sviluppo Linux
+//! headless):** la conferma UI (`conferma()`, pass-through diretto a
+//! `window.confirm` fuori da macOS) e un lock esclusivo Windows sono
+//! state escluse come causa — vedi analisi in PR. Trovato invece un
+//! difetto reale nello stato del writer di `tauri-plugin-log` non
+//! risincronizzato dopo un truncate esterno: vedi doc di
+//! `tronca_file_log` più sotto per i dettagli e per il limite noto che
+//! resta comunque irrisolto. **Non chiude la #584**: la causa del
+//! sintomo riportato su Windows resta ignota, questo modulo migliora
+//! solo la corsa critica trovabile da codice e l'osservabilità del
+//! comando.
 
 use std::fs::{self, File};
 use std::io::{BufWriter, Read, Write};
@@ -226,17 +239,77 @@ pub fn debug_log_apri_cartella(app: tauri::AppHandle) -> Result<(), PapErrore> {
     Ok(())
 }
 
+/// Nucleo puro di `debug_log_pulisci`: tronca `path` a zero byte e ritorna
+/// `(size_prima, size_dopo)` in byte. Estratto a parte per essere
+/// testabile senza `AppHandle` (stesso motivo di `ultime_righe_parsate`).
+///
+/// **Indagine #584 ("pulisci log non pulisce nulla"): cosa si sa e cosa
+/// resta ignoto.** La conferma UI e i permessi/`share_mode` su Windows
+/// sono stati esclusi come causa (vedi PR): `File::create` sui default
+/// Rust concede già `FILE_SHARE_READ|WRITE|DELETE`. Un difetto reale
+/// trovato indagando `tauri-plugin-log` (2.9.0, da cui NON dipendiamo
+/// direttamente per questo tipo — è privato al crate, nessuna API
+/// pubblica lo espone): il suo writer interno (`RotatingFile`) accumula
+/// le righe in un `buffer` in memoria e le scrive su disco solo al
+/// `flush()`, in modalità *append*. Se quel buffer contiene righe non
+/// ancora scaricate nell'istante in cui questa funzione tronca il file
+/// dall'esterno, quelle righe verrebbero scritte **dopo** il truncate al
+/// primo evento di log successivo — il file sembra vuoto per un istante e
+/// poi "si riempie da solo" con contenuto pre-pulizia, che è esattamente
+/// il sintomo riportato. `log::logger().flush()` (API pubblica del crate
+/// `log`, non del plugin — non richiede alcun accesso ai suoi tipi
+/// privati) forza lo scarico di quel buffer PRIMA del truncate,
+/// eliminando questa corsa critica.
+///
+/// **Limite noto, non risolto qui:** il contatore `current_size` interno
+/// di `RotatingFile` resta comunque disallineato dopo il nostro truncate
+/// (memorizza la dimensione pre-pulizia, non 0) fino alla prossima
+/// rotazione naturale del plugin, con possibile rotazione anticipata o
+/// ritardata rispetto alla soglia configurata. Non esiste modo di
+/// riallineare quel contatore da qui: `log::set_boxed_logger` (crate
+/// `log`) è impostabile una sola volta per processo — non c'è "unset" —
+/// e `RotatingFile` non espone né un metodo di reset né un modo per
+/// ottenerne un riferimento dall'`AppHandle`. Riallinearlo davvero
+/// richiederebbe di forkare/patchare `tauri-plugin-log` per esporre un
+/// hook di reset, cosa che non facciamo in questa PR. Non è un problema
+/// di perdita dati (l'append va comunque a buon fine, vedi test con
+/// scrittore concorrente), solo di dimensione/tempistica di rotazione
+/// riportata in modo incoerente subito dopo un "Pulisci log".
+fn tronca_file_log(path: &Path) -> std::io::Result<(u64, u64)> {
+    let size_prima = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    // Scarica il buffer del writer del plugin PRIMA di troncare: vedi
+    // doc sopra, evita che righe già "in volo" ricompaiano dopo la pulizia.
+    log::logger().flush();
+    File::create(path)?;
+    let size_dopo = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    Ok((size_prima, size_dopo))
+}
+
 /// Truncate il file `pap.log` corrente. I file rotati restano intatti.
 /// Best-effort: se il file non esiste è un no-op (non un errore).
+///
+/// Logga sempre dimensione prima/dopo (issue #584): serve a distinguere,
+/// al prossimo collaudo, i tre scenari possibili — errore mostrato in UI
+/// (`debugErrore`), "falso successo" (comando torna `Ok` ma `size_dopo`
+/// non è 0), oppure svuotamento riuscito ma che si riempie di nuovo subito
+/// dopo (size_dopo=0 in questo log, ma il file torna a crescere appena
+/// dopo — visibile solo riaprendo `debug_log_info` più tardi, non da qui).
 #[tauri::command]
 pub fn debug_log_pulisci(app: tauri::AppHandle) -> Result<(), PapErrore> {
     let dir = log_dir(&app)?;
     let path = dir.join(format!("{NOME_LOG}.log"));
     if !path.exists() {
+        log::info!("Debug log: pulizia richiesta ma il file non esiste (no-op).");
         return Ok(());
     }
-    File::create(&path).map_err(|e| PapErrore::dominio("Pulizia dei log non riuscita.", e))?;
-    log::info!("Debug log pulito (truncate)");
+    let (size_prima, size_dopo) = tronca_file_log(&path)
+        .map_err(|e| PapErrore::dominio("Pulizia dei log non riuscita.", e))?;
+    log::info!(
+        "Debug log pulito (truncate): {size_prima} byte -> {size_dopo} byte. \
+         Nota: il contatore di dimensione interno del writer del plugin di \
+         log resta disallineato fino alla prossima rotazione naturale \
+         (limite noto, vedi #584)."
+    );
     Ok(())
 }
 
@@ -767,6 +840,167 @@ mod test {
         drop(file);
 
         assert_eq!(fs::metadata(&path).unwrap().len(), 0);
+    }
+
+    // ─── issue #584 "pulisci log non pulisce nulla": debug_log_pulisci /
+    // tronca_file_log. Prima di questa PR non esisteva NESSUN test per
+    // debug_log_pulisci — solo permessi/export erano coperti. ───
+
+    /// Caso positivo (mancava del tutto): un file popolato viene
+    /// effettivamente ridotto a zero byte, non solo "non fallisce".
+    #[test]
+    fn tronca_file_log_azzera_davvero_un_file_popolato() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pap.log");
+        fs::write(&path, "riga vecchia 1\nriga vecchia 2\n").unwrap();
+        let size_iniziale = fs::metadata(&path).unwrap().len();
+        assert!(
+            size_iniziale > 0,
+            "precondizione: il file deve partire popolato"
+        );
+
+        let (prima, dopo) = tronca_file_log(&path).unwrap();
+
+        assert_eq!(prima, size_iniziale);
+        assert_eq!(dopo, 0);
+        assert_eq!(
+            fs::metadata(&path).unwrap().len(),
+            0,
+            "il file su disco deve essere davvero vuoto, non solo il valore ritornato"
+        );
+    }
+
+    #[test]
+    fn tronca_file_log_su_file_gia_vuoto_resta_a_zero() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pap.log");
+        fs::write(&path, b"").unwrap();
+
+        let (prima, dopo) = tronca_file_log(&path).unwrap();
+
+        assert_eq!(prima, 0);
+        assert_eq!(dopo, 0);
+    }
+
+    /// Scrittore concorrente (thread separato, come farebbe il logger
+    /// globale su un evento asincrono) che continua ad appendere DOPO il
+    /// truncate: non deve panicare, perdere né corrompere le righe scritte
+    /// dopo la pulizia — solo il contenuto pre-pulizia deve sparire.
+    #[test]
+    fn tronca_file_log_con_scrittore_concorrente_che_continua_a_loggare() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pap.log");
+        fs::write(&path, "contenuto da pulire, non deve sopravvivere\n").unwrap();
+
+        let (prima, dopo) = tronca_file_log(&path).unwrap();
+        assert!(prima > 0);
+        assert_eq!(dopo, 0);
+
+        let path_thread = path.clone();
+        std::thread::spawn(move || {
+            use std::fs::OpenOptions;
+            let mut f = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path_thread)
+                .unwrap();
+            f.write_all(b"riga scritta dopo la pulizia\n").unwrap();
+        })
+        .join()
+        .unwrap();
+
+        let contenuto = fs::read_to_string(&path).unwrap();
+        assert_eq!(contenuto, "riga scritta dopo la pulizia\n");
+        assert!(!contenuto.contains("da pulire"));
+    }
+
+    /// Simula (senza dipendere da `tauri-plugin-log`, che non espone nulla
+    /// di testabile qui — v. doc di `tronca_file_log`) lo stesso pattern
+    /// del suo `RotatingFile`: un writer che accumula un buffer in memoria
+    /// e lo scrive su disco in append solo a `flush()`. Riproduce la corsa
+    /// critica #584: se si tronca il file MENTRE il buffer contiene righe
+    /// non ancora scaricate, quelle righe finiscono scritte DOPO il
+    /// truncate al primo flush successivo — il contenuto "ricompare".
+    struct WriterBufferizzatoInAppend {
+        path: PathBuf,
+        buffer: Vec<u8>,
+    }
+
+    impl WriterBufferizzatoInAppend {
+        fn scrivi(&mut self, s: &str) {
+            self.buffer.extend_from_slice(s.as_bytes());
+        }
+
+        fn flush(&mut self) {
+            if self.buffer.is_empty() {
+                return;
+            }
+            use std::fs::OpenOptions;
+            let mut f = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.path)
+                .unwrap();
+            f.write_all(&self.buffer).unwrap();
+            self.buffer.clear();
+        }
+    }
+
+    /// Riproduce il bug #584 SENZA il fix (flush prima del truncate): la
+    /// riga bufferizzata pre-pulizia riappare dopo — "pulisci log" sembra
+    /// non aver pulito nulla.
+    #[test]
+    fn senza_flush_prima_del_truncate_le_righe_bufferizzate_ricompaiono() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pap.log");
+        fs::write(&path, "riga vecchia\n").unwrap();
+
+        let mut writer = WriterBufferizzatoInAppend {
+            path: path.clone(),
+            buffer: Vec::new(),
+        };
+        writer.scrivi("riga bufferizzata non ancora su disco\n");
+        // Nessun flush qui: simula lo stato del writer del plugin
+        // nell'istante esatto in cui l'utente clicca "Pulisci log".
+
+        File::create(&path).unwrap(); // truncate diretto, senza il nostro fix
+        assert_eq!(
+            fs::metadata(&path).unwrap().len(),
+            0,
+            "il truncate azzera subito"
+        );
+
+        writer.flush(); // il prossimo evento di log del plugin scarica il buffer
+        let contenuto = fs::read_to_string(&path).unwrap();
+        assert!(
+            contenuto.contains("riga bufferizzata"),
+            "senza flush-prima-del-truncate la riga bufferizzata pre-pulizia deve ricomparire"
+        );
+    }
+
+    /// Stesso scenario, ma con l'ordine usato da `tronca_file_log`
+    /// (`log::logger().flush()` prima del truncate): la riga bufferizzata
+    /// finisce scritta PRIMA del truncate, quindi sparisce con lui.
+    #[test]
+    fn con_flush_prima_del_truncate_le_righe_bufferizzate_non_ricompaiono() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pap.log");
+        fs::write(&path, "riga vecchia\n").unwrap();
+
+        let mut writer = WriterBufferizzatoInAppend {
+            path: path.clone(),
+            buffer: Vec::new(),
+        };
+        writer.scrivi("riga bufferizzata non ancora su disco\n");
+
+        writer.flush(); // <- ordine corretto: flush PRIMA del truncate
+        File::create(&path).unwrap();
+
+        let contenuto = fs::read_to_string(&path).unwrap();
+        assert!(
+            contenuto.is_empty(),
+            "con flush-prima-del-truncate non deve ricomparire nulla"
+        );
     }
 
     // ─── HIGH review avversariale pre-merge PR #570: dialog spostato lato Rust ───
