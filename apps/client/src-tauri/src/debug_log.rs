@@ -28,6 +28,19 @@
 //! arbitraria di file, non solo lettura. Il permesso `dialog:allow-save`
 //! non c'entra: regola l'apertura del dialogo nativo, non l'argomento di
 //! un comando Rust.
+//!
+//! **Fix sicurezza MEDIUM (CWE-532), difesa in profondità:** i log
+//! scritti **prima** della fix in `log_redazione` possono contenere
+//! chiavi API dei provider AI in chiaro (header `x-api-key`/
+//! `x-goog-api-key` non mascherati da `ureq`, vedi doc del modulo
+//! `log_redazione`). `debug_log_esporta_zip` e `debug_log_leggi`
+//! applicano `log_redazione::redigi_testo_log_storico` al testo prima di
+//! usarlo, così le due vie d'uscita dei log (archivio ZIP, viewer
+//! in-app) non espongono più quelle chiavi anche per file scritti da
+//! versioni precedenti dell'app. Residuo noto: chi usa «Apri cartella»
+//! e allega `pap.log` a mano bypassa questa redazione — non c'è modo di
+//! intercettarlo lato Rust; l'unico modo per ripulire quel file è
+//! `debug_log_pulisci` prima di allegarlo.
 
 use std::fs::{self, File};
 use std::io::{BufWriter, Read, Write};
@@ -41,6 +54,7 @@ use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
 
 use crate::errore::PapErrore;
+use crate::log_redazione;
 
 /// Nome del file di log configurato in `lib.rs::run` (tauri-plugin-log
 /// TargetKind::LogDir { file_name: Some("pap".to_string()) }).
@@ -321,9 +335,17 @@ pub fn debug_log_esporta_zip(app: tauri::AppHandle) -> Result<Option<String>, Pa
         if fh.read_to_end(&mut buf).is_err() {
             continue;
         }
+        // Difesa in profondità CWE-532 (vedi nota di sicurezza in testa al
+        // modulo): redige le chiavi API eventualmente scritte in chiaro
+        // prima della fix del formatter. `from_utf8_lossy` è safe su bytes
+        // non-UTF-8 (sostituisce con U+FFFD, non panica) — il file di log
+        // è comunque testo prodotto da `log`/`write!`, quindi UTF-8 valido
+        // nella quasi totalità dei casi reali.
+        let testo = String::from_utf8_lossy(&buf);
+        let testo_redatto = log_redazione::redigi_testo_log_storico(&testo);
         zip.start_file(&f.name, opts)
             .map_err(|e| PapErrore::dominio("Creazione dell'archivio dei log non riuscita.", e))?;
-        zip.write_all(&buf)
+        zip.write_all(testo_redatto.as_bytes())
             .map_err(|e| PapErrore::dominio("Creazione dell'archivio dei log non riuscita.", e))?;
     }
 
@@ -437,8 +459,17 @@ fn parse_riga(line: &str) -> RigaLog {
 /// e `n`, ritorna le ultime `n` righe parsate. Estratta a parte per poter
 /// scrivere test su un "file fittizio" (stringa in memoria o scritta su
 /// un file temporaneo) senza dover simulare un `AppHandle` Tauri.
+///
+/// Applica prima `log_redazione::redigi_testo_log_storico` (difesa in
+/// profondità CWE-532, vedi nota di sicurezza in testa al modulo): il
+/// viewer in-app non deve mostrare chiavi API scritte in chiaro da
+/// versioni precedenti dell'app. Va fatto sul testo INTERO, non riga per
+/// riga dopo lo split — la redazione è stateful (eredita il target dalla
+/// riga con prefisso precedente per le righe di continuazione del
+/// preludio HTTP di `ureq`).
 fn ultime_righe_parsate(contenuto: &str, n: usize) -> Vec<RigaLog> {
-    let righe: Vec<&str> = contenuto.lines().collect();
+    let contenuto_redatto = log_redazione::redigi_testo_log_storico(contenuto);
+    let righe: Vec<&str> = contenuto_redatto.lines().collect();
     let inizio = righe.len().saturating_sub(n);
     righe[inizio..].iter().map(|l| parse_riga(l)).collect()
 }
@@ -555,6 +586,51 @@ mod test {
         assert_eq!(r.message, "");
     }
 
+    // ─── fix sicurezza CWE-532: `log_redazione::formatta_riga` sostituisce
+    // il formatter di default di `tauri-plugin-log` in `lib.rs::run`. Il
+    // layout `[data][ora][target][LIVELLO] messaggio` DEVE restare
+    // identico — è ciò da cui dipende `parse_riga` qui sopra. Roundtrip
+    // per tutti i livelli, con e senza redazione. ───
+
+    #[test]
+    fn riga_del_nuovo_formatter_passa_per_parse_riga_per_ogni_livello() {
+        for (level, atteso) in [
+            (log::Level::Trace, "TRACE"),
+            (log::Level::Debug, "DEBUG"),
+            (log::Level::Info, "INFO"),
+            (log::Level::Warn, "WARN"),
+            (log::Level::Error, "ERROR"),
+        ] {
+            let riga = crate::log_redazione::formatta_riga(
+                "pap_lib::editor",
+                level,
+                "prompt salvato id=abc",
+            );
+            let r = parse_riga(&riga);
+            assert!(!r.timestamp.is_empty(), "livello {atteso}: {riga}");
+            assert_eq!(r.level, atteso, "livello {atteso}: {riga}");
+            assert_eq!(r.target, "pap_lib::editor", "livello {atteso}: {riga}");
+            assert_eq!(
+                r.message, "prompt salvato id=abc",
+                "livello {atteso}: {riga}"
+            );
+        }
+    }
+
+    #[test]
+    fn riga_del_nuovo_formatter_con_target_ureq_passa_per_parse_riga_e_resta_redatta() {
+        let riga = crate::log_redazione::formatta_riga(
+            "ureq::unit",
+            log::Level::Debug,
+            "writing prelude: POST / HTTP/1.1\r\nx-api-key: sk-segreto\r\n\r\n",
+        );
+        let r = parse_riga(&riga);
+        assert_eq!(r.level, "DEBUG");
+        assert_eq!(r.target, "ureq::unit");
+        assert!(!r.message.contains("sk-segreto"));
+        assert!(r.message.contains("x-api-key: ***"));
+    }
+
     // ─── #558 punto 1: ultime_righe_parsate / debug_log_leggi ───
 
     #[test]
@@ -581,6 +657,24 @@ mod test {
     #[test]
     fn ultime_righe_parsate_file_vuoto() {
         assert!(ultime_righe_parsate("", 200).is_empty());
+    }
+
+    /// Difesa in profondità CWE-532: una riga già scritta su disco (da
+    /// prima della fix del formatter) con la chiave in chiaro nel target
+    /// `ureq` deve arrivare redatta al viewer in-app.
+    #[test]
+    fn ultime_righe_parsate_redige_chiavi_di_log_storici_target_ureq() {
+        let contenuto = "\
+[2026-05-11][10:00:00][ureq::unit][DEBUG] x-api-key: sk-vecchia-in-chiaro
+[2026-05-11][10:00:01][pap_lib::sync][WARN] prompt cookie: scartato per conflitto
+";
+        let righe = ultime_righe_parsate(contenuto, 10);
+        assert_eq!(righe.len(), 2);
+        assert!(!righe[0].message.contains("sk-vecchia-in-chiaro"));
+        assert!(righe[0].message.contains("x-api-key: ***"));
+        // Il messaggio applicativo con "cookie:" per coincidenza nel testo
+        // (target NON ureq) non deve perdere la coda (trappola #2).
+        assert_eq!(righe[1].message, "prompt cookie: scartato per conflitto");
     }
 
     /// Riproduce `debug_log_leggi` end-to-end su un file di log fittizio
