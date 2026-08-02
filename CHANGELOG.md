@@ -1,5 +1,34 @@
 # Changelog — Prompt a Porter
 
+## v0.8.44 — Segreti fuori dai log e correzioni dal collaudo su macOS (2026-08-02)
+
+> Il primo uso reale su Mac ha fatto emergere due funzioni che non avevano **mai** funzionato: i link esterni e il download del modello per la ricerca semantica. A queste si aggiunge una correzione di sicurezza che riguarda anche chi usa già l'app — le chiavi API dei provider finivano in chiaro nel log di debug.
+
+### Novità
+
+- **Elenco dei modelli AI sempre aggiornato** (#560): i selettori di modello in Ritocco e Test Golden pescano ora da un registro unico, aggiornato ogni settimana e consegnato con le nuove versioni. I modelli mostrano un nome leggibile («Claude Opus 5») invece dell'identificativo grezzo, le anteprime sono segnalate, e un modello ritirato dal listino resta selezionabile ma marcato come obsoleto — così una configurazione esistente non si rompe. Ollama ed endpoint compatibili restano a testo libero: il loro elenco dipende dalla tua installazione.
+- **Note di rilascio: il changelog al posto del testo standard** (#552): in **Impostazioni → Aggiornamenti** il box mostrava un testo generico che rimandava a un changelog non raggiungibile da lì. Ora mostra la sezione di changelog della versione proposta, formattata e con i link funzionanti.
+
+### Sicurezza
+
+- **Chiavi API dei provider non più in chiaro nel log** (#571): con il log di debug attivo, le chiavi di **Anthropic** e **Google Gemini** venivano scritte per intero in `pap.log`, perché la libreria HTTP registra l'intera richiesta e maschera da sé solo alcune intestazioni. Finivano così anche nell'archivio che la schermata Sviluppo invita ad allegare a una segnalazione. Ora sono sostituite da `***` sia nei log nuovi sia in quelli già scritti, quando vengono letti nel visualizzatore o esportati. La chiave OpenAI non era interessata, perché viaggia in un'intestazione già mascherata.
+  **Se hai usato il log di debug con una chiave Anthropic o Gemini configurata**, i file già sul disco contengono ancora la chiave in chiaro: usa **Impostazioni → Sviluppo → Pulisci log**, e valuta di rigenerare quella chiave.
+
+### Fix
+
+- **I link esterni ora si aprono davvero** (#554, #555, #557): nessun collegamento dell'app apriva alcunché. Non è una regressione — non hanno mai funzionato, perché mancava del tutto il componente che passa gli indirizzi al browser di sistema. Riparati i badge «?» delle schede dell'Editor (Anteprima, Diagnosi, Test Golden, Import e Var.), i link di **Guida e aiuto** e di **Impostazioni → Informazioni**, e altri due punti con lo stesso difetto ma non segnalati: la sezione Dati con la guida agli aggiornamenti, e «Leggi la guida ai primi passi» nella Libreria. Vengono aperti solo indirizzi `http` e `https`.
+- **Ricerca semantica utilizzabile su macOS** (#556): il download del motore falliva sempre su Mac con un errore sull'archivio, e le Impostazioni dichiaravano il modello «pronto» mentre l'avvio rispondeva che mancava. Corretti entrambi: l'estrazione gestisce ora il formato reale dell'archivio su macOS e su Linux, e lo stato non dichiara più pronto ciò che non lo è. L'estrazione è inoltre atomica, così un download interrotto non lascia file parziali scambiati per validi.
+- **Diff del Ritocco: righe contenute nel riquadro** (#553): nella schermata «Modifiche proposte» le righe uscivano dal riquadro sovrapponendosi. I due tentativi precedenti (v0.8.40 e v0.8.41) agivano sulla schermata anziché sul componente del confronto; la correzione è ora dentro il componente stesso, che riceve esplicitamente la modalità di dimensionamento. La Cronologia, che usa lo stesso componente, resta invariata.
+- **Stima dei costi allineata ai listini reali** (#561): la colonna «costo stimato» dei Test Golden usava una tabella prezzi ferma a inizio anno — Opus sovrastimato di 3 volte, Gemini Flash sottostimato di 8 sull'output. I prezzi vengono ora dallo stesso registro dei modelli e si aggiornano insieme a quello; un modello nuovo arriva già col suo prezzo.
+- **La nuova variante compare subito in elenco** (#559): creando una variante con la Libreria ordinata per «recenti», la lista non si riordinava finché non la si ricaricava a mano.
+- **Log live e export dei log** (#558): nella maschera Sviluppo il visualizzatore del log live non mostrava righe — il filtro per livello leggeva i campi in ordine invertito rispetto a come vengono scritti. L'esportazione «Esporta ZIP per issue» chiede ora dove salvare il file, invece di scriverlo in una cartella interna.
+
+### Manutenzione
+
+- **Esempio e benchmark di nuovo compilabili** (#562): erano fermi a un'API di `rand` superata da mesi, il che faceva fallire `cargo test` in locale a chiunque mentre la CI restava verde. Azzerati anche 19 rilievi di analisi statica.
+- **La CI compila tutto il progetto** (#563): il controllo automatico compilava solo la libreria, ed è la ragione per cui esempio e benchmark hanno potuto marcire senza che nulla lo segnalasse.
+- **Build di verifica più veloci** (#564): introdotta la cache delle dipendenze Rust — il job passa da circa 5 minuti a poco meno di 2.
+
 ## v0.8.43 — Audit di sicurezza chiuso (2026-08-01)
 
 > Chiude per intero l'audit di sicurezza su client e server: dieci rilevazioni verificate, tutte corrette. Non ci sono novità né cambi visibili nell'uso quotidiano — è una release di sola sicurezza e manutenzione.
