@@ -1,21 +1,21 @@
 // Guida interattiva — Fase 0: fonte di verità unica dei link alla
 // documentazione utente. Tutti i punti "?" / "Approfondisci" risolvono i
-// loro URL da qui, così quando esisterà il sito dedicato basta cambiare
-// `urlDoc()` in un solo posto (vedi SITO_BASE).
+// loro URL da qui: un solo posto da cambiare per spostare i link.
 //
-// Stato attuale: i documenti utente vivono nel repo (docs/utente/*.md) e si
-// aprono su GitHub nel browser di sistema. È il "sito placeholder" deciso in
-// fase di design (blueprint docs/roadmap/guida-interattiva.md §9): online,
-// esterno all'app, e già funzionante (nessun 404).
-
-const REPO_ORG_REPO = "robertomarchioro/prompt-a-porter";
+// Fix #554/#555/#557: il sito pubblico è live su www.promptaporter.it
+// (landing "Scontrino cucito", VitePress — apps/site/.vitepress/config.ts)
+// da prima ancora della registrazione di questo SITO_BASE: il dominio
+// `prompt-a-porter.app` usato finora era un placeholder mai registrato, e
+// `urlDoc()` risolveva ancora ai file .md su GitHub. Un solo switch da
+// accendere: base del sito + slug pagina, niente più `/blob/main/...md`.
+// VitePress ha `cleanUrls: true` (vedi config), quindi niente estensione
+// `.md` nell'URL pubblico.
 
 /**
- * Base del futuro sito di documentazione dedicato. Finché non esiste, i link
- * puntano ai .md su GitHub (vedi `urlDoc`). Quando il sito sarà pronto, basterà
- * cambiare `urlDoc` per usare questa base + lo slug della pagina.
+ * Base del sito di documentazione pubblico. Le pagine utente vivono sotto
+ * `/utente/<slug>` (VitePress `srcDir: ../../docs`, `base: /`).
  */
-export const SITO_BASE = "https://prompt-a-porter.app/docs"; // placeholder
+export const SITO_BASE = "https://www.promptaporter.it";
 
 /** Chiavi stabili delle pagine di documentazione referenziabili dall'app. */
 export type ChiaveDoc =
@@ -90,13 +90,14 @@ export const DOCS: Record<ChiaveDoc, VoceDoc> = {
 
 /**
  * Costruisce l'URL (assoluto, da aprire nel browser) della pagina di doc per
- * la chiave indicata. Oggi risolve al file `.md` su GitHub; domani basterà
- * cambiare questa funzione per puntare a `SITO_BASE`.
+ * la chiave indicata: `SITO_BASE` + `/utente/<file>` (+ ancora se presente).
+ * Niente estensione `.md`, niente `/blob/main/` — VitePress ha
+ * `cleanUrls: true` e serve i documenti utente da `/utente/<slug>`.
  */
 export function urlDoc(chiave: ChiaveDoc): string {
   const voce = DOCS[chiave];
   const ancora = voce.ancora ? `#${voce.ancora}` : "";
-  return `https://github.com/${REPO_ORG_REPO}/blob/main/docs/utente/${voce.file}.md${ancora}`;
+  return `${SITO_BASE}/utente/${voce.file}${ancora}`;
 }
 
 /** Titolo breve della pagina, per tooltip/aria-label dei punti "?". */

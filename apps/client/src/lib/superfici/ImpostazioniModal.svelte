@@ -58,6 +58,7 @@
   import { nomeFileExport, scaricaBlob } from "$lib/util/dati-export";
   import { renderNotesHtml } from "$lib/util/updater-notes";
   import { apriUrlEsterno } from "$lib/util/apri-url";
+  import { urlDoc } from "$lib/aiuto/docs-links";
   import { gestisciClickLinkMarkdown } from "$lib/util/markdown-click";
   import { recuperaNoteRilascio, type NoteRilascio } from "$lib/util/note-rilascio";
   import { eseguiEsportaLogZip } from "./debug-log-export-logic";
@@ -134,11 +135,6 @@
   // mutazioni del prop sezioneIniziale resettino la navigazione utente.
   let sezione = $state<SezioneId>(untrack(() => sezioneIniziale));
   let query = $state("");
-
-  // ─── M6 PR-4: sezione "Dati" import/export markdown ──────────────
-  // Repo URL hardcoded per link doc utente (no env var per evitare
-  // dipendenza build, valore stabile).
-  const REPO_ORG_REPO = "robertomarchioro/prompt-a-porter";
 
   // Fix #554 (link "Dati"/auto-update): `target="_blank"` non naviga in
   // una webview Tauri; il click viene intercettato per aprire l'URL con
@@ -865,6 +861,17 @@
   let debugErrore = $state("");
   let debugOpInCorso = $state<"" | "esporta" | "pulisci">("");
   let debugMessaggio = $state("");
+
+  // Fix #558 punto 1: il `<details>` "Visualizza log live" parte chiuso;
+  // <LogViewer> monta comunque non appena la sezione "Sviluppo" diventa
+  // attiva (vedi indagine in LogViewer.svelte). Tracciare lo stato open/
+  // closed del <details> e passarlo a <LogViewer aperto> permette al
+  // viewer di ricaricare esplicitamente i dati quando il pannello viene
+  // aperto, invece di aspettare il refresh automatico a 2s.
+  let logViewerAperto = $state(false);
+  function aggiornaLogViewerAperto(evento: Event): void {
+    logViewerAperto = (evento.currentTarget as HTMLDetailsElement).open;
+  }
 
   async function caricaDebugInfo(): Promise<void> {
     debugErrore = "";
@@ -1964,25 +1971,20 @@
           front-matter YAML) e <strong>JSON</strong> (backup round-trip
           completo del vault: storico versioni, tag, cartelle, fork). Vedi la
           <a
-            href="https://github.com/{REPO_ORG_REPO}/blob/main/docs/utente/markdown-import-export.md"
+            href={urlDoc("markdown-import-export")}
             target="_blank"
             rel="noopener"
             onclick={(evento) =>
-              apriLinkDoc(
-                evento,
-                `https://github.com/${REPO_ORG_REPO}/blob/main/docs/utente/markdown-import-export.md`,
-              )}>guida Markdown</a
+              apriLinkDoc(evento, urlDoc("markdown-import-export"))}
+            >guida Markdown</a
           >
           e il
           <a
-            href="https://github.com/{REPO_ORG_REPO}/blob/main/docs/utente/formato-export-json.md"
+            href={urlDoc("export-json")}
             target="_blank"
             rel="noopener"
-            onclick={(evento) =>
-              apriLinkDoc(
-                evento,
-                `https://github.com/${REPO_ORG_REPO}/blob/main/docs/utente/formato-export-json.md`,
-              )}>formato JSON</a
+            onclick={(evento) => apriLinkDoc(evento, urlDoc("export-json"))}
+            >formato JSON</a
           > per i dettagli.
         </p>
 
@@ -2653,13 +2655,14 @@
               <p class="msg-err">{debugErrore}</p>
             {/if}
 
-            <details class="sviluppo-viewer">
+            <details class="sviluppo-viewer" ontoggle={aggiornaLogViewerAperto}>
               <summary>Visualizza log live</summary>
               <p class="hint">
-                Mostra le ultime 200 righe del file con auto-refresh
-                ogni 2 secondi. Filtra per livello o regex.
+                Mostra le righe più recenti in cima, con auto-refresh ogni 2
+                secondi. Filtra per livello o regex; scegli quante righe
+                caricare dal menu "Righe".
               </p>
-              <LogViewer />
+              <LogViewer aperto={logViewerAperto} />
             </details>
           </div>
         </div>
@@ -2693,14 +2696,10 @@
               disponibile una nuova versione. L'app non contatta GitHub
               automaticamente all'avvio. Vedi
               <a
-                href="https://github.com/robertomarchioro/prompt-a-porter/blob/main/docs/utente/auto-update.md"
+                href={urlDoc("auto-update")}
                 target="_blank"
                 rel="noopener"
-                onclick={(evento) =>
-                  apriLinkDoc(
-                    evento,
-                    "https://github.com/robertomarchioro/prompt-a-porter/blob/main/docs/utente/auto-update.md",
-                  )}
+                onclick={(evento) => apriLinkDoc(evento, urlDoc("auto-update"))}
               >
                 docs auto-update
               </a>
