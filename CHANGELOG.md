@@ -1,5 +1,17 @@
 # Changelog — Prompt a Porter
 
+## v0.8.47 — L'aggiornamento torna a funzionare (2026-08-02)
+
+> ⚠️ **Se stai usando la v0.8.44, la v0.8.45 o la v0.8.46, questa versione va installata a mano, una volta sola.** Il pulsante «Installa e riavvia» in quelle versioni è proprio ciò che non funziona, quindi non può portarti qui da solo: scarica l'installatore da questa pagina ed eseguilo normalmente, i tuoi dati restano intatti. Dalla v0.8.47 in avanti l'aggiornamento automatico torna a funzionare da solo.
+
+### Fix
+
+- **Le richieste di conferma tornano a comparire, e con esse l'aggiornamento automatico** (#585, #572, #584): su Windows e Linux, premendo «Installa e riavvia» su un aggiornamento disponibile compariva l'errore `Command plugin:dialog|confirm not allowed by ACL` e non succedeva nulla. Lo stesso accadeva, in silenzio, a **tutte** le operazioni che chiedono conferma: cestinare un prompt, promuovere una variante a principale, pulire i log. Un unico difetto li spiegava tutti.
+
+  La causa era una libreria di sistema aggiunta in v0.8.44 per il dialogo «salva con nome» dell'esportazione: quella libreria sostituisce le finestre di conferma della pagina con una richiesta a un comando che però **non esiste**, quindi ogni conferma falliva prima ancora di essere mostrata. Su Mac non si notava, perché lì le conferme erano già state spostate su una finestra interna all'app per un motivo diverso.
+
+  Ora le conferme usano quella stessa finestra interna **su tutti i sistemi**, senza dipendere dalle finestre di dialogo della pagina. Sono state aggiunte verifiche automatiche che falliscono se qualcuno reintroducesse quella dipendenza.
+
 ## v0.8.46 — Il crash lascia traccia (2026-08-02)
 
 > Le prove su Windows dopo la v0.8.45 hanno fatto emergere alcuni difetti che il codice, da solo, non permetteva di spiegare: l'app che si chiudeva senza scrivere una riga, schermate che non scorrevano, un pulsante di pulizia che lasciava indietro proprio i file da ripulire. Questa release non chiude tutte quelle segnalazioni — alcune restano aperte apposta — ma fa in modo che il prossimo tentativo lasci finalmente delle tracce leggibili invece del silenzio.
