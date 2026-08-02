@@ -22,9 +22,7 @@ use rusqlite::Connection;
 use serde::Serialize;
 use tauri::State;
 
-use crate::embeddings::{
-    assicura_session_caricata, compute_embedding_opt, session_caricata, EmbeddingsState,
-};
+use crate::embeddings::{assicura_session_caricata, compute_embedding_opt, EmbeddingsState};
 use crate::embeddings_store::search_nearest;
 use crate::errore::PapErrore;
 use crate::vault::VaultState;
@@ -272,9 +270,20 @@ pub fn prompt_cerca_ibrida(
     state.with_conn(|conn| {
         let q = query.trim();
         if q.is_empty() {
+            // Coerente col ramo query non vuota sotto (`cerca_semantica`,
+            // review post-merge PR #589 — minore): usa `assicura_session_caricata`
+            // (tenta il riload on-demand se la Session è stata droppata
+            // dal timer idle-unload) invece della sola lettura passiva
+            // `session_caricata`. Senza questo, un modello idle-unloaded ma
+            // ricaricabile risulterebbe `modello_disponibile: false` solo
+            // perché la query era vuota — incoerente col comportamento a
+            // query non vuota.
             return Ok(RispostaRicercaIbrida {
                 risultati: vec![],
-                modello_disponibile: session_caricata(&rt_state),
+                modello_disponibile: valuta_disponibilita_modello(assicura_session_caricata(
+                    &rt_state,
+                    state.inner(),
+                )),
             });
         }
 

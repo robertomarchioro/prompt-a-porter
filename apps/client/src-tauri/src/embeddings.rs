@@ -437,24 +437,27 @@ fn verifica_base_privata(runtime_dir: &Path, base: &Path) -> Result<(), PapError
     // Fix #575 (residuo): tutte le violazioni sotto costruivano
     // `PapErrore::Generico` a mano — nessuna finiva mai nel log, a differenza
     // di `errore_integrita()`/`PapErrore::dominio` (gli unici punti che
-    // chiamano `log::error!`). Il messaggio verso l'utente resta lo stesso
-    // (non è sensibile: percorso locale e bit di permessi, non segreti);
-    // ora però la stessa riga arriva anche al log applicativo.
+    // chiamano `log::error!`). Corretto qui in seconda battuta (review
+    // post-merge PR #589, M1 — CWE-209): il messaggio verso l'utente NON
+    // deve contenere `base.display()`, che su una home directory reale
+    // rivela lo username di sistema (es. `/home/<utente>/...`) — la stessa
+    // classe di dato già eliminata dai messaggi utente dalla #512. Messaggio
+    // opaco verso l'utente, dettaglio con path/uid/permessi solo nel log
+    // (stesso pattern già usato dal ramo "piattaforma non supportata" di
+    // `ort_release_filename`).
     if meta.file_type().is_symlink() {
-        let messaggio = format!(
-            "Verifica integrità fallita per la directory privata {}: è un symlink, \
-             non una directory reale; operazione interrotta.",
-            base.display()
-        );
-        return Err(PapErrore::dominio(messaggio.clone(), messaggio));
+        return Err(PapErrore::dominio(
+            "Verifica integrità fallita per la directory privata di libonnxruntime: è un \
+             symlink, non una directory reale; operazione interrotta.",
+            format!("directory privata {}: è un symlink", base.display()),
+        ));
     }
     if !meta.is_dir() {
-        let messaggio = format!(
-            "Verifica integrità fallita per la directory privata {}: non è una \
-             directory; operazione interrotta.",
-            base.display()
-        );
-        return Err(PapErrore::dominio(messaggio.clone(), messaggio));
+        return Err(PapErrore::dominio(
+            "Verifica integrità fallita per la directory privata di libonnxruntime: non è \
+             una directory; operazione interrotta.",
+            format!("directory privata {}: non è una directory", base.display()),
+        ));
     }
 
     #[cfg(unix)]
@@ -463,23 +466,27 @@ fn verifica_base_privata(runtime_dir: &Path, base: &Path) -> Result<(), PapError
         use std::os::unix::fs::PermissionsExt;
         let uid_atteso = uid_corrente(runtime_dir)?;
         if meta.uid() != uid_atteso {
-            let messaggio = format!(
-                "Verifica integrità fallita per la directory privata {}: proprietario \
-                 inatteso (uid {}, atteso {}); operazione interrotta.",
-                base.display(),
-                meta.uid(),
-                uid_atteso
-            );
-            return Err(PapErrore::dominio(messaggio.clone(), messaggio));
+            return Err(PapErrore::dominio(
+                "Verifica integrità fallita per la directory privata di libonnxruntime: \
+                 proprietario inatteso; operazione interrotta.",
+                format!(
+                    "directory privata {}: proprietario inatteso (uid {}, atteso {})",
+                    base.display(),
+                    meta.uid(),
+                    uid_atteso
+                ),
+            ));
         }
         let mode = meta.permissions().mode() & 0o777;
         if mode != 0o700 {
-            let messaggio = format!(
-                "Verifica integrità fallita per la directory privata {}: permessi {mode:o} \
-                 inattesi (atteso 700); operazione interrotta.",
-                base.display()
-            );
-            return Err(PapErrore::dominio(messaggio.clone(), messaggio));
+            return Err(PapErrore::dominio(
+                "Verifica integrità fallita per la directory privata di libonnxruntime: \
+                 permessi inattesi; operazione interrotta.",
+                format!(
+                    "directory privata {}: permessi {mode:o} inattesi (atteso 700)",
+                    base.display()
+                ),
+            ));
         }
     }
     let _ = runtime_dir; // usato solo su unix (uid probe)
@@ -533,7 +540,12 @@ const SIMBOLO_ORT_API_BASE: &[u8] = b"OrtGetApiBase\0";
 /// dopo riuscirà: sono due chiamate distinte sullo stesso file — dovrebbero
 /// avere lo stesso esito salvo una race esterna (es. il file rimosso nella
 /// finestra fra le due chiamate), ma questa non è una garanzia formale del
-/// sistema operativo.
+/// sistema operativo. Il ramo positivo (preflight riuscito, libreria reale
+/// onnxruntime) NON è coperto da test automatici su macOS/Windows — solo su
+/// Linux con `libc.so.6` come libreria di prova (vedi doc su
+/// `verifica_dlopen_generico`) — cioè proprio le piattaforme nominate dalla
+/// #586. Residuo noto, non colmabile in CI senza un artefatto ONNX Runtime
+/// reale per piattaforma.
 fn preflight_dlopen(lib_path: &Path) -> Result<(), PapErrore> {
     verifica_dlopen_generico(lib_path, SIMBOLO_ORT_API_BASE, "onnxruntime")
 }
@@ -543,6 +555,16 @@ fn preflight_dlopen(lib_path: &Path) -> Result<(), PapErrore> {
 /// qualunque (es. `libc`) senza dover fabbricare un artefatto ONNX Runtime
 /// fittizio (i cui hash SHA-256 reali sono pinnati e non riproducibili in
 /// un test).
+///
+/// **Nota sui test**: usando `libc.so.6` come libreria di prova su Linux, il
+/// processo di test la tiene già residente/pinnata dal linker dinamico (il
+/// suo refcount interno al loader non torna mai a zero) — i test del ramo
+/// positivo NON esercitano quindi il caso reale in cui questa funzione è
+/// l'UNICO detentore del mapping (onnxruntime, non già caricata da altri).
+/// Il comportamento di `std::mem::forget` sotto (fix HIGH, review PR #589)
+/// resta corretto in entrambi i casi — non scarica mai la libreria — ma la
+/// sua necessità (evitare un ciclo dlopen→dlclose→dlopen reale) è verificata
+/// solo manualmente/a runtime su onnxruntime, non da questo test.
 fn verifica_dlopen_generico(
     lib_path: &Path,
     simbolo: &[u8],
@@ -557,6 +579,25 @@ fn verifica_dlopen_generico(
     // SHA-256 dal chiamante (fix #458/#575) prima di questa chiamata: lo
     // stesso livello di fiducia che avrebbe comunque il `dlopen` interno di
     // `ort` subito dopo.
+    //
+    // SAFETY (fix HIGH, review post-merge PR #589): questa giustificazione
+    // copriva solo la provenienza dei byte, non la sicurezza del DOPPIO
+    // caricamento. `ort` 2.0.0-rc.13 tiene la propria `Library` viva in uno
+    // `static OnceLock` per tutta la vita del processo (mai scaricata). Se
+    // qui lasciassimo `libreria` uscire di scope normalmente, `Drop`
+    // chiamerebbe `dlclose` e il `dlopen` di `ort` subito dopo, sullo STESSO
+    // file, diventerebbe un ciclo completo dlopen→dlclose→dlopen invece di
+    // un singolo dlopen con refcount incrementato dal loader dinamico. Per
+    // una libreria nativa complessa come onnxruntime (threadpool interni,
+    // eventuale OpenMP/oneDNN, costruttori/distruttori statici, TLS) un
+    // ciclo di scarico e ricarico nello stesso processo non è garantito
+    // sicuro dal SO (classe di bug nota: "cannot allocate memory in static
+    // TLS block", thread pool non ripristinati dopo l'unload) — è
+    // esattamente il tipo di crash misterioso su `dlopen` (#586) che questo
+    // preflight vuole diagnosticare, non introdurne uno nuovo. `mem::forget`
+    // sotto, sul successo, lascia il mapping vivo: safe perché non libera
+    // memoria né esegue side-effect, si limita a non eseguire mai `Drop` su
+    // un handle di libreria che vogliamo restare caricato comunque.
     unsafe {
         let libreria = libloading::Library::new(lib_path).map_err(|e| {
             PapErrore::dominio(
@@ -580,6 +621,13 @@ fn verifica_dlopen_generico(
                 ),
             )
         })?;
+
+        // Fix HIGH (review post-merge PR #589): NON droppare `libreria` sul
+        // successo — vedi commento SAFETY sopra. Il `dlopen` successivo di
+        // `ort` sullo stesso file trova così la libreria già mappata e si
+        // limita a incrementare il refcount del loader dinamico, invece di
+        // un reload completo.
+        std::mem::forget(libreria);
     }
     Ok(())
 }
@@ -2206,6 +2254,64 @@ mod test {
         let r = base_privata_hardened(&runtime_dir);
         assert!(r.is_err());
         assert!(r.unwrap_err().to_string().contains("integrità"));
+    }
+
+    // ─── M1 (review post-merge PR #589, CWE-209): il messaggio utente non
+    // deve contenere il path della directory privata (rivelerebbe lo
+    // username di sistema su una home directory reale, es.
+    // `/home/<utente>/...`) — stesso principio già applicato dalla #512.
+    // Copre i 4 rami di `verifica_base_privata` toccati dalla review. ───
+
+    #[cfg(unix)]
+    #[test]
+    fn base_privata_hardened_messaggio_utente_simlink_non_contiene_il_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let runtime_dir = dir.path().join("rt");
+        std::fs::create_dir_all(&runtime_dir).unwrap();
+        let bersaglio = dir.path().join("altrove");
+        std::fs::create_dir_all(&bersaglio).unwrap();
+        std::os::unix::fs::symlink(&bersaglio, runtime_dir.join(NOME_BASE_PRIVATA)).unwrap();
+
+        let msg = base_privata_hardened(&runtime_dir).unwrap_err().to_string();
+        assert!(
+            !msg.contains(dir.path().to_str().unwrap()),
+            "il messaggio utente non deve contenere il path locale: {msg}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn base_privata_hardened_messaggio_utente_permessi_larghi_non_contiene_il_path() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let runtime_dir = dir.path().join("rt");
+        let base = runtime_dir.join(NOME_BASE_PRIVATA);
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o777)).unwrap();
+
+        let msg = base_privata_hardened(&runtime_dir).unwrap_err().to_string();
+        assert!(
+            !msg.contains(dir.path().to_str().unwrap()),
+            "il messaggio utente non deve contenere il path locale: {msg}"
+        );
+        // Il permesso numerico grezzo (0o777) resta un dettaglio tecnico:
+        // niente nel messaggio utente oltre a "permessi inattesi".
+        assert!(!msg.contains("777"), "msg: {msg}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn base_privata_hardened_messaggio_utente_file_al_posto_della_dir_non_contiene_il_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let runtime_dir = dir.path().join("rt");
+        std::fs::create_dir_all(&runtime_dir).unwrap();
+        std::fs::write(runtime_dir.join(NOME_BASE_PRIVATA), b"non-una-dir").unwrap();
+
+        let msg = base_privata_hardened(&runtime_dir).unwrap_err().to_string();
+        assert!(
+            !msg.contains(dir.path().to_str().unwrap()),
+            "il messaggio utente non deve contenere il path locale: {msg}"
+        );
     }
 
     // ─────────── #556: estrazione tar.gz — prefisso `./` + entry symlink ───────────
