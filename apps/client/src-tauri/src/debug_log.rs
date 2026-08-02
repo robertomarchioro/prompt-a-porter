@@ -9,7 +9,14 @@
 //! Cmd esposti:
 //! - `debug_log_info` — path + lista file rotati con size/mtime
 //! - `debug_log_apri_cartella` — apre LogDir con file manager OS
-//! - `debug_log_pulisci` — truncate file corrente (mantiene i rotati)
+//! - `debug_log_pulisci` — truncate del file corrente **ed elimina anche
+//!   i file rotati** (schema reale `pap_<YYYY-MM-DD>_<HH-MM-SS>.log`, non
+//!   `pap.log.N` — vedi nota sullo schema più sotto) — vedi Azione 9,
+//!   review PR #588: con `RotationStrategy::KeepAll` (`lib.rs`) i rotati
+//!   non vengono mai eliminati automaticamente, quindi chi ha usato
+//!   l'app prima della redazione CWE-532 (v0.8.44) può averli ancora
+//!   pieni di chiavi API in chiaro, e la versione precedente di questo
+//!   comando li lasciava intatti dando comunque esito "successo"
 //! - `debug_log_esporta_zip` — apre il dialog di salvataggio nativo e
 //!   crea uno ZIP con file log + metadata nel percorso scelto
 //!   dall'utente (issue #558 punto 2: prima scriveva sempre nella stessa
@@ -38,9 +45,43 @@
 //! usarlo, così le due vie d'uscita dei log (archivio ZIP, viewer
 //! in-app) non espongono più quelle chiavi anche per file scritti da
 //! versioni precedenti dell'app. Residuo noto: chi usa «Apri cartella»
-//! e allega `pap.log` a mano bypassa questa redazione — non c'è modo di
-//! intercettarlo lato Rust; l'unico modo per ripulire quel file è
-//! `debug_log_pulisci` prima di allegarlo.
+//! e allega `pap.log` (o un rotato) a mano bypassa questa redazione —
+//! non c'è modo di intercettarlo lato Rust; l'unico modo per ripulire
+//! quei file è `debug_log_pulisci` prima di allegarli — da Azione 9
+//! (review PR #588) elimina anche i rotati, che prima restavano intatti
+//! per sempre con `RotationStrategy::KeepAll` (CWE-532 pre-v0.8.44
+//! altrimenti mai rimediabile per chi ha già quei file su disco).
+//!
+//! **Rettifica schema nomi dei rotati (review PR #588, MEDIUM):** i
+//! commenti di versioni precedenti di questo modulo (e i relativi test)
+//! usavano `pap.log.1`, `pap.log.2`, … — schema che l'app **non produce
+//! mai**. Verificato sul sorgente pinnato in `Cargo.lock`
+//! (`tauri-plugin-log-2.9.0/src/lib.rs`, `RotatingFile::rename_file_to_dated`
+//! e `LOG_DATE_FORMAT`): con `RotationStrategy::KeepAll` (configurata in
+//! `lib.rs::run`) un file ruotato si chiama
+//! `pap_<YYYY-MM-DD>_<HH-MM-SS>.log` (es. `pap_2026-01-01_00-00-00.log`),
+//! non `pap.log.N`. Il filtro in `raccogli_file_log` funziona comunque —
+//! matcha su `ends_with(".log")`, non su un suffisso numerico — ma prima
+//! di questa correzione nessun test esercitava il nome vero.
+//!
+//! **Indagine issue #584 ("pulisci log non pulisce nulla", segnalata su
+//! Windows, non riprodotta dal vivo — macchina di sviluppo Linux
+//! headless):** la conferma UI (`conferma()`, pass-through diretto a
+//! `window.confirm` fuori da macOS) e un lock esclusivo Windows sono
+//! state escluse come causa — vedi analisi in PR. **Rettifica
+//! post-review (PR #588):** la diagnosi iniziale ipotizzava una corsa
+//! critica reale tra `debug_log_pulisci` e il buffer interno del writer
+//! di `tauri-plugin-log`, ma leggendo il sorgente vendorizzato delle
+//! versioni pinnate nel lock (`tauri-plugin-log` 2.9.0 +
+//! `fern` 0.7.1, `writer_log_impl!`) quella corsa **non esiste**: ogni
+//! chiamata a `log()` fa `write!` + `flush()` sotto lo stesso lock,
+//! quindi il buffer non sopravvive mai da un evento di log al
+//! successivo. Il `log::logger().flush()` aggiunto qui sotto resta un
+//! flush difensivo ragionevole, ma il suo effetto sul sintomo #584 **non
+//! è dimostrato** — vedi doc di `tronca_file_log` più sotto per
+//! l'ipotesi più credibile (flush fallito che lascia il buffer pieno) e
+//! per i limiti noti che restano comunque irrisolti. **Non chiude la
+//! #584**: la causa del sintomo riportato su Windows resta ignota.
 
 use std::fs::{self, File};
 use std::io::{BufWriter, Read, Write};
@@ -58,8 +99,13 @@ use crate::log_redazione;
 
 /// Nome del file di log configurato in `lib.rs::run` (tauri-plugin-log
 /// TargetKind::LogDir { file_name: Some("pap".to_string()) }).
-/// Plugin appende `.log` automaticamente, e rotati si chiamano
-/// `pap.log.1`, `pap.log.2`, etc.
+/// Plugin appende `.log` automaticamente al corrente (`pap.log`). I
+/// rotati **non** si chiamano `pap.log.1`, `pap.log.2`, … — quello schema
+/// non è mai prodotto da questa configurazione. Con
+/// `RotationStrategy::KeepAll` (`lib.rs::run`) si chiamano
+/// `pap_<YYYY-MM-DD>_<HH-MM-SS>.log` (verificato in
+/// `tauri-plugin-log-2.9.0/src/lib.rs`,
+/// `RotatingFile::rename_file_to_dated` + `LOG_DATE_FORMAT`).
 const NOME_LOG: &str = "pap";
 
 #[derive(Debug, Serialize)]
@@ -176,7 +222,11 @@ fn raccogli_file_log(dir: &Path) -> Vec<FileLog> {
         .filter(|e| {
             let name = e.file_name();
             let s = name.to_string_lossy().to_string();
-            // Match pap.log, pap.log.1, pap.log.2, …
+            // Match pap.log (corrente) e pap_<data>_<ora>.log (rotati, v.
+            // doc di NOME_LOG). `.contains(".log.")` resta per robustezza
+            // — non è lo schema prodotto dall'app, v. doc di NOME_LOG —
+            // nel caso in cui il file venga rinominato a mano o da uno
+            // strumento esterno con un suffisso numerico.
             s.starts_with(NOME_LOG) && (s.ends_with(".log") || s.contains(".log."))
         })
         .filter_map(|e| {
@@ -226,18 +276,258 @@ pub fn debug_log_apri_cartella(app: tauri::AppHandle) -> Result<(), PapErrore> {
     Ok(())
 }
 
-/// Truncate il file `pap.log` corrente. I file rotati restano intatti.
-/// Best-effort: se il file non esiste è un no-op (non un errore).
-#[tauri::command]
-pub fn debug_log_pulisci(app: tauri::AppHandle) -> Result<(), PapErrore> {
-    let dir = log_dir(&app)?;
-    let path = dir.join(format!("{NOME_LOG}.log"));
-    if !path.exists() {
-        return Ok(());
+/// Nucleo puro di `debug_log_pulisci`: tronca `path` a zero byte e ritorna
+/// `(size_prima, size_dopo)` in byte. Estratto a parte per essere
+/// testabile senza `AppHandle` (stesso motivo di `ultime_righe_parsate`).
+///
+/// **Indagine #584 ("pulisci log non pulisce nulla"): cosa si sa e cosa
+/// resta ignoto.** La conferma UI e i permessi/`share_mode` su Windows
+/// sono stati esclusi come causa (vedi PR): `File::create` sui default
+/// Rust concede già `FILE_SHARE_READ|WRITE|DELETE`.
+///
+/// **Rettifica post-review (PR #588): la corsa critica dichiarata nella
+/// prima versione di questo commento NON esiste.** Leggendo il sorgente
+/// vendorizzato pinnato nel lock — `tauri-plugin-log-2.9.0/src/lib.rs`
+/// (`TargetKind::LogDir` usa `fern::Output::writer(Box::new(rotator),
+/// "\n")`) e `fern-0.7.1/src/log_impl.rs` (macro `writer_log_impl!`) —
+/// ogni singola chiamata a `log()` esegue `write!(writer, ...)?;
+/// writer.flush()?;` **tenendo il `Mutex` bloccato per tutta la
+/// write+flush**. Il buffer di `RotatingFile` non sopravvive quindi mai
+/// da un evento di log al successivo: non c'è nulla "in volo" che possa
+/// ricomparire dopo un truncate nel percorso normale. Il
+/// `log::logger().flush()` sotto resta un flush difensivo ragionevole
+/// (costa poco, non fa danno), ma **non va presentato come la causa
+/// trovata e chiusa** del sintomo #584 — non lo è.
+///
+/// **Ipotesi principale, da verificare al prossimo collaudo Windows (non
+/// accertata):** `RotatingFile::flush()` (`lib.rs:310-330` del plugin)
+/// fa `file.write_all(&self.buffer)` poi `file.flush()` e **solo se
+/// entrambi riescono** esegue `self.buffer.clear()`. Se una delle due
+/// fallisce — es. *sharing violation* su Windows (antivirus, OneDrive,
+/// editor con lock esclusivo sul file) — il metodo ritorna `Err`
+/// **prima** dello `clear()`, e il buffer resta pieno finché un flush
+/// successivo non riesce. È un candidato molto più credibile per #584
+/// su Windows di quanto lo fosse la corsa critica smentita sopra.
+///
+/// **Buco correlato: il fallimento silenzioso di `flush()`.**
+/// `log::Log::flush(&self) -> ()` non ritorna `Result`
+/// (`fern-0.7.1/src/log_impl.rs:648-653`: `let _ =
+/// self.stream.lock()....flush();`). Se il flush qui sotto fallisce
+/// proprio per la causa più plausibile appena descritta, non abbiamo
+/// alcun modo di saperlo da questa chiamata — l'errore è inghiottito
+/// dentro il crate `log` — e il truncate procede comunque. Rilevante
+/// perché uno degli obiettivi di questa PR è dare osservabilità a
+/// "pulisci log": su questo punto specifico non possiamo averne.
+///
+/// **Race residua, non chiusa:** tra `log::logger().flush()` e
+/// `File::create(path)` qui sotto non c'è alcun lock condiviso con il
+/// percorso di scrittura del logger — è una TOCTOU strutturale. Un altro
+/// thread può scrivere una riga proprio in quella finestra; quella riga
+/// specifica andrebbe persa dal truncate. Non è la stessa cosa del
+/// "contenuto pre-pulizia che ricompare" di #584, ma resta una finestra
+/// reale che questa funzione non chiude.
+///
+/// **Limite noto, non risolto qui:** il contatore `current_size` interno
+/// di `RotatingFile` resta comunque disallineato dopo il nostro truncate
+/// (memorizza la dimensione pre-pulizia, non 0) fino alla prossima
+/// rotazione naturale del plugin. Non è solo una reportistica incoerente:
+/// con `max_file_size` a 5 MB (`lib.rs`), se `current_size` è rimasto
+/// vicino a quella soglia, alla riga di log successiva
+/// `current_size + buffer.len() > max_size` può risultare vera con il
+/// file appena svuotato — una **rotazione prematura reale**, che produce
+/// un file ruotato spurio quasi vuoto, visibile sia in `debug_log_info`
+/// sia nell'export ZIP. Non esiste modo di riallineare quel contatore da
+/// qui: `log::set_boxed_logger` (crate `log`) è impostabile una sola
+/// volta per processo — non c'è "unset" — e `RotatingFile` non espone né
+/// un metodo di reset né un modo per ottenerne un riferimento
+/// dall'`AppHandle`. Riallinearlo davvero richiederebbe di
+/// forkare/patchare `tauri-plugin-log` per esporre un hook di reset,
+/// cosa che non facciamo in questa PR.
+fn tronca_file_log(path: &Path) -> std::io::Result<(u64, Option<u64>)> {
+    let size_prima = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    // Flush difensivo prima di troncare: vedi doc sopra — NON è dimostrato
+    // che chiuda #584 (la corsa critica ipotizzata inizialmente non esiste
+    // nel percorso normale), ma non costa nulla e potrebbe aiutare
+    // nell'ipotesi "flush precedente fallito" descritta sopra.
+    log::logger().flush();
+    File::create(path)?;
+    // `None` se lo stat post-truncate fallisce: NON va confuso con "0
+    // byte" (Azione 6, review PR #588) — il truncate stesso (riga sopra)
+    // è comunque riuscito a questo punto, solo la verifica no. Prima di
+    // questa correzione un fallimento qui produceva `unwrap_or(0)`,
+    // indistinguibile da un vero truncate a 0 byte: proprio la
+    // distinzione che questa telemetria dovrebbe rendere possibile.
+    let size_dopo = fs::metadata(path).ok().map(|m| m.len());
+    Ok((size_prima, size_dopo))
+}
+
+/// Un file rotato eliminato con successo da `debug_log_pulisci`.
+#[derive(Debug, Serialize)]
+pub struct FileRotatoRimosso {
+    pub name: String,
+    pub size_bytes: u64,
+}
+
+/// Un file rotato che `debug_log_pulisci` NON è riuscito a eliminare
+/// (permessi, lock esclusivo su Windows, …). Azione 9 (review PR #588):
+/// il fallimento va riportato esplicitamente, non nascosto dietro un
+/// esito `Ok` generico — niente falsi successi.
+#[derive(Debug, Serialize)]
+pub struct FileRotatoNonRimosso {
+    pub name: String,
+    pub errore: String,
+}
+
+/// Esito di `debug_log_pulisci`. Sempre `Ok` con questo payload finché il
+/// truncate del file corrente riesce (vedi sotto); i fallimenti sui
+/// singoli rotati finiscono in `rotati_falliti`, non fanno fallire
+/// l'intero comando — la pulizia degli altri file prosegue comunque.
+#[derive(Debug, Serialize)]
+pub struct EsitoPulizia {
+    /// Dimensione del file corrente prima del truncate.
+    pub size_prima: u64,
+    /// Dimensione dopo il truncate. `None` se non è stato possibile
+    /// verificarla via stat (il truncate stesso è comunque riuscito a
+    /// questo punto) — v. doc di `tronca_file_log`, Azione 6.
+    pub size_dopo: Option<u64>,
+    /// File rotati (schema reale `pap_<YYYY-MM-DD>_<HH-MM-SS>.log`, v.
+    /// doc di `NOME_LOG`) eliminati con successo.
+    pub rotati_rimossi: Vec<FileRotatoRimosso>,
+    /// File rotati che NON è stato possibile eliminare. Il frontend deve
+    /// controllare questo campo e non dichiarare successo pieno se non è
+    /// vuoto (Azione 9, review PR #588).
+    pub rotati_falliti: Vec<FileRotatoNonRimosso>,
+}
+
+/// Nucleo puro di `debug_log_pulisci`: dato `dir` (la cartella dei log),
+/// tronca il file corrente ed elimina i rotati. Estratto a parte per
+/// essere testabile senza `AppHandle` — stesso motivo di
+/// `tronca_file_log`/`ultime_righe_parsate` — e necessario per Azione 9
+/// (review PR #588): la feature `tauri::test` non è cablata nei
+/// dev-dependencies del crate (v. commento su
+/// `debug_log_esporta_zip_non_accetta_piu_un_percorso_dal_chiamante`),
+/// quindi il "caso positivo" (rotati rimossi davvero) e la "rimozione
+/// parziale" richiesti dalla review vanno testati qui, non sul comando.
+///
+/// Solo il fallimento del truncate del file corrente è un errore duro
+/// (propagato come `Err`): i fallimenti sui singoli rotati sono soft,
+/// finiscono in `EsitoPulizia::rotati_falliti` e non interrompono la
+/// pulizia degli altri file.
+fn pulisci_log_in_dir(dir: &Path) -> std::io::Result<EsitoPulizia> {
+    let path_corrente = dir.join(format!("{NOME_LOG}.log"));
+
+    let (size_prima, size_dopo) = if path_corrente.exists() {
+        tronca_file_log(&path_corrente)?
+    } else {
+        (0, Some(0))
+    };
+
+    let mut rotati_rimossi = Vec::new();
+    let mut rotati_falliti = Vec::new();
+    for f in raccogli_file_log(dir) {
+        if f.name == format!("{NOME_LOG}.log") {
+            continue; // il corrente è gestito sopra, non va eliminato
+        }
+        let path_rotato = dir.join(&f.name);
+        match fs::remove_file(&path_rotato) {
+            Ok(()) => rotati_rimossi.push(FileRotatoRimosso {
+                name: f.name,
+                size_bytes: f.size_bytes,
+            }),
+            Err(e) => rotati_falliti.push(FileRotatoNonRimosso {
+                name: f.name,
+                errore: e.to_string(),
+            }),
+        }
     }
-    File::create(&path).map_err(|e| PapErrore::dominio("Pulizia dei log non riuscita.", e))?;
-    log::info!("Debug log pulito (truncate)");
-    Ok(())
+
+    Ok(EsitoPulizia {
+        size_prima,
+        size_dopo,
+        rotati_rimossi,
+        rotati_falliti,
+    })
+}
+
+/// Truncate il file `pap.log` corrente **ed elimina anche i file
+/// rotati** (schema reale `pap_<YYYY-MM-DD>_<HH-MM-SS>.log`, v. doc di
+/// `NOME_LOG`). Best-effort sul file corrente: se non esiste è un no-op
+/// (non un errore) per quella parte.
+///
+/// **Azione 9 (review PR #588), fix di un HIGH preesistente (CWE-532):**
+/// prima di questa PR i rotati non venivano mai toccati da "Pulisci
+/// log", e con `RotationStrategy::KeepAll` (`lib.rs`) non vengono nemmeno
+/// mai eliminati automaticamente dal plugin. Chi ha usato l'app prima
+/// della redazione introdotta in v0.8.44 può quindi avere chiavi API
+/// Anthropic/Gemini in chiaro nei rotati, e la versione precedente di
+/// questo comando restituiva comunque "successo" senza averli toccati.
+/// Qui i rotati vengono eliminati (non troncati: non hanno motivo di
+/// restare — a differenza del corrente non sono più scritti dal
+/// logger), riusando `raccogli_file_log` per individuarli. Un
+/// fallimento su un singolo rotato (permessi, lock esclusivo Windows)
+/// NON interrompe la pulizia degli altri: finisce in `rotati_falliti`,
+/// che il chiamante deve controllare esplicitamente (niente falsi
+/// successi — questo è esattamente il tipo di esito silenzioso che ha
+/// reso #584 difficile da diagnosticare la prima volta).
+///
+/// **Sovrascrittura fisica dei blocchi prima dell'eliminazione: fuori
+/// perimetro per decisione esplicita** (i file vengono eliminati con
+/// `fs::remove_file`, i blocchi su disco possono restare recuperabili
+/// per un po' con strumenti di file recovery — stesso limite di
+/// qualunque cancellazione file "normale" su tutti e tre gli OS target).
+///
+/// Logga sempre dimensione prima/dopo del truncate (issue #584): serve a
+/// distinguere, al prossimo collaudo, i tre scenari possibili — errore
+/// mostrato in UI (`debugErrore`), "falso successo" (comando torna `Ok`
+/// ma `size_dopo` non è 0), oppure svuotamento riuscito ma che si
+/// riempie di nuovo subito dopo (size_dopo=0 in questo log, ma il file
+/// torna a crescere appena dopo — visibile solo riaprendo
+/// `debug_log_info` più tardi, non da qui).
+///
+/// **Azione 8 (review PR #588) — perché `async`:** `flush()` prende il
+/// lock globale del logger, fa I/O sincrono e ora può innescare
+/// l'eliminazione di più file — non operazioni "veloci" su disco di
+/// rete/OneDrive/antivirus, cioè proprio la piattaforma sotto indagine
+/// per #584. `debug_log_esporta_zip`, nello stesso file, è già marcato
+/// `async` per lo stesso motivo (non bloccare il thread IPC — v. il suo
+/// commento). Marcare anche questo comando `async` è la scelta coerente
+/// con quel pattern, non un'eccezione da giustificare caso per caso.
+#[tauri::command(async)]
+pub fn debug_log_pulisci(app: tauri::AppHandle) -> Result<EsitoPulizia, PapErrore> {
+    let dir = log_dir(&app)?;
+    let esito = pulisci_log_in_dir(&dir)
+        .map_err(|e| PapErrore::dominio("Pulizia dei log non riuscita.", e))?;
+    // Niente doppio `.join(...).exists()` sullo stesso percorso del
+    // corrente (piccola violazione DRY segnalata in review PR #588,
+    // punto 3): l'esistenza del file prima del truncate è già accertata
+    // una sola volta dentro `pulisci_log_in_dir` — qui basta leggerla da
+    // `esito`, che con file assente o già vuoto riporta comunque
+    // `(0, Some(0))` (v. doc di `pulisci_log_in_dir`).
+    if esito.size_prima == 0 && esito.size_dopo == Some(0) {
+        log::info!(
+            "Debug log: pulizia richiesta ma il file corrente non esiste o era già vuoto (no-op sul corrente)."
+        );
+    }
+    let size_dopo_msg = esito
+        .size_dopo
+        .map(|s| format!("{s} byte"))
+        .unwrap_or_else(|| "sconosciuto (stat fallito dopo il truncate)".to_string());
+    log::info!(
+        "Debug log pulito (truncate): {} byte -> {size_dopo_msg}. Rotati eliminati: {}, \
+         falliti: {}. Nota: il contatore di dimensione interno del writer del plugin di \
+         log resta disallineato fino alla prossima rotazione naturale (limite noto, vedi #584).",
+        esito.size_prima,
+        esito.rotati_rimossi.len(),
+        esito.rotati_falliti.len(),
+    );
+    for f in &esito.rotati_falliti {
+        log::warn!(
+            "Debug log: eliminazione rotato {} fallita: {}",
+            f.name,
+            f.errore
+        );
+    }
+    Ok(esito)
 }
 
 /// Nome file suggerito nel dialog di salvataggio nativo, es.
@@ -515,13 +805,30 @@ mod test {
     fn raccogli_match_solo_pap_log() {
         let dir = tempdir().unwrap();
         fs::write(dir.path().join("pap.log"), b"line1\n").unwrap();
+        // Nome reale prodotto dal plugin per un rotato (v. doc di
+        // NOME_LOG): `pap_<YYYY-MM-DD>_<HH-MM-SS>.log`.
+        fs::write(
+            dir.path().join("pap_2026-01-01_00-00-00.log"),
+            b"rotato reale\n",
+        )
+        .unwrap();
+        // `pap.log.1` NON è uno schema mai prodotto dall'app (v. doc di
+        // NOME_LOG) — qui serve solo a dimostrare che il filtro resta
+        // robusto anche su un nome così, non a rappresentare il caso reale.
         fs::write(dir.path().join("pap.log.1"), b"old\n").unwrap();
         fs::write(dir.path().join("altro.txt"), b"skip").unwrap();
         fs::write(dir.path().join("README.md"), b"skip").unwrap();
 
         let files = raccogli_file_log(dir.path());
         let nomi: Vec<String> = files.iter().map(|f| f.name.clone()).collect();
-        assert_eq!(nomi, vec!["pap.log".to_string(), "pap.log.1".to_string()]);
+        assert_eq!(
+            nomi,
+            vec![
+                "pap.log".to_string(),
+                "pap.log.1".to_string(),
+                "pap_2026-01-01_00-00-00.log".to_string(),
+            ]
+        );
     }
 
     #[test]
@@ -767,6 +1074,384 @@ mod test {
         drop(file);
 
         assert_eq!(fs::metadata(&path).unwrap().len(), 0);
+    }
+
+    // ─── issue #584 "pulisci log non pulisce nulla": debug_log_pulisci /
+    // tronca_file_log. Prima di questa PR non esisteva NESSUN test per
+    // debug_log_pulisci — solo permessi/export erano coperti. ───
+
+    /// Caso positivo (mancava del tutto): un file popolato viene
+    /// effettivamente ridotto a zero byte, non solo "non fallisce".
+    #[test]
+    fn tronca_file_log_azzera_davvero_un_file_popolato() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pap.log");
+        fs::write(&path, "riga vecchia 1\nriga vecchia 2\n").unwrap();
+        let size_iniziale = fs::metadata(&path).unwrap().len();
+        assert!(
+            size_iniziale > 0,
+            "precondizione: il file deve partire popolato"
+        );
+
+        let (prima, dopo) = tronca_file_log(&path).unwrap();
+
+        assert_eq!(prima, size_iniziale);
+        assert_eq!(dopo, Some(0));
+        assert_eq!(
+            fs::metadata(&path).unwrap().len(),
+            0,
+            "il file su disco deve essere davvero vuoto, non solo il valore ritornato"
+        );
+    }
+
+    #[test]
+    fn tronca_file_log_su_file_gia_vuoto_resta_a_zero() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pap.log");
+        fs::write(&path, b"").unwrap();
+
+        let (prima, dopo) = tronca_file_log(&path).unwrap();
+
+        assert_eq!(prima, 0);
+        assert_eq!(dopo, Some(0));
+    }
+
+    /// Scrittore concorrente (thread separato, come farebbe il logger
+    /// globale su un evento asincrono) che continua ad appendere DOPO il
+    /// truncate: non deve panicare, perdere né corrompere le righe scritte
+    /// dopo la pulizia — solo il contenuto pre-pulizia deve sparire.
+    #[test]
+    fn tronca_file_log_con_scrittore_concorrente_che_continua_a_loggare() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pap.log");
+        fs::write(&path, "contenuto da pulire, non deve sopravvivere\n").unwrap();
+
+        let (prima, dopo) = tronca_file_log(&path).unwrap();
+        assert!(prima > 0);
+        assert_eq!(dopo, Some(0));
+
+        let path_thread = path.clone();
+        std::thread::spawn(move || {
+            use std::fs::OpenOptions;
+            let mut f = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path_thread)
+                .unwrap();
+            f.write_all(b"riga scritta dopo la pulizia\n").unwrap();
+        })
+        .join()
+        .unwrap();
+
+        let contenuto = fs::read_to_string(&path).unwrap();
+        assert_eq!(contenuto, "riga scritta dopo la pulizia\n");
+        assert!(!contenuto.contains("da pulire"));
+    }
+
+    /// **Ipotesi SCARTATA (rettifica post-review PR #588), non il
+    /// comportamento reale.** Questo writer modella un writer *ipotetico*
+    /// con buffering differito arbitrario (accumula in memoria, scrive su
+    /// disco solo quando qualcuno chiama esplicitamente `flush()`, senza
+    /// mai farlo da solo). Leggendo il sorgente vendorizzato pinnato nel
+    /// lock (`tauri-plugin-log-2.9.0` + `fern-0.7.1`, `writer_log_impl!`)
+    /// si vede che il vero `RotatingFile` NON si comporta così nel
+    /// percorso normale: ogni `log()` fa `write!` + `flush()` sotto lo
+    /// stesso lock, quindi il buffer reale non sopravvive mai da una
+    /// chiamata alla successiva. I due test sotto dimostrano solo che
+    /// QUESTO mock si comporta come è stato scritto — non provano nulla
+    /// sul comportamento reale del plugin. Il meccanismo reale candidato
+    /// per #584 (flush che fallisce e lascia il buffer pieno) è testato
+    /// separatamente più sotto, con `RotatingFileSimulato`.
+    struct WriterIpoteticoBufferingDifferito {
+        path: PathBuf,
+        buffer: Vec<u8>,
+    }
+
+    impl WriterIpoteticoBufferingDifferito {
+        fn scrivi(&mut self, s: &str) {
+            self.buffer.extend_from_slice(s.as_bytes());
+        }
+
+        fn flush(&mut self) {
+            if self.buffer.is_empty() {
+                return;
+            }
+            use std::fs::OpenOptions;
+            let mut f = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.path)
+                .unwrap();
+            f.write_all(&self.buffer).unwrap();
+            self.buffer.clear();
+        }
+    }
+
+    /// Ipotesi scartata, caso "senza flush": con un writer che bufferizza
+    /// in modo differito arbitrario (NON il comportamento reale, vedi doc
+    /// sopra), non chiamare `flush()` prima del truncate lascia
+    /// ricomparire il contenuto bufferizzato al flush successivo.
+    #[test]
+    fn ipotesi_scartata_writer_con_buffering_differito_senza_flush_le_righe_ricompaiono() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pap.log");
+        fs::write(&path, "riga vecchia\n").unwrap();
+
+        let mut writer = WriterIpoteticoBufferingDifferito {
+            path: path.clone(),
+            buffer: Vec::new(),
+        };
+        writer.scrivi("riga bufferizzata non ancora su disco\n");
+        // Nessun flush qui: comportamento del mock, NON dimostrato per il
+        // writer reale del plugin (v. doc della struct sopra).
+
+        File::create(&path).unwrap();
+        assert_eq!(
+            fs::metadata(&path).unwrap().len(),
+            0,
+            "il truncate azzera subito"
+        );
+
+        writer.flush();
+        let contenuto = fs::read_to_string(&path).unwrap();
+        assert!(
+            contenuto.contains("riga bufferizzata"),
+            "con QUESTO mock, senza flush prima del truncate il contenuto bufferizzato ricompare"
+        );
+    }
+
+    /// Stesso mock ipotetico, ma con l'ordine usato da `tronca_file_log`
+    /// (`flush()` prima del truncate): dimostra solo che il mock si
+    /// comporta come scritto, non che questo sia il motivo per cui il
+    /// flush difensivo in `tronca_file_log` aiuta nel caso reale.
+    #[test]
+    fn ipotesi_scartata_writer_con_buffering_differito_con_flush_le_righe_non_ricompaiono() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pap.log");
+        fs::write(&path, "riga vecchia\n").unwrap();
+
+        let mut writer = WriterIpoteticoBufferingDifferito {
+            path: path.clone(),
+            buffer: Vec::new(),
+        };
+        writer.scrivi("riga bufferizzata non ancora su disco\n");
+
+        writer.flush(); // ordine analogo a tronca_file_log: flush prima del truncate
+        File::create(&path).unwrap();
+
+        let contenuto = fs::read_to_string(&path).unwrap();
+        assert!(
+            contenuto.is_empty(),
+            "con QUESTO mock, flush prima del truncate non lascia ricomparire nulla"
+        );
+    }
+
+    /// **Meccanismo REALE candidato per #584 (Azione 2, review PR #588),
+    /// non accertato ma il più credibile trovato leggendo il sorgente.**
+    /// Modella `RotatingFile::flush()` (tauri-plugin-log 2.9.0,
+    /// `lib.rs:310-330`): fa `write_all` poi `file.flush()` e chiama
+    /// `self.buffer.clear()` **solo se entrambi riescono**. Se uno dei
+    /// due fallisce — es. sharing violation Windows — il buffer resta
+    /// pieno oltre la singola chiamata: è questo, non un buffering
+    /// differito "normale", il modo reale per cui il contenuto
+    /// pre-pulizia può ricomparire dopo un truncate esterno.
+    struct RotatingFileSimulato {
+        path: PathBuf,
+        buffer: Vec<u8>,
+        prossimo_flush_fallisce: bool,
+    }
+
+    impl RotatingFileSimulato {
+        fn scrivi(&mut self, s: &str) {
+            self.buffer.extend_from_slice(s.as_bytes());
+        }
+
+        /// Ritorna `Err` se `prossimo_flush_fallisce`, senza svuotare il
+        /// buffer — replica `RotatingFile::flush()` reale, dove
+        /// `buffer.clear()` è raggiunto solo dopo write+flush riusciti.
+        fn flush(&mut self) -> std::io::Result<()> {
+            if self.prossimo_flush_fallisce {
+                return Err(std::io::Error::other("sharing violation simulata"));
+            }
+            if self.buffer.is_empty() {
+                return Ok(());
+            }
+            use std::fs::OpenOptions;
+            let mut f = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.path)?;
+            f.write_all(&self.buffer)?;
+            self.buffer.clear();
+            Ok(())
+        }
+    }
+
+    /// Riproduce il meccanismo Azione 2: un flush fallito lascia il
+    /// buffer pieno; il truncate esterno procede comunque (Azione 4:
+    /// `log::Log::flush(&self) -> ()` non ritorna `Result`, quindi il
+    /// chiamante non avrebbe comunque modo di sapere che è fallito); un
+    /// flush successivo che riesce scarica il contenuto vecchio, che
+    /// "ricompare" davvero — con QUESTO meccanismo, non con quello
+    /// smentito nei due test sopra.
+    #[test]
+    fn meccanismo_reale_flush_fallito_lascia_il_buffer_pieno_oltre_la_singola_chiamata() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pap.log");
+
+        let mut writer = RotatingFileSimulato {
+            path: path.clone(),
+            buffer: Vec::new(),
+            prossimo_flush_fallisce: true,
+        };
+        writer.scrivi("riga che dovrebbe sparire dopo la pulizia\n");
+
+        let esito = writer.flush();
+        assert!(esito.is_err(), "precondizione: il flush simulato fallisce");
+        assert!(
+            !writer.buffer.is_empty(),
+            "il buffer resta pieno perché clear() non viene mai raggiunto dopo un Err"
+        );
+
+        // Il truncate esterno procede comunque: nessun modo di sapere
+        // dall'esterno che l'ultimo flush del logger è fallito.
+        File::create(&path).unwrap();
+        assert_eq!(fs::metadata(&path).unwrap().len(), 0);
+
+        // Un flush successivo che stavolta riesce scarica il buffer
+        // vecchio: la riga pre-pulizia ricompare per davvero.
+        writer.prossimo_flush_fallisce = false;
+        writer.flush().unwrap();
+        let contenuto = fs::read_to_string(&path).unwrap();
+        assert!(contenuto.contains("riga che dovrebbe sparire"));
+    }
+
+    // ─── Azione 9 (review PR #588): "Pulisci log" ora elimina anche i
+    // rotati (HIGH preesistente CWE-532 — con RotationStrategy::KeepAll
+    // non venivano mai eliminati automaticamente). ───
+
+    /// Caso positivo: rotati presenti vengono davvero rimossi, e il conteggio
+    /// byte/file torna corretto.
+    ///
+    /// **Nomi usati (rettifica review PR #588, MEDIUM):** `pap.log.1` e
+    /// `pap.log.2` NON sono lo schema che l'app produce mai — restano qui
+    /// solo come caso di robustezza del filtro (v. doc di
+    /// `raccogli_file_log`), dichiarato esplicitamente per quello che è.
+    /// `pap_2026-01-01_00-00-00.log` è invece lo schema REALE: verificato
+    /// in `tauri-plugin-log-2.9.0/src/lib.rs`,
+    /// `RotatingFile::rename_file_to_dated` + `LOG_DATE_FORMAT`, con
+    /// `RotationStrategy::KeepAll` (configurata in `lib.rs::run`). È
+    /// questo, non i nomi fittizi, a dimostrare che il CWE-532 è chiuso
+    /// davvero sui file che l'app produce.
+    #[test]
+    fn pulisci_log_in_dir_rimuove_davvero_i_rotati_presenti() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("pap.log"), "corrente\n").unwrap();
+        fs::write(
+            dir.path().join("pap.log.1"),
+            "rotato vecchio 1, con chiave in chiaro",
+        )
+        .unwrap();
+        fs::write(dir.path().join("pap.log.2"), "rotato vecchio 2").unwrap();
+        fs::write(
+            dir.path().join("pap_2026-01-01_00-00-00.log"),
+            "rotato reale, con chiave in chiaro",
+        )
+        .unwrap();
+
+        let esito = pulisci_log_in_dir(dir.path()).unwrap();
+
+        assert_eq!(esito.size_dopo, Some(0));
+        assert!(esito.rotati_falliti.is_empty());
+        let nomi: Vec<String> = esito
+            .rotati_rimossi
+            .iter()
+            .map(|f| f.name.clone())
+            .collect();
+        assert_eq!(
+            nomi,
+            vec![
+                "pap.log.1".to_string(),
+                "pap.log.2".to_string(),
+                "pap_2026-01-01_00-00-00.log".to_string(),
+            ]
+        );
+        assert!(esito.rotati_rimossi.iter().all(|f| f.size_bytes > 0));
+
+        assert!(
+            !dir.path().join("pap.log.1").exists(),
+            "il rotato deve essere sparito dal disco, non solo dal report"
+        );
+        assert!(!dir.path().join("pap.log.2").exists());
+        assert!(
+            !dir.path().join("pap_2026-01-01_00-00-00.log").exists(),
+            "il rotato con lo schema di nome REALMENTE prodotto dall'app deve essere sparito"
+        );
+        assert!(
+            dir.path().join("pap.log").exists(),
+            "il corrente deve restare (troncato, non eliminato)"
+        );
+    }
+
+    #[test]
+    fn pulisci_log_in_dir_senza_rotati_non_riporta_nulla_da_rimuovere() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("pap.log"), "solo corrente\n").unwrap();
+
+        let esito = pulisci_log_in_dir(dir.path()).unwrap();
+
+        assert!(esito.rotati_rimossi.is_empty());
+        assert!(esito.rotati_falliti.is_empty());
+    }
+
+    /// Rimozione parziale: un rotato eliminabile e uno no (simulato
+    /// rendendo la sua "directory" un file, così `fs::remove_file` sul
+    /// path costruito sotto fallisce con NotADirectory) — l'esito deve
+    /// riportare entrambi gli scenari, non un falso successo generico.
+    #[cfg(unix)]
+    #[test]
+    fn pulisci_log_in_dir_riporta_un_fallimento_parziale_senza_falso_successo() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("pap.log"), "corrente\n").unwrap();
+        fs::write(dir.path().join("pap.log.1"), "rotato eliminabile").unwrap();
+        fs::write(dir.path().join("pap.log.2"), "rotato NON eliminabile").unwrap();
+
+        // Toglie il permesso di scrittura sulla directory: `remove_file`
+        // richiede il permesso di scrittura sulla dir contenente, quindi
+        // ENTRAMBI i rotati falliranno — sufficiente a dimostrare che un
+        // fallimento (qui totale sui rotati) viene riportato in
+        // `rotati_falliti`, non nascosto da un `Ok` generico, mentre il
+        // truncate del corrente (già avvenuto via metadata prima) resta
+        // comunque riportato correttamente.
+        let mode_originale = fs::metadata(dir.path()).unwrap().permissions().mode();
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o500)).unwrap();
+
+        let esito = pulisci_log_in_dir(dir.path());
+
+        // Ripristina i permessi PRIMA di qualunque assert/unwrap che possa
+        // fallire, altrimenti `tempdir` non riesce a ripulirsi a fine test.
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(mode_originale)).unwrap();
+
+        let esito = esito.unwrap();
+        assert!(
+            esito.rotati_rimossi.is_empty(),
+            "nessun rotato deve risultare rimosso con la dir non scrivibile"
+        );
+        assert_eq!(
+            esito.rotati_falliti.len(),
+            2,
+            "entrambi i rotati devono finire in rotati_falliti, non in un Ok silenzioso"
+        );
+        let nomi_falliti: Vec<String> = esito
+            .rotati_falliti
+            .iter()
+            .map(|f| f.name.clone())
+            .collect();
+        assert!(nomi_falliti.contains(&"pap.log.1".to_string()));
+        assert!(nomi_falliti.contains(&"pap.log.2".to_string()));
+        assert!(esito.rotati_falliti.iter().all(|f| !f.errore.is_empty()));
     }
 
     // ─── HIGH review avversariale pre-merge PR #570: dialog spostato lato Rust ───
