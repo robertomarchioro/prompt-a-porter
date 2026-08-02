@@ -791,7 +791,7 @@
       autoSaveId="detail-rail-v08"
       class="detail-pane-group"
     >
-      <Pane defaultSize={70} minSize={50}>
+      <Pane defaultSize={70} minSize={50} class="pane-contenuto">
         <div class="detail-body">
           {#if tabAttivo === "editor"}
             <MarkdownToolbar
@@ -1104,6 +1104,26 @@
     color: var(--text-subtle);
     border-color: transparent;
     background: transparent;
+  }
+
+  /* #590: <Pane> (paneforge 1.0.2) imposta sul proprio nodo SOLO
+     flex-basis/flex-grow/flex-shrink/overflow via stile inline — MAI
+     `display:flex` (verificato in node_modules/paneforge/dist/internal/
+     utils/style.js, computePaneFlexBoxStyle). Senza questo, `.detail-body`
+     (sotto) non è un flex item di nulla: il suo `flex:1` è un no-op e la
+     sua altezza resta `auto`, cioè pari al contenuto — editor/diff/tab
+     crescono senza limite invece di essere vincolati all'altezza
+     disponibile, e nessun discendente ha mai un'altezza definita da cui
+     scrollare (misurato in Chromium headless: senza questa regola
+     `.detail-body` misura quanto il contenuto, es. 8800px anziché i
+     ~600px visibili; con questa regola torna a 605px e i contenitori
+     interni — `.cm-scroller` di CodeMirror, `.render` di DiffViewer —
+     tornano scrollabili). `:global()` perché il nodo è renderizzato da
+     paneforge, fuori dallo scope di questo componente. */
+  :global(.pane-contenuto) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
 
   .detail-body {
