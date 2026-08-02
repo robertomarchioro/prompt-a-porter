@@ -1,5 +1,24 @@
 # Changelog — Prompt a Porter
 
+## v0.8.45 — Il modello torna a caricarsi (2026-08-02)
+
+> Il secondo giro di prove su Mac ha scoperto che la ricerca semantica non poteva funzionare per nessuno: il controllo di integrità del motore, aggiunto in v0.8.43, confrontava due cose diverse e falliva sempre. Nella stessa release arrivano i collegamenti che portano finalmente al sito della documentazione, e le conferme prima di ogni operazione distruttiva su macOS.
+
+### Sicurezza
+
+- **Conferme prima delle operazioni distruttive su macOS** (#576): su Mac le richieste di conferma non comparivano affatto e **l'operazione veniva eseguita comunque**, come se avessi risposto di sì. Riguardava tutti i punti sensibili: cestinare un prompt, svuotare il cestino, pulire il log. Il componente di sistema usato dalla finestra dell'app non implementa quei dialoghi su macOS. Ora le conferme e gli avvisi usano una finestra interna all'app — su Windows e Linux nulla cambia, perché lì funzionavano già.
+- **File temporanei dei download non più dirottabili** (#569): i file temporanei creati durante lo scaricamento del motore di ricerca semantica avevano un nome prevedibile e venivano aperti in modo da seguire un eventuale collegamento piazzato lì da altri. Non era sfruttabile nella configurazione predefinita — serve che qualcuno possa già scrivere nella cartella dati dell'app — ma ora l'apertura fallisce invece di seguire il collegamento, e il tentativo viene annotato nel log.
+
+### Fix
+
+- **La ricerca semantica torna a inizializzarsi** (#575): all'avvio il modello veniva rifiutato con «verifica di integrità fallita, l'hash non corrisponde», sempre, su ogni sistema e a ogni riavvio successivo a uno scaricamento riuscito. Il controllo introdotto in v0.8.43 confrontava l'impronta dell'**archivio** scaricato con quella del **singolo file estratto** da quell'archivio: due valori diversi per costruzione, quindi il confronto non poteva riuscire mai. Il difetto era rimasto nascosto perché fino a v0.8.44 su Mac lo scaricamento falliva prima di arrivarci. In più, quel fallimento **non veniva scritto da nessuna parte**: ora il log di debug riporta impronta attesa, impronta calcolata, percorso e dimensione del file.
+- **I collegamenti portano al sito della documentazione** (#554, #555, #557): da v0.8.44 i link si aprivano, ma finivano sui file grezzi del codice sorgente su GitHub invece che sulle pagine pubblicate. L'indirizzo di base era rimasto un segnaposto verso un dominio mai registrato. Ora i badge «?» dell'Editor, la schermata **Guida e aiuto** e i link di **Impostazioni → Informazioni** aprono le pagine su `www.promptaporter.it`, e la voce «sito del progetto» porta alla pagina giusta.
+- **Log live più leggibile** (#558): le righe più recenti compaiono ora **in cima** invece che in fondo, il numero di righe caricate passa da 200 a 1000 ed è scegliibile fino a 5000, e il pannello si ricarica quando lo apri. *Resta da verificare* la segnalazione secondo cui, col filtro su «Tutti», l'elenco appare vuoto finché non si tocca un altro filtro: non è stato possibile riprodurla.
+- **Promuovere una variante a principale si vede** (#572): l'operazione andava a buon fine ma la schermata non cambiava e nessun messaggio la confermava, così sembrava non essere successo nulla. Ora il pannello di dettaglio si aggiorna e un avviso conferma l'avvenuta promozione.
+- **Ordinamento A-Z corretto dopo una promozione** (#573): promuovendo la variante di una variante, l'elenco mostrava le versioni secondarie prima della principale. L'ordinamento si affidava alla forma del titolo anziché al legame fra prompt; ora raggruppa esplicitamente ogni variante sotto il proprio principale.
+- **Diff del Ritocco: i numeri di riga restano nel riquadro** (#574): i numeri di riga uscivano dal blocco che scorre e si sovrapponevano alla finestra. È la quarta correzione su questo difetto: le tre precedenti agivano sull'altezza dei contenitori, mentre la causa era il punto di ancoraggio dei numeri, che finiva fuori dall'area scorrevole.
+- **Installazione degli aggiornamenti tracciata nel log** (#576): l'avanzamento dello scaricamento e dell'installazione di un aggiornamento non lasciava traccia, rendendo impossibile capire dove si fosse fermato.
+
 ## v0.8.44 — Segreti fuori dai log e correzioni dal collaudo su macOS (2026-08-02)
 
 > Il primo uso reale su Mac ha fatto emergere due funzioni che non avevano **mai** funzionato: i link esterni e il download del modello per la ricerca semantica. A queste si aggiunge una correzione di sicurezza che riguarda anche chi usa già l'app — le chiavi API dei provider finivano in chiaro nel log di debug.
