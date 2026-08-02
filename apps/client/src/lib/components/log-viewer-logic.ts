@@ -94,3 +94,55 @@ export function filtraRighe(
 export function ordinaRecentiPrimi(righe: readonly RigaLog[]): RigaLog[] {
   return righe.slice().reverse();
 }
+
+/**
+ * Strumentazione diagnostica di sola misura per il viewer log live (#558
+ * punto 1: "con filtro Tutti nessuna riga"). Nessuna di queste funzioni
+ * riceve o logga il contenuto delle righe (sarebbe ricorsivo, e potrebbe
+ * duplicare dati sensibili già presenti nel log stesso) — solo conteggi e
+ * stati, per separare «non arrivano dati dal backend» da «arrivano ma il
+ * filtro li nasconde».
+ *
+ * `origine` distingue le chiamate esplicite a `ricarica()` (montaggio,
+ * apertura del pannello, click "Aggiorna ora", cambio "Righe") dal tick
+ * automatico ogni 2s del timer: quest'ultimo NON va loggato qui (vedi
+ * `LogViewer.svelte`), per non seppellire il segnale nel rumore.
+ */
+export type OrigineRicarica =
+  | "mount"
+  | "apertura-pannello"
+  | "manuale"
+  | "cambio-righe";
+
+export interface DatiAvvioRicarica {
+  origine: OrigineRicarica;
+  livelloFiltro: LivelloFiltro;
+  aperto: boolean;
+}
+
+/** Riga di log per l'ingresso in `ricarica()`. */
+export function formattaRigaRicaricaAvvio(d: DatiAvvioRicarica): string {
+  return (
+    `[log-viewer] ricarica avvio origine=${d.origine} ` +
+    `livelloFiltro="${d.livelloFiltro || "Tutti"}" aperto=${d.aperto}`
+  );
+}
+
+export interface DatiEsitoRicarica {
+  origine: OrigineRicarica;
+  /** Righe tornate dal backend (`debug_log_leggi`), prima di ogni filtro. */
+  nRigheBackend: number;
+  /** Righe visibili dopo il filtro livello/regex correntemente attivo. */
+  nRigheFiltrate: number;
+  /** "" se nessun errore. */
+  errore: string;
+}
+
+/** Riga di log all'uscita da `ricarica()` (successo o errore). */
+export function formattaRigaRicaricaEsito(d: DatiEsitoRicarica): string {
+  const parteErrore = d.errore ? ` errore="${d.errore}"` : "";
+  return (
+    `[log-viewer] ricarica esito origine=${d.origine} ` +
+    `nRigheBackend=${d.nRigheBackend} nRigheFiltrate=${d.nRigheFiltrate}${parteErrore}`
+  );
+}

@@ -31,6 +31,7 @@
   import { scaricaBlob, slugFile } from "$lib/util/dati-export";
   import { apriUrlEsterno } from "$lib/util/apri-url";
   import { conferma, avvisa } from "$lib/util/conferma";
+  import { logInfoApp, logErroreApp } from "$lib/util/log-app";
   import {
     caricaStato,
     salvaStato,
@@ -349,16 +350,24 @@
   async function eliminaPrompt(id: string, titolo: string): Promise<void> {
     const ok = await conferma(
       `Spostare "${titolo || "(senza titolo)"}" nel cestino?`,
+      "elimina-prompt",
     );
+    // #585: punto di controllo — la conferma ha ritornato true/false?
+    logInfoApp(`[list-pane] elimina-prompt: conferma ritornata esito=${ok}`);
     if (!ok) return;
     try {
+      logInfoApp("[list-pane] elimina-prompt: invoke prompt_elimina — avvio");
       await invoke("prompt_elimina", { id });
+      logInfoApp("[list-pane] elimina-prompt: invoke prompt_elimina — completato");
       refreshLista();
       // Se il prompt eliminato è aperto nel DetailPane, Shell lo deseleziona.
       window.dispatchEvent(
         new CustomEvent("pap:prompt-eliminato", { detail: id }),
       );
     } catch (e) {
+      // `String(e)` è sicuro qui solo perché `PapErrore` è opaco per
+      // costruzione — invariante non coperta da un test dedicato.
+      logErroreApp(`[list-pane] elimina-prompt: invoke prompt_elimina — errore ${String(e)}`);
       console.error("[list-pane] elimina", e);
     }
   }
@@ -558,17 +567,34 @@
   }
 
   async function eliminaBulk(ids: string[]): Promise<void> {
-    const ok = await conferma(`Spostare ${ids.length} prompt nel cestino?`);
+    const ok = await conferma(
+      `Spostare ${ids.length} prompt nel cestino?`,
+      "elimina-prompt-multiplo",
+    );
+    // #585: punto di controllo — la conferma ha ritornato true/false?
+    logInfoApp(`[list-pane] elimina-prompt-multiplo: conferma ritornata esito=${ok}`);
     if (!ok) return;
     try {
+      logInfoApp(
+        `[list-pane] elimina-prompt-multiplo: invoke prompt_elimina x${ids.length} — avvio`,
+      );
       for (const id of ids) {
         await invoke<void>("prompt_elimina", { id });
         window.dispatchEvent(
           new CustomEvent("pap:prompt-eliminato", { detail: id }),
         );
       }
+      logInfoApp("[list-pane] elimina-prompt-multiplo: invoke prompt_elimina — completato");
     } catch (e) {
-      await avvisa(`Errore durante l'eliminazione: ${String(e).replace(/^Error: /, "")}`);
+      // `String(e)` è sicuro qui solo perché `PapErrore` è opaco per
+      // costruzione — invariante non coperta da un test dedicato.
+      logErroreApp(
+        `[list-pane] elimina-prompt-multiplo: invoke prompt_elimina — errore ${String(e)}`,
+      );
+      await avvisa(
+        `Errore durante l'eliminazione: ${String(e).replace(/^Error: /, "")}`,
+        "elimina-prompt-multiplo",
+      );
     } finally {
       onPulisciSelezione?.();
       refreshLista();

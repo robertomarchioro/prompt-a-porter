@@ -226,3 +226,110 @@ describe("eseguiPromuoviVariante: errore backend — nessun dispatch", () => {
     expect(risultato.errore).toBe("Impossibile promuovere la variante.");
   });
 });
+
+describe("eseguiPromuoviVariante: strumentazione diagnostica (#572)", () => {
+  it("senza il parametro log opzionale, non lancia e si comporta come prima", async () => {
+    const invokeFn = vi.fn<InvokePromuoviFn>().mockResolvedValue(undefined);
+
+    await expect(
+      eseguiPromuoviVariante(
+        "prm-variante-1",
+        invokeFn,
+        vi.fn<DispatchListaMutataFn>(),
+        vi.fn<DispatchApriPromptFn>(),
+        vi.fn<DispatchPromptPromossoFn>(),
+      ),
+    ).resolves.toEqual({ ok: true });
+  });
+
+  it("logga invoke e i tre dispatch, in ordine, al successo", async () => {
+    const invokeFn = vi.fn<InvokePromuoviFn>().mockResolvedValue(undefined);
+    const log = vi.fn<(messaggio: string) => void>();
+
+    await eseguiPromuoviVariante(
+      "prm-variante-1",
+      invokeFn,
+      vi.fn<DispatchListaMutataFn>(),
+      vi.fn<DispatchApriPromptFn>(),
+      vi.fn<DispatchPromptPromossoFn>(),
+      log,
+    );
+
+    const righe = log.mock.calls.map((c) => c[0]);
+    expect(righe).toEqual([
+      "[promuovi-variante] invoke prompt_promuovi_variante — avvio",
+      "[promuovi-variante] invoke prompt_promuovi_variante — completato",
+      "[promuovi-variante] dispatch pap:lista-mutata",
+      "[promuovi-variante] dispatch pap:apri-prompt",
+      "[promuovi-variante] dispatch pap:prompt-promosso",
+    ]);
+  });
+
+  it("con un solo callback `log` (retrocompatibilità), l'errore ricade sullo stesso", async () => {
+    const invokeFn = vi
+      .fn<InvokePromuoviFn>()
+      .mockRejectedValue(new Error("DB error"));
+    const log = vi.fn<(messaggio: string) => void>();
+
+    await eseguiPromuoviVariante(
+      "prm-variante-1",
+      invokeFn,
+      vi.fn<DispatchListaMutataFn>(),
+      vi.fn<DispatchApriPromptFn>(),
+      vi.fn<DispatchPromptPromossoFn>(),
+      log,
+    );
+
+    const righe = log.mock.calls.map((c) => c[0]);
+    expect(righe).toEqual([
+      "[promuovi-variante] invoke prompt_promuovi_variante — avvio",
+      "[promuovi-variante] invoke prompt_promuovi_variante — errore DB error",
+    ]);
+  });
+
+  // Review PR #592 (MEDIUM): il 6° parametro passato da RightRail.svelte
+  // era sempre `logInfoApp`, quindi la riga d'errore finiva a livello
+  // info — invisibile col filtro di default `warn` del log applicativo.
+  // Il 7° parametro opzionale `logErrore` separa i due livelli.
+  it("con `logErrore` distinto da `log`, l'errore va SOLO a `logErrore` (mai a `log`)", async () => {
+    const invokeFn = vi
+      .fn<InvokePromuoviFn>()
+      .mockRejectedValue(new Error("DB error"));
+    const log = vi.fn<(messaggio: string) => void>();
+    const logErrore = vi.fn<(messaggio: string) => void>();
+
+    await eseguiPromuoviVariante(
+      "prm-variante-1",
+      invokeFn,
+      vi.fn<DispatchListaMutataFn>(),
+      vi.fn<DispatchApriPromptFn>(),
+      vi.fn<DispatchPromptPromossoFn>(),
+      log,
+      logErrore,
+    );
+
+    expect(log.mock.calls.map((c) => c[0])).toEqual([
+      "[promuovi-variante] invoke prompt_promuovi_variante — avvio",
+    ]);
+    expect(logErrore.mock.calls.map((c) => c[0])).toEqual([
+      "[promuovi-variante] invoke prompt_promuovi_variante — errore DB error",
+    ]);
+  });
+
+  it("al successo `logErrore` distinto non viene mai chiamato", async () => {
+    const invokeFn = vi.fn<InvokePromuoviFn>().mockResolvedValue(undefined);
+    const logErrore = vi.fn<(messaggio: string) => void>();
+
+    await eseguiPromuoviVariante(
+      "prm-variante-1",
+      invokeFn,
+      vi.fn<DispatchListaMutataFn>(),
+      vi.fn<DispatchApriPromptFn>(),
+      vi.fn<DispatchPromptPromossoFn>(),
+      vi.fn<(messaggio: string) => void>(),
+      logErrore,
+    );
+
+    expect(logErrore).not.toHaveBeenCalled();
+  });
+});

@@ -20,6 +20,7 @@
   import { eseguiCreaVariante } from "./crea-variante-logic";
   import { eseguiPromuoviVariante } from "./promuovi-variante-logic";
   import { conferma, avvisa } from "$lib/util/conferma";
+  import { logInfoApp, logErroreApp } from "$lib/util/log-app";
   import Modale from "$lib/components/Modale.svelte";
   import Button from "$lib/components/Button.svelte";
   import Input from "$lib/components/Input.svelte";
@@ -140,7 +141,10 @@
         `NOTA: gli import esistenti che puntano al vecchio principale ` +
         `continueranno a puntare allo stesso prompt (ora variante). ` +
         `La migration automatica e' in backlog.`,
+      "promuovi-variante",
     );
+    // #572: punto di controllo — la conferma ha ritornato true/false?
+    logInfoApp(`[right-rail] promuovi-variante: conferma ritornata esito=${ok}`);
     if (!ok) return;
     const risultato = await eseguiPromuoviVariante(
       promptId,
@@ -151,12 +155,18 @@
         window.dispatchEvent(
           new CustomEvent("pap:prompt-promosso", { detail: { promptId: id } }),
         ),
+      logInfoApp,
+      // Review PR #592: riga d'errore dedicata a livello errore (prima
+      // finiva a `logInfoApp`, invisibile col filtro di default `warn`).
+      // Il messaggio è già scritto qui da `eseguiPromuoviVariante`: niente
+      // più `logErroreApp` duplicato sotto.
+      logErroreApp,
     );
     if (risultato.ok) {
       await caricaVarianti();
-      await avvisa("Variante promossa a principale.");
+      await avvisa("Variante promossa a principale.", "promuovi-variante");
     } else {
-      await avvisa(`Errore durante la promozione: ${risultato.errore}`);
+      await avvisa(`Errore durante la promozione: ${risultato.errore}`, "promuovi-variante");
     }
   }
 
@@ -185,7 +195,10 @@
   async function promuoviVariante(id: string): Promise<void> {
     const ok = await conferma(
       "Promuovere questa variante a principale? Lo stato attuale del prompt principale diventerà variante.",
+      "promuovi-variante",
     );
+    // #572: punto di controllo — la conferma ha ritornato true/false?
+    logInfoApp(`[right-rail] promuovi-variante: conferma ritornata esito=${ok}`);
     if (!ok) return;
     const risultato = await eseguiPromuoviVariante(
       id,
@@ -196,22 +209,30 @@
         window.dispatchEvent(
           new CustomEvent("pap:prompt-promosso", { detail: { promptId: pid } }),
         ),
+      logInfoApp,
+      // Vedi commento gemello in promuoviAPrincipale() sopra.
+      logErroreApp,
     );
     if (risultato.ok) {
       await caricaVarianti();
-      await avvisa("Variante promossa a principale.");
+      await avvisa("Variante promossa a principale.", "promuovi-variante");
     } else {
-      await avvisa(`Errore durante la promozione: ${risultato.errore}`);
+      await avvisa(`Errore durante la promozione: ${risultato.errore}`, "promuovi-variante");
     }
   }
 
   async function eliminaVariante(v: VariantInfo): Promise<void> {
     const ok = await conferma(
       `Eliminare la variante "${v.variant_label}"? Andrà nel cestino.`,
+      "elimina-variante",
     );
+    // #572: punto di controllo — la conferma ha ritornato true/false?
+    logInfoApp(`[right-rail] elimina-variante: conferma ritornata esito=${ok}`);
     if (!ok) return;
     try {
+      logInfoApp("[right-rail] elimina-variante: invoke prompt_elimina — avvio");
       await invoke<void>("prompt_elimina", { id: v.id });
+      logInfoApp("[right-rail] elimina-variante: invoke prompt_elimina — completato");
       if (v.id === promptId) {
         // La variante eliminata è quella aperta: Shell deseleziona e il pane si
         // smonta — NON ricaricare le varianti (promptId ormai stale).
@@ -223,7 +244,13 @@
       }
       window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
     } catch (e) {
-      await avvisa(`Errore durante l'eliminazione: ${String(e).replace(/^Error: /, "")}`);
+      // `String(e)` è sicuro qui solo perché `PapErrore` è opaco per
+      // costruzione — invariante non coperta da un test dedicato.
+      logErroreApp(`[right-rail] elimina-variante: invoke prompt_elimina — errore ${String(e)}`);
+      await avvisa(
+        `Errore durante l'eliminazione: ${String(e).replace(/^Error: /, "")}`,
+        "elimina-variante",
+      );
     }
   }
 

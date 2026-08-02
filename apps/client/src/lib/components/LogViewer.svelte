@@ -16,11 +16,15 @@
     erroreRegex,
     filtraRighe,
     ordinaRecentiPrimi,
+    formattaRigaRicaricaAvvio,
+    formattaRigaRicaricaEsito,
     N_RIGHE_DEFAULT,
     OPZIONI_N_RIGHE,
     type LivelloFiltro,
+    type OrigineRicarica,
     type RigaLog,
   } from "./log-viewer-logic";
+  import { logInfoApp } from "$lib/util/log-app";
 
   interface Props {
     /**
@@ -64,16 +68,49 @@
   // scatta il refresh automatico a 2s. L'`$effect` su `aperto` sotto chiude
   // questa finestra ricaricando esplicitamente quando il pannello passa da
   // chiuso ad aperto, indipendentemente dal timer.
-  async function ricarica(): Promise<void> {
+  // Strumentazione diagnostica (#558 punto 1, nessun cambio di
+  // comportamento): `origine` distingue le chiamate esplicite (montaggio,
+  // apertura pannello, click "Aggiorna ora", cambio "Righe") dal tick
+  // automatico del timer a 2s, che chiama `ricarica()` senza origine e
+  // quindi non produce alcuna riga di log — altrimenti il rumore
+  // seppellirebbe il segnale. Le righe di log riportano solo conteggi e
+  // stati, mai il contenuto delle righe (vedi log-viewer-logic.ts).
+  async function ricarica(origine?: OrigineRicarica): Promise<void> {
     if (inAttesa) return;
     inAttesa = true;
+    if (origine) {
+      logInfoApp(formattaRigaRicaricaAvvio({ origine, livelloFiltro: livello, aperto }));
+    }
+    let erroreRilevato = "";
     try {
       righe = await invoke<RigaLog[]>("debug_log_leggi", { nRighe });
       errore = "";
     } catch (e) {
       errore = e instanceof Error ? e.message : String(e);
+      erroreRilevato = errore;
     } finally {
       inAttesa = false;
+      if (origine) {
+        // Il conteggio filtrato va calcolato QUI applicando `filtraRighe`
+        // direttamente a `righe` appena assegnata, invece di leggere il
+        // `$derived` `righeFiltrate`: quest'ultimo non garantisce di essere
+        // già stato ricalcolato in questo stesso blocco sincrono, col
+        // rischio di loggare il conteggio della ricarica PRECEDENTE. È il
+        // numero chiave del discriminante #558 (dati non arrivati vs
+        // arrivati-ma-non-disegnati): se è sfasato il discriminante mente.
+        logInfoApp(
+          formattaRigaRicaricaEsito({
+            origine,
+            nRigheBackend: righe.length,
+            nRigheFiltrate: filtraRighe(
+              ordinaRecentiPrimi(righe),
+              livello,
+              compilaRegex(regexInput),
+            ).length,
+            errore: erroreRilevato,
+          }),
+        );
+      }
     }
   }
 
@@ -85,7 +122,7 @@
   $effect(() => {
     const attuale = aperto;
     if (attuale && !apertoPrec) {
-      void ricarica();
+      void ricarica("apertura-pannello");
     }
     apertoPrec = attuale;
   });
@@ -105,7 +142,7 @@
   }
 
   onMount(() => {
-    void ricarica();
+    void ricarica("mount");
     avviaTimer();
   });
 
@@ -186,7 +223,7 @@
         <span>Righe</span>
         <select
           bind:value={nRighe}
-          onchange={() => void ricarica()}
+          onchange={() => void ricarica("cambio-righe")}
           aria-label="Numero di righe caricate"
         >
           {#each OPZIONI_N_RIGHE as opzione (opzione)}
@@ -203,7 +240,7 @@
       <button
         type="button"
         class="log-btn-ghost"
-        onclick={ricarica}
+        onclick={() => void ricarica("manuale")}
         disabled={inAttesa}
         title="Aggiorna ora"
         aria-label="Aggiorna ora"
