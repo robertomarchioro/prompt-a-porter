@@ -18,6 +18,7 @@
   import { onDestroy, onMount } from "svelte";
   import { Play, PlayCircle, Pencil, Trash2, Plus } from "lucide-svelte";
   import Modale from "$lib/components/Modale.svelte";
+  import { conferma } from "$lib/util/conferma";
 
   interface Golden {
     id: string;
@@ -131,7 +132,7 @@
   });
 
   async function elimina(id: string, etichetta: string): Promise<void> {
-    if (!confirm(`Eliminare il golden test "${etichetta}"?`)) return;
+    if (!(await conferma(`Eliminare il golden test "${etichetta}"?`))) return;
     try {
       await invoke("golden_elimina", { id });
       window.dispatchEvent(new CustomEvent("pap:lista-mutata"));

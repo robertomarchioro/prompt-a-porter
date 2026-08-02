@@ -20,6 +20,7 @@
     type ColoreAvatar,
   } from "$lib/util/avatar-hash";
   import DiffViewer from "./DiffViewer.svelte";
+  import { conferma } from "$lib/util/conferma";
 
   interface VersioneStorica {
     id: string;
@@ -97,12 +98,10 @@
   });
 
   async function rollback(version: number, etichetta: string): Promise<void> {
-    if (
-      !confirm(
-        `Ripristinare la versione ${etichetta}? Verrà creata una nuova versione con questo contenuto.`,
-      )
-    )
-      return;
+    const ok = await conferma(
+      `Ripristinare la versione ${etichetta}? Verrà creata una nuova versione con questo contenuto.`,
+    );
+    if (!ok) return;
     try {
       await invoke("prompt_rollback", {
         promptId,

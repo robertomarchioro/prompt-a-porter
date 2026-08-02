@@ -12,6 +12,7 @@
   import { onMount, onDestroy } from "svelte";
   import { RotateCcw, Trash2, Link2 } from "lucide-svelte";
   import Toast from "./Toast.svelte";
+  import { conferma } from "$lib/util/conferma";
 
   interface PromptCancellato {
     id: string;
@@ -61,7 +62,7 @@
 
   async function eliminaDefinitivo(p: PromptCancellato): Promise<void> {
     const titolo = p.titolo || "(senza titolo)";
-    const ok = window.confirm(
+    const ok = await conferma(
       `Eliminare definitivamente "${titolo}"?\n\nQuesta operazione NON è reversibile: il prompt e la sua cronologia verranno rimossi per sempre.`,
     );
     if (!ok) return;
@@ -78,7 +79,7 @@
 
   async function svuota(): Promise<void> {
     if (prompts.length === 0) return;
-    const ok = window.confirm(
+    const ok = await conferma(
       `Svuotare il cestino?\n\n${prompts.length} prompt verranno eliminati definitivamente. L'operazione NON è reversibile.`,
     );
     if (!ok) return;

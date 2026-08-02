@@ -18,6 +18,7 @@
   import { estraiImports } from "$lib/util/estrai-imports";
   import { MODELLI_TARGET } from "$lib/modelli-target";
   import { eseguiCreaVariante } from "./crea-variante-logic";
+  import { conferma, avvisa } from "$lib/util/conferma";
   import Modale from "$lib/components/Modale.svelte";
   import Button from "$lib/components/Button.svelte";
   import Input from "$lib/components/Input.svelte";
@@ -123,7 +124,7 @@
   // M3 PR-5: promuovi questa variante a principale.
   async function promuoviAPrincipale(): Promise<void> {
     if (!parentPromptId) return; // safe-guard: il bottone non dovrebbe essere visibile
-    const ok = confirm(
+    const ok = await conferma(
       `Promuovere questa variante a principale?\n\n` +
         `Lo stato attuale del prompt principale diventerà variante. Le altre ` +
         `varianti saranno ri-agganciate a questo nuovo principale.\n\n` +
@@ -139,7 +140,7 @@
       window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
       window.dispatchEvent(new CustomEvent("pap:apri-prompt", { detail: promptId }));
     } catch (e) {
-      alert(`Errore durante la promozione: ${String(e).replace(/^Error: /, "")}`);
+      await avvisa(`Errore durante la promozione: ${String(e).replace(/^Error: /, "")}`);
     }
   }
 
@@ -166,29 +167,25 @@
   }
 
   async function promuoviVariante(id: string): Promise<void> {
-    if (
-      !confirm(
-        "Promuovere questa variante a principale? Lo stato attuale del prompt principale diventerà variante.",
-      )
-    ) {
-      return;
-    }
+    const ok = await conferma(
+      "Promuovere questa variante a principale? Lo stato attuale del prompt principale diventerà variante.",
+    );
+    if (!ok) return;
     try {
       await invoke<void>("prompt_promuovi_variante", { variantId: id });
       await caricaVarianti();
       window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
       window.dispatchEvent(new CustomEvent("pap:apri-prompt", { detail: id }));
     } catch (e) {
-      alert(`Errore durante la promozione: ${String(e).replace(/^Error: /, "")}`);
+      await avvisa(`Errore durante la promozione: ${String(e).replace(/^Error: /, "")}`);
     }
   }
 
   async function eliminaVariante(v: VariantInfo): Promise<void> {
-    if (
-      !confirm(`Eliminare la variante "${v.variant_label}"? Andrà nel cestino.`)
-    ) {
-      return;
-    }
+    const ok = await conferma(
+      `Eliminare la variante "${v.variant_label}"? Andrà nel cestino.`,
+    );
+    if (!ok) return;
     try {
       await invoke<void>("prompt_elimina", { id: v.id });
       if (v.id === promptId) {
@@ -202,7 +199,7 @@
       }
       window.dispatchEvent(new CustomEvent("pap:lista-mutata"));
     } catch (e) {
-      alert(`Errore durante l'eliminazione: ${String(e).replace(/^Error: /, "")}`);
+      await avvisa(`Errore durante l'eliminazione: ${String(e).replace(/^Error: /, "")}`);
     }
   }
 

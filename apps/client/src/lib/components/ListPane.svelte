@@ -30,6 +30,7 @@
   import { apriModale } from "$lib/stores/modale.svelte";
   import { scaricaBlob, slugFile } from "$lib/util/dati-export";
   import { apriUrlEsterno } from "$lib/util/apri-url";
+  import { conferma, avvisa } from "$lib/util/conferma";
   import {
     caricaStato,
     salvaStato,
@@ -343,9 +344,10 @@
   }
 
   async function eliminaPrompt(id: string, titolo: string): Promise<void> {
-    if (!confirm(`Spostare "${titolo || "(senza titolo)"}" nel cestino?`)) {
-      return;
-    }
+    const ok = await conferma(
+      `Spostare "${titolo || "(senza titolo)"}" nel cestino?`,
+    );
+    if (!ok) return;
     try {
       await invoke("prompt_elimina", { id });
       refreshLista();
@@ -526,7 +528,7 @@
         });
       }
     } catch (e) {
-      alert(`Errore durante lo spostamento: ${String(e).replace(/^Error: /, "")}`);
+      await avvisa(`Errore durante lo spostamento: ${String(e).replace(/^Error: /, "")}`);
     } finally {
       onPulisciSelezione?.();
       refreshLista();
@@ -553,7 +555,8 @@
   }
 
   async function eliminaBulk(ids: string[]): Promise<void> {
-    if (!confirm(`Spostare ${ids.length} prompt nel cestino?`)) return;
+    const ok = await conferma(`Spostare ${ids.length} prompt nel cestino?`);
+    if (!ok) return;
     try {
       for (const id of ids) {
         await invoke<void>("prompt_elimina", { id });
@@ -562,7 +565,7 @@
         );
       }
     } catch (e) {
-      alert(`Errore durante l'eliminazione: ${String(e).replace(/^Error: /, "")}`);
+      await avvisa(`Errore durante l'eliminazione: ${String(e).replace(/^Error: /, "")}`);
     } finally {
       onPulisciSelezione?.();
       refreshLista();
@@ -604,7 +607,7 @@
     // La selezione resta: così si possono aggiungere più tag di fila.
     refreshLista();
     if (falliti > 0) {
-      alert(`Impossibile aggiungere il tag a ${falliti} prompt su ${ids.length}.`);
+      await avvisa(`Impossibile aggiungere il tag a ${falliti} prompt su ${ids.length}.`);
     }
   }
 
