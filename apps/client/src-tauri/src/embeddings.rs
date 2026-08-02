@@ -199,6 +199,35 @@ fn sha256_hex(bytes: &[u8]) -> String {
     digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// Fix #575 (review): costruisce l'errore di integrità mostrato all'utente
+/// (opaco, CWE-209) E scrive nel log TUTTI i dettagli tecnici — nome file,
+/// origine (percorso su disco o URL di provenienza), dimensione, hash
+/// atteso e hash calcolato. Nessuno di questi dati è sensibile (percorsi
+/// locali e hash pubblici, non segreti/credenziali): rispetta lo standard
+/// del progetto (niente CWE-532, vedi fix #571) mentre chiude la CWE-209
+/// nell'altra direzione — prima di questo fix un mismatch di integrità non
+/// finiva MAI nel log, a nessun livello di debug, perché i punti che lo
+/// sollevavano costruivano `PapErrore::Generico(...)` direttamente invece di
+/// passare da `PapErrore::dominio(...)` (l'unico punto che chiama
+/// `log::error!`, vedi `errore.rs`).
+fn errore_integrita(
+    nome_file: &str,
+    origine: &str,
+    dimensione: u64,
+    atteso: &str,
+    calcolato: &str,
+) -> PapErrore {
+    log::error!(
+        "Verifica integrità fallita per {nome_file} — origine: {origine}, \
+         dimensione: {dimensione} byte, hash atteso: {atteso}, hash calcolato: {calcolato}"
+    );
+    PapErrore::Generico(format!(
+        "Verifica integrità fallita per {nome_file}: l'hash SHA-256 non corrisponde \
+         a quello atteso. Il file potrebbe essere stato manomesso, corrotto o \
+         sostituito; operazione interrotta."
+    ))
+}
+
 /// Verifica che l'hash SHA-256 di `bytes` corrisponda a `atteso`
 /// (confronto case-insensitive). Fail-closed: qualunque mismatch produce
 /// un errore esplicito invece di procedere silenziosamente con un
@@ -207,14 +236,13 @@ fn sha256_hex(bytes: &[u8]) -> String {
 /// (a download avvenuto, o riscritto sul disco in un momento successivo)
 /// equivarrebbe a RCE. Usata sia subito dopo il download sia ad ogni
 /// riavvio prima di ricaricare gli artefatti dalla cache locale.
-fn verifica_sha256(bytes: &[u8], atteso: &str, nome_file: &str) -> Result<(), PapErrore> {
+///
+/// `origine` è il percorso su disco (o l'URL, quando i byte sono ancora
+/// solo in memoria) usato per arricchire il log su mismatch (fix #575).
+fn verifica_sha256(bytes: &[u8], atteso: &str, nome_file: &str, origine: &str) -> Result<(), PapErrore> {
     let calcolato = sha256_hex(bytes);
     if !calcolato.eq_ignore_ascii_case(atteso) {
-        return Err(PapErrore::Generico(format!(
-            "Verifica integrità fallita per {nome_file}: l'hash SHA-256 non corrisponde \
-             a quello atteso. Il file potrebbe essere stato manomesso, corrotto o \
-             sostituito; operazione interrotta."
-        )));
+        return Err(errore_integrita(nome_file, origine, bytes.len() as u64, atteso, &calcolato));
     }
     Ok(())
 }
@@ -227,7 +255,34 @@ fn verifica_sha256(bytes: &[u8], atteso: &str, nome_file: &str) -> Result<(), Pa
 /// successivi il file veniva fidato solo perché "esiste su disco"
 /// (`lib_path.is_file()`), senza ricontrollarne il contenuto. Fail-closed:
 /// il primo mismatch interrompe il caricamento con un errore esplicito.
-fn verifica_artefatti_cache_su_disco(dir_modello: &Path, lib_path: &Path) -> Result<(), PapErrore> {
+///
+/// `sha256_lib_atteso` è l'hash del file GIÀ ESTRATTO (fix #575), passato
+/// dal chiamante — NON quello dell'archivio da cui proviene (sono diversi
+/// per costruzione, vedi doc su `ort_release_filename`): prima del fix
+/// questa funzione chiamava `ort_release_filename()` internamente e ne
+/// riusava per errore l'hash dell'archivio, con mismatch sistematico al
+/// 100%. Iniettarlo come parametro rende la funzione testabile con un hash
+/// noto, senza dover mockare `ort_release_filename` (hardcoded per
+/// piattaforma).
+///
+/// Divisa in due funzioni focalizzate (`verifica_modello_cache_su_disco` +
+/// `verifica_lib_cache_su_disco`) così il test di regressione #575 può
+/// esercitare SOLO il ramo che conteneva il bug, senza dover fabbricare
+/// contenuti fittizi che superino l'hash reale di `model.onnx`/`tokenizer.json`
+/// (pinnato su file HuggingFace veri, non riproducibili in un test).
+fn verifica_artefatti_cache_su_disco(
+    dir_modello: &Path,
+    lib_path: &Path,
+    sha256_lib_atteso: &str,
+) -> Result<(), PapErrore> {
+    verifica_modello_cache_su_disco(dir_modello)?;
+    verifica_lib_cache_su_disco(lib_path, sha256_lib_atteso)?;
+    Ok(())
+}
+
+/// Ri-verifica SHA-256 di model.onnx + tokenizer.json in cache (parte di
+/// `verifica_artefatti_cache_su_disco`, invariata dal fix #575).
+fn verifica_modello_cache_su_disco(dir_modello: &Path) -> Result<(), PapErrore> {
     for (_, nome_locale, sha256_atteso) in FILES_HF {
         let path = dir_modello.join(nome_locale);
         let bytes = fs::read(&path).map_err(|e| {
@@ -235,18 +290,22 @@ fn verifica_artefatti_cache_su_disco(dir_modello: &Path, lib_path: &Path) -> Res
                 "Impossibile leggere {nome_locale} per la verifica di integrità: {e}"
             ))
         })?;
-        verifica_sha256(&bytes, sha256_atteso, nome_locale)?;
+        verifica_sha256(&bytes, sha256_atteso, nome_locale, &path.display().to_string())?;
     }
+    Ok(())
+}
 
-    let (_, _, sha256_lib_atteso) = ort_release_filename()?;
+/// Ri-verifica SHA-256 di libonnxruntime in cache contro `sha256_atteso`
+/// (l'hash del file ESTRATTO, iniettato dal chiamante). Questo è il ramo
+/// che conteneva il bug #575: prima del fix il chiamante gli passava per
+/// errore l'hash dell'ARCHIVIO invece che quello del file estratto.
+fn verifica_lib_cache_su_disco(lib_path: &Path, sha256_atteso: &str) -> Result<(), PapErrore> {
     let lib_bytes = fs::read(lib_path).map_err(|e| {
         PapErrore::Generico(format!(
             "Impossibile leggere libonnxruntime per la verifica di integrità: {e}"
         ))
     })?;
-    verifica_sha256(&lib_bytes, sha256_lib_atteso, "libonnxruntime")?;
-
-    Ok(())
+    verifica_sha256(&lib_bytes, sha256_atteso, "libonnxruntime", &lib_path.display().to_string())
 }
 
 // ─────────── Staging privato libonnxruntime (fix TOCTOU CWE-367) ───────────
@@ -280,7 +339,7 @@ fn stage_lib_verificata(
     // privata: è questa la copia che verrà caricata, non più il file in cache.
     let bytes = fs::read(&dest)
         .map_err(|e| PapErrore::dominio("Impossibile rileggere la copia privata di libonnxruntime per la verifica.", e))?;
-    verifica_sha256(&bytes, sha256_atteso, "libonnxruntime (copia privata)")?;
+    verifica_sha256(&bytes, sha256_atteso, "libonnxruntime (copia privata)", &dest.display().to_string())?;
     Ok((tmp, dest))
 }
 
@@ -521,7 +580,62 @@ fn scarica_file(
     if let Some(parent) = dest_tmp.parent() {
         fs::create_dir_all(parent)?;
     }
-    let mut out = fs::File::create(&dest_tmp)?;
+
+    // Fix #569: rimuove un eventuale residuo — file regolare di un download
+    // interrotto in precedenza, O un symlink pre-piazzato da un attaccante
+    // verso un path esterno — PRIMA di aprire con `create_new` più sotto.
+    // `remove_file` non segue i symlink (cancella il link stesso, non il
+    // bersaglio), quindi è sicuro anche nel caso ostile. La finestra fra
+    // questo `remove_file` e la `open` è innocua: se qualcosa ricompare nel
+    // frattempo, `create_new` fallisce chiuso con `AlreadyExists` (voluto).
+    let _ = fs::remove_file(&dest_tmp);
+
+    let acc = match scarica_e_verifica_in_tmp(app, url, &dest_tmp, indice_file, totale_file, nome_visibile, sha256_atteso) {
+        Ok(acc) => acc,
+        Err(e) => {
+            // Fix #569: pulizia su OGNI ramo d'errore (I/O a metà, lettura
+            // di rete fallita, mismatch SHA-256) — non solo sul mismatch
+            // come prima del fix — così un residuo non blocca per sempre
+            // il prossimo tentativo con `AlreadyExists`.
+            let _ = fs::remove_file(&dest_tmp);
+            return Err(e);
+        }
+    };
+
+    fs::rename(&dest_tmp, dest)?;
+    let _ = app.emit(
+        "embeddings:download:progress",
+        ProgressDownload {
+            file: nome_visibile.to_string(),
+            bytes: acc,
+            total: None,
+            indice_file,
+            totale_file,
+        },
+    );
+    Ok(())
+}
+
+/// Corpo di `scarica_file`: apre `dest_tmp` in modo symlink-safe
+/// (`O_CREAT|O_EXCL`, fix #569), scarica in streaming calcolando l'hash
+/// incrementalmente, e verifica l'integrità PRIMA che il chiamante sposti
+/// il file nella posizione finale. Ritorna i byte totali scaricati su
+/// successo; il chiamante è responsabile della pulizia di `dest_tmp` su
+/// QUALUNQUE errore (non solo il mismatch SHA-256).
+fn scarica_e_verifica_in_tmp(
+    app: &tauri::AppHandle,
+    url: &str,
+    dest_tmp: &Path,
+    indice_file: usize,
+    totale_file: usize,
+    nome_visibile: &str,
+    sha256_atteso: &str,
+) -> Result<u64, PapErrore> {
+    // Fix #569 (CWE-59-adjacent, TOCTOU su file temporanei): `create_new`
+    // fallisce se il path esiste già (file O symlink), invece di seguire
+    // un eventuale symlink pre-piazzato come farebbe `File::create`
+    // (O_CREAT|O_TRUNC senza O_EXCL).
+    let mut out = fs::OpenOptions::new().write(true).create_new(true).open(dest_tmp)?;
     let mut reader = http_get_streaming(url)?;
     let mut buf = [0u8; 64 * 1024];
     let mut acc: u64 = 0;
@@ -557,71 +671,91 @@ fn scarica_file(
     drop(out);
 
     // Fix #458: verifica integrità PRIMA di spostare il file nella
-    // posizione finale da cui verrà caricato/usato. Su mismatch il file
-    // parziale viene rimosso (fail-closed, niente file sospetto residuo).
+    // posizione finale da cui verrà caricato/usato.
     let digest_hex: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
     if !digest_hex.eq_ignore_ascii_case(sha256_atteso) {
-        let _ = fs::remove_file(&dest_tmp);
-        return Err(PapErrore::Generico(format!(
-            "Verifica integrità fallita per {nome_visibile}: l'hash SHA-256 del download \
-             non corrisponde a quello atteso. Il file potrebbe essere stato manomesso \
-             o il mirror è compromesso; download interrotto."
-        )));
+        return Err(errore_integrita(nome_visibile, &dest_tmp.display().to_string(), acc, sha256_atteso, &digest_hex));
     }
 
-    fs::rename(&dest_tmp, dest)?;
-    let _ = app.emit(
-        "embeddings:download:progress",
-        ProgressDownload {
-            file: nome_visibile.to_string(),
-            bytes: acc,
-            total: None,
-            indice_file,
-            totale_file,
-        },
-    );
-    Ok(())
+    Ok(acc)
 }
 
 // ─────────── Download libonnxruntime ───────────
 
-/// Tarball name + sub-path della libreria nativa nella release upstream +
-/// hash SHA-256 atteso dell'intero archivio (fix #458).
+/// Tarball name + sub-path della libreria nativa nella release upstream,
+/// più l'hash SHA-256 dell'ARCHIVIO (fix #458, verificato PRIMA
+/// dell'estrazione) e l'hash SHA-256 del FILE GIÀ ESTRATTO (fix #575,
+/// ri-verificato ad ogni avvio).
 ///
-/// L'hash è verificato PRIMA dell'estrazione: `libonnxruntime` è codice
-/// nativo caricato ed eseguito nel processo (via `ORT_DYLIB_PATH`), quindi
-/// un archivio manomesso non verificato equivarrebbe a RCE. Ogni
-/// piattaforma supportata ha il proprio hash pinnato qui; una piattaforma
+/// I due hash sono DIVERSI per costruzione: un archivio compresso non ha lo
+/// stesso SHA-256 del singolo file estratto al suo interno. Prima del fix
+/// #575 — una regressione della #541 (commit `34e9459`, che introdusse la
+/// ri-verifica ad ogni avvio) — `verifica_artefatti_cache_su_disco` e
+/// `stage_lib_verificata` riusavano l'hash dell'ARCHIVIO per verificare il
+/// file estratto già presente in cache: il mismatch era sistematico al
+/// 100%, su ogni piattaforma, a ogni avvio successivo a un download
+/// riuscito. Non era emerso prima perché su macOS, fino al fix #566,
+/// l'estrazione stessa falliva sempre (bug indipendente).
+///
+/// L'hash dell'archivio è verificato PRIMA dell'estrazione: `libonnxruntime`
+/// è codice nativo caricato ed eseguito nel processo (via `ORT_DYLIB_PATH`),
+/// quindi un archivio manomesso non verificato equivarrebbe a RCE. Ogni
+/// piattaforma supportata ha entrambi gli hash pinnati qui; una piattaforma
 /// non elencata fallisce chiusa nel branch `(os, arch)` sottostante,
 /// invece di scaricare/estrarre un artefatto non verificato.
-fn ort_release_filename() -> Result<(String, String, &'static str), PapErrore> {
+///
+/// PROCEDURA con cui gli hash del file estratto sono stati ottenuti
+/// (riproducibile, PR fix #575):
+/// 1. Scaricati i 5 archivi da
+///    `https://github.com/microsoft/onnxruntime/releases/download/v1.23.0/<filename>`
+///    — esattamente gli URL costruiti da questa funzione (`ORT_RELEASE_BASE`
+///    + `v{ORT_VERSION}/{suffix}`).
+/// 2. `sha256sum` su ciascun archivio confrontato con l'hash già pinnato qui
+///    dal fix #458: CORRISPONDE per tutte e 5 le piattaforme (nessuna
+///    sorpresa, nessuna sostituzione upstream).
+/// 3. Estratto da ciascun archivio il file `.../lib/<lib>` seguendo la
+///    STESSA risoluzione symlink del codice di produzione
+///    (`estrai_da_tar_gz` + `risolvi_symlink_in_archivio`, fix #556): su
+///    Linux `libonnxruntime.so` è un doppio hop di symlink
+///    (`.so` → `.so.1` → `.so.1.23.0`, quest'ultimo il file regolare); su
+///    macOS un singolo hop (`.dylib` → `.1.23.0.dylib`); su Windows nessun
+///    symlink, voce diretta nello zip (`onnxruntime.dll`).
+/// 4. `sha256sum` sul file REGOLARE finale (non sul symlink) → hash
+///    registrati sotto, con dimensione del file coerente con quanto
+///    riportato da `tar tzv`/`unzip -l` (22/18/35/39 MB + 14 MB il .dll).
+fn ort_release_filename() -> Result<(String, String, &'static str, &'static str), PapErrore> {
     let arch = std::env::consts::ARCH;
     let lib = nome_libonnxruntime();
-    let (suffix, sub, sha256_atteso) = match (std::env::consts::OS, arch) {
+    let (suffix, sub, sha256_archivio, sha256_lib_estratta) = match (std::env::consts::OS, arch) {
         ("linux", "x86_64") => (
             format!("onnxruntime-linux-x64-{ORT_VERSION}.tgz"),
             format!("onnxruntime-linux-x64-{ORT_VERSION}/lib/{lib}"),
             "b6deea7f2e22c10c043019f294a0ea4d2a6c0ae52a009c34847640db75ec5580",
+            "98b0253652d36c706cd9b873f3e8dc74e107c26cf9694672fb4d88da1c00f250",
         ),
         ("linux", "aarch64") => (
             format!("onnxruntime-linux-aarch64-{ORT_VERSION}.tgz"),
             format!("onnxruntime-linux-aarch64-{ORT_VERSION}/lib/{lib}"),
             "0b9f47d140411d938e47915824d8daaa424df95a88b5f1fc843172a75168f7a0",
+            "cb068adc50115db2cca077b385a15b35cc07a14ef3bb71aa5d7c66f1982f5264",
         ),
         ("macos", "aarch64") => (
             format!("onnxruntime-osx-arm64-{ORT_VERSION}.tgz"),
             format!("onnxruntime-osx-arm64-{ORT_VERSION}/lib/{lib}"),
             "8182db0ebb5caa21036a3c78178f17fabb98a7916bdab454467c8f4cf34bcfdf",
+            "d3859aecdb70ea099f5b5f4185fe16f0527c6680b18731e6e96fc971ec767cca",
         ),
         ("macos", "x86_64") => (
             format!("onnxruntime-osx-x86_64-{ORT_VERSION}.tgz"),
             format!("onnxruntime-osx-x86_64-{ORT_VERSION}/lib/{lib}"),
             "a8e43edcaa349cbfc51578a7fc61ea2b88793ccf077b4bc65aca58999d20cf0f",
+            "091d265e49da84ac8eafd6ff76b67688555192a272d784a252d550a858797d6f",
         ),
         ("windows", "x86_64") => (
             format!("onnxruntime-win-x64-{ORT_VERSION}.zip"),
             format!("onnxruntime-win-x64-{ORT_VERSION}/lib/{lib}"),
             "72c23470310ec79a7d42d27fe9d257e6c98540c73fa5a1db1f67f538c6c16f2f",
+            "b4b7f9aed3cf6b04000f595bddcbdf12e87214bc401d1b81beadae3dbf28d2bd",
         ),
         (os, arch) => {
             return Err(PapErrore::Generico(format!(
@@ -629,7 +763,7 @@ fn ort_release_filename() -> Result<(String, String, &'static str), PapErrore> {
             )))
         }
     };
-    Ok((suffix, sub, sha256_atteso))
+    Ok((suffix, sub, sha256_archivio, sha256_lib_estratta))
 }
 
 /// Estrae `path_in_archive` in `dest`.
@@ -657,6 +791,11 @@ fn estrai_libonnxruntime(
     )?;
 
     let dest_tmp = dest.with_extension("extract-partial");
+    // Fix #569: rimuove un eventuale residuo — file regolare O symlink
+    // pre-piazzato verso un path esterno — PRIMA di aprirlo in `create_new`
+    // dentro `estrai_da_zip`/`estrai_da_tar_gz`. Copre entrambe le
+    // funzioni, che ricevono sempre `dest_tmp` da qui.
+    let _ = fs::remove_file(&dest_tmp);
     let risultato = if std::env::consts::OS == "windows" {
         estrai_da_zip(archive_bytes, path_in_archive, &dest_tmp)
     } else {
@@ -677,7 +816,10 @@ fn estrai_da_zip(archive_bytes: &[u8], path_in_archive: &str, dest: &Path) -> Re
     let mut entry = archive
         .by_name(path_in_archive)
         .map_err(|e| PapErrore::dominio("Contenuto del modello di embedding mancante o corrotto nell'archivio.", e))?;
-    let mut out = fs::File::create(dest)?;
+    // Fix #569: come `scarica_e_verifica_in_tmp`, `create_new` invece di
+    // `File::create` per non seguire un eventuale symlink pre-piazzato. Il
+    // residuo è già stato ripulito dal chiamante (`estrai_libonnxruntime`).
+    let mut out = fs::OpenOptions::new().write(true).create_new(true).open(dest)?;
     std::io::copy(&mut entry, &mut out)?;
     Ok(())
 }
@@ -747,6 +889,17 @@ const MAX_HOP_SYMLINK: u8 = 8;
 /// Il decoding gzip riparte da `archive_bytes` (in memoria, quindi
 /// riavvolgibile) ad ogni hop: il tar crate legge solo in streaming forward,
 /// non supporta un accesso random per path.
+///
+/// Fix #569 (difensivo, correttezza non sicurezza): gestisce anche
+/// `EntryType::Link` (hard link tar), non solo `Symlink`. Senza questo
+/// branch un hard link cadrebbe nel ramo "file regolare" sottostante e
+/// verrebbe letto con `entry.read()` → 0 byte, riproducendo lo stesso
+/// fuorviante "hash non corrisponde" già documentato sopra per i symlink
+/// (fix #556). A differenza del symlink, la semantica tar vuole il
+/// `link_name` di un hard link risolto rispetto alla ROOT dell'archivio,
+/// non rispetto alla directory dell'entry: nessuna `risolvi_path_relativo`
+/// qui, solo normalizzazione. I tarball onnxruntime reali non usano hard
+/// link: questo branch non è mai stato esercitato da un archivio reale.
 fn risolvi_symlink_in_archivio(
     archive_bytes: &[u8],
     path_normalizzato: &Path,
@@ -768,7 +921,8 @@ fn risolvi_symlink_in_archivio(
             if normalizza_path_archivio(&entry_path) != corrente {
                 continue;
             }
-            if entry.header().entry_type().is_symlink() {
+            let entry_type = entry.header().entry_type();
+            if entry_type.is_symlink() {
                 let link_name = entry
                     .link_name()
                     .map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?
@@ -784,6 +938,20 @@ fn risolvi_symlink_in_archivio(
                     dir_symlink,
                     &link_name,
                 ))));
+            } else if entry_type.is_hard_link() {
+                // Vedi doc sopra: `link_name` di un hard link è relativo
+                // alla root dell'archivio, non alla dir dell'entry.
+                let link_name = entry
+                    .link_name()
+                    .map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?
+                    .ok_or_else(|| {
+                        PapErrore::Generico(format!(
+                            "tar: entry hard link {} senza link target",
+                            corrente.display()
+                        ))
+                    })?
+                    .into_owned();
+                esito_entry = Some(Some(normalizza_path_archivio(&link_name)));
             } else {
                 esito_entry = Some(None);
             }
@@ -823,7 +991,9 @@ fn estrai_da_tar_gz(archive_bytes: &[u8], path_in_archive: &str, dest: &Path) ->
             .map_err(|e| PapErrore::dominio("Estrazione del modello di embedding non riuscita.", e))?
             .into_owned();
         if normalizza_path_archivio(&entry_path) == target_risolto {
-            let mut out = fs::File::create(dest)?;
+            // Fix #569: `create_new` invece di `File::create`, come in
+            // `estrai_da_zip`. Il residuo è già ripulito dal chiamante.
+            let mut out = fs::OpenOptions::new().write(true).create_new(true).open(dest)?;
             std::io::copy(&mut entry, &mut out)?;
             found = true;
             break;
@@ -866,7 +1036,9 @@ pub fn embeddings_download(
 
     // 2. libonnxruntime da Microsoft GitHub release (tarball/zip → estrai solo lib)
     if libonnxruntime_da_scaricare {
-        let (filename, path_in_archive, sha256_atteso) = ort_release_filename()?;
+        // Qui serve l'hash dell'ARCHIVIO (verificato prima dell'estrazione),
+        // non quello del file estratto — vedi doc su `ort_release_filename`.
+        let (filename, path_in_archive, sha256_atteso, _sha256_lib_estratta) = ort_release_filename()?;
         let url = format!("{ORT_RELEASE_BASE}v{ORT_VERSION}/{filename}");
         let (bytes, _total) = http_get_with_progress(
             &app,
@@ -877,7 +1049,7 @@ pub fn embeddings_download(
         )?;
         // Fix #458: verifica integrità dell'intero archivio PRIMA di
         // estrarre/caricare la libreria nativa al suo interno.
-        verifica_sha256(&bytes, sha256_atteso, &filename)?;
+        verifica_sha256(&bytes, sha256_atteso, &filename, &url)?;
         estrai_libonnxruntime(&bytes, &path_in_archive, &lib_path)?;
         log::info!("libonnxruntime estratta in {}", lib_path.display());
     }
@@ -921,11 +1093,17 @@ pub fn init_session_pure(
         ));
     }
 
+    // Fix #575: un'unica chiamata a `ort_release_filename()` per l'intera
+    // funzione — usata sia per la ri-verifica su disco sia per lo staging
+    // della copia privata più sotto, così l'hash del file estratto è
+    // recuperato una volta sola invece che duplicato in due punti diversi.
+    let (_, _, _, sha256_lib_atteso) = ort_release_filename()?;
+
     // Fix #458 (review MEDIUM): fail-fast. La verifica SHA-256 avveniva solo
     // al download; la ri-eseguiamo ORA, ad ogni avvio, così un artefatto in
     // cache alterato produce subito un errore chiaro — modello e tokenizer
     // compresi — prima ancora dello staging della libreria nativa.
-    verifica_artefatti_cache_su_disco(&dir_modello, &lib_path)?;
+    verifica_artefatti_cache_su_disco(&dir_modello, &lib_path, sha256_lib_atteso)?;
 
     // Fix TOCTOU (CWE-367): NON puntare ORT_DYLIB_PATH al file in cache.
     // `ort` fa `dlopen(ORT_DYLIB_PATH)` in modo indipendente DOPO la nostra
@@ -948,8 +1126,11 @@ pub fn init_session_pure(
     // group/other-writable (NON il default) E la vittoria di una race stretta.
     // Un attaccante dello STESSO UID è fuori dalla portata di qualunque
     // approccio path-based, perché `ort` non offre un load da file descriptor.
+    // Fix #575: la copia privata è ricopiata dal file GIÀ ESTRATTO in cache,
+    // quindi va ri-verificata con `sha256_lib_atteso` (l'hash del file
+    // estratto, calcolato una volta sola sopra), non con quello
+    // dell'archivio (sono diversi per costruzione).
     let runtime_dir = percorso_runtime_dir(vault_state);
-    let (_, _, sha256_lib_atteso) = ort_release_filename()?;
     let (tmp_lib, lib_privata_path) =
         stage_lib_verificata(&runtime_dir, &lib_path, sha256_lib_atteso)?;
 
@@ -1261,12 +1442,19 @@ mod test {
         // Sentinel: la fn ritorna Ok per la piattaforma corrente di test.
         let r = ort_release_filename();
         assert!(r.is_ok(), "Piattaforma corrente deve essere supportata");
-        let (filename, sub, sha256_atteso) = r.unwrap();
+        let (filename, sub, sha256_archivio, sha256_lib_estratta) = r.unwrap();
         assert!(filename.contains(ORT_VERSION));
         assert!(sub.contains("/lib/"));
-        // Fix #458: hash pinnato, 64 hex char (SHA-256), non vuoto/placeholder.
-        assert_eq!(sha256_atteso.len(), 64);
-        assert!(sha256_atteso.chars().all(|c| c.is_ascii_hexdigit()));
+        // Fix #458/#575: entrambi gli hash pinnati, 64 hex char (SHA-256),
+        // non vuoti/placeholder, e DIVERSI fra loro (archivio ≠ file estratto).
+        assert_eq!(sha256_archivio.len(), 64);
+        assert!(sha256_archivio.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_eq!(sha256_lib_estratta.len(), 64);
+        assert!(sha256_lib_estratta.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(
+            sha256_archivio, sha256_lib_estratta,
+            "l'hash dell'archivio e quello del file estratto devono essere diversi (fix #575)"
+        );
     }
 
     #[test]
@@ -1394,10 +1582,37 @@ mod test {
         std::fs::write(dir_modello.join("tokenizer.json"), b"contenuto-manomesso").unwrap();
         let lib_path = dir.path().join("libonnxruntime.so");
         std::fs::write(&lib_path, b"binario-manomesso").unwrap();
+        let sha256_lib_atteso = sha256_hex(b"contenuto-legittimo-mai-scritto-su-disco");
 
-        let r = verifica_artefatti_cache_su_disco(&dir_modello, &lib_path);
+        let r = verifica_artefatti_cache_su_disco(&dir_modello, &lib_path, &sha256_lib_atteso);
         assert!(r.is_err());
         assert!(r.unwrap_err().to_string().contains("integrità"));
+    }
+
+    #[test]
+    fn verifica_lib_cache_su_disco_regressione_575_passa_con_hash_file_estratto() {
+        // Regressione #575, sulla funzione di PRODUZIONE che conteneva il
+        // bug (non una simulazione): `verifica_lib_cache_su_disco` è
+        // esattamente il ramo che prima del fix riceveva per errore l'hash
+        // dell'ARCHIVIO invece di quello del file estratto. Qui simuliamo
+        // un riavvio legittimo dopo un download andato a buon fine:
+        // `lib_path` contiene un file "già estratto" e lo verifichiamo con
+        // l'hash DI QUEL CONTENUTO (come farebbe il codice corretto, che
+        // riceve il campo giusto da `ort_release_filename`). Con il bug
+        // pre-fix (hash dell'archivio, strutturalmente diverso da quello
+        // del contenuto estratto) questo scenario avrebbe fallito SEMPRE.
+        let dir = tempfile::tempdir().unwrap();
+        let lib_path = dir.path().join("libonnxruntime.so");
+        let contenuto_lib_estratta = b"contenuto-fittizio-libonnxruntime-gia-estratta-su-disco";
+        std::fs::write(&lib_path, contenuto_lib_estratta).unwrap();
+
+        let sha256_lib_atteso = sha256_hex(contenuto_lib_estratta);
+
+        let r = verifica_lib_cache_su_disco(&lib_path, &sha256_lib_atteso);
+        assert!(
+            r.is_ok(),
+            "un round-trip legittimo (file estratto verificato con l'hash del file estratto) deve passare: {r:?}"
+        );
     }
 
     #[test]
@@ -1544,7 +1759,7 @@ mod test {
     fn ort_release_filename_versione_consistente() {
         // Sentinel: il filename ritorna la stessa ORT_VERSION (no drift).
         let r = ort_release_filename().unwrap();
-        let (filename, _sub, _sha256_atteso) = r;
+        let (filename, _sub, _sha256_archivio, _sha256_lib_estratta) = r;
         // Filename contiene sempre la versione configurata.
         assert!(filename.contains(ORT_VERSION));
     }
@@ -1565,14 +1780,14 @@ mod test {
     fn verifica_sha256_hash_corretto_ok() {
         let bytes = b"contenuto di test";
         let atteso = sha256_hex(bytes);
-        assert!(verifica_sha256(bytes, &atteso, "file.txt").is_ok());
+        assert!(verifica_sha256(bytes, &atteso, "file.txt", "origine-test").is_ok());
     }
 
     #[test]
     fn verifica_sha256_case_insensitive() {
         let bytes = b"contenuto di test";
         let atteso = sha256_hex(bytes).to_uppercase();
-        assert!(verifica_sha256(bytes, &atteso, "file.txt").is_ok());
+        assert!(verifica_sha256(bytes, &atteso, "file.txt", "origine-test").is_ok());
     }
 
     #[test]
@@ -1580,7 +1795,7 @@ mod test {
         let bytes = b"contenuto originale";
         let atteso_sbagliato =
             "0000000000000000000000000000000000000000000000000000000000000000";
-        let r = verifica_sha256(bytes, atteso_sbagliato, "modello.onnx");
+        let r = verifica_sha256(bytes, atteso_sbagliato, "modello.onnx", "origine-test");
         assert!(r.is_err());
         let msg = r.unwrap_err().to_string();
         assert!(msg.contains("modello.onnx"), "Deve nominare il file: {msg}");
@@ -1589,14 +1804,19 @@ mod test {
 
     #[test]
     fn sha256_atteso_ort_hash_reale_non_placeholder() {
-        // Sentinel anti-regressione: l'hash pinnato per la piattaforma
-        // corrente deve essere reale (64 hex char), non un placeholder
-        // tipo tutto-zero che romperebbe silenziosamente `verifica_sha256`.
+        // Sentinel anti-regressione: entrambi gli hash pinnati per la
+        // piattaforma corrente devono essere reali (64 hex char), non un
+        // placeholder tipo tutto-zero che romperebbe silenziosamente
+        // `verifica_sha256`.
         let placeholder_zero = "0".repeat(64);
+        let (_, _, sha256_archivio, sha256_lib_estratta) = ort_release_filename().unwrap();
         assert_ne!(
-            ort_release_filename().unwrap().2,
-            placeholder_zero,
-            "l'hash della piattaforma corrente non deve essere un placeholder"
+            sha256_archivio, placeholder_zero,
+            "l'hash dell'archivio della piattaforma corrente non deve essere un placeholder"
+        );
+        assert_ne!(
+            sha256_lib_estratta, placeholder_zero,
+            "l'hash del file estratto della piattaforma corrente non deve essere un placeholder"
         );
     }
 
@@ -1875,5 +2095,138 @@ mod test {
             Path::new("../lib64/libonnxruntime.so"),
         );
         assert_eq!(risolto, PathBuf::from("onnxruntime-test/lib64/libonnxruntime.so"));
+    }
+
+    // ─────────── #575: round-trip download → estrazione → riavvio ───────────
+    //
+    // Il difetto sistematico: `verifica_artefatti_cache_su_disco` e
+    // `stage_lib_verificata` riusavano l'hash dell'ARCHIVIO (fix #458) per
+    // verificare il file GIÀ ESTRATTO in cache, ad ogni avvio. Un archivio
+    // compresso non può avere lo stesso SHA-256 del singolo file estratto al
+    // suo interno: il mismatch era sistematico al 100%. Questo test
+    // riproduce il ciclo completo con un fixture `.tar.gz` sintetico
+    // (nessun download reale) e sarebbe fallito PRIMA del fix perché
+    // `ort_release_filename()` ritornava un solo hash, riusato per entrambi
+    // gli usi.
+
+    #[test]
+    fn roundtrip_hash_archivio_e_hash_file_estratto_sono_diversi_e_indipendenti() {
+        // 1. "Download": archivio sintetico con lo stesso schema del
+        //    tarball onnxruntime reale (prefisso `./`, entry symlink) —
+        //    vedi `tar_gz_sintetico_con_prefisso_e_symlink`.
+        let contenuto_lib = b"contenuto-fittizio-libonnxruntime-estratta";
+        let archive = tar_gz_sintetico_con_prefisso_e_symlink(contenuto_lib);
+        let sha256_archivio = sha256_hex(&archive);
+
+        // 2. Verifica integrità dell'ARCHIVIO prima dell'estrazione (fix
+        //    #458, invariata da questa PR): deve passare con l'hash
+        //    dell'archivio.
+        verifica_sha256(&archive, &sha256_archivio, "archivio-test", "origine-test")
+            .expect("la verifica dell'archivio con il proprio hash deve passare");
+
+        // 3. "Estrazione": stesso codice di produzione (`estrai_libonnxruntime`,
+        //    che risolve il prefisso `./` e la catena di symlink, fix #556).
+        let dest_dir = tempfile::tempdir().unwrap();
+        let lib_path = dest_dir.path().join("libonnxruntime.so");
+        estrai_libonnxruntime(&archive, "onnxruntime-test/lib/libonnxruntime.so", &lib_path)
+            .expect("l'estrazione deve riuscire");
+        let bytes_estratti = std::fs::read(&lib_path).unwrap();
+        assert_eq!(bytes_estratti, contenuto_lib);
+
+        let sha256_file_estratto = sha256_hex(&bytes_estratti);
+
+        // 4. Causa radice #575: l'hash dell'archivio (contiene overhead
+        //    tar+gzip) NON PUÒ coincidere strutturalmente con l'hash del
+        //    singolo file che ne è stato estratto.
+        assert_ne!(
+            sha256_archivio, sha256_file_estratto,
+            "l'hash dell'archivio e quello del file estratto devono essere diversi per costruzione"
+        );
+
+        // 5. "Riavvio" — PRIMA del fix: `verifica_artefatti_cache_su_disco`
+        //    e `stage_lib_verificata` riverificavano il file estratto con
+        //    l'hash dell'ARCHIVIO. Riprodotto qui esplicitamente: deve
+        //    fallire SEMPRE, a riprova del difetto sistematico segnalato
+        //    nella #575.
+        let esito_bug_pre_fix =
+            verifica_sha256(&bytes_estratti, &sha256_archivio, "libonnxruntime", "origine-test");
+        assert!(
+            esito_bug_pre_fix.is_err(),
+            "riproduce il bug #575: verificare il file estratto con l'hash dell'archivio deve fallire sempre"
+        );
+
+        // 6. "Riavvio" — DOPO il fix: la ri-verifica usa l'hash del file
+        //    ESTRATTO (il secondo campo del ritorno di
+        //    `ort_release_filename`), che è quello coerente con i byte
+        //    effettivamente letti da disco ad ogni avvio.
+        verifica_sha256(&bytes_estratti, &sha256_file_estratto, "libonnxruntime", "origine-test")
+            .expect("con l'hash del file estratto la ri-verifica ad ogni avvio deve passare");
+    }
+
+    // ─────────── #569: O_EXCL sui file temporanei ───────────
+
+    #[test]
+    fn estrai_libonnxruntime_residuo_regolare_non_blocca_estrazione_successiva() {
+        // Fix #569: un `.extract-partial` residuo — lasciato da un
+        // tentativo precedente interrotto a metà (crash, I/O fallito) —
+        // NON deve bloccare per sempre il prossimo tentativo con
+        // `AlreadyExists`, dato che ora si usa `create_new`.
+        let contenuto = b"contenuto-fittizio-libonnxruntime";
+        let archive = tar_gz_sintetico_con_prefisso_e_symlink(contenuto);
+        let dest_dir = tempfile::tempdir().unwrap();
+        let dest = dest_dir.path().join("libonnxruntime.so");
+        let dest_tmp = dest.with_extension("extract-partial");
+        std::fs::write(&dest_tmp, b"residuo-di-un-tentativo-precedente").unwrap();
+
+        estrai_libonnxruntime(&archive, "onnxruntime-test/lib/libonnxruntime.so", &dest).unwrap();
+
+        assert_eq!(std::fs::read(&dest).unwrap(), contenuto);
+    }
+
+    #[test]
+    fn estrai_libonnxruntime_errore_con_residuo_regolare_pulisce_dest_tmp() {
+        // Un residuo pre-esistente non deve nemmeno sopravvivere a
+        // un'estrazione fallita: il ramo d'errore ripulisce `dest_tmp`
+        // esattamente come nel caso senza residuo.
+        let archive = tar_gz_sintetico_con_prefisso_e_symlink(b"x");
+        let dest_dir = tempfile::tempdir().unwrap();
+        let dest = dest_dir.path().join("libonnxruntime.so");
+        let dest_tmp = dest.with_extension("extract-partial");
+        std::fs::write(&dest_tmp, b"residuo").unwrap();
+
+        let r = estrai_libonnxruntime(&archive, "percorso/inesistente", &dest);
+        assert!(r.is_err());
+        assert!(!dest.exists());
+        assert!(
+            fs::read_dir(dest_dir.path()).unwrap().next().is_none(),
+            "il residuo pre-esistente deve essere ripulito, non lasciato sul filesystem"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn estrai_libonnxruntime_residuo_symlink_non_scrive_attraverso_il_link() {
+        // Fix #569 (il caso di sicurezza vero e proprio): un
+        // `.extract-partial` PRE-PIAZZATO come symlink verso un path
+        // ESTERNO alla dest dir (attacker-controlled) non deve essere
+        // seguito da `create_new` — il contenuto estratto deve finire
+        // SOLO in `dest`, MAI scritto attraverso il link nel bersaglio.
+        let contenuto = b"contenuto-fittizio-libonnxruntime";
+        let archive = tar_gz_sintetico_con_prefisso_e_symlink(contenuto);
+        let dest_dir = tempfile::tempdir().unwrap();
+        let dest = dest_dir.path().join("libonnxruntime.so");
+        let dest_tmp = dest.with_extension("extract-partial");
+
+        let fuori_dir = tempfile::tempdir().unwrap();
+        let bersaglio_esterno = fuori_dir.path().join("scrittura-non-autorizzata");
+        std::os::unix::fs::symlink(&bersaglio_esterno, &dest_tmp).unwrap();
+
+        estrai_libonnxruntime(&archive, "onnxruntime-test/lib/libonnxruntime.so", &dest).unwrap();
+
+        assert_eq!(std::fs::read(&dest).unwrap(), contenuto, "il contenuto deve arrivare in dest");
+        assert!(
+            !bersaglio_esterno.exists(),
+            "il bersaglio del symlink pre-piazzato non deve mai essere scritto"
+        );
     }
 }
