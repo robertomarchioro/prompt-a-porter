@@ -3,7 +3,8 @@
 > **Destinatario**: chi implementa la nuova landing in `apps/site` (VitePress/Vue).
 > **Fonti vincolanti**: handoff desktop [`desktop/README.md`](./desktop/README.md) (schermata `#4a`), handoff mobile [`mobile/README.md`](./mobile/README.md) (schermata `#3a`), copy [`contenuti.md`](./contenuti.md).
 > **Regola di precedenza**: in caso di conflitto, **il copy lo governa `contenuti.md`**, **il visivo lo governano gli handoff**. La vecchia landing «Arioso Atelier» dark (in `archivio/`) resta come riferimento storico: questa nuova direzione la **sostituisce**.
-> **Stato**: documento operativo, aggiornato al 2026-07-18.
+> **Stato**: documento operativo. F1-F3 live; aggiornato al **2026-08-02** (riscritta la §5: il transazionale passa da n8n e non più da un endpoint Go, anti-abuso con ALTCHA, relay Lettermint).
+> **Documento gemello**: per l'infrastruttura su Giganto (CT 150, listmonk, nginx, DNS, workflow n8n) la fonte è la pagina Notion *«CT 150 — mailer (Listmonk + Lettermint) — Piano di implementazione»*. Qui sta ciò che riguarda `apps/site`; là ciò che riguarda il cluster. Dove si toccano — contratto dell'endpoint, CORS, ALTCHA, privacy — vale quanto scritto nella §5 di questo file.
 
 ## 1. Cosa si costruisce
 
@@ -135,30 +136,92 @@ Fonti: [Matomo senza consenso/banner](https://matomo.org/faq/new-to-piwik/how-do
 
 Il design mobile promette testualmente: *«un solo link. Niente newsletter, niente account, niente scuse.»* La raccolta contatti per comunicazioni future **non passa dal sito** — così la promessa resta vera alla lettera, il form resta un campo solo e non c'è micro-copy da rinegoziare:
 
-1. **Dal sito**: l'email serve esclusivamente a recapitare il link di download. Base giuridica: esecuzione della richiesta dell'utente. L'indirizzo **si cancella automaticamente** dopo un tempo breve (es. 30 giorni).
+1. **Dal sito**: l'email serve esclusivamente a recapitare il link di download. Base giuridica: esecuzione della richiesta dell'utente. L'indirizzo **non viene mai memorizzato in un archivio nostro**: transita nel workflow e finisce nei log di consegna del relay. ⚠️ n8n però **conserva i dati di esecuzione**, email inclusa: la retention delle execution del workflow va configurata esplicitamente (o il claim qui sopra è falso). Vedi §5.4.
 2. **Dalla mail**: il corpo della mail col link contiene una **CTA di iscrizione** (es. *«Vuoi sapere quando debutta una nuova stagione? Avvisami →»*) che porta a una **pagina di iscrizione dedicata** con **double opt-in**. Chi clicca compie un'azione esplicita e la mail di conferma la sigilla: consenso pulito, lista costruita solo con chi la vuole davvero.
 
 La mail del link è l'unico punto in cui la newsletter viene proposta — una volta, senza insistere. È l'approccio più coerente col brand "niente dark pattern": la conversione sarà più bassa di una checkbox, ma ogni iscritto è genuino.
 
-### 5.2 Architettura
+**Copy della landing: invariato** (decisione Roberto, 2026-08-02). La promessa *«niente newsletter»* resta scritta così com'è sulla card mobile. La tensione con la CTA dentro la mail si scioglie **nel template della mail**, con una nota autoironica del tipo *«ti avevamo promesso niente newsletter — e infatti non ti ci abbiamo iscritto. Se però vuoi…»*. Non si ammorbidisce il copy del sito: è la promessa che rende credibile il resto.
 
-Il sito è statico (GitHub Pages): il form fa **POST cross-origin** verso Giganto. L'iscrizione alla lista **non** passa dall'endpoint: avviene solo dopo, via CTA nella mail, sulla pagina pubblica dell'applicativo di supporto.
+### 5.2 Architettura (rev. 2026-08-02 — sostituisce l'endpoint Go)
+
+> ⚠️ **Questa sezione è cambiata.** La versione precedente prescriveva un **endpoint proxy in Go** su Giganto. Non si fa più: il transazionale passa da **n8n**, che è già in produzione, già HA, già esposto e già in backup. Il documento operativo dell'infrastruttura è la pagina Notion *«CT 150 — mailer (Listmonk + Lettermint) — Piano di implementazione»*; qui sta solo ciò che riguarda `apps/site` e i vincoli che il sito impone al backend.
+
+Il principio: **n8n gestisce i messaggi, Listmonk gestisce le liste.** Un link di download non ha consenso, disiscrizione o bounce da gestire — è un messaggio, non una campagna. I due sistemi **non si parlano mai**: l'unico punto di contatto è un URL scritto nel corpo di una mail.
 
 ```
-form (apps/site) ──POST──► endpoint Go «mandami-il-link» (Giganto)
-                              │  rate limit IP · honeypot · validazione
-                              │  errori opachi (pattern PapErrore, CWE-209)
-                              └──► API transazionale (app di supporto) ──► relay SMTP ──► mail col link
-                                                                                            │
-              pagina di iscrizione «stagioni» (double opt-in, app di supporto) ◄── CTA nel corpo della mail
+apps/site (GitHub Pages, statico)
+    │  1. GET  challenge ALTCHA
+    │  2. POST { email, altcha, honeypot }
+    ▼
+n8n CT 110 — webhook /pap-download                [CORS gestito da nginx CT 100]
+    │  verifica ALTCHA (HMAC) · honeypot · formato email · dedup indirizzo
+    │  GET api.github.com/…/releases/latest → estrazione asset per pattern
+    ▼
+Lettermint (Paesi Bassi) — route `transactional`
+    ▼
+mail: 4 link download  +  CTA iscrizione ──────┐
+                                               ▼
+                        Listmonk CT 150 — tikki.giganto.it
+                        pagina pubblica · double opt-in · route `broadcast`
 ```
 
-- **Endpoint proxy in Go** (stile `apps/server`): non esporre l'applicativo di supporto direttamente. Fa rate limiting per IP, honeypot, validazione sintattica email, CORS ristretto al dominio del sito, risposte **non enumeranti** (sempre "Fatto, controlla la posta" — coerente con il lavoro #512 sugli errori opachi). Niente email in chiaro nei log.
-- **Pagina di iscrizione**: è quella pubblica dell'applicativo di supporto (double opt-in nativo, unsubscribe nativo) — non serve proxarla, ha le sue protezioni; va solo brandizzata (template) e linkata all'informativa privacy.
-- **Relay SMTP esterno** per la consegna: **non** inviare SMTP direttamente da Giganto (reputazione IP, PTR, blacklist = link che finiscono in spam). Serve un account presso un provider transazionale (preferenza UE) e la configurazione **SPF + DKIM + DMARC** sul dominio mittente. Questa è l'unica dipendenza esterna dell'intero impianto: scelta del provider da fare con Roberto.
-- **Anti-abuso**: se il rate limit non basta, aggiungere [Altcha](https://altcha.org) (proof-of-work self-hosted, zero cookie). **Mai reCAPTCHA/Turnstile**: terze parti in contrasto col posizionamento privacy e col §4.
+Vincoli che il **sito** deve rispettare:
 
-### 5.2bis Applicativo di supporto: listmonk o altro?
+- **CORS**: l'origin da autorizzare è **`https://www.promptaporter.it`**, non l'apex — `promptaporter.it` fa 301 verso `www` e il browser manda l'origin *dopo* il redirect. Il CORS è gestito da nginx CT 100, non dall'opzione nativa del nodo Webhook n8n (documentata solo per le richieste non-preflight e riportata come inaffidabile).
+- **Risposte non enumeranti**: sempre lo stesso messaggio di esito («Fatto, controlla la posta»), qualunque sia l'errore — coerente col lavoro #512 sugli errori opachi (CWE-209). Vale anche per il rifiuto anti-abuso: chi attacca non deve capire quale difesa è scattata.
+- **Niente email in chiaro nei log**, né lato n8n né lato nginx.
+- **Il contratto dell'endpoint** (forma di richiesta e risposta, status code, comportamento a quota esaurita) va fissato **prima** di scrivere il componente: senza, il form non è scrivibile. Da definire con la Fase 2 del piano Notion.
+
+### 5.2bis Anti-abuso: ALTCHA — e dove trova posto nella nostra infrastruttura
+
+**Decisione (2026-08-02): ALTCHA open source, `altcha` + `altcha-lib`, entrambi MIT.** Proof-of-work con challenge firmata HMAC: il widget contatta **solo un nostro endpoint**, nessun servizio di terzi entra nel giro, nessun cookie, nessun fingerprinting.
+
+**Mai reCAPTCHA, hCaptcha o Turnstile.** Non è una preferenza estetica: caricano uno script da un dominio terzo (USA), mandano lì l'IP del visitatore, violano la regola «nessuna richiesta a domini terzi» del §2.3 e aggiungono un responsabile extra-UE all'informativa. Turnstile era stato ipotizzato nella prima stesura del piano infrastruttura ed è stato **scartato per questo motivo**.
+
+ALTCHA non richiede un servizio nuovo, ma **richiede comunque quattro posti** nell'infrastruttura. Vanno assegnati esplicitamente, non dati per scontati:
+
+| Pezzo | Dove vive | Nota |
+|---|---|---|
+| **Widget** | bundle di `apps/site` (npm `altcha`, MIT) | impacchettato da Vite come i font `@fontsource` — zero richieste a domini terzi, la regola del §2.3 resta intatta |
+| **Emissione della challenge** | **n8n CT 110**, secondo webhook (`/webhook/pap-challenge`) | stesso host del POST → coperto dalla stessa regex CORS su nginx, nessun vhost nuovo |
+| **Verifica della soluzione** | nodo Code del workflow `/pap-download`, prima di ogni altra difesa | HMAC-SHA256 + SHA-256: logica di `altcha-lib`, zero dipendenze |
+| **Chiave HMAC** | pagina **Segreti** + variabile d'ambiente su CT 110 | mai nel repo, mai nel bundle, mai in un file versionato |
+
+**Prerequisito da verificare PRIMA di impegnarsi**: il nodo Code di n8n deve poter usare `crypto`, che su n8n dipende da `NODE_FUNCTION_ALLOW_BUILTIN`. Se risultasse chiuso, la soluzione è **quella variabile d'ambiente su CT 110** — una riga di configurazione su un servizio già gestito, non un servizio in più.
+
+**Protezione replay**: la libreria nuda non impedisce di risolvere il PoW una volta e riusare la stessa soluzione. Si copre con due accorgimenti dentro il workflow, entrambi voluti a prescindere:
+
+- `expires` breve sulla challenge (supportato nativamente da `altcha-lib`);
+- **deduplica per indirizzo** su finestra recente — impedisce anche a un utente legittimo di farsi recapitare venti volte la stessa mail.
+
+> ⛔ **Trappola da non prendere.** Su `altcha.org` esiste anche un'**API antispam ospitata da loro**. Non c'entra col protocollo ed è un servizio di terzi: usarla rimetterebbe dentro dalla finestra esattamente il problema per cui abbiamo scartato Turnstile. Nella configurazione non deve comparire nessun endpoint `altcha.org`.
+
+**Valutati e tenuti in panchina**, entrambi da riaprire solo se il form diventasse un bersaglio vero:
+
+- **ALTCHA Sentinel** — backend commerciale self-hosted, da €24/mese a licenza fissa. Aggiunge dashboard, rate limiting, threat intelligence, classificatore ML, protezione replay. Costa più del servizio che protegge, e ogni sua funzione qui è già coperta altrove (Matomo, Grafana, nginx). Usa **lo stesso widget**: passarci un domani significa cambiare un attributo e aggiungere una chiave — non è una scelta che ci incastra.
+- **GateCHA** — server MIT in Go che parla il protocollo ALTCHA, alternativa gratuita a Sentinel. Scartato **non per qualità** (metodo di sviluppo curato) ma per livello e maturità: è un **servizio in esecuzione sul percorso critico del form**, di una persona sola, creato a febbraio 2026, a v0.3.2 con 10 stelle. Una libreria abbandonata è codice che possiedi; un server abbandonato è un servizio di rete non più aggiornato da sostituire di corsa. In cambio darebbe multi-sito, gestione API key e dashboard: cose che qui non servono.
+
+### 5.2ter Relay di consegna: Lettermint, e il legame fra quota e captcha
+
+**Relay SMTP esterno obbligatorio**: **non** si spedisce SMTP direttamente da Giganto (reputazione IP, PTR, blacklist = link che finiscono in spam). Scelto **Lettermint** (Paesi Bassi, transito UE), con **due route distinte**: `transactional` per n8n e Grafana, `broadcast` per Listmonk — se le campagne uscissero dalla transazionale, il webhook dei bounce non riceverebbe nulla.
+
+Condizioni verificate il 2026-08-02:
+
+| Piano | Da | Incluse/mese | Overage |
+|---|---|---|---|
+| Free | €0 | **300** | ❌ nessuno: muro rigido, poi si smette di spedire |
+| Starter | €10/mese | 10.000 | €1,10–1,50 / 1.000 |
+| Growth | €13/mese | 10.000 | €0,85–1,15 / 1.000 |
+| Pro | €15/mese | 10.000 | €0,60–1,10 / 1.000 |
+
+Non esistono pacchetti di crediti una-tantum: dal free si esce solo cambiando piano. Per il picco del lancio 1.0 la leva è **Starter per il mese del lancio, poi ritorno al free** — è un abbonamento mensile, non un impegno.
+
+> **Il tetto e il captcha sono la stessa decisione.** Sul piano free il tetto esiste per costruzione ed è invalicabile: il caso peggiore di un abuso è che si brucino 300 mail e il form si spenga da solo — fastidio, non disastro. **Nel momento in cui si passa a Starter con overage attivo quel muro sparisce**, e uno script che gira una notte può spedire diecimila mail non richieste col nostro dominio come mittente. Il captcha va quindi costruito **prima** del lancio, non durante: serve esattamente quando arriva il traffico vero.
+
+### 5.2quater Applicativo di supporto: listmonk o altro? — ✅ DECISO: listmonk
+
+> **Decisione presa (2026-08-01/02): listmonk**, su **CT 150** (hostname `mailer`, dominio pubblico `tikki.giganto.it`). Il confronto qui sotto resta come traccia del ragionamento. ⚠️ Rispetto a quanto scritto sotto, il ruolo di listmonk si è **ristretto**: fa **solo liste**, non più la mail transazionale del link (che passa da n8n, §5.2). Il requisito (a) è quindi decaduto come criterio di scelta.
 
 Requisiti: **(a)** API transazionale per la mail del link, **(b)** pagina di iscrizione pubblica con double opt-in, **(c)** gestione lista per le campagne future (unsubscribe, bounce, export/cancellazione GDPR), **(d)** self-hosted su Giganto con footprint contenuto.
 
@@ -183,14 +246,29 @@ Il form è **solo mobile**: la landing desktop non ne dipende. Quindi:
 - **Fase A** — landing live senza backend: su mobile la CTA degrada a link diretto alla release Latest ("Apri la pagina di download") o resta il form con messaggio "in arrivo". **Decisione consigliata: lanciare con il fallback**, non tenere la landing in ostaggio del backend.
 - **Fase B** — backend attivo: form live, mail transazionale col link + CTA di iscrizione (§5.1).
 
-Piattaforme nuove da creare su Giganto (riepilogo): **1)** listmonk + Postgres, **2)** endpoint Go `mandami-il-link` — Matomo esiste già (§3.1). Più l'account relay SMTP (esterno). Entrambe dietro il reverse proxy TLS esistente.
+Stato al 2026-08-02: **siamo in Fase A** — `SezioneDesktop.vue` (albero mobile) espone la CTA di ripiego verso la pagina release, non il form.
+
+Cosa serve su Giganto perché parta la Fase B (riepilogo aggiornato — Matomo esiste già, §3.1):
+
+| # | Pezzo | Stato |
+|---|---|---|
+| 1 | Account **Lettermint** + route `transactional`/`broadcast` + DNS (DKIM, DMARC, CNAME bounces) | ✅ fatto 2026-08-02, `dkim/spf/dmarc=pass` verificati |
+| 2 | **CORS** su nginx CT 100 per il webhook n8n (origin `www`, regex che copre anche `/webhook-test/`) | ⏳ patcher pronto, non applicato |
+| 3 | **Workflow n8n** del Flusso A (7 nodi) + anti-abuso | ⏳ da costruire |
+| 4 | **ALTCHA**: challenge endpoint su n8n, chiave HMAC nei Segreti, `crypto` nel Code node (§5.2bis) | ⏳ da fare — prerequisito `crypto` da verificare per primo |
+| 5 | **CT 150 + listmonk + Postgres** su CT 200, vhost `tikki.giganto.it` | ⏳ da fare (indipendente da 2-4: il Flusso A parte anche senza) |
+| 6 | **Widget ALTCHA + componente form** in `apps/site` | ⏳ da fare, dipende dal contratto dell'endpoint (§5.2) |
+
+I flussi A (download) e B (liste) sono **indipendenti**: si può mandare live il form senza che listmonk esista, mettendo nella mail una CTA che punterà alla pagina di iscrizione solo quando ci sarà.
 
 ### 5.4 Obblighi privacy (dal momento in cui il form va live)
 
 - **Pagina «Privacy»** nel sito: informativa art. 13 GDPR — titolare (Roberto Marchioro), le due finalità con le rispettive basi giuridiche e retention (§5.1), diritti dell'interessato, contatto. Linkata dal form, dalla pagina di iscrizione e dal footer.
 - Il claim di `contenuti.md` §10 (*"Nessun 'Privacy Policy' complesso perché non raccogliamo dati"*) **decade**: aggiornare `contenuti.md` quando la Fase B parte.
-- Unsubscribe in ogni mail della lista (listmonk lo fa da sé); cancellazione automatica delle email non iscritte; nessun indirizzo nei log applicativi.
-- Niente trasferimenti extra-UE se il relay SMTP scelto è UE; in caso contrario, va detto nell'informativa.
+- **Retention delle execution n8n** — ⚠️ il punto più facile da sbagliare. n8n salva i dati di esecuzione, **email inclusa**: finché non è configurata una retention breve (o il pruning), la frase «non conserviamo il tuo indirizzo» è **falsa** e l'informativa sarebbe sbagliata. Va verificato sul workflow prima di andare live, non dopo.
+- **Responsabili esterni da elencare** nell'informativa: **Lettermint** (Paesi Bassi, transito UE — IP di uscita ad Amsterdam, verificato). Con ALTCHA self-hosted **non se ne aggiungono altri**: è la ragione principale per cui è stato scelto al posto di Turnstile.
+- Unsubscribe in ogni mail della lista (listmonk lo fa da sé); nessun indirizzo nei log applicativi.
+- Il relay scelto è UE: nessun trasferimento extra-UE da dichiarare. Se un domani cambiasse, va detto nell'informativa.
 
 ## 6. Piano di lavoro e Definition of Done
 
@@ -199,15 +277,16 @@ Ordine suggerito (ogni fase = PR autonoma verso `main`):
 1. **F1 — Token + desktop `#4a`**: custom properties Cloud Dancer, albero `LandingDesktop.vue` (§1.1), restyle/riscrittura componenti (§2.2), layout 1280 con breakpoint interni 1080/900.
 2. **F2 — Mobile `#3a`**: albero `LandingMobile.vue` separato, commutazione CSS a 680px, hamburger/drawer, form in modalità fallback (Fase A §5.3).
 3. **F3 — Matomo**: preparazione istanza esistente (audit §3.1), tag cookieless, eventi §3.4, disclaimer footer.
-4. **F4 — Form email**: listmonk + endpoint Go + relay SMTP, mail col link + CTA di iscrizione, pagina Privacy, aggiornamento `contenuti.md`.
+4. **F4 — Form email**: workflow n8n + ALTCHA + Lettermint (§5.2), componente form al posto della CTA di ripiego, mail col link + CTA di iscrizione, pagina Privacy, aggiornamento `contenuti.md`. Listmonk/CT 150 è parallelo e non blocca il resto (§5.3).
 
 Checklist di ogni PR (estende quella di `contenuti.md`):
 
 - [ ] Copy conforme a `contenuti.md`; visivo conforme agli handoff (pixel-perfect sui render `4a-desktop.png` / `3a-mobile.png`)
 - [ ] Screenshot Playwright a 392 / 680 / 900 / 1280 confrontati coi render; nessuna regressione sull'altro layout (§1.1)
 - [ ] Regola viola/ambra rispettata; token `{{…}}` sempre ambra
-- [ ] Nessuna richiesta a domini terzi (font self-hosted; unica eccezione runtime: POST del form verso Giganto)
+- [ ] Nessuna richiesta a domini terzi (font e widget ALTCHA impacchettati; unica eccezione runtime: challenge + POST del form verso Giganto — **nessun endpoint `altcha.org`**, §5.2bis)
 - [ ] `prefers-reduced-motion`, focus visibile, hit target 44px, contrasti verificati (§2.4)
 - [ ] Build statico verde + Lighthouse ≥95 (Perf/A11y/SEO)
 - [ ] Matomo: eventi verificati in staging, nessun dato personale negli eventi
-- [ ] Form: errori opachi, rate limit testato, double opt-in verificato end-to-end (solo F4)
+- [ ] Form: errori opachi, rate limit testato, ALTCHA verificato lato server, double opt-in verificato end-to-end (solo F4)
+- [ ] **Prova dal vivo su telefono reale** (solo F4): form compilato da mobile, mail ricevuta, i 4 link scaricano il file giusto da desktop. I criteri di accettazione del piano infrastruttura sono tutti server-side: questo è l'unico che collauda il flusso vero.
