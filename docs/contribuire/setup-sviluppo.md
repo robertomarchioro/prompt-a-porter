@@ -4,7 +4,7 @@
 
 | Strumento | Versione | Note |
 |-----------|----------|------|
-| Node.js | 22.x LTS | Runtime per frontend Svelte e tooling |
+| Node.js | ≥ 22.22.2 (22.x LTS) | Runtime per frontend Svelte e tooling. Il minimo lo impone `jsdom` 30, usato come ambiente dei test del client |
 | pnpm | 9.x+ | Package manager (workspace monorepo) |
 | Rust | stable (≥1.77) | Per Tauri 2 core + SQLCipher |
 | Go | 1.22+ | Per il server sync (opzionale) |
