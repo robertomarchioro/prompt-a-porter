@@ -40,7 +40,7 @@
     "codemirror": "^6.0.0",
     "diff": "^9.0.0",
     "diff2html": "^3",
-    "dompurify": "^3.4.12",
+    "dompurify": "^3.4.13",
     "driver.js": "^1.8.0",
     "lucide-svelte": "^1.0.1",
     "marked": "^18.0.7",
