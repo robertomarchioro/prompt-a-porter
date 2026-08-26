@@ -68,20 +68,25 @@ jobs:
           pnpm --filter @pap/client lint
           pnpm --filter @pap/client test
 
-      - name: Apri la PR
+      - name: Apri o aggiorna la PR
         if: steps.stato.outputs.cambiato == 'si'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          RAMO="chore/modelli-$(date -u +%Y%m%d)"
+          # Ramo unico e riusato, non uno per data: il push avviene PRIMA della
+          # creazione della PR, quindi con un ramo datato ogni run fallito
+          # lasciava un rifiuto su origin (ne erano rimasti tre). Il force-push
+          # sostituisce la proposta pendente con quella nuova: una sola PR
+          # aperta alla volta, sempre col listino più recente.
+          RAMO="chore/modelli-registro"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$RAMO"
           git add apps/client/src/lib/modelli-registro.json
           git commit -m "chore(modelli): aggiorna il registro dei modelli AI"
-          git push -u origin "$RAMO"
+          git push --force origin "$RAMO"
 
           {
             echo "Aggiornamento settimanale di \`modelli-registro.json\` da [models.dev](https://models.dev)."
@@ -96,8 +101,16 @@ jobs:
             echo "> Lint e test sono stati eseguiti nel run che l'ha generata; il gate finale è il Client Build su main."
           } > corpo.md
 
-          gh pr create \
-            --title "chore(modelli): aggiorna il registro dei modelli AI" \
-            --body-file corpo.md \
-            --base main \
-            --head "$RAMO"
+          # Se la PR è già aperta il force-push l'ha appena aggiornata: resta da
+          # riscriverne il corpo col delta di oggi. `gh pr create` qui fallirebbe.
+          PR="$(gh pr list --head "$RAMO" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$PR" ]; then
+            gh pr edit "$PR" --body-file corpo.md
+            echo "PR #$PR aggiornata col listino di oggi."
+          else
+            gh pr create \
+              --title "chore(modelli): aggiorna il registro dei modelli AI" \
+              --body-file corpo.md \
+              --base main \
+              --head "$RAMO"
+          fi
