@@ -18,10 +18,5 @@
     "node": ">=22.22.2",
     "pnpm": ">=9.0.0"
   },
-  "packageManager": "pnpm@9.15.0",
-  "pnpm": {
-    "overrides": {
-      "fast-uri": ">=3.1.2"
-    }
-  }
+  "packageManager": "pnpm@9.15.0"
 }
