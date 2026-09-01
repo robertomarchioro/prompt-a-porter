@@ -52,7 +52,7 @@ rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"]
 # `docs/architettura/decisioni/sqlite-vec-sqlcipher.md`): registrata come
 # auto-extension statica via sqlite3_auto_extension prima di Connection::open.
 sqlite-vec = "0.1"
-argon2 = "0.5"
+argon2 = "0.6"
 rand = "0.10"
 # Fix #459: azzera la memoria dei buffer chiave/password del vault al
 # drop, invece di lasciarli in RAM come byte residui recuperabili da un
