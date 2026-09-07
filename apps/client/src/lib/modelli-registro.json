@@ -1,5 +1,5 @@
 {
-  "aggiornato_a": "2026-08-26",
+  "aggiornato_a": "2026-09-07",
   "fonte": "https://models.dev/api.json",
   "modelli": [
     {
@@ -8,7 +8,20 @@
       "etichetta": "Claude Fable 5",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
+      "contesto": 1000000,
+      "prezzo": {
+        "input": 10,
+        "output": 50
+      }
+    },
+    {
+      "id": "claude-fable-5-1",
+      "provider": "anthropic",
+      "etichetta": "Claude Fable 5.1",
+      "obsoleto": false,
+      "anteprima": false,
+      "visto_il": "2026-09-07",
       "contesto": 1000000,
       "prezzo": {
         "input": 10,
@@ -21,7 +34,7 @@
       "etichetta": "Claude Haiku 4.5 (latest)",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 200000,
       "prezzo": {
         "input": 1,
@@ -47,7 +60,7 @@
       "etichetta": "Claude Opus 4.5 (latest)",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 200000,
       "prezzo": {
         "input": 5,
@@ -60,7 +73,7 @@
       "etichetta": "Claude Opus 4.6",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1000000,
       "prezzo": {
         "input": 5,
@@ -73,7 +86,7 @@
       "etichetta": "Claude Opus 4.7",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1000000,
       "prezzo": {
         "input": 5,
@@ -86,7 +99,7 @@
       "etichetta": "Claude Opus 4.8",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1000000,
       "prezzo": {
         "input": 5,
@@ -99,7 +112,7 @@
       "etichetta": "Claude Opus 5",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1000000,
       "prezzo": {
         "input": 5,
@@ -112,7 +125,7 @@
       "etichetta": "Claude Sonnet 4.5 (latest)",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1000000,
       "prezzo": {
         "input": 3,
@@ -125,7 +138,7 @@
       "etichetta": "Claude Sonnet 4.6",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1000000,
       "prezzo": {
         "input": 3,
@@ -138,7 +151,7 @@
       "etichetta": "Claude Sonnet 5",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1000000,
       "prezzo": {
         "input": 2,
@@ -151,7 +164,7 @@
       "etichetta": "Gemini 2.5 Flash",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1048576,
       "prezzo": {
         "input": 0.3,
@@ -164,7 +177,7 @@
       "etichetta": "Gemini 2.5 Flash-Lite",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1048576,
       "prezzo": {
         "input": 0.1,
@@ -177,7 +190,7 @@
       "etichetta": "Gemini 2.5 Pro",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1048576,
       "prezzo": {
         "input": 1.25,
@@ -203,7 +216,7 @@
       "etichetta": "Gemini 3.1 Flash Lite",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1048576,
       "prezzo": {
         "input": 0.25,
@@ -216,7 +229,7 @@
       "etichetta": "Gemini 3.1 Pro Preview",
       "obsoleto": false,
       "anteprima": true,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1048576,
       "prezzo": {
         "input": 2,
@@ -229,7 +242,7 @@
       "etichetta": "Gemini 3.5 Flash",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1048576,
       "prezzo": {
         "input": 1.5,
@@ -242,7 +255,7 @@
       "etichetta": "Gemini 3.5 Flash Lite",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1048576,
       "prezzo": {
         "input": 0.3,
@@ -255,7 +268,7 @@
       "etichetta": "Gemini 3.6 Flash",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1048576,
       "prezzo": {
         "input": 0.75,
@@ -268,7 +281,20 @@
       "etichetta": "Gemini 3.7 Flash",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
+      "contesto": 1048576,
+      "prezzo": {
+        "input": 0.75,
+        "output": 3.75
+      }
+    },
+    {
+      "id": "gemini-3.8-flash",
+      "provider": "gemini",
+      "etichetta": "Gemini 3.8 Flash",
+      "obsoleto": false,
+      "anteprima": false,
+      "visto_il": "2026-09-07",
       "contesto": 1048576,
       "prezzo": {
         "input": 0.75,
@@ -281,7 +307,7 @@
       "etichetta": "Gemini Flash Latest",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1048576,
       "prezzo": {
         "input": 0.75,
@@ -294,7 +320,7 @@
       "etichetta": "Gemini Flash-Lite Latest",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1048576,
       "prezzo": {
         "input": 0.3,
@@ -307,7 +333,7 @@
       "etichetta": "GPT-4.1",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1047576,
       "prezzo": {
         "input": 2,
@@ -320,7 +346,7 @@
       "etichetta": "GPT-4.1 mini",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1047576,
       "prezzo": {
         "input": 0.4,
@@ -333,7 +359,7 @@
       "etichetta": "GPT-4.1 nano",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1047576,
       "prezzo": {
         "input": 0.1,
@@ -346,7 +372,7 @@
       "etichetta": "GPT-5",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 400000,
       "prezzo": {
         "input": 1.25,
@@ -359,7 +385,7 @@
       "etichetta": "GPT-5 Mini",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 400000,
       "prezzo": {
         "input": 0.25,
@@ -372,7 +398,7 @@
       "etichetta": "GPT-5 Nano",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 400000,
       "prezzo": {
         "input": 0.05,
@@ -385,7 +411,7 @@
       "etichetta": "GPT-5.1",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 400000,
       "prezzo": {
         "input": 1.25,
@@ -398,7 +424,7 @@
       "etichetta": "GPT-5.2",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 400000,
       "prezzo": {
         "input": 1.75,
@@ -411,7 +437,7 @@
       "etichetta": "GPT-5.4",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1050000,
       "prezzo": {
         "input": 2.5,
@@ -424,7 +450,7 @@
       "etichetta": "GPT-5.4 mini",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 400000,
       "prezzo": {
         "input": 0.75,
@@ -437,7 +463,7 @@
       "etichetta": "GPT-5.4 nano",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 400000,
       "prezzo": {
         "input": 0.2,
@@ -450,7 +476,7 @@
       "etichetta": "GPT-5.5",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1050000,
       "prezzo": {
         "input": 5,
@@ -463,7 +489,7 @@
       "etichetta": "GPT-5.6",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1050000,
       "prezzo": {
         "input": 4,
@@ -476,7 +502,7 @@
       "etichetta": "GPT-5.6 Luna",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1050000,
       "prezzo": {
         "input": 0.2,
@@ -489,7 +515,7 @@
       "etichetta": "GPT-5.6 Sol",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1050000,
       "prezzo": {
         "input": 4,
@@ -502,11 +528,24 @@
       "etichetta": "GPT-5.6 Terra",
       "obsoleto": false,
       "anteprima": false,
-      "visto_il": "2026-08-26",
+      "visto_il": "2026-09-07",
       "contesto": 1050000,
       "prezzo": {
         "input": 2,
         "output": 12
+      }
+    },
+    {
+      "id": "gpt-6-astra",
+      "provider": "openai",
+      "etichetta": "GPT-6 Astra",
+      "obsoleto": false,
+      "anteprima": false,
+      "visto_il": "2026-09-07",
+      "contesto": 1050000,
+      "prezzo": {
+        "input": 10,
+        "output": 50
       }
     }
   ]
