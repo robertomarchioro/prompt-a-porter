@@ -38,7 +38,7 @@ Trigger: push/PR su `main` quando cambiano file in `apps/server/`.
 | `actions/setup-node` | v7 (Node 22) |
 | `pnpm/action-setup` | v6 |
 | `dtolnay/rust-toolchain` | pin 1.96.0 |
-| `actions/setup-go` | v7 (Go 1.25) |
+| `actions/setup-go` | v7 (Go 1.26) |
 | `golangci/golangci-lint-action` | v9 |
 
 > Le versioni sono pinnate per SHA nei workflow: la fonte di verità è sempre

@@ -8,7 +8,7 @@
 ## Panoramica
 
 Server Go single binary (`papsync`) per sync opzionale dei workspace team.
-Stack: Go 1.25, chi v5 (+ `go-chi/cors`, `go-chi/httprate`), SQLite (WAL),
+Stack: Go 1.26, chi v5 (+ `go-chi/cors`, `go-chi/httprate`), SQLite (WAL),
 Argon2id, JWT HS256, gorilla/websocket.
 
 Layout: `cmd/papsync` (main, bootstrap TLS/timeouts) + `internal/`
