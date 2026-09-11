@@ -1,5 +1,22 @@
 # Changelog — Prompt a Porter
 
+## v0.8.48 — Cuciture di sicurezza (2026-09-11)
+
+> Release di sola sicurezza e manutenzione: chiude i due punti rimasti aperti dall'audit (la redazione del file di crash e il controllo giornaliero delle vulnerabilità, che si era fermato), porta la toolchain Go a una versione ancora supportata e assorbe la coda di aggiornamenti delle dipendenze di agosto e settembre. Nessuna novità visibile nell'uso quotidiano.
+
+### Sicurezza
+
+- **Il file di crash maschera le chiavi API anche quando non stanno in un header a inizio riga** (#591): `pap-crash.log` — il file che l'app invita ad allegare a una segnalazione — finora mascherava una chiave solo se compariva come header riconosciuto all'inizio di una riga. Ora una seconda linea di difesa la riconosce dalla sua forma (`sk-…`, `AIza…`, `Bearer …`, anche in minuscolo) ovunque compaia: a metà riga, dentro una mappa di header stampata da una libreria, in un indirizzo web. Il file inoltre non cresce più all'infinito: superati 5 MB viene azzerato, come già `pap.log`, e lo fa sull'handle già aperto in sicurezza — un collegamento simbolico piazzato al suo posto non viene mai seguito. I limiti che restano sono documentati nel codice: nessuna regola generica su stringhe «casuali», perché un falso positivo che cancella un percorso o un hash renderebbe inutile proprio il file che serve a diagnosticare.
+- **Toolchain Go 1.26.8** (#638): Go 1.25 è uscito dal periodo di supporto con l'arrivo di Go 1.27 e non riceve più correzioni di sicurezza; le librerie usate dal server sync (`x/crypto`) e dallo strumento di audit (`govulncheck`) avevano già alzato il minimo richiesto. Server e CLI compilano ora con Go 1.26.8, verificati sui sei target di cross-compilazione.
+- **Il controllo giornaliero delle vulnerabilità torna a girare** (#635): il job si fermava da giorni non per una vulnerabilità ma perché `govulncheck@latest` aveva iniziato a richiedere Go 1.26; ora è pinnato a una versione esatta, da aggiornare insieme al pin di Go. Il database delle advisory è comunque scaricato a ogni esecuzione: la copertura non cambia.
+- **Tre advisory della libreria standard Go chiuse** (#607): pin di Go portato alla 1.25.14 (poi superato dalla 1.26.8 qui sopra).
+- **Cinque segnalazioni Dependabot su dipendenze indirette chiuse** (#624, #625): rinfresco del lockfile npm e rimozione dell'override `fast-uri`, che era lui stesso a creare l'esposizione. Restano due segnalazioni bloccate a monte, entrambe senza effetto sull'app distribuita (#626, #627).
+
+### Manutenzione
+
+- **Registro dei modelli AI aggiornato** (#615, #616, #634): tre modelli nuovi (Claude Fable 5.1, Gemini 3.8 Flash, GPT-6 Astra); il job settimanale di refresh riesce di nuovo ad aprire la propria PR.
+- **Aggiornamento dipendenze**: lato Rust `argon2` 0.6.0 (vault esistenti verificati bit-identici), `rusqlite`, `log`, plugin Tauri (updater 2.11.0, dialog, log, opener, single-instance); lato Go `modernc.org/sqlite` 1.58, `go-sqlite3` 1.14.52, `x/crypto` 0.56; lato npm `better-sqlite3` 13, `vitest` 5, `vite` 8.2, `jsdom` 30, `@types/better-sqlite3` 9 e patch/minor varie; action pinnate (`rust-cache`, `install-action`, `deploy-pages`); `engines.node` ≥ 22.22.2 (#601).
+
 ## v0.8.47 — L'aggiornamento torna a funzionare (2026-08-02)
 
 > ⚠️ **Se stai usando la v0.8.44, la v0.8.45 o la v0.8.46, questa versione va installata a mano, una volta sola.** Il pulsante «Installa e riavvia» in quelle versioni è proprio ciò che non funziona, quindi non può portarti qui da solo: scarica l'installatore da questa pagina ed eseguilo normalmente, i tuoi dati restano intatti. Dalla v0.8.47 in avanti l'aggiornamento automatico torna a funzionare da solo.
