@@ -39,20 +39,22 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          # Pin esatto: setup-go con "1.25" può risolvere a una patch
+          # Pin esatto: setup-go con "1.26" può risolvere a una patch
           # precedente se l'ultima non è ancora nel manifests cache.
           # Da bumpare a ogni patch stdlib con fix sicurezza
           # (storico: GO-2026-5039, GO-2026-5037, GO-2026-5856).
-          go-version: "1.25.14"
+          go-version: "1.26.8"
           cache-dependency-path: apps/server/go.sum
 
-      # Pin a v1.7.0: @latest (>= v1.8.0) richiede Go >= 1.26, ma qui il
-      # workflow pinna Go 1.25.x con GOTOOLCHAIN=local (vedi go-version sopra).
+      # Pin esatto, mai @latest: una nuova x/vuln può alzare il minimo di Go
+      # oltre il pin go-version qui sopra (GOTOOLCHAIN=local) e rompere il job
+      # senza alcuna advisory reale (#635: v1.8.0 richiede Go >= 1.26).
       # Non riduce la copertura: il DB advisory (vuln.go.dev) è scaricato a
       # runtime, indipendentemente dalla versione del binario govulncheck.
-      # Per bumpare govulncheck, bumpare prima il pin go-version (#635).
+      # Bumpare govulncheck e go-version insieme, controllando il `go` del
+      # suo go.mod: curl -s https://proxy.golang.org/golang.org/x/vuln/@v/vX.Y.Z.mod
       - name: Installa govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
 
       - name: Vuln check
         working-directory: apps/server
@@ -66,15 +68,15 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.25.14"
+          go-version: "1.26.8"
 
       - name: Genera go.sum
         working-directory: apps/cli
         run: go mod tidy
 
-      # Pin a v1.7.0: vedi nota nel job go-audit-server sopra (#635).
+      # Pin esatto, stesso valore del job go-audit-server: vedi nota lì (#635).
       - name: Installa govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
 
       - name: Vuln check
         working-directory: apps/cli

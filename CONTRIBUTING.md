@@ -14,7 +14,7 @@ Prima di iniziare, leggi anche:
 - Node.js 22.x LTS
 - pnpm 9.x+
 - Rust toolchain stable (per il client Tauri)
-- Go 1.25+ (per la CLI e il server sync)
+- Go 1.26+ (per la CLI e il server sync)
 - Vedi [`docs/contribuire/setup-sviluppo.md`](docs/contribuire/setup-sviluppo.md) per istruzioni dettagliate
 
 ## Workflow di sviluppo

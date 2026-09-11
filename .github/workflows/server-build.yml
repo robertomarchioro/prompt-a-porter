@@ -28,15 +28,16 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.25"
+          go-version: "1.26.8"
           cache-dependency-path: apps/server/go.sum
 
       - name: Vet
         working-directory: apps/server
         run: go vet ./...
 
-      # TODO: riattivare golangci-lint quando l'action supporta stabilmente v2
-      # (v1.64.8 è build su Go 1.24, incompatibile con Go 1.25 della codebase)
+      # TODO: riattivare golangci-lint come in cli-build.yml (action v9,
+      # `version: latest`): il blocco storico era l'action v6 con il linter
+      # v1.64.8 buildato su Go 1.24, non più attuale.
 
       - name: Test
         working-directory: apps/server

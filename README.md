@@ -92,7 +92,7 @@ pnpm install
 pnpm --filter @pap/client dev
 ```
 
-Prerequisiti: Node 22 LTS, pnpm 9+, Rust stable (Tauri), Go 1.25+ (CLI/server).
+Prerequisiti: Node 22 LTS, pnpm 9+, Rust stable (Tauri), Go 1.26+ (CLI/server).
 Setup completo, convenzioni e mappa CI in [`docs/contribuire/`](docs/contribuire/).
 La documentazione tecnica è in 5 cluster sotto [`docs/`](docs/README.md)
 (utente · contribuire · architettura · roadmap · operativo).
