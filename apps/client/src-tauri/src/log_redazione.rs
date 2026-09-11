@@ -40,6 +40,40 @@
 //! transitiva, non usata direttamente per le chiamate ai provider AI).
 //! I log applicativi (target `pap_lib::…`) non vengono mai toccati da
 //! questa regex.
+//!
+//! ## Limiti noti (issue #591)
+//!
+//! `redigi_valori_header` filtra per **nome di header**, ancorato a inizio
+//! riga (`^[ \t]*(?:nome)[ \t]*:`). Restano scoperti, per costruzione:
+//!
+//! 1. un nome di header che compare **a metà riga** invece che a inizio
+//!    riga (es. `"header inatteso x-api-key: sk-..."` dentro un messaggio
+//!    di log/panic libero);
+//! 2. un header formattato con `Debug` — fra virgolette o graffe, come
+//!    `{"x-api-key": "sk-..."}` (`{:?}` di una mappa di header);
+//! 3. una **chiave nuda**, senza alcun prefisso di nome-header
+//!    riconosciuto;
+//! 4. un **token in query string** di un URL (`?key=sk-...`).
+//!
+//! Da qui in poi `redigi_valori_header` applica anche una seconda linea di
+//! difesa **per forma di segreto** (non per nome di header):
+//! `redigi_forme_di_segreto` cerca, ovunque nel testo, i prefissi di
+//! valore non ambigui `sk-`, `AIza`, `Bearer ` seguiti da un token
+//! sufficientemente lungo, e ne redige SOLO il token. Questo copre tutti
+//! e quattro i casi sopra **quando** il segreto usa uno di questi
+//! prefissi — è esattamente lo scenario delle chiavi API dei provider
+//! usati da questa app (Anthropic `sk-ant-…`, Google `AIza…`, e il più
+//! generico schema HTTP `Bearer`).
+//!
+//! **Cosa NON copre**, deliberatamente: non esiste alcuna regola generica
+//! su stringhe ad alta entropia. L'issue #591 la scarta esplicitamente —
+//! in un crash log un falso positivo che redige un percorso, un hash o un
+//! ID di sincronizzazione rende la diagnostica inutilizzabile, che è lo
+//! scopo stesso per cui quel file esiste. Un segreto con una forma NON
+//! elencata sopra (un prefisso non riconosciuto, nessun prefisso
+//! distintivo) resta scoperto anche da questa seconda linea di difesa. V.
+//! anche la nota "Redazione dei segreti" in `panic_diagnostics`, che
+//! applica questa stessa funzione al payload dei panic.
 use std::sync::OnceLock;
 
 use regex::Regex;
@@ -91,10 +125,80 @@ fn pattern_redazione() -> &'static Regex {
 /// `***`, preservando nome dell'header, spaziatura originale e
 /// terminatori di riga. Safe su testo multibyte: opera su `&str`
 /// (UTF-8), il crate `regex` non taglia mai a metà di un carattere.
+///
+/// Concatena SEMPRE, subito dopo, la seconda linea di difesa per forma di
+/// segreto (`redigi_forme_di_segreto`, issue #591 — v. "Limiti noti" nella
+/// doc di modulo): ogni chiamante di questa funzione (`panic_diagnostics`,
+/// `redigi_testo_log_storico`, `debug_log::redigi_testo_per_export`)
+/// riceve entrambe le linee di difesa senza doverle richiamare a parte.
 pub fn redigi_valori_header(testo: &str) -> String {
-    pattern_redazione()
-        .replace_all(testo, "${pre}***")
-        .into_owned()
+    let per_nome_header = pattern_redazione().replace_all(testo, "${pre}***");
+    redigi_forme_di_segreto(&per_nome_header)
+}
+
+/// Soglia di dimensione, in byte, condivisa fra la rotazione di `pap.log`
+/// (`tauri_plugin_log`, v. `lib.rs::run`) e il tetto applicato a
+/// `pap-crash.log` (`panic_diagnostics`, che non ruota mai da solo — ogni
+/// panic APPENDE una sezione, v. doc di quel modulo) — issue #591, punto
+/// minore "pap-crash.log non ruota". Un'unica costante evita che le due
+/// soglie divergano in silenzio.
+pub(crate) const MAX_LOG_FILE_SIZE_BYTES: u64 = 5 * 1024 * 1024;
+
+/// Prefisso di valore riconosciuto come inequivocabilmente un segreto, a
+/// bassissimo rischio di falso positivo (issue #591, punto 2). Il gruppo
+/// `pre` cattura il carattere che precede il prefisso — o l'inizio della
+/// stringa — cosicché il match scatti SOLO a un confine di token: senza
+/// questo vincolo `sk-` matcherebbe anche dentro un percorso come
+/// `/tmp/task-sk-build/x` (preceduto da `-`, che fa parte dello stesso
+/// alfabeto del token) o dentro un hash esadecimale che lo contenesse per
+/// coincidenza. Il crate `regex` non supporta i lookbehind: il gruppo
+/// `pre`, catturato e poi riemesso in `redigi_forme_di_segreto`, è
+/// l'equivalente "lookbehind-safe" — consuma il carattere di confine ma lo
+/// restituisce intatto nella sostituzione.
+fn pattern_forma_sk() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| {
+        Regex::new(r"(?P<pre>^|[^A-Za-z0-9_-])sk-[A-Za-z0-9_-]{10,}")
+            .expect("pattern di redazione per forma sk- non valido")
+    })
+}
+
+/// Prefisso delle chiavi API Google (`AIza…`, es. Gemini) — stesso vincolo
+/// di confine di `pattern_forma_sk`.
+fn pattern_forma_aiza() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| {
+        Regex::new(r"(?P<pre>^|[^A-Za-z0-9_-])AIza[A-Za-z0-9_-]{10,}")
+            .expect("pattern di redazione per forma AIza non valido")
+    })
+}
+
+/// Schema HTTP `Bearer` (RFC 6750): il valore ammette anche `.`, `~`, `+`,
+/// `/`, `=` (alfabeto dei token base64url e dei JWT), quindi il vincolo di
+/// confine su `pre` usa comunque il gruppo `[^A-Za-z0-9_-]` — l'alfabeto
+/// del PREFISSO che precede `Bearer`, non quello del token — così
+/// `"unBearer xxxxxxxxxx"` (preceduto da `n`, alfanumerico) non matcha.
+fn pattern_forma_bearer() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| {
+        Regex::new(r"(?P<pre>^|[^A-Za-z0-9_-])Bearer [A-Za-z0-9._~+/=-]{10,}")
+            .expect("pattern di redazione per forma Bearer non valido")
+    })
+}
+
+/// Seconda linea di difesa: redige per **forma di segreto** invece che
+/// per nome di header (issue #591). A differenza di `pattern_redazione`
+/// (ancorato a inizio riga e al NOME dell'header), queste regole cercano
+/// ovunque nel testo un prefisso di VALORE non ambiguo e ne rimuovono
+/// interamente il token, senza conservarne alcun carattere oltre il
+/// prefisso diagnostico (`sk-…[REDATTO]`, `AIza…[REDATTO]`,
+/// `Bearer …[REDATTO]`). Nessuna regola generica su entropia — v. "Limiti
+/// noti" nella doc di modulo.
+fn redigi_forme_di_segreto(testo: &str) -> String {
+    let t = pattern_forma_sk().replace_all(testo, "${pre}sk-…[REDATTO]");
+    let t = pattern_forma_aiza().replace_all(&t, "${pre}AIza…[REDATTO]");
+    let t = pattern_forma_bearer().replace_all(&t, "${pre}Bearer …[REDATTO]");
+    t.into_owned()
 }
 
 /// Timestamp UTC corrente, formattato `[YYYY-MM-DD][HH:MM:SS]` — la
@@ -318,6 +422,98 @@ content-type: application/json\r\n\
     #[test]
     fn stringa_vuota_non_panica() {
         assert_eq!(redigi_valori_header(""), "");
+    }
+
+    // ─── redigi_valori_header — seconda linea di difesa per forma (#591) ───
+
+    #[test]
+    fn redige_prefisso_sk_a_meta_riga_senza_nome_header_a_inizio_riga() {
+        // Caso 1 dell'issue: il nome dell'header è a METÀ riga, non a
+        // inizio riga — la prima linea di difesa (ancorata a `^`) non
+        // può riconoscerlo; questa deve.
+        let testo = "header inatteso x-api-key: sk-ant-1234567890abcdef\n";
+        let out = redigi_valori_header(testo);
+        assert!(!out.contains("sk-ant-1234567890abcdef"), "{out}");
+        assert!(out.contains("sk-…[REDATTO]"), "{out}");
+        assert!(out.contains("header inatteso x-api-key:"), "{out}");
+    }
+
+    #[test]
+    fn redige_prefisso_aiza_dentro_mappa_debug_formattata() {
+        // Caso 2 dell'issue: `{:?}` di una mappa di header — tra virgolette
+        // e graffe, non a inizio riga.
+        let testo = r#"headers ricevuti: {"x-goog-api-key": "AIzaSyABCDEFGHIJKLMNOP"}"#;
+        let out = redigi_valori_header(testo);
+        assert!(!out.contains("AIzaSyABCDEFGHIJKLMNOP"), "{out}");
+        assert!(out.contains("AIza…[REDATTO]"), "{out}");
+        assert!(out.contains(r#""x-goog-api-key":"#), "{out}");
+    }
+
+    #[test]
+    fn redige_prefisso_bearer_come_chiave_nuda_senza_prefisso_di_header() {
+        // Caso 3 dell'issue: nessun nome di header riconosciuto davanti.
+        let testo = "credenziale catturata: Bearer abcDEF1234567890.ghIJKL";
+        let out = redigi_valori_header(testo);
+        assert!(!out.contains("abcDEF1234567890.ghIJKL"), "{out}");
+        assert!(out.contains("Bearer …[REDATTO]"), "{out}");
+    }
+
+    #[test]
+    fn redige_token_sk_in_query_string_di_url() {
+        // Caso 4 dell'issue: token in query string.
+        let testo = "richiesta a https://x.test/webhook?key=sk-liveABCDEFGHIJ&altro=1";
+        let out = redigi_valori_header(testo);
+        assert!(!out.contains("sk-liveABCDEFGHIJ"), "{out}");
+        assert!(out.contains("sk-…[REDATTO]"), "{out}");
+        assert!(out.contains("&altro=1"), "{out}");
+    }
+
+    #[test]
+    fn redige_token_aiza_in_query_string_di_url() {
+        let testo = "https://example.com/callback?token=AIzaXXXXXXXXXXXXXXXX&stato=ok";
+        let out = redigi_valori_header(testo);
+        assert!(!out.contains("AIzaXXXXXXXXXXXXXXXX"), "{out}");
+        assert!(out.contains("AIza…[REDATTO]"), "{out}");
+        assert!(out.contains("&stato=ok"), "{out}");
+    }
+
+    // ─── redigi_valori_header — roundtrip legittimo, niente falsi positivi ───
+
+    #[test]
+    fn non_redige_sk_come_sottostringa_di_un_percorso_piu_lungo() {
+        // "sk-" compare dentro un percorso, ma preceduto da `-` (stesso
+        // alfabeto del token): non è un confine di token, non deve
+        // scattare. Roundtrip byte per byte.
+        let testo = "diagnostica: /tmp/task-sk-build-1234567890/output.log salvato";
+        assert_eq!(redigi_valori_header(testo), testo);
+    }
+
+    #[test]
+    fn non_redige_hash_esadecimale_che_non_contiene_alcun_prefisso() {
+        let testo = "commit a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2 applicato";
+        assert_eq!(redigi_valori_header(testo), testo);
+    }
+
+    #[test]
+    fn non_redige_bearer_parola_semplice_seguita_da_testo_breve() {
+        // "Bearer" come parola qualunque, seguita da un token troppo corto
+        // per soddisfare la soglia minima (10 caratteri): niente match.
+        let testo = "il campo si chiama Bearer test\n";
+        assert_eq!(redigi_valori_header(testo), testo);
+    }
+
+    #[test]
+    fn non_redige_sk_sotto_la_soglia_minima_di_lunghezza() {
+        let testo = "chiave: sk-abc123 non valida\n";
+        assert_eq!(redigi_valori_header(testo), testo);
+    }
+
+    // ─── MAX_LOG_FILE_SIZE_BYTES ───
+
+    #[test]
+    fn costante_soglia_crash_log_corrisponde_a_5_mebibyte() {
+        assert_eq!(MAX_LOG_FILE_SIZE_BYTES, 5 * 1024 * 1024);
+        assert_ne!(MAX_LOG_FILE_SIZE_BYTES, 0);
     }
 
     // ─── timestamp_bracket_utc ───

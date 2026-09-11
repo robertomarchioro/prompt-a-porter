@@ -45,6 +45,23 @@
 //! PRIMA di scriverlo sia via `log::error!` sia sul file dedicato — così
 //! `pap-crash.log`, che l'app invita ad allegare a una segnalazione
 //! pubblica, non può contenere una chiave API in chiaro.
+//!
+//! Da `redigi_valori_header` arriva ANCHE la seconda linea di difesa per
+//! forma di segreto (issue #591): copre nome-header a metà riga, mappe
+//! `Debug`-formattate, chiavi nude e token in query string — v. paragrafo
+//! "Limiti noti" nella doc di `log_redazione` per cosa resta comunque
+//! scoperto.
+//!
+//! ## Tetto a `pap-crash.log` (issue #591, minore)
+//!
+//! A differenza di `pap.log`, che `tauri_plugin_log` ruota da sé a
+//! `log_redazione::MAX_LOG_FILE_SIZE_BYTES` (`lib.rs::run`),
+//! `pap-crash.log` non ruota mai: ogni panic APPENDE una sezione. Prima di
+//! ogni scrittura, se il file esistente supera quella stessa soglia viene
+//! troncato a zero byte (v. `tronca_se_troppo_grande`) — non un log
+//! rotante vero e proprio, solo un tetto: evita che un file già esportato
+//! nelle segnalazioni pubbliche cresca indefinitamente fra una sessione e
+//! l'altra.
 
 // `PanicInfo` (non il più recente `PanicHookInfo`, stesso tipo rinominato in
 // Rust 1.81): `Cargo.toml` dichiara `rust-version = "1.77"` (promesso anche
@@ -166,6 +183,30 @@ fn apri_crash_log_safe(path: &std::path::Path) -> Option<std::fs::File> {
     Some(file)
 }
 
+/// Se il file al percorso indicato supera `log_redazione::MAX_LOG_FILE_SIZE_BYTES`
+/// lo tronca a zero byte — issue #591 (minore), v. doc di modulo. Stesso
+/// approccio di `debug_log::tronca_file_log` (`File::create` su un path
+/// esistente tronca il contenuto senza ricreare l'inode, quindi senza
+/// alterare i permessi 0600 impostati da `apri_crash_log_safe`), qui
+/// duplicato deliberatamente invece che riusato: quella funzione vive nel
+/// modulo `debug_log` (ritorna telemetria prima/dopo, chiama
+/// `log::logger().flush()` sul logger applicativo) — dipendenze che
+/// l'hook di panic non deve avere, per restare libero da qualunque cosa
+/// possa a sua volta panicare o bloccare.
+///
+/// Best-effort e silenzioso come il resto dell'hook: un fallimento di
+/// `metadata`/`File::create` qui non deve MAI far panicare l'hook stesso
+/// (se il file non esiste ancora, `metadata` fallisce e la funzione non fa
+/// nulla — corretto, non c'è nulla da troncare).
+fn tronca_se_troppo_grande(path: &std::path::Path) {
+    let supera_soglia = std::fs::metadata(path)
+        .map(|m| m.len() > crate::log_redazione::MAX_LOG_FILE_SIZE_BYTES)
+        .unwrap_or(false);
+    if supera_soglia {
+        let _ = std::fs::File::create(path);
+    }
+}
+
 /// Estrae dal payload del panic un testo leggibile, gestendo sia `&str`
 /// (caso comune, es. `panic!("...")` / `.expect("...")`) sia `String`.
 #[allow(deprecated)]
@@ -245,7 +286,12 @@ pub fn installa() {
         //    buffer del logger potrebbe non essere mai svuotato.
         //    `apri_crash_log_safe` (fix H2, review PR #589) resiste a un
         //    symlink pre-piazzato sul percorso e nasce/resta a permessi 0600.
-        if let Some(mut file) = apri_crash_log_safe(&percorso_crash_log()) {
+        //    `tronca_se_troppo_grande` (issue #591, minore) tronca PRIMA di
+        //    appendere se il file esistente ha già superato il tetto
+        //    condiviso con `pap.log`: `pap-crash.log` non ruota da solo.
+        let percorso = percorso_crash_log();
+        tronca_se_troppo_grande(&percorso);
+        if let Some(mut file) = apri_crash_log_safe(&percorso) {
             let _ = file.write_all(riga.as_bytes());
             let _ = file.flush();
         }
@@ -461,6 +507,98 @@ mod test {
             "la chiave non deve comparire in chiaro nel file di crash: {contenuto}"
         );
         assert!(contenuto.contains("x-goog-api-key: ***"), "{contenuto}");
+    }
+
+    /// End-to-end: un payload di panic che è il `{:?}` di una mappa di
+    /// header (caso 2 dell'issue #591 — esattamente ciò che produrrebbe un
+    /// `.expect()` su una risposta HTTP di terze parti che stampa i propri
+    /// header) non deve MAI raggiungere il file di crash in chiaro. La
+    /// prima linea di difesa (ancorata a inizio riga sul NOME
+    /// dell'header) non basta qui: l'intera mappa sta su una riga sola che
+    /// inizia per `{`, non per un nome di header — è la seconda linea di
+    /// difesa per forma (`redigi_forme_di_segreto`) a doverla coprire.
+    #[test]
+    fn installa_non_scrive_chiavi_in_chiaro_quando_il_payload_e_una_mappa_debug_formattata() {
+        let _guard = TEST_HOOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        let dir = crash_log_dir_di_test();
+
+        let hook_originale_processo = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_info| {}));
+
+        installa();
+
+        let risultato = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            panic!(
+                "{:?}",
+                std::collections::BTreeMap::from([
+                    ("x-api-key", "sk-ant-mappadebugsegreta1234"),
+                    ("content-type", "application/json"),
+                ])
+            );
+        }));
+
+        std::panic::set_hook(hook_originale_processo);
+        assert!(risultato.is_err());
+
+        let contenuto = std::fs::read_to_string(dir.join(NOME_CRASH_LOG))
+            .expect("il file di crash deve esistere");
+        assert!(
+            !contenuto.contains("sk-ant-mappadebugsegreta1234"),
+            "la chiave non deve comparire in chiaro nel file di crash: {contenuto}"
+        );
+        assert!(contenuto.contains("sk-…[REDATTO]"), "{contenuto}");
+    }
+
+    // ─── tetto a pap-crash.log (issue #591, minore) ───
+
+    /// Se il file di crash esistente ha già superato la soglia condivisa
+    /// con `pap.log`, la scrittura successiva deve troncarlo PRIMA di
+    /// appendere la nuova sezione — non limitarsi ad appendere all'infinito.
+    #[test]
+    fn installa_tronca_il_file_di_crash_se_supera_la_soglia_prima_di_appendere() {
+        let _guard = TEST_HOOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        let dir = crash_log_dir_di_test();
+        let percorso = dir.join(NOME_CRASH_LOG);
+
+        // Pre-crea un file di crash già oltre la soglia condivisa —
+        // sovrascrive deliberatamente qualunque contenuto lasciato da test
+        // precedenti sulla stessa directory condivisa (v. doc di
+        // `crash_log_dir_di_test`): `fs::write` tronca e riscrive un
+        // contenuto di dimensione nota, quindi il test resta deterministico
+        // indipendentemente dall'ordine di esecuzione.
+        let contenuto_grande = vec![b'x'; (log_redazione::MAX_LOG_FILE_SIZE_BYTES + 1024) as usize];
+        std::fs::write(&percorso, &contenuto_grande).unwrap();
+        assert!(std::fs::metadata(&percorso).unwrap().len() > log_redazione::MAX_LOG_FILE_SIZE_BYTES);
+
+        let hook_originale_processo = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_info| {}));
+
+        installa();
+
+        let risultato = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            panic!("marcatore-dopo-troncamento-cap-591");
+        }));
+
+        std::panic::set_hook(hook_originale_processo);
+        assert!(risultato.is_err());
+
+        let dimensione_finale = std::fs::metadata(&percorso).unwrap().len();
+        assert!(
+            dimensione_finale < log_redazione::MAX_LOG_FILE_SIZE_BYTES,
+            "il file doveva essere troncato prima di appendere la nuova sezione, dimensione finale: {dimensione_finale}"
+        );
+
+        let contenuto = std::fs::read_to_string(&percorso).unwrap();
+        assert!(
+            contenuto.contains("marcatore-dopo-troncamento-cap-591"),
+            "{contenuto}"
+        );
+        assert!(
+            !contenuto.contains("xxxxxxxxxx"),
+            "il contenuto pre-esistente oltre soglia non deve essere sopravvissuto al troncamento"
+        );
     }
 
     // ─── H2 (review PR #589): O_EXCL/symlink e permessi sul file di crash ───
