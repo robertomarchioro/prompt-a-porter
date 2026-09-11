@@ -74,6 +74,15 @@
 //! distintivo) resta scoperto anche da questa seconda linea di difesa. V.
 //! anche la nota "Redazione dei segreti" in `panic_diagnostics`, che
 //! applica questa stessa funzione al payload dei panic.
+//!
+//! **Coda residua di falsi positivi, accettata deliberatamente**: la
+//! stessa euristica per prefisso può scattare su un identificatore
+//! kebab-case che inizi per coincidenza con `sk-` seguito da almeno 10
+//! caratteri dell'alfabeto del token — es. un tag BCP 47 concatenato come
+//! `sk-SK-Latn-1234567890`. Accettato rispetto all'alternativa (una regola
+//! a entropia, già scartata sopra per un motivo più grave): il costo di
+//! questo falso positivo è la perdita locale di un identificatore in un
+//! log di diagnostica, non l'inutilizzabilità sistematica del file.
 use std::sync::OnceLock;
 
 use regex::Regex;
@@ -178,10 +187,20 @@ fn pattern_forma_aiza() -> &'static Regex {
 /// confine su `pre` usa comunque il gruppo `[^A-Za-z0-9_-]` — l'alfabeto
 /// del PREFISSO che precede `Bearer`, non quello del token — così
 /// `"unBearer xxxxxxxxxx"` (preceduto da `n`, alfanumerico) non matcha.
+///
+/// `(?i)` — SOLO su questo pattern, non su `sk-`/`AIza` (quelli hanno un
+/// casing fisso e non ambiguo) — perché RFC 7235 §2.1 dichiara lo schema
+/// di autenticazione case-insensitive: `bearer <token>` è legale e alcune
+/// librerie/dump lo emettono in minuscolo. `[ \t]+` al posto di un singolo
+/// spazio letterale tollera più spazi/tab fra schema e token (evasione:
+/// `"Bearer  segreto"`, doppio spazio — con un solo spazio letterale il
+/// carattere consumato dopo "Bearer " resterebbe uno spazio, non l'inizio
+/// del token, e il match fallirebbe) — stessa tolleranza di spaziatura già
+/// usata da `pattern_redazione` per i due punti dopo il nome header.
 fn pattern_forma_bearer() -> &'static Regex {
     static CELL: OnceLock<Regex> = OnceLock::new();
     CELL.get_or_init(|| {
-        Regex::new(r"(?P<pre>^|[^A-Za-z0-9_-])Bearer [A-Za-z0-9._~+/=-]{10,}")
+        Regex::new(r"(?i)(?P<pre>^|[^A-Za-z0-9_-])Bearer[ \t]+[A-Za-z0-9._~+/=-]{10,}")
             .expect("pattern di redazione per forma Bearer non valido")
     })
 }
@@ -194,6 +213,21 @@ fn pattern_forma_bearer() -> &'static Regex {
 /// prefisso diagnostico (`sk-…[REDATTO]`, `AIza…[REDATTO]`,
 /// `Bearer …[REDATTO]`). Nessuna regola generica su entropia — v. "Limiti
 /// noti" nella doc di modulo.
+///
+/// **Idempotenza voluta, non incidentale**: il `…` (U+2026, ellissi
+/// tipografica) SUBITO dopo il prefisso è ciò che rende un marker già
+/// prodotto non ri-matchabile da una seconda passata — `pap-crash.log`
+/// viene ri-redatto per intero a ogni export
+/// (`debug_log::redigi_testo_per_export`), quindi `f(f(x)) == f(x)` deve
+/// valere sempre. `…` non fa parte dell'alfabeto di nessuno dei tre
+/// pattern (`[A-Za-z0-9_-]` per `sk-`/`AIza`, `[A-Za-z0-9._~+/=-]` per
+/// `Bearer`), quindi subito dopo il prefisso il token richiesto dal
+/// quantificatore `{10,}` non può nemmeno iniziare a formarsi. Non
+/// semplificare mai il marker eliminando il `…` (es. in `sk-[REDATTO]`
+/// senza ellissi): resta la garanzia esplicita di non ri-match, va
+/// preservata in ogni forma futura del marker anche se un cambio
+/// dell'alfabeto di uno dei tre pattern rendesse la protezione implicita
+/// meno ovvia da verificare a colpo d'occhio.
 fn redigi_forme_di_segreto(testo: &str) -> String {
     let t = pattern_forma_sk().replace_all(testo, "${pre}sk-…[REDATTO]");
     let t = pattern_forma_aiza().replace_all(&t, "${pre}AIza…[REDATTO]");
@@ -459,6 +493,29 @@ content-type: application/json\r\n\
     }
 
     #[test]
+    fn redige_prefisso_bearer_minuscolo_case_insensitive() {
+        // RFC 7235 §2.1: lo schema di autenticazione è case-insensitive —
+        // "bearer" minuscolo è legale e alcune librerie/dump lo emettono
+        // così. Prima della correzione (finding MEDIUM) il pattern
+        // richiedeva "Bearer" letterale e questo passava intatto.
+        let testo = "auth: bearer abcDEF1234567890.ghIJKL";
+        let out = redigi_valori_header(testo);
+        assert!(!out.contains("abcDEF1234567890.ghIJKL"), "{out}");
+        assert!(out.contains("Bearer …[REDATTO]"), "{out}");
+    }
+
+    #[test]
+    fn redige_prefisso_bearer_con_doppio_spazio() {
+        // Un singolo spazio letterale nel pattern non tollera "Bearer  x"
+        // (doppio spazio): il carattere consumato dopo "Bearer " resta uno
+        // spazio, non l'inizio del token, e il match fallirebbe.
+        let testo = "auth: Bearer  abcDEF1234567890";
+        let out = redigi_valori_header(testo);
+        assert!(!out.contains("abcDEF1234567890"), "{out}");
+        assert!(out.contains("Bearer …[REDATTO]"), "{out}");
+    }
+
+    #[test]
     fn redige_token_sk_in_query_string_di_url() {
         // Caso 4 dell'issue: token in query string.
         let testo = "richiesta a https://x.test/webhook?key=sk-liveABCDEFGHIJ&altro=1";
@@ -506,6 +563,38 @@ content-type: application/json\r\n\
     fn non_redige_sk_sotto_la_soglia_minima_di_lunghezza() {
         let testo = "chiave: sk-abc123 non valida\n";
         assert_eq!(redigi_valori_header(testo), testo);
+    }
+
+    #[test]
+    fn non_redige_bearer_come_sottostringa_di_una_parola_italiana() {
+        // "bearer" compare come sottostringa di "portatore/bearer" — ma il
+        // token che segue è troppo corto (< 10 caratteri) per soddisfare
+        // la soglia minima, quindi niente match anche con `(?i)` attivo.
+        // Roundtrip byte per byte.
+        let testo = "il portatore/bearer di turno consegna il pacco\n";
+        assert_eq!(redigi_valori_header(testo), testo);
+    }
+
+    // ─── redigi_valori_header — idempotenza sui marker (review PR #637) ───
+
+    #[test]
+    fn redazione_e_idempotente_sui_marker() {
+        // pap-crash.log viene ri-redatto per intero a ogni export
+        // (`debug_log::redigi_testo_per_export`): un marker già prodotto
+        // NON deve mai ri-matchare una seconda passata. Un testo con tutti
+        // e tre i prefissi (uno per forma) più un header a inizio riga
+        // (prima linea di difesa) deve dare lo stesso risultato alla
+        // seconda applicazione della prima.
+        let testo = "x-api-key: sk-ant-prima-passata-1234567890\n\
+                      chiave sk-liveABCDEFGHIJ nel messaggio\n\
+                      https://x.test/cb?token=AIzaXXXXXXXXXXXXXXXX\n\
+                      auth: Bearer abcDEF1234567890.ghIJKL\n";
+        let una_volta = redigi_valori_header(testo);
+        let due_volte = redigi_valori_header(&una_volta);
+        assert_eq!(
+            una_volta, due_volte,
+            "una seconda passata non deve alterare l'output già redatto"
+        );
     }
 
     // ─── MAX_LOG_FILE_SIZE_BYTES ───
