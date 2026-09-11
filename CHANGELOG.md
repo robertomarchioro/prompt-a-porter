@@ -1,8 +1,8 @@
 # Changelog — Prompt a Porter
 
-## v0.8.48 — Cuciture di sicurezza (2026-09-11)
+## v0.8.49 — Cuciture di sicurezza (2026-09-11)
 
-> Release di sola sicurezza e manutenzione: chiude i due punti rimasti aperti dall'audit (la redazione del file di crash e il controllo giornaliero delle vulnerabilità, che si era fermato), porta la toolchain Go a una versione ancora supportata e assorbe la coda di aggiornamenti delle dipendenze di agosto e settembre. Nessuna novità visibile nell'uso quotidiano.
+> Sostituisce la v0.8.48, taggata ma mai pubblicata: la sua build di release falliva su Windows (#640) e i tag di release sono immutabili per regola del repository. Release di sola sicurezza e manutenzione: chiude i due punti rimasti aperti dall'audit (la redazione del file di crash e il controllo giornaliero delle vulnerabilità, che si era fermato), porta la toolchain Go a una versione ancora supportata e assorbe la coda di aggiornamenti delle dipendenze di agosto e settembre. Nessuna novità visibile nell'uso quotidiano.
 
 ### Sicurezza
 
