@@ -15,6 +15,7 @@
 ### Manutenzione
 
 - **Registro dei modelli AI aggiornato** (#615, #616, #634): tre modelli nuovi (Claude Fable 5.1, Gemini 3.8 Flash, GPT-6 Astra); il job settimanale di refresh riesce di nuovo ad aprire la propria PR.
+- **Build di release Windows sbloccata** (#640): `better-sqlite3` 13 spedisce già i binari precompilati per tutte le piattaforme, ma pnpm lo ricompilava comunque a ogni installazione — e sul runner Windows la compilazione falliva, fermando la release. Ora è dichiarato come dipendenza da non compilare mai: si usano i binari inclusi nel pacchetto.
 - **Aggiornamento dipendenze**: lato Rust `argon2` 0.6.0 (vault esistenti verificati bit-identici), `rusqlite`, `log`, plugin Tauri (updater 2.11.0, dialog, log, opener, single-instance); lato Go `modernc.org/sqlite` 1.58, `go-sqlite3` 1.14.52, `x/crypto` 0.56; lato npm `better-sqlite3` 13, `vitest` 5, `vite` 8.2, `jsdom` 30, `@types/better-sqlite3` 9 e patch/minor varie; action pinnate (`rust-cache`, `install-action`, `deploy-pages`); `engines.node` ≥ 22.22.2 (#601).
 
 ## v0.8.47 — L'aggiornamento torna a funzionare (2026-08-02)
