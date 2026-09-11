@@ -373,7 +373,10 @@ pub fn run() {
                     Target::new(TargetKind::Stdout),
                     Target::new(TargetKind::Webview),
                 ])
-                .max_file_size(5 * 1024 * 1024) // 5 MB
+                // v. `log_redazione::MAX_LOG_FILE_SIZE_BYTES` — stessa soglia
+                // condivisa con il tetto applicato a `pap-crash.log`
+                // (issue #591, `panic_diagnostics::tronca_se_troppo_grande`).
+                .max_file_size(log_redazione::MAX_LOG_FILE_SIZE_BYTES as u128) // 5 MB
                 .rotation_strategy(RotationStrategy::KeepAll)
                 .build(),
         )

@@ -45,6 +45,36 @@
 //! PRIMA di scriverlo sia via `log::error!` sia sul file dedicato — così
 //! `pap-crash.log`, che l'app invita ad allegare a una segnalazione
 //! pubblica, non può contenere una chiave API in chiaro.
+//!
+//! Da `redigi_valori_header` arriva ANCHE la seconda linea di difesa per
+//! forma di segreto (issue #591): copre nome-header a metà riga, mappe
+//! `Debug`-formattate, chiavi nude e token in query string — v. paragrafo
+//! "Limiti noti" nella doc di `log_redazione` per cosa resta comunque
+//! scoperto.
+//!
+//! ## Tetto a `pap-crash.log` (issue #591, minore)
+//!
+//! A differenza di `pap.log`, che `tauri_plugin_log` ruota da sé a
+//! `log_redazione::MAX_LOG_FILE_SIZE_BYTES` (`lib.rs::run`),
+//! `pap-crash.log` non ruota mai: ogni panic APPENDE una sezione. Prima di
+//! ogni scrittura, se il file esistente supera quella stessa soglia viene
+//! troncato a zero byte — non un log rotante vero e proprio, solo un
+//! tetto: evita che un file già esportato nelle segnalazioni pubbliche
+//! cresca indefinitamente fra una sessione e l'altra.
+//!
+//! **Il troncamento avviene sull'HANDLE già aperto** (`set_len(0)`,
+//! `tronca_handle_se_troppo_grande`), MAI con un secondo `open`/`create`
+//! per percorso. Correzione post-review (finding HIGH) di una prima
+//! versione che troncava per path con `std::fs::metadata`/
+//! `std::fs::File::create`: entrambi SEGUONO i symlink, quindi un symlink
+//! pre-piazzato su `pap-crash.log` verso un file dell'utente più grande
+//! della soglia (es. il DB del vault) sarebbe stato svuotato dall'hook di
+//! panic — esattamente il modello di minaccia H2 (PR #589) riaperto da una
+//! via nuova. Operando sull'handle restituito da `apri_crash_log_safe`
+//! (che ha già verificato che il path non sia un symlink, o l'ha creato
+//! esso stesso con `create_new`) non c'è alcun secondo open da eseguire:
+//! niente symlink seguibile in questo punto e niente finestra TOCTOU fra
+//! uno stat sul path e l'apertura.
 
 // `PanicInfo` (non il più recente `PanicHookInfo`, stesso tipo rinominato in
 // Rust 1.81): `Cargo.toml` dichiara `rust-version = "1.77"` (promesso anche
@@ -166,6 +196,37 @@ fn apri_crash_log_safe(path: &std::path::Path) -> Option<std::fs::File> {
     Some(file)
 }
 
+/// Tronca a zero byte l'HANDLE già aperto se supera
+/// `log_redazione::MAX_LOG_FILE_SIZE_BYTES` — issue #591 (minore), v. doc
+/// di modulo.
+///
+/// Deliberatamente NON un secondo `File::open`/`File::create` per PATH
+/// (correzione post-review, finding HIGH: la prima versione lo faceva e
+/// riapriva esattamente il modello di minaccia H2, PR #589 — sia
+/// `std::fs::metadata` sia `std::fs::File::create` SEGUONO i symlink, quindi
+/// un symlink pre-piazzato su `pap-crash.log` verso un file dell'utente più
+/// grande della soglia — es. il DB del vault — verrebbe troncato a zero
+/// byte). Operando su `&File` invece che su `&Path` non c'è alcun secondo
+/// `open` da eseguire: niente symlink seguibile in questo punto (il file è
+/// già quello aperto — e verificato non-symlink — da
+/// `apri_crash_log_safe`) e niente finestra TOCTOU fra uno stat sul path e
+/// l'apertura. `set_len(0)` è `ftruncate` sul file descriptor: con il file
+/// aperto in append (`apri_crash_log_safe`) la scrittura successiva va
+/// comunque a partire dalla nuova fine (offset 0).
+///
+/// Best-effort e silenzioso come il resto dell'hook: un fallimento di
+/// `metadata`/`set_len` sull'handle non deve MAI far panicare l'hook
+/// stesso.
+fn tronca_handle_se_troppo_grande(file: &std::fs::File) {
+    let supera_soglia = file
+        .metadata()
+        .map(|m| m.len() > crate::log_redazione::MAX_LOG_FILE_SIZE_BYTES)
+        .unwrap_or(false);
+    if supera_soglia {
+        let _ = file.set_len(0);
+    }
+}
+
 /// Estrae dal payload del panic un testo leggibile, gestendo sia `&str`
 /// (caso comune, es. `panic!("...")` / `.expect("...")`) sia `String`.
 #[allow(deprecated)]
@@ -245,7 +306,14 @@ pub fn installa() {
         //    buffer del logger potrebbe non essere mai svuotato.
         //    `apri_crash_log_safe` (fix H2, review PR #589) resiste a un
         //    symlink pre-piazzato sul percorso e nasce/resta a permessi 0600.
+        //    `tronca_handle_se_troppo_grande` (issue #591, minore — corretta
+        //    post-review dopo una finding HIGH, v. sua doc) tronca l'HANDLE
+        //    già aperto, MAI un secondo open per path, così non può seguire
+        //    un symlink: se il file esistente ha già superato il tetto
+        //    condiviso con `pap.log` (`pap-crash.log` non ruota da solo)
+        //    viene svuotato prima di appendere la nuova sezione.
         if let Some(mut file) = apri_crash_log_safe(&percorso_crash_log()) {
+            tronca_handle_se_troppo_grande(&file);
             let _ = file.write_all(riga.as_bytes());
             let _ = file.flush();
         }
@@ -429,7 +497,10 @@ mod test {
 
         let grezzo = catturato.lock().unwrap().clone();
         let redatto = log_redazione::redigi_valori_header(&grezzo);
-        assert!(!redatto.contains("sk-ant-segreto-riga-singola"), "{redatto}");
+        assert!(
+            !redatto.contains("sk-ant-segreto-riga-singola"),
+            "{redatto}"
+        );
         assert!(redatto.contains("x-api-key: ***"), "{redatto}");
     }
 
@@ -463,6 +534,163 @@ mod test {
         assert!(contenuto.contains("x-goog-api-key: ***"), "{contenuto}");
     }
 
+    /// End-to-end: un payload di panic che è il `{:?}` di una mappa di
+    /// header (caso 2 dell'issue #591 — esattamente ciò che produrrebbe un
+    /// `.expect()` su una risposta HTTP di terze parti che stampa i propri
+    /// header) non deve MAI raggiungere il file di crash in chiaro. La
+    /// prima linea di difesa (ancorata a inizio riga sul NOME
+    /// dell'header) non basta qui: l'intera mappa sta su una riga sola che
+    /// inizia per `{`, non per un nome di header — è la seconda linea di
+    /// difesa per forma (`redigi_forme_di_segreto`) a doverla coprire.
+    #[test]
+    fn installa_non_scrive_chiavi_in_chiaro_quando_il_payload_e_una_mappa_debug_formattata() {
+        let _guard = TEST_HOOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        let dir = crash_log_dir_di_test();
+
+        let hook_originale_processo = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_info| {}));
+
+        installa();
+
+        let risultato = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            panic!(
+                "{:?}",
+                std::collections::BTreeMap::from([
+                    ("x-api-key", "sk-ant-mappadebugsegreta1234"),
+                    ("content-type", "application/json"),
+                ])
+            );
+        }));
+
+        std::panic::set_hook(hook_originale_processo);
+        assert!(risultato.is_err());
+
+        let contenuto = std::fs::read_to_string(dir.join(NOME_CRASH_LOG))
+            .expect("il file di crash deve esistere");
+        assert!(
+            !contenuto.contains("sk-ant-mappadebugsegreta1234"),
+            "la chiave non deve comparire in chiaro nel file di crash: {contenuto}"
+        );
+        assert!(contenuto.contains("sk-…[REDATTO]"), "{contenuto}");
+    }
+
+    // ─── tetto a pap-crash.log (issue #591, minore) ───
+
+    /// Se il file di crash esistente ha già superato la soglia condivisa
+    /// con `pap.log`, la scrittura successiva deve troncarlo PRIMA di
+    /// appendere la nuova sezione — non limitarsi ad appendere all'infinito.
+    #[test]
+    fn installa_tronca_il_file_di_crash_se_supera_la_soglia_prima_di_appendere() {
+        let _guard = TEST_HOOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        let dir = crash_log_dir_di_test();
+        let percorso = dir.join(NOME_CRASH_LOG);
+
+        // Pre-crea un file di crash già oltre la soglia condivisa —
+        // sovrascrive deliberatamente qualunque contenuto lasciato da test
+        // precedenti sulla stessa directory condivisa (v. doc di
+        // `crash_log_dir_di_test`): `fs::write` tronca e riscrive un
+        // contenuto di dimensione nota, quindi il test resta deterministico
+        // indipendentemente dall'ordine di esecuzione.
+        let contenuto_grande = vec![b'x'; (log_redazione::MAX_LOG_FILE_SIZE_BYTES + 1024) as usize];
+        std::fs::write(&percorso, &contenuto_grande).unwrap();
+        assert!(
+            std::fs::metadata(&percorso).unwrap().len() > log_redazione::MAX_LOG_FILE_SIZE_BYTES
+        );
+
+        let hook_originale_processo = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_info| {}));
+
+        installa();
+
+        let risultato = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            panic!("marcatore-dopo-troncamento-cap-591");
+        }));
+
+        std::panic::set_hook(hook_originale_processo);
+        assert!(risultato.is_err());
+
+        let dimensione_finale = std::fs::metadata(&percorso).unwrap().len();
+        assert!(
+            dimensione_finale < log_redazione::MAX_LOG_FILE_SIZE_BYTES,
+            "il file doveva essere troncato prima di appendere la nuova sezione, dimensione finale: {dimensione_finale}"
+        );
+
+        let contenuto = std::fs::read_to_string(&percorso).unwrap();
+        assert!(
+            contenuto.contains("marcatore-dopo-troncamento-cap-591"),
+            "{contenuto}"
+        );
+        assert!(
+            !contenuto.contains("xxxxxxxxxx"),
+            "il contenuto pre-esistente oltre soglia non deve essere sopravvissuto al troncamento"
+        );
+    }
+
+    /// Un symlink pre-piazzato su `pap-crash.log`, verso un file ESTERNO
+    /// più grande della soglia (es. un DB del vault dell'utente), NON deve
+    /// essere troncato dall'hook di panic — stesso principio di H2 (PR
+    /// #589), qui verificato END-TO-END attraverso `installa()`: un
+    /// controllo di troncamento fatto per PATH (`fs::metadata`/
+    /// `File::create` su un `&Path`) SEGUE i symlink, a differenza di
+    /// `apri_crash_log_safe` che apre con `create_new`/verifica
+    /// `symlink_metadata` prima di riaprire. Riproduce esattamente lo
+    /// scenario H2: un attaccante locale piazza il symlink PRIMA che l'app
+    /// scriva mai sul percorso.
+    #[cfg(unix)]
+    #[test]
+    fn installa_non_tronca_un_bersaglio_esterno_raggiunto_da_symlink_preesistente() {
+        let _guard = TEST_HOOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        let dir = crash_log_dir_di_test();
+        let percorso = dir.join(NOME_CRASH_LOG);
+
+        // La directory di test è condivisa fra i test di questo modulo
+        // (v. doc di `crash_log_dir_di_test`): rimuove un eventuale
+        // file/symlink lasciato da un test precedente prima di piazzare il
+        // nostro.
+        let _ = std::fs::remove_file(&percorso);
+
+        let bersaglio_dir = tempfile::tempdir().unwrap();
+        let bersaglio = bersaglio_dir.path().join("bersaglio-esterno");
+        let contenuto_originale =
+            vec![b'x'; (log_redazione::MAX_LOG_FILE_SIZE_BYTES + 1024) as usize];
+        std::fs::write(&bersaglio, &contenuto_originale).unwrap();
+
+        std::os::unix::fs::symlink(&bersaglio, &percorso).unwrap();
+
+        let hook_originale_processo = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_info| {}));
+
+        installa();
+
+        let risultato = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            panic!("panic di prova su symlink pre-piazzato");
+        }));
+
+        std::panic::set_hook(hook_originale_processo);
+
+        // Pulizia SUBITO dopo l'hook, prima di ogni assert: se un assert
+        // fallisse lascerebbe comunque il symlink al posto giusto per il
+        // prossimo test che condivide `crash_log_dir_di_test()`.
+        let _ = std::fs::remove_file(&percorso);
+
+        assert!(risultato.is_err());
+
+        let dimensione_bersaglio = std::fs::metadata(&bersaglio).unwrap().len();
+        assert_eq!(
+            dimensione_bersaglio,
+            contenuto_originale.len() as u64,
+            "il bersaglio esterno del symlink non deve MAI essere troncato dall'hook di panic"
+        );
+        assert_eq!(
+            std::fs::read(&bersaglio).unwrap(),
+            contenuto_originale,
+            "il contenuto del bersaglio esterno deve restare intatto"
+        );
+    }
+
     // ─── H2 (review PR #589): O_EXCL/symlink e permessi sul file di crash ───
 
     /// Un symlink pre-piazzato sul percorso del file di crash (scenario
@@ -480,7 +708,10 @@ mod test {
 
         let r = apri_crash_log_safe(&percorso);
 
-        assert!(r.is_none(), "un symlink pre-piazzato deve far fallire l'apertura");
+        assert!(
+            r.is_none(),
+            "un symlink pre-piazzato deve far fallire l'apertura"
+        );
         assert_eq!(
             std::fs::read(&bersaglio).unwrap(),
             b"contenuto-originale",
@@ -517,7 +748,8 @@ mod test {
             f.write_all(b"primo crash\n").unwrap();
         }
         {
-            let mut f = apri_crash_log_safe(&percorso).expect("seconda apertura deve riuscire (append)");
+            let mut f =
+                apri_crash_log_safe(&percorso).expect("seconda apertura deve riuscire (append)");
             f.write_all(b"secondo crash\n").unwrap();
         }
 
