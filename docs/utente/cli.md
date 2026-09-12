@@ -173,9 +173,19 @@ pap completion powershell | Out-String | Invoke-Expression
 pap completion powershell >> $PROFILE
 ```
 
-## Installazione
+## Installazione e aggiornamento
 
-L'installazione avviene **da sorgente** (la pagina Releases pubblica solo gli installer del client desktop, non i binari CLI). Serve Go installato:
+La strada più semplice è il **binario precompilato**: ogni release su GitHub allega la CLI per sei piattaforme, accanto agli installer dell'app.
+
+| Piattaforma | Asset |
+|---|---|
+| Windows x64 / ARM64 | `pap-windows-amd64.exe` / `pap-windows-arm64.exe` |
+| macOS Intel / Apple Silicon | `pap-darwin-amd64` / `pap-darwin-arm64` |
+| Linux x64 / ARM64 | `pap-linux-amd64` / `pap-linux-arm64` |
+
+Scarica quello della tua piattaforma, rinominalo `pap` (o `pap.exe`) e mettilo in una cartella nel `PATH` (es. `/usr/local/bin`); su macOS e Linux serve `chmod +x`. I binari CLI non sono firmati né notarizzati: su macOS il primo avvio può chiedere conferma in *Impostazioni → Privacy e sicurezza*.
+
+In alternativa, **da sorgente** (serve Go, la versione indicata in `apps/cli/go.mod`):
 
 ```bash
 git clone https://github.com/robertomarchioro/prompt-a-porter
@@ -183,7 +193,9 @@ cd prompt-a-porter/apps/cli
 go install .
 ```
 
-`go install` mette il binario in `$GOPATH/bin` (default `~/go/bin`); assicurati che sia in `$PATH`. In alternativa `go build -o pap .` produce il binario nella directory corrente, da spostare dove preferisci (es. `/usr/local/bin/pap`).
+`go install` mette il binario in `$GOPATH/bin` (default `~/go/bin`); assicurati che sia in `$PATH`. In alternativa `go build -o pap .` produce il binario nella directory corrente, da spostare dove preferisci.
+
+**La CLI non si aggiorna da sola**: l'aggiornamento automatico riguarda solo l'app desktop. Per aggiornarla ripeti l'installazione con il binario della release nuova (o `git pull && go install .`); `pap version` dice quale versione hai. Tenerla allineata all'app conta, perché la sintassi del body evolve: una CLI più vecchia dell'app può non riconoscere una direttiva nuova — per esempio, prima della v0.8.50 i commenti `{{!-- … --}}` non venivano tolti da `pap render`.
 
 ## Codici di uscita
 
