@@ -92,4 +92,36 @@ describe("toggleCommento", () => {
     const r = esegui("{{!-- abc def --}}", 7, 9);
     expect(r.doc).toBe("abc def");
   });
+
+  // Rilievi review PR-2.
+  it("col cursore subito dopo --}} inserisce un commento nuovo, non scommenta", () => {
+    const r = esegui("{{!-- nota --}}", 15);
+    expect(r.doc).toBe("{{!-- nota --}}{{!--  --}}");
+  });
+
+  it("col cursore subito prima di {{!-- scommenta (confine incluso)", () => {
+    const r = esegui("{{!-- nota --}}", 0);
+    expect(r.doc).toBe("nota");
+  });
+
+  it("selezione che contiene un commento: lo assorbe in un commento unico", () => {
+    const doc = "x {{!-- a --}} y";
+    const r = esegui(doc, 0, doc.length);
+    expect(r.doc).toBe("{{!-- x a y --}}");
+    expect(r.doc.slice(r.from, r.to)).toBe("x a y");
+  });
+
+  it("selezione che taglia un commento a metà: si allarga a coprirlo", () => {
+    const doc = "{{!-- abc --}} def";
+    // "c --}} de"
+    const r = esegui(doc, 8, 17);
+    expect(r.doc).toBe("{{!-- abc de --}}f");
+  });
+
+  it("testo con --}} letterale: nessuna modifica ma comando gestito", () => {
+    const doc = "a --}} b";
+    const r = esegui(doc, 0, doc.length);
+    expect(r.doc).toBe(doc);
+    expect(r.eseguito).toBe(true);
+  });
 });
