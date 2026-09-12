@@ -34,7 +34,7 @@ Nel catalogo alcuni numeri risultano saltati (`PH002`, `PII002`, `STY002`): corr
 | Codice | Severità | Quando scatta |
 |---|---|---|
 | `PH001` | Error | Singola graffa: `{nome}` invece di `{{nome}}` |
-| `PH003` | Warning | Caratteri non consentiti nel nome: `{{nome con spazi}}`, `{{nome-con-trattini}}` |
+| `PH003` | Warning | Caratteri non consentiti nel nome: `{{nome con spazi}}`, `{{nome-con-trattini}}`. Anche `{{! nota }}`: non è un commento, il messaggio rimanda a `{{!-- nota --}}` |
 
 ### Privacy / PII
 
@@ -49,6 +49,14 @@ Nel catalogo alcuni numeri risultano saltati (`PH002`, `PII002`, `STY002`): corr
 | Codice | Severità | Quando scatta |
 |---|---|---|
 | `STY001` | Info | Stesso n-gram (3 parole) ripetuto ≥ 4 volte nel body |
+
+### Commenti
+
+| Codice | Severità | Quando scatta |
+|---|---|---|
+| `CMT001` | Warning | `{{!--` senza il `--}}` di chiusura: così com'è non è un commento e **resta nel testo compilato** |
+
+I commenti `{{!-- … --}}` chiusi non generano mai segnalazioni, e ciò che contengono non viene analizzato dalle regole sui segnaposti (`PH*`) né conteggiato da quelle sulla lunghezza e sullo stile (`LEN*`, `STY*`), perché non parte col prompt. Le regole di privacy (`PII*`) invece li leggono: un dato sensibile in un commento è comunque salvato nel vault e finisce nell'export.
 
 ### Import (prompt componibili)
 
@@ -109,7 +117,7 @@ Le regole sono tarate su un uso generico, e prima o poi qualcuna entrerà in rot
 
 ### Dove
 
-**Impostazioni → Linter.** Trovi il catalogo completo raggruppato per categoria (Lunghezza, Segnaposti, Privacy, Stile, Import). Ogni voce mostra il codice (`PII001`), la severità e una breve descrizione.
+**Impostazioni → Linter.** Trovi il catalogo completo raggruppato per categoria (Lunghezza, Segnaposti, Privacy, Stile, Commenti, Import). Ogni voce mostra il codice (`PII001`), la severità e una breve descrizione.
 
 ### Come
 

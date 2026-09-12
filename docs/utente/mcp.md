@@ -19,7 +19,7 @@ Una volta collegato, l'assistente vede quattro tool con prefisso `pap_`, uno per
 | `pap_list_recent` | I prompt usati più di recente | `limit?` |
 | `pap_render` | Compila un prompt con valori per i segnaposti `{{...}}` | `prompt_id`, `vars?` |
 
-Qualche dettaglio di comportamento utile da sapere: `limit` vale 10 per default e viene comunque limitato a 50; una `query` vuota in `pap_search` restituisce i prompt recenti; il filtro `tags` richiede che il prompt abbia **tutti** i tag indicati. Se `pap_render` trova segnaposti senza valore, li elenca in una nota in coda al testo compilato, così l'assistente (e tu) ve ne accorgete subito.
+Qualche dettaglio di comportamento utile da sapere: `limit` vale 10 per default e viene comunque limitato a 50; una `query` vuota in `pap_search` restituisce i prompt recenti; il filtro `tags` richiede che il prompt abbia **tutti** i tag indicati. Se `pap_render` trova segnaposti senza valore, li elenca in una nota in coda al testo compilato, così l'assistente (e tu) ve ne accorgete subito. I commenti `{{!-- … --}}` non escono mai dal server MCP: `pap_render` li toglie prima di compilare e `pap_get` restituisce il body già senza (l'assistente è un modello, e i commenti sono note per te).
 
 ## Preparare il server
 
