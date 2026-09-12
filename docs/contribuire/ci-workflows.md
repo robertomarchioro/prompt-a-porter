@@ -6,7 +6,7 @@
 
 | File | Trigger | Job principali |
 |---|---|---|
-| `cli-build.yml` | `push:main` + `pull_request` su `apps/cli/**` (no md) + `workflow_dispatch` | `lint-and-test` (Go + golangci-lint + coverage report, no gate), `cross-compile` matrix 6 OS/arch |
+| `cli-build.yml` | `push:main` + `pull_request` su `apps/cli/**` ∪ `packages/shared-schema/fixtures/**` (no md) + `workflow_dispatch` | `lint-and-test` (Go + golangci-lint + coverage report, no gate), `cross-compile` matrix 6 OS/arch |
 | `client-build.yml` | `push:main` + `pull_request` su `apps/client/**` ∪ `packages/**` ∪ `pnpm-workspace.yaml` ∪ `pnpm-lock.yaml` ∪ `.github/workflows/client-build.yml` (no md) + `workflow_dispatch` | `lint-and-test` (TypeScript, **coverage gate 70%**), `rust-test` (`cargo check --all-targets` + cargo-llvm-cov **gate 80% line**, `--locked`) |
 | `mcp-server-build.yml` | `push:main` + `pull_request` su `apps/mcp-server/**` ∪ `pnpm-workspace.yaml` ∪ `pnpm-lock.yaml` (no md) + `workflow_dispatch` | `lint-and-build` (TS type check + build + **coverage gate 80%** su `@pap/shared-schema` e `@pap/mcp-server`) |
 | `server-build.yml` | `push:main` + `pull_request` su `apps/server/**` (no md) + `workflow_dispatch` | `lint-and-test` (Go vet + test `-race` + **coverage gate 50%**) |
@@ -25,7 +25,7 @@
 | `apps/client/**` (escluso md/CHANGELOG/LICENSE) | **client-build** |
 | `apps/mcp-server/**` (escluso md/CHANGELOG/LICENSE) | **mcp-server-build** |
 | `apps/server/**` (escluso md/CHANGELOG/LICENSE) | **server-build** |
-| `packages/**` (escluso md) | **client-build** |
+| `packages/**` (escluso md) | **client-build**; `packages/shared-schema/**` anche **mcp-server-build**; `packages/shared-schema/fixtures/**` anche **cli-build** (fixture di conformità cross-linguaggio, #643) |
 | `pnpm-workspace.yaml` o `pnpm-lock.yaml` | **client-build** + **mcp-server-build** (su PR); + **site-deploy** al merge su main |
 | `.github/workflows/client-build.yml` | **client-build** (è auto-listato nei suoi `paths`) |
 | `.github/workflows/cli-build.yml` | ⚠️ **nessuno** (non auto-listato) |

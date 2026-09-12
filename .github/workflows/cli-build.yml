@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "apps/cli/**"
+      # #643: fixture di conformità letta dai test Go.
+      - "packages/shared-schema/fixtures/**"
       - "!apps/cli/**/*.md"
       - "!apps/cli/**/CHANGELOG.md"
       - "!apps/cli/**/LICENSE"
@@ -12,6 +14,8 @@ on:
     branches: [main]
     paths:
       - "apps/cli/**"
+      # #643: fixture di conformità letta dai test Go.
+      - "packages/shared-schema/fixtures/**"
       - "!apps/cli/**/*.md"
       - "!apps/cli/**/CHANGELOG.md"
       - "!apps/cli/**/LICENSE"

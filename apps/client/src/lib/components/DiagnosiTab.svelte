@@ -92,6 +92,8 @@
         return "Privacy";
       case "STY":
         return "Stile";
+      case "CMT":
+        return "Commenti";
       case "IMP":
         return "Import";
       default:

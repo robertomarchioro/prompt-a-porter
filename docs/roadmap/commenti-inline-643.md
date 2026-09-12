@@ -1,6 +1,6 @@
 # Analisi — Commenti nel prompt (issue #643)
 
-> **Stato**: analisi con decisioni chiuse (2026-09-12, v. §8). Nessun codice ancora.
+> **Stato**: decisioni chiuse (2026-09-12, v. §8); PR-1 (motore + conformità) in corso.
 > **Issue**: [#643](https://github.com/robertomarchioro/prompt-a-porter/issues/643) — «Possibilità di inserire commenti nel prompt».
 > **Obiettivo utente**: annotare un prompt (perché una frase c'è, cosa provare, cosa non funziona) senza che l'annotazione finisca nel testo copiato o inviato al modello.
 > **Data**: 2026-09-12
@@ -77,7 +77,9 @@ Principio: **il commento non raggiunge mai un modello né gli appunti né un cli
 | Ritocco AI | `src-tauri/src/ritocco.rs` | **Non toglie** (deciso) | Il diff che torna dal modello si applica al body: se il modello non vede i commenti, il diff li cancella. Effetto collaterale utile: i commenti diventano istruzioni per il revisore («qui voglio più conciso»). Da dire nella guida al Ritocco. |
 | Embeddings / ricerca semantica | `src-tauri/src/editor.rs` → `compute_embedding_opt` | **Non toglie** | Il commento descrive l'intento: aiuta a ritrovare il prompt. Nessun backfill necessario. |
 | Linter PII (`PII00x`) | `src-tauri/src/linting.rs` | **Non toglie** | Una carta di credito in un commento è comunque nel vault e nell'export |
-| Linter lunghezza (`LEN00x`) e stima costo (`pricing.rs`) | idem | **Toglie** | Contano ciò che paga l'utente. Con i commenti la stima è gonfiata. |
+| Linter lunghezza (`LEN00x`) e stile (`STY001`) | idem | **Toglie** | Misurano ciò che arriva al modello. |
+| Stima costo (`pricing.rs::stima_costo`) | chiamata da `regression.rs` e `ritocco.rs` | Nulla da fare | Riceve il testo già compilato dal golden (pulito) o il body inviato al Ritocco (con commenti, per scelta): in entrambi i casi conta ciò che parte davvero. |
+| CLI `get` | `apps/cli/main.go` | **Non toglie** | È il sorgente per un umano (come l'export); solo `render` compila. |
 | Linter `PH003` | `regola_ph003_caratteri_speciali` | **Skip esplicito** di `{{!-- … --}}` come già per `import` | Oggi verrebbe segnalato come «caratteri non consentiti»: senza questo punto la feature nasce con un falso positivo. `{{! x }}` resta segnalato, con il suggerimento della forma giusta |
 | Versioni, diff, export/import JSON, Cestino, Ordito | — | Nulla | Il commento è body |
 

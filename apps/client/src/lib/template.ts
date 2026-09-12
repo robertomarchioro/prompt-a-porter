@@ -1,5 +1,8 @@
+import { rimuoviCommenti } from "./commenti";
+
 export interface Segnaposto {
   nome: string;
+  /** Offset nel body senza commenti (v. `rimuoviCommenti`, #643). */
   indice: number;
   /** Issue #159: true se sintassi `{{global nome}}`, false se `{{nome}}`. */
   globale: boolean;
@@ -19,12 +22,17 @@ export interface Segnaposto {
  */
 const RE_SEGNAPOSTO = /\{\{\s*(global\s+)?(\w+)\s*\}\}/g;
 
+/**
+ * #643: i commenti `{{!-- … --}}` vengono tolti prima dell'estrazione, così
+ * un segnaposto citato solo in un commento non compare nella form.
+ */
 export function estraiSegnaposti(body: string): Segnaposto[] {
+  const pulito = rimuoviCommenti(body);
   const risultati: Segnaposto[] = [];
   const visti = new Set<string>();
   let match;
   RE_SEGNAPOSTO.lastIndex = 0;
-  while ((match = RE_SEGNAPOSTO.exec(body)) !== null) {
+  while ((match = RE_SEGNAPOSTO.exec(pulito)) !== null) {
     const globale = match[1] !== undefined;
     const nome = match[2];
     // Chiave dedup: distingue globale-vs-normale con stesso nome
@@ -43,13 +51,17 @@ export function estraiSegnaposti(body: string): Segnaposto[] {
  * Issue #159: 3° parametro opzionale `valoriGlobali` per resolver
  * separato. Default `{}` per back-compat (segnaposti globali non
  * vengono compilati senza valori globali).
+ *
+ * #643: i commenti `{{!-- … --}}` spariscono dal testo compilato; il
+ * passaggio è idempotente, quindi è innocuo anche su un body già espanso
+ * dal backend (`prompt_compila_inline`), che li ha già tolti.
  */
 export function compila(
   body: string,
   valori: Record<string, string>,
   valoriGlobali: Record<string, string> = {},
 ): string {
-  return body.replace(RE_SEGNAPOSTO, (_, glob, nome) => {
+  return rimuoviCommenti(body).replace(RE_SEGNAPOSTO, (_, glob, nome) => {
     if (glob) {
       return valoriGlobali[nome]?.trim() || `{{global ${nome}}}`;
     }

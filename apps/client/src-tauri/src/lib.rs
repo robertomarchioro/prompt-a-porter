@@ -5,6 +5,7 @@ pub mod audit;
 pub mod cartelle;
 pub mod cestino;
 pub mod changelog;
+pub mod commenti;
 pub mod debug_log;
 pub mod editor;
 pub mod embeddings;

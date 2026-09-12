@@ -104,8 +104,10 @@ pub(crate) fn compila_per_golden(body: &str, input_vars_json: &str) -> Result<St
     let map = vars
         .as_object()
         .ok_or_else(|| PapErrore::Generico("InputVars deve essere un oggetto JSON".into()))?;
+    // #643: il golden esegue il prompt come parte davvero, senza commenti.
+    let body = crate::commenti::rimuovi_commenti(body);
     let re = re_segnaposto();
-    let result = re.replace_all(body, |caps: &regex::Captures| {
+    let result = re.replace_all(&body, |caps: &regex::Captures| {
         let name = &caps[1];
         match map.get(name) {
             Some(serde_json::Value::String(s)) => s.clone(),
@@ -1159,6 +1161,15 @@ mod test {
         let vars = r#"{"nome":"Luca","tono":"formale"}"#;
         let r = compila_per_golden(body, vars).unwrap();
         assert_eq!(r, "Saluta Luca con tono formale.");
+    }
+
+    #[test]
+    fn compila_toglie_i_commenti_e_non_compila_dentro_di_essi() {
+        // #643: il golden esegue il prompt come lo vedrebbe l'utente.
+        let body = "{{!-- {{nome}} qui non conta --}}\nSaluta {{nome}}. {{!-- inline --}}";
+        let vars = r#"{"nome":"Luca"}"#;
+        let r = compila_per_golden(body, vars).unwrap();
+        assert_eq!(r, "Saluta Luca. ");
     }
 
     #[test]

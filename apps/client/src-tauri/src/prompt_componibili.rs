@@ -25,6 +25,7 @@ use std::collections::HashSet;
 use std::sync::OnceLock;
 use tauri::State;
 
+use crate::commenti::{dentro_commento, intervalli_commenti, rimuovi_commenti};
 use crate::errore::PapErrore;
 use crate::vault::VaultState;
 
@@ -147,9 +148,15 @@ pub fn parse_with_clause(raw: &str) -> Vec<(String, String)> {
 }
 
 /// Estrae tutti gli import dichiarati in un body, in ordine di apparizione.
+/// #643: gli import dentro un commento `{{!-- --}}` sono ignorati. Gli
+/// offset `byte_start`/`byte_end` restano relativi al body passato (non a
+/// una copia senza commenti), così i chiamanti che tagliano i token per
+/// range (`import_rimuovi_da_dipendenti_pure`) restano corretti.
 pub fn parse_imports(body: &str) -> Vec<ImportRef> {
+    let commenti = intervalli_commenti(body);
     re_import()
         .captures_iter(body)
+        .filter(|cap| !dentro_commento(&commenti, cap.get(0).unwrap().start()))
         .enumerate()
         .map(|(i, cap)| {
             let m = cap.get(0).unwrap();
@@ -268,6 +275,11 @@ fn compila_ricorsivo(
             "Ciclo di import rilevato su {prompt_id}. Impossibile compilare."
         )));
     }
+
+    // #643: i commenti spariscono PRIMA di risolvere gli import, a ogni
+    // livello della ricorsione (quindi anche nei body importati).
+    let body_pulito = rimuovi_commenti(body);
+    let body = body_pulito.as_ref();
 
     let imports = parse_imports(body);
     if imports.is_empty() {
@@ -796,6 +808,79 @@ mod test {
         let mut visitati = HashSet::new();
         let out = compila_ricorsivo(&conn, "prm-1", "Niente import qui.", &mut visitati, 0).unwrap();
         assert_eq!(out, "Niente import qui.");
+    }
+
+    // ─── #643: commenti `{{!-- --}}` ───
+
+    #[test]
+    fn parse_imports_ignora_import_nei_commenti() {
+        let body = "{{!-- {{import \"vecchio\"}} --}}\n{{import \"vivo\"}}";
+        let imps = parse_imports(body);
+        assert_eq!(imps.len(), 1);
+        assert_eq!(imps[0].path, "vivo");
+        assert_eq!(imps[0].position, 0);
+        // Gli offset restano relativi al body ORIGINALE (usati da
+        // import_rimuovi_da_dipendenti per tagliare i token).
+        assert_eq!(&body[imps[0].byte_start..imps[0].byte_end], "{{import \"vivo\"}}");
+    }
+
+    #[test]
+    fn compila_import_commentato_non_viene_risolto() {
+        let conn = db_test();
+        // "non-esiste" farebbe fallire la compilazione se fosse risolto.
+        let body = "{{!-- {{import \"non-esiste\"}} --}}\nCiao";
+        inserisci_prompt(&conn, "prm-1", "P", body, None);
+        let mut visitati = HashSet::new();
+        let out = compila_ricorsivo(&conn, "prm-1", body, &mut visitati, 0).unwrap();
+        assert_eq!(out, "Ciao");
+    }
+
+    #[test]
+    fn compila_toglie_i_commenti_anche_nel_figlio_importato() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "Padre", "Inizio. {{import \"figlio\"}} Fine.", None);
+        inserisci_prompt(
+            &conn,
+            "prm-2",
+            "figlio",
+            "{{!-- nota del figlio --}}\nBODY-FIGLIO {{!-- inline --}}",
+            None,
+        );
+        let mut visitati = HashSet::new();
+        let out = compila_ricorsivo(
+            &conn,
+            "prm-1",
+            "Inizio. {{import \"figlio\"}} Fine.",
+            &mut visitati,
+            0,
+        )
+        .unwrap();
+        assert_eq!(out, "Inizio. BODY-FIGLIO  Fine.");
+    }
+
+    #[test]
+    fn compila_senza_import_toglie_comunque_i_commenti() {
+        let conn = db_test();
+        let body = "{{!-- tono B --}}\nCiao {{nome}}";
+        let mut visitati = HashSet::new();
+        let out = compila_ricorsivo(&conn, "prm-x", body, &mut visitati, 0).unwrap();
+        assert_eq!(out, "Ciao {{nome}}");
+    }
+
+    #[test]
+    fn aggiorna_imports_ignora_import_commentati() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "Padre", "", None);
+        inserisci_prompt(&conn, "prm-2", "X", "body x", None);
+        aggiorna_imports(&conn, "prm-1", "{{!-- {{import \"X\"}} --}}").unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM PromptImports WHERE ParentPromptId = 'prm-1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 0, "un import commentato non è una dipendenza");
     }
 
     #[test]
