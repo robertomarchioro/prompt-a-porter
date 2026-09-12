@@ -1,10 +1,10 @@
 # Glossario sintassi
 
-> Reference rapido della sintassi del body di un prompt: segnaposti, globali, import, codici linter.
+> Reference rapido della sintassi del body di un prompt: segnaposti, globali, import, commenti, codici linter.
 
 Un prompt salvato così com'è è poco più di un appunto: la prossima volta che ti serve, devi rileggerlo e adattarlo a mano. La sintassi di Prompt a Porter esiste per trasformare quell'appunto in uno strumento: separi le parti che hai rifinito una volta per tutte (le istruzioni, il tono, la struttura) dalle parti che cambiano a ogni uso (il destinatario, il testo da elaborare, la lingua). Le prime le scrivi nel body; le seconde le dichiari come **segnaposti**, e l'app te le chiederà al momento della compilazione.
 
-Su questa idea si innestano altri due mattoni. I **segnaposti globali** coprono i valori che cambiano raramente ma compaiono ovunque — il tuo nome, il ruolo, l'azienda — e vengono riempiti automaticamente, senza domande. Gli **import** permettono a un prompt di includerne un altro, così un blocco che funziona (un "ruolo esperto", un tono editoriale) vive in un posto solo e viene riusato da molti prompt.
+Su questa idea si innestano altri mattoni. I **segnaposti globali** coprono i valori che cambiano raramente ma compaiono ovunque — il tuo nome, il ruolo, l'azienda — e vengono riempiti automaticamente, senza domande. Gli **import** permettono a un prompt di includerne un altro, così un blocco che funziona (un "ruolo esperto", un tono editoriale) vive in un posto solo e viene riusato da molti prompt. I **commenti** sono note per te che restano nel sorgente e non partono mai col prompt.
 
 Questa pagina è il reference della grammatica: consultala quando hai un dubbio di sintassi. Per gli approfondimenti sui prompt modulari c'è [`prompt-componibili.md`](./prompt-componibili.md), per il catalogo completo delle regole del linter [`linting-regole.md`](./linting-regole.md).
 
@@ -93,6 +93,28 @@ Gli import hanno tre limiti pensati per proteggerti: la profondità massima di n
 
 Vedi [`prompt-componibili.md`](./prompt-componibili.md) per esempi completi, anti-pattern e troubleshooting.
 
+## Commenti
+
+Un commento è una nota dell'autore: `{{!-- testo --}}`. Resta nel body che vedi nell'editor, ma **non viene mai copiato** alla compilazione — né negli appunti, né nell'Anteprima, né nei golden, né da `pap render` o dal server MCP.
+
+```
+{{!-- Versione B del tono: da confrontare col golden "email-formale" --}}
+Riscrivi il seguente testo in tono {{tono}}:
+
+"{{testo}}"   {{!-- il testo arriva già senza firma --}}
+```
+
+Compilando, il primo commento sparisce **insieme alla sua riga** (era da solo sulla riga: non resta una riga vuota), il secondo sparisce lasciando il resto della riga com'è.
+
+Le regole sono poche:
+
+- La forma è **una sola**: apre con `{{!--` e chiude al primo `--}}`. Può andare a capo e può contenere `}}`, un segnaposto d'esempio (`{{nome}}`) o un import: dentro un commento nulla viene interpretato, quindi commentare un `{{import "…"}}` è il modo per "spegnerlo" senza cancellarlo.
+- `{{! testo }}` (la forma breve di altri motori di template) **non** è un commento: il linter la segnala con `PH003` e ti indica la forma giusta.
+- Un commento **non chiuso** resta nel testo così com'è (lo vedi, non sparisce nulla di nascosto) e il linter lo segnala con `CMT001`.
+- I commenti sono parte del sorgente: restano nelle versioni, nell'export, nella ricerca semantica (descrivono l'intento: aiutano a ritrovare il prompt) e li vede anche il **Ritocco** — puoi usarli per dare indicazioni al revisore («qui voglio più conciso»). Il linter di privacy li legge: un'email o una carta in un commento è comunque nel vault.
+
+Nell'editor il pulsante **Commenta / scommenta** della barra di formattazione (o `Ctrl+/`, `⌘/` su Mac, o il menu contestuale) avvolge la selezione in un commento; con il cursore dentro un commento lo scommenta. I commenti sono resi in grigio corsivo, e un segnaposto o un import al loro interno non viene evidenziato.
+
 ## Codici linter
 
 Mentre scrivi, l'editor analizza il body e segnala in tempo reale i problemi nella tab **Diagnosi**: sintassi rotta, dati sensibili dimenticati nel testo, import che non risolvono. Questo è il catalogo riassuntivo dei codici; il dettaglio di ogni regola, con esempi, è in [`linting-regole.md`](./linting-regole.md).
@@ -109,7 +131,7 @@ Mentre scrivi, l'editor analizza il body e segnala in tempo reale i problemi nel
 | Codice | Severità | Quando |
 |---|---|---|
 | `PH001` | Error | Singola graffa: `{nome}` invece di `{{nome}}` |
-| `PH003` | Warning | Nome con caratteri non consentiti (spazi, trattini) |
+| `PH003` | Warning | Nome con caratteri non consentiti (spazi, trattini); anche `{{! nota }}`, che non è un commento |
 
 ### PII — Privacy
 
@@ -124,6 +146,12 @@ Mentre scrivi, l'editor analizza il body e segnala in tempo reale i problemi nel
 | Codice | Severità | Quando |
 |---|---|---|
 | `STY001` | Info | Stesso n-gram (3 parole) ripetuto ≥ 4 volte |
+
+### CMT — Commenti
+
+| Codice | Severità | Quando |
+|---|---|---|
+| `CMT001` | Warning | `{{!--` senza `--}}`: il commento non è chiuso e resta nel testo compilato |
 
 ### IMP — Import / dipendenze
 

@@ -133,7 +133,9 @@
     <div class="ritocco-scelta">
       <p class="hint">
         Il Ritocco invia il prompt e le linee guida ufficiali del suo modello
-        target al provider AI scelto, e propone una versione migliorata.
+        target al provider AI scelto, e propone una versione migliorata. I
+        commenti <code>{"{{!-- … --}}"}</code> partono anche loro: usali per
+        dare indicazioni al revisore.
       </p>
       <label class="campo">
         <span>Provider</span>

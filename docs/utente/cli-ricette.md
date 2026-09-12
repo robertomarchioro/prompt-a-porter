@@ -144,6 +144,8 @@ agente e vuoi che attinga alla tua libreria, vuoi l'MCP.
 
 - **Sola lettura.** `pap` non crea, modifica o cancella prompt: per quello
   c'è l'app. È una scelta di sicurezza, non una mancanza.
+- **I commenti `{{!-- … --}}` non arrivano in stdout**: `render` li toglie
+  prima di compilare, come fa l'app. `get` li mostra (è il sorgente).
 - **Gli `{{import}}` non vengono espansi.** Se un prompt ne include altri,
   la CLI lascia l'`{{import}}` com'è e te lo segnala su `stderr`; per la
   composizione completa usa l'app desktop.

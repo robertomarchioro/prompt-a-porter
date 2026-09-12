@@ -1,6 +1,6 @@
 # Analisi — Commenti nel prompt (issue #643)
 
-> **Stato**: decisioni chiuse (2026-09-12, v. §8); PR-1 (motore + conformità) in corso.
+> **Stato**: implementata — PR-1 #645 (motore + conformità), PR-2 #646 (editor), PR-3 (documentazione). Issue #643 chiusa il 2026-09-12; prova dal vivo ancora da fare.
 > **Issue**: [#643](https://github.com/robertomarchioro/prompt-a-porter/issues/643) — «Possibilità di inserire commenti nel prompt».
 > **Obiettivo utente**: annotare un prompt (perché una frase c'è, cosa provare, cosa non funziona) senza che l'annotazione finisca nel testo copiato o inviato al modello.
 > **Data**: 2026-09-12

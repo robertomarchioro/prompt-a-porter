@@ -123,6 +123,8 @@ Se qualcosa resta incompleto, `pap` te lo dice su stderr (l'output su stdout non
 - globali non trovati nel vault;
 - `{{import}}` presenti nel corpo: la CLI **non li espande** (usa il client desktop per compilarli).
 
+I commenti `{{!-- … --}}` vengono **tolti** da `render` prima di ogni altra cosa: non arrivano mai in stdout. `get`, invece, mostra il corpo così com'è nel vault, commenti inclusi — è il sorgente, non il prompt compilato.
+
 ### Prompt recenti
 
 ```bash
