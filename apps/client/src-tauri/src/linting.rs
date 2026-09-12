@@ -215,8 +215,12 @@ fn regola_ph003_caratteri_speciali(
     for cap in re_segnaposto_caratteri_speciali().captures_iter(body) {
         let intero = cap.get(0).map(|m| m.as_str()).unwrap_or("");
         // #643: un commento `{{!-- … --}}` è sintassi valida (e ciò che
-        // contiene non è un nome di segnaposto).
-        if dentro_commento(commenti, cap.get(0).map(|m| m.start()).unwrap_or(0)) {
+        // contiene non è un nome di segnaposto). Un `{{!--` non chiuso che
+        // trova un `}}` più avanti è già diagnosticato da CMT001: qui si
+        // tace per non dare due consigli contraddittori sullo stesso token.
+        if dentro_commento(commenti, cap.get(0).map(|m| m.start()).unwrap_or(0))
+            || intero.starts_with(APERTURA)
+        {
             continue;
         }
         // Skip le forme valide: `{{nome}}`, `{{global nome}}`.
@@ -971,6 +975,16 @@ mod test {
         assert!(matches!(issue.severita, Severita::Warning));
         assert_eq!(issue.linea, Some(2));
         assert_eq!(issue.colonna, Some(1));
+    }
+
+    #[test]
+    fn cmt001_e_l_unica_diagnosi_se_un_doppio_graffa_segue_l_apertura() {
+        // `{{!-- … {{nome}}`: la regex di PH003 aggancerebbe il token aperto
+        // e suggerirebbe «usa {{!-- --}}» a chi l'ha già scritto.
+        let body = "{{!-- dimenticato\nRiscrivi in tono formale: {{testo}}";
+        let issues = analizza(body);
+        assert_eq!(conta_codice(&issues, "CMT001"), 1, "{issues:?}");
+        assert_eq!(conta_codice(&issues, "PH003"), 0, "{issues:?}");
     }
 
     #[test]
