@@ -1,5 +1,21 @@
 # Changelog — Prompt a Porter
 
+## v0.8.50 — Commenti nel prompt (2026-09-12)
+
+> Una sola novità, chiesta nella #643: annotare un prompt senza che l'annotazione parta col prompt. Utile per ricordarsi perché una frase c'è, cosa provare, cosa non ha funzionato — e per «spegnere» un pezzo di testo o un import senza cancellarlo.
+
+### Novità
+
+- **Commenti nel prompt** (#643): il testo racchiuso fra `{{!--` e `--}}` è una nota per te. Resta nell'editor, nelle versioni, nell'export e nella ricerca, ma **non viene mai copiato**: né negli appunti alla compilazione, né nell'Anteprima, né nei golden, né da `pap render` o dal server MCP. Un commento che occupa una riga intera sparisce con la riga (niente righe vuote nel testo copiato); può andare a capo e contenere `}}`, un segnaposto d'esempio o un `{{import}}` — dentro un commento nulla viene interpretato, quindi commentare un import è il modo per disattivarlo temporaneamente. Nell'editor i commenti sono resi in grigio corsivo; il nuovo pulsante **Commenta / scommenta** della barra di formattazione, la scorciatoia `Ctrl+/` (`⌘/` su Mac) e il menu contestuale avvolgono la selezione in un commento o lo tolgono. Il linter segnala con `CMT001` un commento lasciato aperto e indirizza chi scrive `{{! nota }}` (che non è un commento) alla forma giusta. Il Ritocco invece i commenti li vede: puoi usarli per dare indicazioni al revisore. Sintassi e regole in `glossario-sintassi.md`, sezione «Commenti».
+
+### Fix
+
+- **`Ctrl+/` non produce più un commento HTML** (#643): la scorciatoia era legata al commento Markdown `<!-- -->`, che arrivava tale e quale al modello. Ora produce il commento `{{!-- --}}`, che viene tolto.
+
+### Manutenzione
+
+- **Tabella di conformità per la sintassi del body** (#645): la grammatica `{{ }}` è interpretata da cinque componenti in tre linguaggi (app, server MCP, CLI, golden, risoluzione degli import); i loro test leggono ora una stessa tabella di casi condivisa, così una modifica alla sintassi non può più divergere in silenzio fra app e CLI.
+
 ## v0.8.49 — Cuciture di sicurezza (2026-09-11)
 
 > Sostituisce la v0.8.48, taggata ma mai pubblicata: la sua build di release falliva su Windows (#640) e i tag di release sono immutabili per regola del repository. Release di sola sicurezza e manutenzione: chiude i due punti rimasti aperti dall'audit (la redazione del file di crash e il controllo giornaliero delle vulnerabilità, che si era fermato), porta la toolchain Go a una versione ancora supportata e assorbe la coda di aggiornamenti delle dipendenze di agosto e settembre. Nessuna novità visibile nell'uso quotidiano.
