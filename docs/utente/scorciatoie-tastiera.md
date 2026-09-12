@@ -52,7 +52,7 @@ L'editor del body supporta le scorciatoie di editing più diffuse. Le più comun
 | `Ctrl+A` | Seleziona tutto |
 | `Ctrl+F` | Cerca nel body |
 | `Ctrl+D` | Seleziona la prossima occorrenza della selezione |
-| `Ctrl+/` | Toggle commento (commento HTML in Markdown) |
+| `Ctrl+/` | Commenta / scommenta la selezione con `{{!-- … --}}` (il commento non viene copiato alla compilazione) |
 
 Quando l'autocomplete degli import (`{{import "..."}}`) è attivo:
 

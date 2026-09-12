@@ -6,6 +6,11 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import { RangeSetBuilder } from "@codemirror/state";
+import {
+  dentroCommento,
+  intervalliCommenti,
+  type IntervalloCommento,
+} from "$lib/commenti";
 
 /// Regex che riconosce sia `{{nome}}` (segnaposto semplice) sia
 /// `{{global nome}}` (segnaposto globale, Issue #353).
@@ -33,11 +38,19 @@ export interface SegnapostoMatch {
 /// Ritorna i match con la loro posizione e se sono globali.
 /// La globalità è rilevata tramite il gruppo di cattura 1 della RE — nessuna
 /// seconda regex separata.
-export function _matchSegnaposti(text: string): SegnapostoMatch[] {
+///
+/// #643: i segnaposti dentro un commento `{{!-- --}}` sono saltati.
+/// `commenti` sono intervalli relativi a `text` (default: calcolati su
+/// `text` stesso); il plugin li passa calcolati sul documento intero.
+export function _matchSegnaposti(
+  text: string,
+  commenti: IntervalloCommento[] = intervalliCommenti(text),
+): SegnapostoMatch[] {
   const re = new RegExp(RE.source, "g");
   const results: SegnapostoMatch[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
+    if (dentroCommento(commenti, m.index)) continue;
     // m[1] è definito ('global') solo quando il ramo globale ha fatto match.
     const isGlobale = m[1] === "global";
     results.push({ from: m.index, to: m.index + m[0].length, globale: isGlobale });
@@ -52,9 +65,16 @@ const segnapostoGlobaleMark = Decoration.mark({
 
 function costruisciDecorazioni(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
+  // Commenti sul documento intero (un commento multiriga può iniziare
+  // fuori viewport), riportati a offset relativi alla fetta visibile.
+  const commentiDoc = intervalliCommenti(view.state.doc.toString());
   for (const { from, to } of view.visibleRanges) {
     const testo = view.state.doc.sliceString(from, to);
-    const matches = _matchSegnaposti(testo);
+    const commenti = commentiDoc.map((c) => ({
+      from: c.from - from,
+      to: c.to - from,
+    }));
+    const matches = _matchSegnaposti(testo, commenti);
     for (const match of matches) {
       const mark = match.globale ? segnapostoGlobaleMark : segnapostoMark;
       builder.add(from + match.from, from + match.to, mark);

@@ -14,10 +14,13 @@
     Variable,
     Globe,
     GitFork,
+    MessageCircleDashed,
     Search,
   } from "lucide-svelte";
   import type { EditorView } from "@codemirror/view";
   import { openSearchPanel } from "@codemirror/search";
+  import { toggleCommento } from "$lib/codemirror/comment-highlight";
+  import { fmtShortcut } from "$lib/util/shortcut";
 
   interface Props {
     view: EditorView | null;
@@ -92,6 +95,16 @@
       // Seleziona "url" per editing immediato
       selection: { anchor: from + sel.length + 3, head: from + sel.length + 6 },
     });
+    view.focus();
+  }
+
+  /**
+   * #643: avvolge la selezione in `{{!-- … --}}` (o la scommenta se già
+   * dentro un commento). Stessa logica di `Mod-/` e del menu contestuale.
+   */
+  function commenta(): void {
+    if (!view) return;
+    toggleCommento(view);
     view.focus();
   }
 
@@ -256,6 +269,15 @@
     onclick={onInserisciImport}
   >
     <GitFork size={14} strokeWidth={1.75} />
+  </button>
+  <button
+    class="md-btn"
+    type="button"
+    title={`Commenta / scommenta ({{!-- … --}}, non copiato alla compilazione) — ${fmtShortcut("mod+/")}`}
+    aria-label="Commenta o scommenta"
+    onclick={commenta}
+  >
+    <MessageCircleDashed size={14} strokeWidth={1.75} />
   </button>
 
   <span class="md-sep" aria-hidden="true"></span>

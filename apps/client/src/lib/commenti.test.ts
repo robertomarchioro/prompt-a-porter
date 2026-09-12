@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { intervalliCommenti, rimuoviCommenti } from "./commenti";
+import { dentroCommento, intervalliCommenti, rimuoviCommenti } from "./commenti";
 import { compila, estraiSegnaposti } from "./template";
 // #643: tabella di conformità condivisa con MCP server, Rust e Go CLI.
 // Un caso nuovo si aggiunge nella fixture, non qui.
@@ -84,5 +84,15 @@ describe("compila con commenti", () => {
     expect(compila("Ciao {{nome}} {{!-- nota --}}", { nome: "Anna" })).toBe(
       "Ciao Anna ",
     );
+  });
+});
+
+describe("dentroCommento", () => {
+  it("confini [from, to)", () => {
+    const iv = intervalliCommenti("a {{!-- x --}} b");
+    expect(dentroCommento(iv, 1)).toBe(false);
+    expect(dentroCommento(iv, 2)).toBe(true);
+    expect(dentroCommento(iv, 13)).toBe(true);
+    expect(dentroCommento(iv, 14)).toBe(false);
   });
 });

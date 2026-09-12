@@ -17,6 +17,7 @@ import {
 } from "@codemirror/view";
 import { type Extension, RangeSetBuilder } from "@codemirror/state";
 import { invoke } from "@tauri-apps/api/core";
+import { dentroCommento, intervalliCommenti } from "$lib/commenti";
 
 /// Stesso pattern del backend (`prompt_componibili::re_import`).
 /// Gruppo 1: path del prompt importato.
@@ -27,11 +28,14 @@ const importMark = Decoration.mark({ class: "cm-import" });
 
 function buildDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
+  // #643: un import commentato non è un import (niente highlight).
+  const commenti = intervalliCommenti(view.state.doc.toString());
   for (const { from, to } of view.visibleRanges) {
     const text = view.state.doc.sliceString(from, to);
     let m: RegExpExecArray | null;
     RE_IMPORT.lastIndex = 0;
     while ((m = RE_IMPORT.exec(text)) !== null) {
+      if (dentroCommento(commenti, from + m.index)) continue;
       builder.add(from + m.index, from + m.index + m[0].length, importMark);
     }
   }
@@ -61,13 +65,16 @@ interface ImportPreview {
 
 /// Trova il match `{{import "..."}}` che contiene la posizione `pos`.
 /// Ritorna `{from, to, path}` se trovato, `null` altrimenti.
+/// #643: un import dentro un commento non ha tooltip né Ctrl+click.
 export function _findImportAt(
   doc: string,
   pos: number,
 ): { from: number; to: number; path: string } | null {
+  const commenti = intervalliCommenti(doc);
   const re = new RegExp(RE_IMPORT.source, "g");
   let m: RegExpExecArray | null;
   while ((m = re.exec(doc)) !== null) {
+    if (dentroCommento(commenti, m.index)) continue;
     if (pos >= m.index && pos <= m.index + m[0].length) {
       return { from: m.index, to: m.index + m[0].length, path: m[1] };
     }
