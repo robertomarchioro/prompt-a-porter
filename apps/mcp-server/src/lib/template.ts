@@ -5,7 +5,12 @@
  * semplici `{{nome}}`, identificatori `\w+`, whitespace interno opzionale.
  * Non supporta `{{import "..."}}` (riservato al client desktop, dove gli
  * import vengono risolti contro il vault aperto).
+ *
+ * #643: i commenti `{{!-- … --}}` vengono tolti prima di tutto — il livello
+ * MCP non li espone mai a un client (che è un modello).
  */
+
+import { rimuoviCommenti } from "@pap/shared-schema";
 
 const RE_SEGNAPOSTO = /\{\{\s*(\w+)\s*\}\}/g;
 
@@ -18,7 +23,7 @@ export function compila(
   body: string,
   valori: Record<string, string>,
 ): string {
-  return body.replace(
+  return rimuoviCommenti(body).replace(
     RE_SEGNAPOSTO,
     (_, nome: string) => valori[nome]?.trim() || `{{${nome}}}`,
   );
@@ -29,11 +34,12 @@ export function compila(
  * l'ordine di prima apparizione.
  */
 export function estraiSegnaposti(body: string): string[] {
+  const pulito = rimuoviCommenti(body);
   const visti = new Set<string>();
   const out: string[] = [];
   RE_SEGNAPOSTO.lastIndex = 0;
   let m: RegExpExecArray | null;
-  while ((m = RE_SEGNAPOSTO.exec(body)) !== null) {
+  while ((m = RE_SEGNAPOSTO.exec(pulito)) !== null) {
     if (!visti.has(m[1])) {
       visti.add(m[1]);
       out.push(m[1]);

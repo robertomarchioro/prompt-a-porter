@@ -71,3 +71,39 @@ describe("estraiSegnaposti", () => {
     expect(estraiSegnaposti(body)).toEqual(["x", "y"]);
   });
 });
+
+// #643: conformità con la fixture condivisa (client, Rust, Go CLI).
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+interface CasoConformita {
+  nome: string;
+  body: string;
+  atteso: string;
+  segnaposti: string[];
+}
+
+const FIXTURE = fileURLToPath(
+  new URL(
+    "../../../../packages/shared-schema/fixtures/commenti-conformita.json",
+    import.meta.url,
+  ),
+);
+const { casi } = JSON.parse(readFileSync(FIXTURE, "utf8")) as {
+  casi: CasoConformita[];
+};
+
+describe("commenti {{!-- --}} — conformità (#643)", () => {
+  for (const caso of casi) {
+    it(caso.nome, () => {
+      // Senza valori, compila = rimozione dei soli commenti.
+      expect(compila(caso.body, {})).toBe(caso.atteso);
+      expect(estraiSegnaposti(caso.body)).toEqual(caso.segnaposti);
+    });
+  }
+
+  it("un segnaposto citato solo nel commento non viene compilato", () => {
+    expect(compila("{{!-- {{x}} --}}\nCiao {{nome}}", { x: "NO", nome: "Anna" }))
+      .toBe("Ciao Anna");
+  });
+});

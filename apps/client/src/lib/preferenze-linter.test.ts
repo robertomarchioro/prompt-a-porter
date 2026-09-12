@@ -28,8 +28,8 @@ describe("preferenze-linter", () => {
     localStorage.clear();
   });
 
-  it("CATEGORIE_LINTER ha 5 elementi e match con ETICHETTE/DESCRIZIONI", () => {
-    expect(CATEGORIE_LINTER).toHaveLength(5);
+  it("CATEGORIE_LINTER ha 6 elementi e match con ETICHETTE/DESCRIZIONI", () => {
+    expect(CATEGORIE_LINTER).toHaveLength(6);
     for (const c of CATEGORIE_LINTER) {
       expect(ETICHETTE[c]).toBeTruthy();
       expect(DESCRIZIONI[c]).toBeTruthy();

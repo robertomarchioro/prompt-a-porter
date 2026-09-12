@@ -24,6 +24,12 @@ describe("estraiImports", () => {
     expect(estraiImports(body)).toEqual(["spaces", "tabs"]);
   });
 
+  it("ignora gli import dentro un commento {{!-- --}} (#643)", () => {
+    const body =
+      '{{!-- {{import "vecchio"}} --}}\n{{import "vivo"}} {{!-- {{import "x"}} --}}';
+    expect(estraiImports(body)).toEqual(["vivo"]);
+  });
+
   it("ignora segnaposti normali {{var}} (no parola 'import')", () => {
     const body = '{{nome}} {{import "x/y"}} {{cognome}} {{import "z"}}';
     expect(estraiImports(body)).toEqual(["x/y", "z"]);

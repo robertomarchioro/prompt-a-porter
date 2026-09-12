@@ -1,0 +1,42 @@
+{
+  "descrizione": "Tabella di conformità cross-linguaggio per i commenti inline `{{!-- … --}}` (issue #643). Ogni parser del body (client TS, MCP TS, Rust, Go CLI) deve produrre `atteso` da `body` e, dove estrae i segnaposti, la lista `segnaposti` (nomi dei segnaposti semplici, in ordine di prima apparizione, senza duplicati). Un caso nuovo si aggiunge QUI, una volta sola.",
+  "regole": [
+    "Il commento è l'unica forma `{{!-- … --}}`: chiude al primo `--}}`, può contenere `}}`, segnaposti, import e andare a capo.",
+    "La forma breve `{{! … }}` NON è un commento: resta inalterata.",
+    "Un commento non chiuso resta inalterato.",
+    "Rimozione in due passi: (1) si toglie il token; (2) ogni riga che conteneva un commento e che dopo il passo 1 è vuota (solo spazi/tab/CR) viene rimossa con il suo a-capo. Le righe vuote che erano già vuote restano.",
+    "Un commento inline (testo prima o dopo sulla stessa riga) toglie solo il token: gli spazi attorno restano."
+  ],
+  "casi": [
+    { "nome": "senza_commenti", "body": "Ciao {{nome}}, oggi {{tema}}", "atteso": "Ciao {{nome}}, oggi {{tema}}", "segnaposti": ["nome", "tema"] },
+    { "nome": "vuoto", "body": "", "atteso": "", "segnaposti": [] },
+    { "nome": "solo_commento", "body": "{{!-- nota --}}", "atteso": "", "segnaposti": [] },
+    { "nome": "riga_intera_in_testa", "body": "{{!-- nota --}}\nCiao {{nome}}", "atteso": "Ciao {{nome}}", "segnaposti": ["nome"] },
+    { "nome": "riga_intera_in_mezzo", "body": "Ciao\n{{!-- nota --}}\n{{nome}}", "atteso": "Ciao\n{{nome}}", "segnaposti": ["nome"] },
+    { "nome": "riga_intera_in_coda_senza_newline", "body": "Ciao\n{{!-- nota --}}", "atteso": "Ciao", "segnaposti": [] },
+    { "nome": "riga_intera_in_coda_con_newline", "body": "Ciao\n{{!-- nota --}}\n", "atteso": "Ciao\n", "segnaposti": [] },
+    { "nome": "righe_intere_consecutive", "body": "{{!-- uno --}}\n{{!-- due --}}\nCiao", "atteso": "Ciao", "segnaposti": [] },
+    { "nome": "riga_intera_indentata", "body": "a\n   {{!-- x --}}   \nb", "atteso": "a\nb", "segnaposti": [] },
+    { "nome": "righe_vuote_originali_conservate", "body": "a\n\n{{!-- x --}}\n\nb", "atteso": "a\n\n\nb", "segnaposti": [] },
+    { "nome": "inline_fine_riga", "body": "Ciao {{nome}} {{!-- il nome arriva senza firma --}}\nFine", "atteso": "Ciao {{nome}} \nFine", "segnaposti": ["nome"] },
+    { "nome": "inline_in_mezzo", "body": "a {{!-- x --}} b", "atteso": "a  b", "segnaposti": [] },
+    { "nome": "inline_inizio_riga", "body": "{{!-- x --}} testo", "atteso": " testo", "segnaposti": [] },
+    { "nome": "due_commenti_stessa_riga_vuota", "body": "{{!-- a --}} {{!-- b --}}\nc", "atteso": "c", "segnaposti": [] },
+    { "nome": "multiriga", "body": "a\n{{!-- riga 1\nriga 2\nriga 3 --}}\nb", "atteso": "a\nb", "segnaposti": [] },
+    { "nome": "multiriga_con_testo_attorno", "body": "a {{!-- riga 1\nriga 2 --}} b", "atteso": "a  b", "segnaposti": [] },
+    { "nome": "contiene_doppie_graffe", "body": "a\n{{!-- vedi {{nome}} e }} qui --}}\nb", "atteso": "a\nb", "segnaposti": [] },
+    { "nome": "contiene_import", "body": "{{!-- {{import \"ruolo\"}} --}}\nCiao", "atteso": "Ciao", "segnaposti": [] },
+    { "nome": "segnaposto_nel_commento_non_estratto", "body": "{{nome}} {{!-- {{altro}} --}}", "atteso": "{{nome}} ", "segnaposti": ["nome"] },
+    { "nome": "segnaposto_ripetuto_fuori_e_dentro", "body": "{{nome}}\n{{!-- {{nome}} --}}\n{{nome}}", "atteso": "{{nome}}\n{{nome}}", "segnaposti": ["nome"] },
+    { "nome": "trattini_interni", "body": "{{!-- a -- b --}}\nc", "atteso": "c", "segnaposti": [] },
+    { "nome": "tre_trattini", "body": "{{!--- x ---}}\nc", "atteso": "c", "segnaposti": [] },
+    { "nome": "non_chiuso_resta", "body": "a {{!-- non chiuso\nb {{nome}}", "atteso": "a {{!-- non chiuso\nb {{nome}}", "segnaposti": ["nome"] },
+    { "nome": "chiusura_senza_apertura_resta", "body": "a --}} b", "atteso": "a --}} b", "segnaposti": [] },
+    { "nome": "forma_breve_non_riconosciuta", "body": "a {{! breve }} b", "atteso": "a {{! breve }} b", "segnaposti": [] },
+    { "nome": "spazio_dopo_graffe_non_riconosciuto", "body": "a {{ !-- x --}} b", "atteso": "a {{ !-- x --}} b", "segnaposti": [] },
+    { "nome": "crlf_riga_intera", "body": "a\r\n{{!-- x --}}\r\nb", "atteso": "a\r\nb", "segnaposti": [] },
+    { "nome": "crlf_inline", "body": "a {{!-- x --}}\r\nb", "atteso": "a \r\nb", "segnaposti": [] },
+    { "nome": "unicode_nel_commento", "body": "{{!-- perché, così — ✓ --}}\nCiao {{citta}}", "atteso": "Ciao {{citta}}", "segnaposti": ["citta"] },
+    { "nome": "commento_vuoto", "body": "{{!----}}\nc", "atteso": "c", "segnaposti": [] }
+  ]
+}

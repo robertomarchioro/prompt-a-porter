@@ -32,6 +32,7 @@ import {
   papListRecentArgsSchema,
   papRenderArgsSchema,
   papSearchArgsSchema,
+  rimuoviCommenti,
 } from "@pap/shared-schema";
 
 import { sanitizzaFts } from "./lib/fts.js";
@@ -227,7 +228,8 @@ const TOOLS = [
   },
   {
     name: "pap_get",
-    description: "Restituisce il dettaglio completo di un prompt per ID, inclusi i tag.",
+    description:
+      "Restituisce il dettaglio completo di un prompt per ID, inclusi i tag. Il body è restituito senza i commenti dell'autore `{{!-- … --}}`.",
     inputSchema: {
       type: "object",
       properties: {
@@ -348,6 +350,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 JSON.stringify(
                   {
                     ...p,
+                    // #643: il body esposto a un client MCP non contiene
+                    // mai i commenti dell'autore.
+                    body: rimuoviCommenti(p.body),
                     is_favorite: p.is_favorite !== 0,
                     segnaposti: estraiSegnaposti(p.body),
                   },

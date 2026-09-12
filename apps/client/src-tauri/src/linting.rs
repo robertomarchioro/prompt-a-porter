@@ -6,7 +6,7 @@
 //   - body-only (no DB): regole pure sul testo
 //   - completo (con vault): aggiunge le regole IMP* su grafo di import
 //
-// 11 regole implementate (di 14 nello spec):
+// 12 regole implementate (di 15 nello spec):
 //   - LEN001/002: lunghezza body
 //   - PH001/003: segnaposti
 //   - PII001/003/004: privacy
@@ -15,6 +15,13 @@
 //   - IMP002: ciclo di import
 //   - IMP003: profondità di import oltre il limite
 //   - IMP004: prompt importato da altri (info, cross-prompt linting v0.7 Step 5)
+//   - CMT001: commento `{{!--` non chiuso (#643)
+//
+// Commenti `{{!-- … --}}` (#643): le regole che misurano ciò che arriva al
+// modello (LEN*, STY*) girano sul body senza commenti; quelle che riportano
+// una posizione (PH*) girano sul body originale saltando i match dentro un
+// commento, così linea/colonna restano quelle dell'editor; le PII* guardano
+// tutto, perché un dato sensibile in un commento è comunque nel vault.
 //
 // Skippate per ora (motivo nello spec / PR successive):
 //   - PH002 (segnaposto dichiarato non usato): semantica ambigua, il
@@ -30,6 +37,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 use tauri::State;
 
+use crate::commenti::{dentro_commento, intervalli_commenti, rimuovi_commenti, APERTURA};
 use crate::errore::PapErrore;
 use crate::prompt_componibili::{parse_imports, resolve_path, MAX_DEPTH};
 use crate::vault::VaultState;
@@ -172,10 +180,17 @@ fn regola_len002(body: &str, soglie: &SoglieLinter, out: &mut Vec<Issue>) {
     }
 }
 
-fn regola_ph001_segnaposti_malformati(body: &str, out: &mut Vec<Issue>) {
+fn regola_ph001_segnaposti_malformati(
+    body: &str,
+    commenti: &[std::ops::Range<usize>],
+    out: &mut Vec<Issue>,
+) {
     for cap in re_segnaposto_singolo().captures_iter(body) {
         let nome = cap.get(2).map(|m| m.as_str()).unwrap_or("");
         let pos = cap.get(2).map(|m| m.start()).unwrap_or(0);
+        if dentro_commento(commenti, pos) {
+            continue;
+        }
         let (linea, colonna) = pos_a_linea_col(body, pos);
         out.push(Issue {
             code: "PH001",
@@ -190,11 +205,24 @@ fn regola_ph001_segnaposti_malformati(body: &str, out: &mut Vec<Issue>) {
     }
 }
 
-fn regola_ph003_caratteri_speciali(body: &str, out: &mut Vec<Issue>) {
+fn regola_ph003_caratteri_speciali(
+    body: &str,
+    commenti: &[std::ops::Range<usize>],
+    out: &mut Vec<Issue>,
+) {
     let valido = re_segnaposto_doppio_o_globale();
     let import = re_segnaposto_import();
     for cap in re_segnaposto_caratteri_speciali().captures_iter(body) {
         let intero = cap.get(0).map(|m| m.as_str()).unwrap_or("");
+        // #643: un commento `{{!-- … --}}` è sintassi valida (e ciò che
+        // contiene non è un nome di segnaposto). Un `{{!--` non chiuso che
+        // trova un `}}` più avanti è già diagnosticato da CMT001: qui si
+        // tace per non dare due consigli contraddittori sullo stesso token.
+        if dentro_commento(commenti, cap.get(0).map(|m| m.start()).unwrap_or(0))
+            || intero.starts_with(APERTURA)
+        {
+            continue;
+        }
         // Skip le forme valide: `{{nome}}`, `{{global nome}}`.
         if valido.is_match(intero) {
             continue;
@@ -212,12 +240,43 @@ fn regola_ph003_caratteri_speciali(body: &str, out: &mut Vec<Issue>) {
         }
         let pos = cap.get(0).map(|m| m.start()).unwrap_or(0);
         let (linea, colonna) = pos_a_linea_col(body, pos);
+        // #643: `{{! … }}` è la forma breve di Handlebars, che qui non è
+        // un commento: indirizza alla forma riconosciuta.
+        let messaggio = if nome.starts_with('!') {
+            "Questo non è un commento: usa `{{!-- testo --}}` (con i due trattini, chiuso da `--}}`)."
+                .to_string()
+        } else {
+            format!(
+                "Nome segnaposto `{nome}` contiene caratteri non consentiti. Usa solo lettere, cifre, underscore."
+            )
+        };
         out.push(Issue {
             code: "PH003",
             severita: Severita::Warning,
-            messaggio: format!(
-                "Nome segnaposto `{nome}` contiene caratteri non consentiti. Usa solo lettere, cifre, underscore."
-            ),
+            messaggio,
+            linea: Some(linea),
+            colonna: Some(colonna),
+        });
+    }
+}
+
+/// #643: un `{{!--` senza `--}}` non è un commento e resta nel testo che
+/// parte. Cerca le aperture fuori dai commenti riconosciuti.
+fn regola_cmt001_commento_non_chiuso(
+    body: &str,
+    commenti: &[std::ops::Range<usize>],
+    out: &mut Vec<Issue>,
+) {
+    for (pos, _) in body.match_indices(APERTURA) {
+        if dentro_commento(commenti, pos) {
+            continue;
+        }
+        let (linea, colonna) = pos_a_linea_col(body, pos);
+        out.push(Issue {
+            code: "CMT001",
+            severita: Severita::Warning,
+            messaggio: "Commento `{{!--` non chiuso: manca `--}}`. Così com'è resta nel testo compilato."
+                .to_string(),
             linea: Some(linea),
             colonna: Some(colonna),
         });
@@ -541,14 +600,18 @@ pub fn analizza(body: &str) -> Vec<Issue> {
 /// Le regole PH/PII non hanno soglie tunabili: invariate.
 pub fn analizza_con(body: &str, soglie: &SoglieLinter) -> Vec<Issue> {
     let mut out = Vec::new();
-    regola_len001(body, soglie, &mut out);
-    regola_len002(body, soglie, &mut out);
-    regola_ph001_segnaposti_malformati(body, &mut out);
-    regola_ph003_caratteri_speciali(body, &mut out);
+    // #643: v. nota in testa al modulo su quali regole vedono i commenti.
+    let commenti = intervalli_commenti(body);
+    let pulito = rimuovi_commenti(body);
+    regola_len001(&pulito, soglie, &mut out);
+    regola_len002(&pulito, soglie, &mut out);
+    regola_ph001_segnaposti_malformati(body, &commenti, &mut out);
+    regola_ph003_caratteri_speciali(body, &commenti, &mut out);
     regola_pii001_email(body, &mut out);
     regola_pii003_carta_credito(body, &mut out);
     regola_pii004_api_keys(body, &mut out);
-    regola_sty001_ripetizione(body, soglie, &mut out);
+    regola_sty001_ripetizione(&pulito, soglie, &mut out);
+    regola_cmt001_commento_non_chiuso(body, &commenti, &mut out);
     out
 }
 
@@ -644,6 +707,10 @@ pub fn regole_catalogo() -> Vec<RegolaMeta> {
             titolo: "Ripetizione eccessiva",
             descrizione: "Uno stesso n-gramma di parole si ripete oltre la soglia: valuta di riformulare.",
             configurabile: true },
+        RegolaMeta { code: "CMT001", categoria: "CMT", severita_default: Severita::Warning,
+            titolo: "Commento non chiuso",
+            descrizione: "Un `{{!--` senza `--}}` non è un commento: resta nel testo compilato.",
+            configurabile: false },
         RegolaMeta { code: "IMP001", categoria: "IMP", severita_default: Severita::Error,
             titolo: "Import non risolto",
             descrizione: "Un `{{import \"...\"}}` punta a un prompt inesistente nella libreria.",
@@ -858,6 +925,85 @@ mod test {
                 "PH003 falso positivo su: {body}"
             );
         }
+    }
+
+    // ─── #643: commenti `{{!-- --}}` ───
+
+    #[test]
+    fn commento_valido_zero_issue() {
+        let body = "{{!-- nota dell'autore, con {x} e {{nome con spazi}} dentro --}}\n\
+                    Riscrivi questa email in tono più formale: {{testo}}";
+        let issues = analizza(body);
+        assert_eq!(issues.len(), 0, "il commento non deve generare issue: {issues:?}");
+    }
+
+    #[test]
+    fn len001_non_conta_i_commenti() {
+        let body = format!("{{{{!-- {} --}}}}\nTesto corto ma sopra la soglia minima di trenta.", "x".repeat(LEN_MAX_BODY));
+        let issues = analizza(&body);
+        assert!(!ha_codice(&issues, "LEN001"), "{issues:?}");
+    }
+
+    #[test]
+    fn len002_conta_solo_il_testo_che_parte() {
+        let body = "{{!-- commento lunghissimo che da solo supererebbe la soglia minima --}}\nciao";
+        let issues = analizza(body);
+        assert!(ha_codice(&issues, "LEN002"));
+    }
+
+    #[test]
+    fn pii_scatta_anche_dentro_un_commento() {
+        // Il commento resta nel vault e nell'export: la PII va segnalata comunque.
+        let body = "{{!-- chiedere a mario.rossi@example.com --}}\nRiscrivi in tono formale: {{testo}}";
+        let issues = analizza(body);
+        assert!(ha_codice(&issues, "PII001"));
+    }
+
+    #[test]
+    fn sty001_non_conta_i_commenti() {
+        let rip = "uno due tre ".repeat(NGRAM_THRESHOLD + 1);
+        let body = format!("{{{{!-- {rip} --}}}}\nRiscrivi questa email in tono più formale: {{{{testo}}}}");
+        let issues = analizza(&body);
+        assert!(!ha_codice(&issues, "STY001"), "{issues:?}");
+    }
+
+    #[test]
+    fn cmt001_commento_non_chiuso() {
+        let body = "Riscrivi in tono formale: {{testo}}\n{{!-- dimenticato di chiudere";
+        let issues = analizza(body);
+        let issue = issues.iter().find(|i| i.code == "CMT001").expect("CMT001 atteso");
+        assert!(matches!(issue.severita, Severita::Warning));
+        assert_eq!(issue.linea, Some(2));
+        assert_eq!(issue.colonna, Some(1));
+    }
+
+    #[test]
+    fn cmt001_e_l_unica_diagnosi_se_un_doppio_graffa_segue_l_apertura() {
+        // `{{!-- … {{nome}}`: la regex di PH003 aggancerebbe il token aperto
+        // e suggerirebbe «usa {{!-- --}}» a chi l'ha già scritto.
+        let body = "{{!-- dimenticato\nRiscrivi in tono formale: {{testo}}";
+        let issues = analizza(body);
+        assert_eq!(conta_codice(&issues, "CMT001"), 1, "{issues:?}");
+        assert_eq!(conta_codice(&issues, "PH003"), 0, "{issues:?}");
+    }
+
+    #[test]
+    fn cmt001_non_scatta_su_commento_chiuso() {
+        let body = "{{!-- ok --}}\nRiscrivi in tono formale: {{testo}} {{!-- ok --}}";
+        assert!(!ha_codice(&analizza(body), "CMT001"));
+    }
+
+    #[test]
+    fn ph003_forma_breve_suggerisce_la_forma_blocco() {
+        let body = "Riscrivi in tono formale: {{testo}} {{! nota breve }}";
+        let issues = analizza(body);
+        let issue = issues.iter().find(|i| i.code == "PH003").expect("PH003 atteso");
+        assert!(issue.messaggio.contains("{{!-- "), "{}", issue.messaggio);
+    }
+
+    #[test]
+    fn cmt001_e_in_catalogo() {
+        assert!(regole_catalogo().iter().any(|r| r.code == "CMT001" && r.categoria == "CMT"));
     }
 
     #[test]
@@ -1173,12 +1319,12 @@ mod test {
         use std::collections::HashSet;
         let cat = super::regole_catalogo();
         // Conteggio == numero di regole effettive (guard-rail anti-drift).
-        assert_eq!(cat.len(), 12);
+        assert_eq!(cat.len(), 13);
         // Code unici.
         let codici: HashSet<&str> = cat.iter().map(|r| r.code).collect();
         assert_eq!(codici.len(), cat.len());
         // Categoria valida e coerente col prefisso del code.
-        let valide = ["LEN", "PH", "PII", "STY", "IMP"];
+        let valide = ["LEN", "PH", "PII", "STY", "CMT", "IMP"];
         for r in &cat {
             assert!(valide.contains(&r.categoria), "categoria invalida: {}", r.categoria);
             assert!(r.code.starts_with(r.categoria), "code {} ≠ categoria {}", r.code, r.categoria);

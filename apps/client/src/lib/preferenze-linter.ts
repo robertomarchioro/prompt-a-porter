@@ -9,13 +9,14 @@
 
 const STORAGE_KEY = "pap.linter.categorie_disabilitate";
 
-export type CategoriaLinter = "LEN" | "PH" | "PII" | "STY" | "IMP";
+export type CategoriaLinter = "LEN" | "PH" | "PII" | "STY" | "CMT" | "IMP";
 
 export const CATEGORIE_LINTER: CategoriaLinter[] = [
   "LEN",
   "PH",
   "PII",
   "STY",
+  "CMT",
   "IMP",
 ];
 
@@ -25,6 +26,7 @@ export const ETICHETTE: Record<CategoriaLinter, string> = {
   PH: "Segnaposti (PH)",
   PII: "Privacy / dati personali (PII)",
   STY: "Stile / ripetizioni (STY)",
+  CMT: "Commenti (CMT)",
   IMP: "Import / dipendenze (IMP)",
 };
 
@@ -34,6 +36,7 @@ export const DESCRIZIONI: Record<CategoriaLinter, string> = {
   PH: "Segnaposti malformati o con caratteri non consentiti.",
   PII: "Email, carte di credito, API key rilevati nel body.",
   STY: "Pattern stilistici (es. ripetizioni n-gram).",
+  CMT: "Commenti {{!-- … --}} non chiusi.",
   IMP: "Import non risolti, cicli, profondità eccessiva.",
 };
 

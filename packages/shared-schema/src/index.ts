@@ -9,6 +9,11 @@ export {
   papRenderArgsSchema,
   TOOL_ARGS_SCHEMAS,
 } from "./mcp-tools.js";
+export {
+  intervalliCommenti,
+  rimuoviCommenti,
+} from "./commenti.js";
+export type { IntervalloCommento } from "./commenti.js";
 export type {
   PapSearchArgs,
   PapGetArgs,

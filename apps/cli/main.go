@@ -312,8 +312,10 @@ func recent(db *sql.DB, limit int) ([]Prompt, error) {
 
 var reSegnaposto = regexp.MustCompile(`\{\{\s*(\w+)\s*\}\}`)
 
+// compila sostituisce i segnaposti `{{nome}}` con i valori forniti. I
+// commenti `{{!-- … --}}` spariscono prima (#643).
 func compila(body string, vars map[string]string) string {
-	return reSegnaposto.ReplaceAllStringFunc(body, func(match string) string {
+	return reSegnaposto.ReplaceAllStringFunc(rimuoviCommenti(body), func(match string) string {
 		sub := reSegnaposto.FindStringSubmatch(match)
 		if len(sub) < 2 {
 			return match
@@ -327,7 +329,7 @@ func compila(body string, vars map[string]string) string {
 }
 
 func estraiSegnaposti(body string) []string {
-	matches := reSegnaposto.FindAllStringSubmatch(body, -1)
+	matches := reSegnaposto.FindAllStringSubmatch(rimuoviCommenti(body), -1)
 	seen := make(map[string]bool, len(matches))
 	out := make([]string, 0, len(matches))
 	for _, m := range matches {
@@ -635,9 +637,11 @@ var renderCmd = &cobra.Command{
 			return err
 		}
 
-		// Espandi prima i globali dal vault, poi i segnaposti forniti.
+		// #643: via i commenti; poi i globali dal vault, poi i segnaposti
+		// forniti.
+		bodyPulito := rimuoviCommenti(p.Body)
 		globali := caricaGlobali(db)
-		bodyEspanso := espandiGlobali(p.Body, globali)
+		bodyEspanso := espandiGlobali(bodyPulito, globali)
 		compilato := compila(bodyEspanso, vars)
 
 		_, _ = fmt.Fprint(cmd.OutOrStdout(), compilato)
@@ -665,7 +669,7 @@ var renderCmd = &cobra.Command{
 				"[pap] segnaposti globali non trovati nel vault: %s\n", strings.Join(g, ", "))
 		}
 		// 3) import: la CLI non li espande (serve il client desktop)
-		if im := nomiUnici(reImport, p.Body); len(im) > 0 {
+		if im := nomiUnici(reImport, bodyPulito); len(im) > 0 {
 			_, _ = fmt.Fprintf(errw,
 				"[pap] import NON espansi dalla CLI (usa il client desktop per compilarli): %s\n", strings.Join(im, ", "))
 		}
