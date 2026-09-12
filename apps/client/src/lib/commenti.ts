@@ -38,6 +38,14 @@ export function intervalliCommenti(testo: string): IntervalloCommento[] {
   return out;
 }
 
+/** True se l'offset `pos` cade dentro uno degli intervalli. */
+export function dentroCommento(
+  intervalli: IntervalloCommento[],
+  pos: number,
+): boolean {
+  return intervalli.some((c) => pos >= c.from && pos < c.to);
+}
+
 function contaNewline(s: string): number {
   let n = 0;
   for (let i = 0; i < s.length; i++) {

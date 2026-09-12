@@ -25,6 +25,11 @@
     segnapostoTheme,
   } from "$lib/codemirror/placeholder-highlight";
   import { importAutocompletion } from "$lib/codemirror/import-autocomplete";
+  import {
+    commentoHighlight,
+    commentoTheme,
+    toggleCommento,
+  } from "$lib/codemirror/comment-highlight";
   import { statoEditor } from "$lib/stores/preferenze.svelte";
   import {
     Scissors,
@@ -33,6 +38,7 @@
     Braces,
     FileInput,
     Globe,
+    MessageCircleDashed,
   } from "lucide-svelte";
   import {
     apriMenu,
@@ -140,6 +146,8 @@
       { id: "ins-segnaposto", label: "Inserisci segnaposto", icona: Braces, azione: () => inserisci("{{nome}}", 2, 4) },
       { id: "ins-global", label: "Inserisci segnaposto globale", icona: Globe, azione: () => inserisci("{{global nome}}", 9, 4) },
       { id: "ins-import", label: "Inserisci import", icona: FileInput, azione: () => inserisci('{{import "percorso"}}', 10, 8) },
+      { separatore: true },
+      { id: "toggle-commento", label: "Commenta / scommenta", icona: MessageCircleDashed, azione: () => { if (view) { toggleCommento(view); view.focus(); } } },
     ];
   }
 
@@ -195,6 +203,9 @@
     const extensions = [
       history(),
       keymap.of([
+        // #643: prima di defaultKeymap, che lega Mod-/ al toggleComment
+        // Markdown (`<!-- -->`, che NON viene tolto alla compilazione).
+        { key: "Mod-/", run: toggleCommento },
         ...defaultKeymap,
         ...historyKeymap,
         ...searchKeymap,
@@ -210,6 +221,8 @@
       importAutocompletion({ getPromptId: () => promptId }),
       segnapostoHighlight,
       segnapostoTheme,
+      commentoHighlight,
+      commentoTheme,
       updateListener,
     ];
     if (statoEditor.showLineNumbers) extensions.push(lineNumbers());

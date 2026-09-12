@@ -96,3 +96,11 @@ describe("import-tokens / _findImportAt", () => {
     expect(f2?.path).toBe("b");
   });
 });
+
+describe("import-tokens / #643 commenti", () => {
+  it("_findImportAt ignora un import dentro un commento", () => {
+    const doc = '{{!-- {{import "vecchio"}} --}} {{import "vivo"}}';
+    expect(_findImportAt(doc, 12)).toBeNull();
+    expect(_findImportAt(doc, 40)?.path).toBe("vivo");
+  });
+});

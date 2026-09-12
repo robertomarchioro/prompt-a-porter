@@ -83,3 +83,21 @@ describe("placeholder-highlight / _matchSegnaposti", () => {
     expect(matches[0].globale).toBe(false);
   });
 });
+
+describe("placeholder-highlight / #643 commenti", () => {
+  it("un segnaposto dentro un commento non viene evidenziato", () => {
+    const testo = "{{nome}} {{!-- {{altro}} {{global x}} --}} {{fine}}";
+    const m = _matchSegnaposti(testo);
+    expect(m.map((x) => testo.slice(x.from, x.to))).toEqual([
+      "{{nome}}",
+      "{{fine}}",
+    ]);
+  });
+
+  it("accetta intervalli di commento esterni (offset relativi al testo)", () => {
+    // Fetta visibile che inizia dentro un commento aperto più sopra.
+    const fetta = "coda del commento --}} {{vivo}}";
+    const m = _matchSegnaposti(fetta, [{ from: -20, to: 22 }]);
+    expect(m.map((x) => fetta.slice(x.from, x.to))).toEqual(["{{vivo}}"]);
+  });
+});
