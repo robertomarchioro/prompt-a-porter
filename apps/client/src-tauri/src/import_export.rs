@@ -1,6 +1,7 @@
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use tauri_plugin_dialog::DialogExt;
 
 use crate::embeddings::EmbeddingsState;
 use crate::errore::PapErrore;
@@ -544,6 +545,101 @@ pub fn prompt_export_markdown(
         );
         Ok(md)
     })
+}
+
+/// Slug filesystem-safe da un titolo, per il nome file suggerito nel
+/// dialog di salvataggio (issue #644). Stessa regola di `slugFile` in
+/// `dati-export.ts`: minuscolo, ogni carattere non `[a-z0-9]` collassato
+/// in un singolo trattino, trattini iniziali/finali rimossi, fallback
+/// "prompt" se il risultato resta vuoto.
+fn slug_file_markdown(titolo: &str) -> String {
+    let mut slug = String::with_capacity(titolo.len());
+    let mut ultimo_e_trattino = false;
+    for ch in titolo.chars() {
+        let lower = ch.to_ascii_lowercase();
+        if lower.is_ascii_alphanumeric() {
+            slug.push(lower);
+            ultimo_e_trattino = false;
+        } else if !ultimo_e_trattino {
+            slug.push('-');
+            ultimo_e_trattino = true;
+        }
+    }
+    let slug = slug.trim_matches('-');
+    if slug.is_empty() {
+        "prompt".to_string()
+    } else {
+        slug.to_string()
+    }
+}
+
+/// Tauri command: esporta un singolo prompt in Markdown salvandolo su
+/// disco tramite il dialog di salvataggio nativo (issue #644 — prima il
+/// frontend usava `<a download>` su un blob URL, che la WebView di Tauri
+/// scarta silenziosamente: nessun handler di download è registrato in
+/// `src-tauri`, quindi il click sintetico non produceva mai un file).
+///
+/// Il dialog viene aperto **qui**, lato Rust, non nel frontend: stessa
+/// motivazione di sicurezza di `debug_log_esporta_zip` (vedi la nota in
+/// testa a `debug_log.rs`) — questa app non ha un manifest ACL, quindi un
+/// path di destinazione passato dal frontend come argomento di comando
+/// bypasserebbe `resolve_access` e permetterebbe una scrittura arbitraria
+/// scelta da qualunque JS nella webview.
+///
+/// Marcato `async`: `blocking_save_file` pompa una nested event loop
+/// nativa e non deve girare sul thread principale.
+///
+/// Ritorna `None` se l'utente annulla il dialog (non è un errore),
+/// altrimenti il percorso assoluto del file scritto.
+#[tauri::command(async)]
+pub fn prompt_export_markdown_su_file(
+    app: tauri::AppHandle,
+    prompt_id: String,
+    state: State<'_, VaultState>,
+) -> Result<Option<String>, PapErrore> {
+    let (md, titolo) = state.with_conn(|conn| {
+        let md = prompt_export_markdown_pure(conn, &prompt_id)?;
+        let titolo: String = conn
+            .query_row(
+                "SELECT Title FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
+                [&prompt_id],
+                |r| r.get(0),
+            )
+            .map_err(|e| PapErrore::dominio("Prompt non trovato durante l'esportazione.", e))?;
+        Ok((md, titolo))
+    })?;
+
+    let nome_file = format!("{}.md", slug_file_markdown(&titolo));
+
+    let destinazione = app
+        .dialog()
+        .file()
+        .set_file_name(nome_file)
+        .add_filter("Markdown", &["md"])
+        .blocking_save_file();
+    let Some(destinazione) = destinazione else {
+        // Utente ha annullato il dialog: non è un errore.
+        return Ok(None);
+    };
+    let path = destinazione
+        .into_path()
+        .map_err(|e| PapErrore::dominio("Percorso di destinazione non valido.", e))?;
+
+    std::fs::write(&path, &md)
+        .map_err(|e| PapErrore::dominio("Scrittura del file Markdown non riuscita.", e))?;
+
+    state.with_conn(|conn| {
+        crate::audit::registra(
+            conn,
+            "prompt.exported.markdown",
+            "Prompt",
+            &prompt_id,
+            None,
+        );
+        Ok(())
+    })?;
+
+    Ok(Some(path.to_string_lossy().to_string()))
 }
 
 // ─── M6 PR-1: Markdown import (singolo file) ───────────────────────
@@ -2513,6 +2609,33 @@ mod test {
         inserisci_prompt(&conn, "prm-1", "Title", "Body abbastanza lungo per il test.");
         let md = super::prompt_export_markdown_pure(&conn, "prm-1").unwrap();
         assert!(!md.contains("description:"));
+    }
+
+    // ─── issue #644: slug_file_markdown ────────────────────────────
+
+    #[test]
+    fn slug_file_markdown_minuscolo_e_trattini() {
+        assert_eq!(super::slug_file_markdown("Il Mio Prompt"), "il-mio-prompt");
+    }
+
+    #[test]
+    fn slug_file_markdown_collassa_caratteri_ripetuti() {
+        assert_eq!(
+            super::slug_file_markdown("Prompt!!  ***Speciale***"),
+            "prompt-speciale"
+        );
+    }
+
+    #[test]
+    fn slug_file_markdown_rimuove_trattini_iniziali_e_finali() {
+        assert_eq!(super::slug_file_markdown("--Prompt--"), "prompt");
+    }
+
+    #[test]
+    fn slug_file_markdown_fallback_su_stringa_vuota() {
+        assert_eq!(super::slug_file_markdown(""), "prompt");
+        assert_eq!(super::slug_file_markdown("!!!"), "prompt");
+        assert_eq!(super::slug_file_markdown("   "), "prompt");
     }
 
     // ─── M6 PR-1: parse_markdown_frontmatter ───────────────────────

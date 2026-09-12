@@ -658,6 +658,7 @@ pub fn run() {
             import_export::vault_export_folder_json,
             import_export::vault_import_json,
             import_export::prompt_export_markdown,
+            import_export::prompt_export_markdown_su_file,
             import_export::prompt_import_markdown,
             import_export::vault_import_markdown_bulk,
             import_export::vault_export_markdown_zip,
