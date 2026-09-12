@@ -23,6 +23,7 @@
   import { segnaPasso } from "$lib/aiuto/primi-passi.svelte";
   import { conferma, avvisa } from "$lib/util/conferma";
   import { logInfoApp, logErroreApp } from "$lib/util/log-app";
+  import { puoSalvare } from "./salvataggio-logic";
 
   const META_KEY = "pap.detail.meta-collapsed";
   function caricaMetaCollapsed(): boolean {
@@ -315,7 +316,7 @@
     dettaglioTarget: PromptDettaglio,
     creaSnapshot: boolean,
   ): Promise<boolean> {
-    if (!titoloTarget.trim() || !bodyTarget.trim()) return false;
+    if (!puoSalvare(titoloTarget, bodyTarget)) return false;
     statoSalvataggio = "salvando";
     try {
       await invoke("prompt_aggiorna", {
