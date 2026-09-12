@@ -21,9 +21,9 @@
   import { apriModale } from "$lib/stores/modale.svelte";
   import { statoEditor } from "$lib/stores/preferenze.svelte";
   import { segnaPasso } from "$lib/aiuto/primi-passi.svelte";
-  import { scaricaBlob, slugFile } from "$lib/util/dati-export";
   import { conferma, avvisa } from "$lib/util/conferma";
   import { logInfoApp, logErroreApp } from "$lib/util/log-app";
+  import { puoSalvare } from "./salvataggio-logic";
 
   const META_KEY = "pap.detail.meta-collapsed";
   function caricaMetaCollapsed(): boolean {
@@ -316,7 +316,7 @@
     dettaglioTarget: PromptDettaglio,
     creaSnapshot: boolean,
   ): Promise<boolean> {
-    if (!titoloTarget.trim() || !bodyTarget.trim()) return false;
+    if (!puoSalvare(titoloTarget, bodyTarget)) return false;
     statoSalvataggio = "salvando";
     try {
       await invoke("prompt_aggiorna", {
@@ -546,13 +546,23 @@
     }
   }
 
-  /** #402: esporta il prompt corrente come file Markdown. */
+  /**
+   * #402: esporta il prompt corrente come file Markdown.
+   *
+   * #644: il dialog di salvataggio nativo viene aperto **lato Rust**
+   * (`prompt_export_markdown_su_file`) — il vecchio pattern `<a download>`
+   * su un blob URL non produceva alcun file, perché la WebView di Tauri
+   * non ha un handler di download registrato.
+   */
   async function esportaMarkdown(): Promise<void> {
     if (!dettaglio) return;
     try {
-      const md = await invoke<string>("prompt_export_markdown", { promptId });
-      const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-      scaricaBlob(blob, `${slugFile(titolo || dettaglio.titolo)}.md`);
+      const path = await invoke<string | null>(
+        "prompt_export_markdown_su_file",
+        { promptId },
+      );
+      if (path === null) return; // utente ha annullato il dialog
+      await avvisa(`Prompt esportato: ${path}`, "esporta-markdown");
     } catch (e) {
       console.error("[detail] export markdown", e);
       await avvisa("Errore nell'esportazione Markdown: " + String(e));
