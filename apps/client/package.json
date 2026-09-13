@@ -24,7 +24,7 @@
     "@codemirror/lang-markdown": "^6",
     "@codemirror/language": "^6.12.4",
     "@codemirror/search": "^6",
-    "@codemirror/state": "^6.7.1",
+    "@codemirror/state": "^6.7.4",
     "@codemirror/view": "^6.43.11",
     "@fontsource/inter": "^5.3",
     "@fontsource/jetbrains-mono": "^5.3",
@@ -40,10 +40,10 @@
     "codemirror": "^6.0.0",
     "diff": "^9.0.0",
     "diff2html": "^3",
-    "dompurify": "^3.4.14",
+    "dompurify": "^3.4.15",
     "driver.js": "^1.8.0",
     "lucide-svelte": "^1.0.1",
-    "marked": "^18.0.11",
+    "marked": "^18.0.12",
     "paneforge": "^1.0.2"
   },
   "devDependencies": {
@@ -57,7 +57,7 @@
     "tslib": "^2.8.0",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3",
-    "vite": "^8.2.2",
+    "vite": "^8.3.0",
     "vitest": "^5.0.0"
   }
 }
