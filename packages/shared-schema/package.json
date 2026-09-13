@@ -21,7 +21,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "zod": "^4.4.3"
+    "zod": "^4.6.1"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^5.0.0",
