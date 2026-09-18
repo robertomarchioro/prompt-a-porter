@@ -55,7 +55,6 @@
   import PannelloLinter from "$lib/components/PannelloLinter.svelte";
   import HotkeyInput from "$lib/components/HotkeyInput.svelte";
   import LogViewer from "$lib/components/LogViewer.svelte";
-  import { nomeFileExport, scaricaBlob } from "$lib/util/dati-export";
   import { renderNotesHtml } from "$lib/util/updater-notes";
   import { apriUrlEsterno } from "$lib/util/apri-url";
   import { urlDoc } from "$lib/aiuto/docs-links";
@@ -180,13 +179,7 @@
 
   let datiExport = $state<{
     inCorso: boolean;
-    ultimo:
-      | {
-          totale: number;
-          byteCount: number;
-          filename: string;
-        }
-      | null;
+    ultimo: { path: string } | null;
     errore: string;
   }>({
     inCorso: false,
@@ -221,7 +214,7 @@
 
   let datiExportJson = $state<{
     inCorso: boolean;
-    ultimo: { byteCount: number; filename: string } | null;
+    ultimo: { path: string } | null;
     errore: string;
   }>({
     inCorso: false,
@@ -283,23 +276,23 @@
     target.value = "";
   }
 
+  /**
+   * #649: il dialog di salvataggio nativo viene aperto **lato Rust**
+   * (`vault_export_markdown_zip_su_file`) — il vecchio pattern
+   * `scaricaBlob()` su un blob URL non produceva alcun file nella WebView
+   * di Tauri (stesso problema di #644). Il nome file suggerito è
+   * calcolato in Rust; `nomeFileExport`/`scaricaBlob` non servono più qui.
+   */
   async function esportaVaultZip(): Promise<void> {
     datiExport = { inCorso: true, ultimo: null, errore: "" };
     try {
-      const res = await invoke<{
-        bytes: number[];
-        totale_esportati: number;
-      }>("vault_export_markdown_zip", { folderId: null });
-      const filename = nomeFileExport("zip", new Date().toISOString());
-      const blob = new Blob([new Uint8Array(res.bytes)], {
-        type: "application/zip",
-      });
-      scaricaBlob(blob, filename);
-      datiExport.ultimo = {
-        totale: res.totale_esportati,
-        byteCount: res.bytes.length,
-        filename,
-      };
+      const path = await invoke<string | null>(
+        "vault_export_markdown_zip_su_file",
+        { folderId: null },
+      );
+      if (path !== null) {
+        datiExport.ultimo = { path };
+      }
     } catch (err) {
       datiExport.errore = String(err).replace(/^Error: /, "");
     } finally {
@@ -307,17 +300,18 @@
     }
   }
 
+  /**
+   * #649: il dialog di salvataggio nativo viene aperto **lato Rust**
+   * (`vault_export_json_su_file`) — stesso fix di `esportaVaultZip` qui
+   * sopra.
+   */
   async function esportaVaultJson(): Promise<void> {
     datiExportJson = { inCorso: true, ultimo: null, errore: "" };
     try {
-      const json = await invoke<string>("vault_export_json");
-      const filename = nomeFileExport("json", new Date().toISOString());
-      const blob = new Blob([json], { type: "application/json" });
-      scaricaBlob(blob, filename);
-      datiExportJson.ultimo = {
-        byteCount: new TextEncoder().encode(json).length,
-        filename,
-      };
+      const path = await invoke<string | null>("vault_export_json_su_file");
+      if (path !== null) {
+        datiExportJson.ultimo = { path };
+      }
     } catch (err) {
       datiExportJson.errore = String(err).replace(/^Error: /, "");
     } finally {
@@ -2129,9 +2123,7 @@
           </button>
           {#if datiExport.ultimo}
             <p class="dati-report-ok">
-              ✓ Esportati {datiExport.ultimo.totale} prompt
-              ({(datiExport.ultimo.byteCount / 1024).toFixed(1)} KB) →
-              <code>{datiExport.ultimo.filename}</code>
+              ✓ Esportato → <code>{datiExport.ultimo.path}</code>
             </p>
           {/if}
           {#if datiExport.errore}
@@ -2234,10 +2226,7 @@
           </button>
           {#if datiExportJson.ultimo}
             <p class="dati-report-ok">
-              ✓ Esportato ({(datiExportJson.ultimo.byteCount / 1024).toFixed(
-                1,
-              )} KB) →
-              <code>{datiExportJson.ultimo.filename}</code>
+              ✓ Esportato → <code>{datiExportJson.ultimo.path}</code>
             </p>
           {/if}
           {#if datiExportJson.errore}

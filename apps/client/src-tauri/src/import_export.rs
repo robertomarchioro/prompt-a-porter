@@ -420,6 +420,75 @@ pub fn vault_export_json(state: State<'_, VaultState>) -> Result<String, PapErro
     })
 }
 
+/// Porta Rust di `nomeFileExport` in `dati-export.ts` (issue #649): stesso
+/// schema di nome file suggerito nel dialog di salvataggio nativo
+/// dell'export vault (JSON/ZIP), `prompt-a-porter-export-{YYYY-MM-DD}.{estensione}`.
+/// `timestamp_iso` è atteso nel formato prodotto da `ora_iso()`
+/// (`YYYY-MM-DDTHH:MM:SSZ`): i primi 10 caratteri sono sempre la data.
+fn nome_file_export_vault(estensione: &str, timestamp_iso: &str) -> String {
+    let giorno = timestamp_iso.get(..10).unwrap_or(timestamp_iso);
+    format!("prompt-a-porter-export-{giorno}.{estensione}")
+}
+
+/// Tauri command: esporta l'intero workspace come JSON, salvandolo su
+/// disco tramite il dialog di salvataggio nativo (issue #649 — stesso
+/// problema di #644 risolto in `prompt_export_markdown_su_file`:
+/// `scaricaBlob()` su un blob URL non produce alcun file nella WebView di
+/// Tauri).
+///
+/// Stessa motivazione di sicurezza di `prompt_export_markdown_su_file`
+/// (vedi il commento lì e la nota in testa a `debug_log.rs`): il dialog
+/// si apre **qui**, lato Rust.
+///
+/// Marcato `async`: `blocking_save_file` pompa una nested event loop
+/// nativa e non deve girare sul thread principale.
+///
+/// Ritorna `None` se l'utente annulla il dialog (non è un errore),
+/// altrimenti il percorso assoluto del file scritto.
+#[tauri::command(async)]
+pub fn vault_export_json_su_file(
+    app: tauri::AppHandle,
+    state: State<'_, VaultState>,
+) -> Result<Option<String>, PapErrore> {
+    let (json, meta) = state.with_conn(|conn| {
+        let export = export_pure(conn)?;
+        let json = serde_json::to_string_pretty(&export)?;
+        let meta = format!(
+            "{} prompts, {} versioni, {} tag",
+            export.prompts.len(),
+            export.versions.len(),
+            export.tags.len()
+        );
+        Ok((json, meta))
+    })?;
+
+    let nome_file = nome_file_export_vault("json", &ora_iso());
+
+    let destinazione = app
+        .dialog()
+        .file()
+        .set_file_name(nome_file)
+        .add_filter("JSON", &["json"])
+        .blocking_save_file();
+    let Some(destinazione) = destinazione else {
+        // Utente ha annullato il dialog: non è un errore.
+        return Ok(None);
+    };
+    let path = destinazione
+        .into_path()
+        .map_err(|e| PapErrore::dominio("Percorso di destinazione non valido.", e))?;
+
+    std::fs::write(&path, &json)
+        .map_err(|e| PapErrore::dominio("Scrittura del file JSON non riuscita.", e))?;
+
+    state.with_conn(|conn| {
+        crate::audit::registra(conn, "vault.exported", "Vault", "", Some(&meta));
+        Ok(())
+    })?;
+
+    Ok(Some(path.to_string_lossy().to_string()))
+}
+
 /// Tauri command: esporta solo i prompt del sotto-albero della cartella
 /// indicata (incluse sotto-cartelle). v0.7.0 Step 2.
 #[tauri::command]
@@ -635,6 +704,99 @@ pub fn prompt_export_markdown_su_file(
             "Prompt",
             &prompt_id,
             None,
+        );
+        Ok(())
+    })?;
+
+    Ok(Some(path.to_string_lossy().to_string()))
+}
+
+/// Nome file suggerito per l'export Markdown bulk (issue #649), stesso
+/// schema che il frontend calcolava lato client prima di questo fix
+/// (`prompt-a-porter-export-{n}.md`).
+fn nome_file_bulk_markdown(totale: usize) -> String {
+    format!("prompt-a-porter-export-{totale}.md")
+}
+
+/// Logica pura (no dialog, no filesystem) dell'export Markdown bulk:
+/// esporta ogni id nell'ordine ricevuto con `prompt_export_markdown_pure`
+/// e unisce i risultati con il separatore `\n\n---\n\n` (stesso schema
+/// che `ListPane.svelte` usava lato frontend). Errore esplicito se
+/// `prompt_ids` è vuoto — estratta da `prompt_export_markdown_bulk_su_file`
+/// per essere testabile senza un `AppHandle` reale.
+fn prompt_export_markdown_bulk_pure(
+    conn: &Connection,
+    prompt_ids: &[String],
+) -> Result<String, PapErrore> {
+    if prompt_ids.is_empty() {
+        return Err(PapErrore::Generico(
+            "Nessun prompt selezionato per l'esportazione.".to_string(),
+        ));
+    }
+    let parti = prompt_ids
+        .iter()
+        .map(|id| prompt_export_markdown_pure(conn, id))
+        .collect::<Result<Vec<String>, PapErrore>>()?;
+    Ok(parti.join("\n\n---\n\n"))
+}
+
+/// Tauri command: esporta più prompt in un unico file Markdown, salvato
+/// su disco tramite il dialog di salvataggio nativo (issue #649 — stesso
+/// problema di #644 risolto in `prompt_export_markdown_su_file`:
+/// `scaricaBlob()` su un blob URL non produce alcun file nella WebView di
+/// Tauri, perché nessun handler di download è registrato in `src-tauri`).
+///
+/// Riusa `prompt_export_markdown_pure` per ogni id e unisce i risultati
+/// con lo stesso separatore che `ListPane.svelte` usava lato frontend
+/// (`\n\n---\n\n`), nell'ordine ricevuto (il chiamante preserva l'ordine
+/// di selezione).
+///
+/// Stessa motivazione di sicurezza di `prompt_export_markdown_su_file`
+/// (vedi il commento lì sopra e la nota in testa a `debug_log.rs`): il
+/// dialog si apre **qui**, lato Rust — un path di destinazione passato
+/// dal frontend bypasserebbe `resolve_access` (assente in questa app,
+/// niente manifest ACL).
+///
+/// Marcato `async`: `blocking_save_file` pompa una nested event loop
+/// nativa e non deve girare sul thread principale.
+///
+/// Ritorna `None` se l'utente annulla il dialog (non è un errore),
+/// altrimenti il percorso assoluto del file scritto. Errore esplicito se
+/// `prompt_ids` è vuoto (nessuna selezione da esportare).
+#[tauri::command(async)]
+pub fn prompt_export_markdown_bulk_su_file(
+    app: tauri::AppHandle,
+    prompt_ids: Vec<String>,
+    state: State<'_, VaultState>,
+) -> Result<Option<String>, PapErrore> {
+    let md = state.with_conn(|conn| prompt_export_markdown_bulk_pure(conn, &prompt_ids))?;
+
+    let nome_file = nome_file_bulk_markdown(prompt_ids.len());
+
+    let destinazione = app
+        .dialog()
+        .file()
+        .set_file_name(nome_file)
+        .add_filter("Markdown", &["md"])
+        .blocking_save_file();
+    let Some(destinazione) = destinazione else {
+        // Utente ha annullato il dialog: non è un errore.
+        return Ok(None);
+    };
+    let path = destinazione
+        .into_path()
+        .map_err(|e| PapErrore::dominio("Percorso di destinazione non valido.", e))?;
+
+    std::fs::write(&path, &md)
+        .map_err(|e| PapErrore::dominio("Scrittura del file Markdown non riuscita.", e))?;
+
+    state.with_conn(|conn| {
+        crate::audit::registra(
+            conn,
+            "prompt.exported.markdown.bulk",
+            "Prompt",
+            "",
+            Some(&format!("{} prompt", prompt_ids.len())),
         );
         Ok(())
     })?;
@@ -1277,8 +1439,13 @@ pub struct ZipExportResult {
 
 /// Tauri command: esporta tutti i prompt del vault (o di una cartella
 /// + discendenti) come archivio zip contenente file .md con
-/// front-matter YAML. Il frontend riceve i bytes e li salva tramite
-/// `dialog.save` + `fs.writeFile`.
+/// front-matter YAML, restituendo i bytes serializzati al chiamante.
+///
+/// Rimasto per compatibilità (es. MCP/CLI che vogliono i bytes in
+/// memoria); il frontend usa invece `vault_export_markdown_zip_su_file`,
+/// che scrive il file su disco — issue #649: questo comando **non**
+/// salva mai nulla da solo, e il vecchio pattern frontend `scaricaBlob()`
+/// su blob URL non produceva alcun file nella WebView di Tauri.
 #[tauri::command]
 pub fn vault_export_markdown_zip(
     folder_id: Option<String>,
@@ -1301,6 +1468,65 @@ pub fn vault_export_markdown_zip(
         bytes: buf.into_inner(),
         totale_esportati: totale,
     })
+}
+
+/// Tauri command: esporta tutti i prompt del vault (o di una cartella +
+/// discendenti) come archivio zip contenente file .md con front-matter
+/// YAML, salvandolo su disco tramite il dialog di salvataggio nativo
+/// (issue #649 — stesso problema di #644 risolto in
+/// `prompt_export_markdown_su_file`).
+///
+/// Stessa motivazione di sicurezza di `prompt_export_markdown_su_file`
+/// (vedi il commento lì e la nota in testa a `debug_log.rs`): il dialog
+/// si apre **qui**, lato Rust.
+///
+/// Marcato `async`: `blocking_save_file` pompa una nested event loop
+/// nativa e non deve girare sul thread principale.
+///
+/// Ritorna `None` se l'utente annulla il dialog (non è un errore),
+/// altrimenti il percorso assoluto del file scritto.
+#[tauri::command(async)]
+pub fn vault_export_markdown_zip_su_file(
+    app: tauri::AppHandle,
+    folder_id: Option<String>,
+    state: State<'_, VaultState>,
+) -> Result<Option<String>, PapErrore> {
+    let mut buf = std::io::Cursor::new(Vec::new());
+    let totale =
+        state.with_conn(|conn| export_markdown_zip_pure(conn, folder_id.as_deref(), &mut buf))?;
+
+    let nome_file = nome_file_export_vault("zip", &ora_iso());
+
+    let destinazione = app
+        .dialog()
+        .file()
+        .set_file_name(nome_file)
+        .add_filter("Archivio ZIP", &["zip"])
+        .blocking_save_file();
+    let Some(destinazione) = destinazione else {
+        // Utente ha annullato il dialog: non è un errore.
+        return Ok(None);
+    };
+    let path = destinazione
+        .into_path()
+        .map_err(|e| PapErrore::dominio("Percorso di destinazione non valido.", e))?;
+
+    std::fs::write(&path, buf.into_inner())
+        .map_err(|e| PapErrore::dominio("Scrittura dell'archivio ZIP non riuscita.", e))?;
+
+    state.with_conn(|conn| {
+        crate::audit::registra(
+            conn,
+            "vault.exported.markdown.zip",
+            "Vault",
+            folder_id.as_deref().unwrap_or("vault"),
+            Some(&format!("totale_esportati={totale}")),
+        );
+        Ok(())
+    })?;
+
+    log::info!("Vault esportato in zip markdown: {totale} prompt");
+    Ok(Some(path.to_string_lossy().to_string()))
 }
 
 /// Helper "pure" (no Tauri State) per applicare un `ExportV1` parsato
@@ -2636,6 +2862,92 @@ mod test {
         assert_eq!(super::slug_file_markdown(""), "prompt");
         assert_eq!(super::slug_file_markdown("!!!"), "prompt");
         assert_eq!(super::slug_file_markdown("   "), "prompt");
+    }
+
+    // ─── issue #649: export bulk markdown + export vault su file ───
+
+    #[test]
+    fn prompt_export_markdown_bulk_pure_ids_vuoti_errore() {
+        let conn = db_test();
+        let r = super::prompt_export_markdown_bulk_pure(&conn, &[]);
+        assert!(matches!(r, Err(PapErrore::Generico(_))));
+    }
+
+    #[test]
+    fn prompt_export_markdown_bulk_pure_unisce_con_separatore_nell_ordine_ricevuto() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "Primo", "Corpo del primo.");
+        inserisci_prompt(&conn, "prm-2", "Secondo", "Corpo del secondo.");
+        let ids = vec!["prm-2".to_string(), "prm-1".to_string()];
+        let md = super::prompt_export_markdown_bulk_pure(&conn, &ids).unwrap();
+        let pos_secondo = md.find("title: \"Secondo\"").unwrap();
+        let pos_primo = md.find("title: \"Primo\"").unwrap();
+        assert!(
+            pos_secondo < pos_primo,
+            "atteso 'Secondo' prima di 'Primo' (ordine di selezione)"
+        );
+        assert!(md.contains("\n\n---\n\n"));
+    }
+
+    #[test]
+    fn prompt_export_markdown_bulk_pure_id_inesistente_propaga_errore() {
+        let conn = db_test();
+        inserisci_prompt(&conn, "prm-1", "Primo", "Corpo.");
+        let ids = vec!["prm-1".to_string(), "prm-fantasma".to_string()];
+        let r = super::prompt_export_markdown_bulk_pure(&conn, &ids);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn nome_file_bulk_markdown_formato() {
+        assert_eq!(
+            super::nome_file_bulk_markdown(3),
+            "prompt-a-porter-export-3.md"
+        );
+        assert_eq!(
+            super::nome_file_bulk_markdown(0),
+            "prompt-a-porter-export-0.md"
+        );
+    }
+
+    // Porta di `nomeFileExport` (dati-export.ts): stessi casi del test
+    // vitest storico (`dati-export.test.ts`), per garantire lo stesso
+    // schema di nome file anche lato Rust dopo #649.
+    #[test]
+    fn nome_file_export_vault_usa_solo_la_parte_data() {
+        assert_eq!(
+            super::nome_file_export_vault("json", "2026-06-03T10:30:00Z"),
+            "prompt-a-porter-export-2026-06-03.json"
+        );
+        assert_eq!(
+            super::nome_file_export_vault("zip", "2026-12-31T23:59:59Z"),
+            "prompt-a-porter-export-2026-12-31.zip"
+        );
+    }
+
+    /// Verifica statica (a tempo di compilazione, non a runtime): le firme
+    /// dei tre comandi `_su_file` accettano solo `AppHandle` (+ i
+    /// parametri di dominio necessari) e lo `State`, mai un parametro di
+    /// destinazione proveniente dal chiamante IPC. Stesso pattern di
+    /// `debug_log_esporta_zip_non_accetta_piu_un_percorso_dal_chiamante`
+    /// in `debug_log.rs`: se in futuro qualcuno reintroducesse un
+    /// `destinazione: String`, l'arità/i tipi non coinciderebbero più con
+    /// queste coercizioni a puntatore a funzione e la build fallirebbe.
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn comandi_export_su_file_non_accettano_un_percorso_dal_chiamante() {
+        let _f: fn(
+            tauri::AppHandle,
+            Vec<String>,
+            State<'_, VaultState>,
+        ) -> Result<Option<String>, PapErrore> = prompt_export_markdown_bulk_su_file;
+        let _f: fn(tauri::AppHandle, State<'_, VaultState>) -> Result<Option<String>, PapErrore> =
+            vault_export_json_su_file;
+        let _f: fn(
+            tauri::AppHandle,
+            Option<String>,
+            State<'_, VaultState>,
+        ) -> Result<Option<String>, PapErrore> = vault_export_markdown_zip_su_file;
     }
 
     // ─── M6 PR-1: parse_markdown_frontmatter ───────────────────────

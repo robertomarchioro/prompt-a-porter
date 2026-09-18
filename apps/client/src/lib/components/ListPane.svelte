@@ -28,7 +28,6 @@
     type VoceMenu,
   } from "$lib/stores/menu-contestuale.svelte";
   import { apriModale } from "$lib/stores/modale.svelte";
-  import { scaricaBlob } from "$lib/util/dati-export";
   import { apriUrlEsterno } from "$lib/util/apri-url";
   import { conferma, avvisa } from "$lib/util/conferma";
   import { logInfoApp, logErroreApp } from "$lib/util/log-app";
@@ -556,22 +555,24 @@
     }
   }
 
+  /**
+   * #649: il dialog di salvataggio nativo viene aperto **lato Rust**
+   * (`prompt_export_markdown_bulk_su_file`), stesso fix di #644 —
+   * `scaricaBlob()` su un blob URL non produceva alcun file nella WebView
+   * di Tauri. Ordine = ordine di selezione (Set preserva l'inserimento);
+   * l'unione in un unico file con separatore `---` resta lato Rust.
+   */
   async function esportaBulkMarkdown(ids: string[]): Promise<void> {
     try {
-      // Ordine = ordine di selezione (Set preserva l'inserimento), unite in un
-      // unico file con separatore `---` (evita N download bloccati dal browser).
-      const parti: string[] = [];
-      for (const id of ids) {
-        parti.push(
-          await invoke<string>("prompt_export_markdown", { promptId: id }),
-        );
-      }
-      const blob = new Blob([parti.join("\n\n---\n\n")], {
-        type: "text/markdown;charset=utf-8",
-      });
-      scaricaBlob(blob, `prompt-a-porter-export-${ids.length}.md`);
+      const path = await invoke<string | null>(
+        "prompt_export_markdown_bulk_su_file",
+        { promptIds: ids },
+      );
+      if (path === null) return; // utente ha annullato il dialog
+      await avvisa(`Prompt esportati: ${path}`, "esporta-markdown-bulk");
     } catch (e) {
       console.error("[list-pane] export bulk markdown", e);
+      await avvisa("Errore nell'esportazione Markdown: " + String(e));
     }
   }
 
