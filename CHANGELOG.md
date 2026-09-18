@@ -1,5 +1,25 @@
 # Changelog — Prompt a Porter
 
+## v0.8.51 — L'export scrive davvero (2026-09-18)
+
+> Release di correzioni, nessuna novità di prodotto. Quattro percorsi di esportazione che non scrivevano mai un file, una guardia di salvataggio troppo severa, una vulnerabilità TLS chiusa in una libreria indiretta, e la ricerca semantica che quando non parte finalmente dice perché.
+
+### Sicurezza
+
+- **rustls 0.23.45** (#655): il controllo giornaliero delle vulnerabilità segnalava RUSTSEC-2026-0285 — messaggi di handshake TLS 1.3 accettati oltre il confine del livello di cifratura (severità media). La libreria è usata in modo indiretto dall'aggiornamento automatico e dalle chiamate ai provider AI; cambia solo il lockfile, nessun effetto sull'uso quotidiano.
+
+### Fix
+
+- **L'export scrive davvero un file** (#644, #649): l'export Markdown del singolo prompt, l'export di più prompt dalla selezione e l'export dell'intero vault in JSON o in ZIP passavano per un «download» dal browser che la finestra di Tauri scarta in silenzio: l'app rispondeva, il file non compariva mai e nessun errore lo diceva. Ora si apre la finestra «Salva con nome» del sistema, l'app scrive il file dove indichi e ti mostra il percorso; annullare non è un errore.
+- **Un prompt nuovo si salva anche con il solo titolo** (#642): la guardia del salvataggio pretendeva anche il corpo, così un prompt appena creato per fissare un'idea non si poteva salvare. Basta il titolo.
+- **La ricerca semantica dice perché non parte** (#582, #586): quando il caricamento della libreria nativa ONNX Runtime fallisce, il log di debug riporta ora il codice di errore del sistema operativo, finora perso — è l'informazione che distingue una libreria di sistema mancante da un file danneggiato o da un blocco dell'antivirus. Su Windows, se manca il **Microsoft Visual C++ Redistributable** (richiesto dai binari ufficiali di ONNX Runtime, assente per esempio in Windows Sandbox), il messaggio lo dice e la guida spiega cosa installare. Le due segnalazioni restano aperte in attesa di un nuovo log da un dispositivo reale.
+- **Nessun fallback `favicon.ico` nel log di debug** (#641): l'icona ora c'è anche per la webview, spariscono le tre righe di rumore all'avvio.
+
+### Manutenzione
+
+- **Installazione della CLI dai binari allegati alla release** (#648): la guida spiega come scaricare `pap` per la propria piattaforma e come aggiornarla (i binari non sono firmati, l'aggiornamento è manuale).
+- **Aggiornamento dipendenze** (#652, #653, #654): lato Go `x/crypto` 0.57; lato npm `vite` 8.3, `zod` 4.6.1, `dompurify`, `marked`, `@codemirror/state`, `@types/node`; action pinnate `pnpm/action-setup` 6.1.0 e `taiki-e/install-action` 2.87.10.
+
 ## v0.8.50 — Commenti nel prompt (2026-09-12)
 
 > Una sola novità, chiesta nella #643: annotare un prompt senza che l'annotazione parta col prompt. Utile per ricordarsi perché una frase c'è, cosa provare, cosa non ha funzionato — e per «spegnere» un pezzo di testo o un import senza cancellarlo.
