@@ -45,6 +45,11 @@ diverse da quelle del titolo: vedrai comparire prompt che prima non
 trovavi. Sui risultati che devono la loro posizione al significato appare
 un piccolo badge **sem**.
 
+> **Windows**: se **Inizializza** fallisce con un errore sul caricamento
+> della libreria nativa onnxruntime, la causa più comune è l'assenza del
+> **Microsoft Visual C++ Redistributable 2015-2022 x64**, richiesto dai
+> binari ufficiali di ONNX Runtime. Installalo dal sito Microsoft e riprova.
+
 ## Come funziona
 
 Sotto il cofano la ricerca combina due segnali indipendenti e ne fonde le

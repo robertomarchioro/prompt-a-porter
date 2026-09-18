@@ -550,6 +550,63 @@ fn preflight_dlopen(lib_path: &Path) -> Result<(), PapErrore> {
     verifica_dlopen_generico(lib_path, SIMBOLO_ORT_API_BASE, "onnxruntime")
 }
 
+/// Appiattisce un errore e tutta la sua catena di `source()` (dal più
+/// esterno al più interno) in un'unica stringa, separando i livelli con
+/// " ← ". Rif. #582 #586: su Windows `libloading::Error::LoadLibraryExW`
+/// mostra in `Display` solo "LoadLibraryExW failed" — il codice errore
+/// reale del sistema operativo (`(os error N)`, es. 126/193/5) vive
+/// nello `std::io::Error` restituito da `source()`, un livello più in
+/// profondità. Senza appiattire la catena quel codice non arriva mai nel
+/// log, ed è l'unico discriminante fra "manca una dipendenza di sistema",
+/// "file corrotto/architettura sbagliata" e "accesso negato".
+fn catena_errore(err: &dyn std::error::Error) -> String {
+    let mut pezzi = vec![err.to_string()];
+    let mut corrente = err.source();
+    while let Some(sorgente) = corrente {
+        pezzi.push(sorgente.to_string());
+        corrente = sorgente.source();
+    }
+    pezzi.join(" ← ")
+}
+
+/// Suggerimento pratico in italiano per l'utente, dato il codice errore del
+/// loader Windows presente nella catena appiattita (`catena_errore`).
+/// Copre solo i codici osservati o plausibili per un fallimento di
+/// `LoadLibraryExW`/`GetProcAddress` su `onnxruntime.dll` — non è
+/// esaustivo, va esteso man mano che arrivano nuovi log reali da
+/// dispositivi (vedi #582/#586). Pura e indipendente dalla piattaforma di
+/// esecuzione: testabile ovunque, anche se i codici hanno senso solo su
+/// Windows (il chiamante decide se applicarla con `cfg!(windows)`).
+fn suggerimento_errore_windows(catena: &str) -> Option<&'static str> {
+    if catena.contains("os error 126") {
+        // ERROR_MOD_NOT_FOUND: una DLL da cui onnxruntime.dll dipende non è
+        // presente — nei log raccolti finora (Windows Sandbox) è quasi
+        // sempre il Microsoft Visual C++ Redistributable, richiesto dai
+        // binari ufficiali di ONNX Runtime per Windows.
+        Some(
+            "Manca una libreria di sistema richiesta da ONNX Runtime, tipicamente il \
+             Microsoft Visual C++ Redistributable 2015-2022 x64: installalo dal sito \
+             Microsoft e riprova.",
+        )
+    } else if catena.contains("os error 193") {
+        // ERROR_BAD_EXE_FORMAT: il file non è un eseguibile/DLL valido per
+        // questa architettura, oppure è danneggiato.
+        Some(
+            "Il file della libreria è danneggiato o per l'architettura sbagliata: eliminalo \
+             e lascia che l'app lo riscarichi.",
+        )
+    } else if catena.contains("os error 5") {
+        // ERROR_ACCESS_DENIED: permessi insufficienti o blocco esterno
+        // (tipicamente un antivirus) sul file.
+        Some(
+            "Accesso negato al file: verifica che l'antivirus non lo stia bloccando e che \
+             l'app abbia i permessi sulla cartella.",
+        )
+    } else {
+        None
+    }
+}
+
 /// Corpo generico del preflight `dlopen` + lookup simbolo, parametrizzato su
 /// percorso/simbolo/nome visibile: testabile con una libreria di sistema
 /// qualunque (es. `libc`) senza dover fabbricare un artefatto ONNX Runtime
@@ -600,11 +657,18 @@ fn verifica_dlopen_generico(
     // un handle di libreria che vogliamo restare caricato comunque.
     unsafe {
         let libreria = libloading::Library::new(lib_path).map_err(|e| {
+            let catena = catena_errore(&e);
+            let mut messaggio = "Impossibile caricare la libreria nativa onnxruntime.".to_string();
+            if cfg!(windows) {
+                if let Some(suggerimento) = suggerimento_errore_windows(&catena) {
+                    messaggio = format!("{messaggio} {suggerimento}");
+                }
+            }
             PapErrore::dominio(
-                "Impossibile caricare la libreria nativa onnxruntime.",
+                messaggio,
                 format!(
                     "preflight dlopen fallito — percorso: {}, dimensione: {dimensione} byte, \
-                     libreria: {nome_visibile}, errore di sistema: {e}",
+                     libreria: {nome_visibile}, errore di sistema: {catena}",
                     lib_path.display()
                 ),
             )
@@ -612,11 +676,20 @@ fn verifica_dlopen_generico(
         let simbolo_risolto: Result<libloading::Symbol<'_, unsafe extern "C" fn()>, _> =
             libreria.get(simbolo);
         simbolo_risolto.map_err(|e| {
+            let catena = catena_errore(&e);
+            let mut messaggio =
+                "La libreria nativa onnxruntime non espone il punto di ingresso atteso."
+                    .to_string();
+            if cfg!(windows) {
+                if let Some(suggerimento) = suggerimento_errore_windows(&catena) {
+                    messaggio = format!("{messaggio} {suggerimento}");
+                }
+            }
             PapErrore::dominio(
-                "La libreria nativa onnxruntime non espone il punto di ingresso atteso.",
+                messaggio,
                 format!(
                     "preflight: simbolo mancante — percorso: {}, dimensione: {dimensione} byte, \
-                     libreria: {nome_visibile}, errore di sistema: {e}",
+                     libreria: {nome_visibile}, errore di sistema: {catena}",
                     lib_path.display()
                 ),
             )
@@ -2114,6 +2187,115 @@ mod test {
             "libc (test)",
         );
         assert!(r.is_err(), "un simbolo assente deve far fallire il preflight");
+    }
+
+    /// Ramo negativo su un percorso che non esiste affatto (non solo un
+    /// file non valido): il messaggio di log deve comunque contenere sia il
+    /// marcatore "preflight dlopen fallito" sia il percorso, così un log
+    /// raccolto da un dispositivo reale resta diagnosticabile anche quando
+    /// il problema è "il file non c'è" invece di "il file è corrotto".
+    #[test]
+    fn preflight_dlopen_fallisce_su_percorso_inesistente_e_logga_percorso() {
+        testing_logger::setup();
+
+        let percorso = Path::new("/percorso/onnxruntime-inesistente.dll");
+        let r = preflight_dlopen(percorso);
+        assert!(r.is_err(), "un percorso inesistente deve far fallire il preflight");
+
+        testing_logger::validate(|righe| {
+            let trovata = righe.iter().any(|riga| {
+                riga.level == log::Level::Error
+                    && riga.body.contains("preflight dlopen fallito")
+                    && riga.body.contains("onnxruntime-inesistente.dll")
+            });
+            let corpi: Vec<&str> = righe.iter().map(|r| r.body.as_str()).collect();
+            assert!(trovata, "percorso e marcatore devono finire nel log: {corpi:?}");
+        });
+    }
+
+    // ─── Catena errori appiattita (Rif. #582 #586) ───
+
+    /// Errore di test a due livelli: simula la forma di
+    /// `libloading::Error::LoadLibraryExW { source }` su Windows, dove il
+    /// `Display` esterno non dice nulla di utile ("wrapper failed") e il
+    /// vero codice sistema operativo vive solo in `source()`.
+    #[derive(Debug)]
+    struct ErroreEsterno {
+        sorgente: std::io::Error,
+    }
+
+    impl std::fmt::Display for ErroreEsterno {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "wrapper failed")
+        }
+    }
+
+    impl std::error::Error for ErroreEsterno {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            Some(&self.sorgente)
+        }
+    }
+
+    #[test]
+    fn catena_errore_appiattisce_source_annidato() {
+        let interno = std::io::Error::from_raw_os_error(126);
+        let esterno = ErroreEsterno { sorgente: interno };
+
+        let catena = catena_errore(&esterno);
+
+        assert!(catena.contains("wrapper failed"), "catena: {catena}");
+        assert!(catena.contains("os error 126"), "catena: {catena}");
+        assert!(catena.contains(" ← "), "i livelli devono essere separati: {catena}");
+    }
+
+    #[test]
+    fn catena_errore_senza_source_e_solo_il_messaggio_esterno() {
+        // Caso positivo semplice: un errore senza `source()` (come la
+        // maggior parte degli `std::io::Error` costruiti da un codice
+        // grezzo) produce una catena di un solo livello, senza separatore.
+        let solo = std::io::Error::from_raw_os_error(2);
+        let catena = catena_errore(&solo);
+
+        assert!(!catena.contains(" ← "), "un solo livello non deve avere separatore: {catena}");
+        assert!(!catena.is_empty());
+    }
+
+    #[test]
+    fn suggerimento_errore_windows_os_error_126_vc_redist() {
+        let suggerimento = suggerimento_errore_windows("wrapper failed ← os error 126")
+            .expect("os error 126 deve avere un suggerimento");
+        assert!(
+            suggerimento.contains("Visual C++ Redistributable"),
+            "suggerimento inatteso: {suggerimento}"
+        );
+    }
+
+    #[test]
+    fn suggerimento_errore_windows_os_error_193_file_corrotto() {
+        let suggerimento = suggerimento_errore_windows("os error 193")
+            .expect("os error 193 deve avere un suggerimento");
+        assert!(
+            suggerimento.contains("architettura") || suggerimento.contains("danneggiat"),
+            "suggerimento inatteso: {suggerimento}"
+        );
+    }
+
+    #[test]
+    fn suggerimento_errore_windows_os_error_5_accesso_negato() {
+        let suggerimento = suggerimento_errore_windows("os error 5")
+            .expect("os error 5 deve avere un suggerimento");
+        assert!(suggerimento.contains("Accesso negato"), "suggerimento inatteso: {suggerimento}");
+    }
+
+    #[test]
+    fn suggerimento_errore_windows_nessuno_per_codice_sconosciuto() {
+        // Caso negativo: un codice non mappato non deve inventarsi un
+        // suggerimento fuorviante.
+        assert_eq!(
+            suggerimento_errore_windows("LoadLibraryExW failed (os error 1)"),
+            None
+        );
+        assert_eq!(suggerimento_errore_windows("stringa qualunque senza codice"), None);
     }
 
     #[test]
