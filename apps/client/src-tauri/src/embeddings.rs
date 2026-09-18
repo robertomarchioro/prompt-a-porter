@@ -578,7 +578,10 @@ fn catena_errore(err: &dyn std::error::Error) -> String {
 /// esecuzione: testabile ovunque, anche se i codici hanno senso solo su
 /// Windows (il chiamante decide se applicarla con `cfg!(windows)`).
 fn suggerimento_errore_windows(catena: &str) -> Option<&'static str> {
-    if catena.contains("os error 126") {
+    // Match sul numero intero, non per sottostringa: "os error 5" è prefisso
+    // di "os error 50"/"os error 53" e darebbe un suggerimento sbagliato.
+    let codice = codice_os_error(catena)?;
+    if codice == 126 {
         // ERROR_MOD_NOT_FOUND: una DLL da cui onnxruntime.dll dipende non è
         // presente — nei log raccolti finora (Windows Sandbox) è quasi
         // sempre il Microsoft Visual C++ Redistributable, richiesto dai
@@ -588,14 +591,14 @@ fn suggerimento_errore_windows(catena: &str) -> Option<&'static str> {
              Microsoft Visual C++ Redistributable 2015-2022 x64: installalo dal sito \
              Microsoft e riprova.",
         )
-    } else if catena.contains("os error 193") {
+    } else if codice == 193 {
         // ERROR_BAD_EXE_FORMAT: il file non è un eseguibile/DLL valido per
         // questa architettura, oppure è danneggiato.
         Some(
             "Il file della libreria è danneggiato o per l'architettura sbagliata: eliminalo \
              e lascia che l'app lo riscarichi.",
         )
-    } else if catena.contains("os error 5") {
+    } else if codice == 5 {
         // ERROR_ACCESS_DENIED: permessi insufficienti o blocco esterno
         // (tipicamente un antivirus) sul file.
         Some(
@@ -605,6 +608,19 @@ fn suggerimento_errore_windows(catena: &str) -> Option<&'static str> {
     } else {
         None
     }
+}
+
+/// Estrae il codice numerico dal primo `os error N` presente nella catena
+/// (formato di `Display` di `std::io::Error`, uguale su tutte le
+/// piattaforme). `None` se assente o non seguito da cifre.
+fn codice_os_error(catena: &str) -> Option<u32> {
+    const MARCATORE: &str = "os error ";
+    let inizio = catena.find(MARCATORE)? + MARCATORE.len();
+    let cifre: String = catena[inizio..]
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    cifre.parse().ok()
 }
 
 /// Corpo generico del preflight `dlopen` + lookup simbolo, parametrizzato su
@@ -2296,6 +2312,24 @@ mod test {
             None
         );
         assert_eq!(suggerimento_errore_windows("stringa qualunque senza codice"), None);
+    }
+
+    #[test]
+    fn suggerimento_errore_windows_non_confonde_prefissi_numerici() {
+        // "os error 5" è prefisso di 50/53/59: un match per sottostringa
+        // darebbe "accesso negato" a un errore di rete (53 = bad netpath).
+        assert_eq!(suggerimento_errore_windows("(os error 53)"), None);
+        assert_eq!(suggerimento_errore_windows("(os error 50)"), None);
+        assert_eq!(suggerimento_errore_windows("(os error 1260)"), None);
+        assert_eq!(suggerimento_errore_windows("(os error 1930)"), None);
+    }
+
+    #[test]
+    fn codice_os_error_estrae_il_numero_intero() {
+        assert_eq!(codice_os_error("wrapper failed ← Modulo non trovato. (os error 126)"), Some(126));
+        assert_eq!(codice_os_error("(os error 5)"), Some(5));
+        assert_eq!(codice_os_error("os error senza numero"), None);
+        assert_eq!(codice_os_error("nessun marcatore"), None);
     }
 
     #[test]
