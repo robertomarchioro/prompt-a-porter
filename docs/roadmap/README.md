@@ -49,7 +49,7 @@ Decisione di rotta dell'autore:
 | [`stagioni-e-nomi-rilascio.md`](./stagioni-e-nomi-rilascio.md) | **Convenzione di naming dei rilasci**: etichetta stagionale `Autunno-Inverno ANNO · vX.Y.Z`, doppia linea `1.x` Personale / `2.x` Enterprise, codename cardine tessile |
 | [`prompts-as-code.md`](./prompts-as-code.md) | 🧭 *Esplorazione post-1.0 (Deluxe)* — idea strategica "Prompts as Code" (git=versioni, branch=varianti, golden=CI gate, pin a SHA per agent) |
 | [`vault-a-cartella.md`](./vault-a-cartella.md) | 🧭 *Esplorazione post-1.0 (Deluxe)* — blueprint storage a file plain-text no-lock-in, sidecar `.pap/`, fasi F1-F4 |
-| [`collezioni-curate.md`](./collezioni-curate.md) | 🧭 *Valutazione (2026-09-19)* — collezioni di prompt curate vs import da siti di condivisione: decisione per le collezioni bundlate, import CSV generico, nessun connettore per sito |
+| [`collezioni-curate.md`](./collezioni-curate.md) | **Decisione di rotta (2026-09-19)** — collezioni di prompt curate vs import da siti di condivisione: collezioni scaricate da `docs/collezioni/` su `main` con sha256 verificato, nessun connettore per sito, CSV rinviato. Prima PR con backend, card Impostazioni → Dati e due collezioni |
 | [`ordito-sync-log.md`](./ordito-sync-log.md) | 🧭 *Esplorazione post-1.0 (Deluxe→Enterprise)* — blueprint "Ordito": oplog replicato firmato (HLC, LWW per campo), sync multi-device senza server, DB come proiezione. v3: 7 decisioni chiuse |
 | [`ordito/`](./ordito/blueprint-F1.md) | ✏️ *Blueprint operativi Ordito (design, no codice)* — tagli esecutivi delle 4 fasi F1-F4 |
 | [`website/`](./website/istruzioni-sviluppo-landing.md) | **Thread parallelo — Landing page attiva** (www.promptaporter.it): istruzioni di sviluppo, contenuti, mockup desktop/mobile |

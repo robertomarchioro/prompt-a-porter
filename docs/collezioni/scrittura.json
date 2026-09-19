@@ -1,0 +1,330 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-09-19T08:00:00Z",
+  "workspace": {
+    "id": "ws-personale",
+    "name": "Personale",
+    "type": "personal"
+  },
+  "tags": [
+    {
+      "id": "tag-scrittura",
+      "name": "scrittura",
+      "color": "#9333ea",
+      "created_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "tag-email",
+      "name": "email",
+      "color": "#2563eb",
+      "created_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "tag-ruolo",
+      "name": "ruolo",
+      "color": "#64748b",
+      "created_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "tag-col-revisione",
+      "name": "revisione",
+      "color": "#0891b2",
+      "created_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "tag-col-sintesi",
+      "name": "sintesi",
+      "color": "#ca8a04",
+      "created_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "tag-col-social",
+      "name": "social",
+      "color": "#db2777",
+      "created_at": "2026-09-19T08:00:00Z"
+    }
+  ],
+  "folders": [
+    {
+      "id": "fld-collezioni",
+      "parent_folder_id": null,
+      "name": "Collezioni",
+      "path": "/Collezioni",
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "fld-col-scr",
+      "parent_folder_id": "fld-collezioni",
+      "name": "Scrittura",
+      "path": "/Collezioni/Scrittura",
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "fld-col-scr-ruoli",
+      "parent_folder_id": "fld-col-scr",
+      "name": "Ruoli",
+      "path": "/Collezioni/Scrittura/Ruoli",
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "fld-col-scr-email",
+      "parent_folder_id": "fld-col-scr",
+      "name": "Email",
+      "path": "/Collezioni/Scrittura/Email",
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "fld-col-scr-testi",
+      "parent_folder_id": "fld-col-scr",
+      "name": "Testi",
+      "path": "/Collezioni/Scrittura/Testi",
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "fld-col-scr-revisione",
+      "parent_folder_id": "fld-col-scr",
+      "name": "Revisione",
+      "path": "/Collezioni/Scrittura/Revisione",
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z"
+    }
+  ],
+  "prompts": [
+    {
+      "id": "prm-col-scr-ruolo-editor",
+      "title": "Ruolo editor di testi",
+      "description": "Blocco di contesto riusabile via import: un editor che taglia, non che aggiunge. Il segnaposto {{registro}} si fissa dall'import con «with».",
+      "body": "Sei un editor di testi in lingua italiana con vent'anni di redazione alle spalle.\nRegistro richiesto: {{registro}}.\nIl tuo istinto è togliere: avverbi, ripetizioni, frasi che dicono ciò che la frase prima ha già detto.\nRispetti la voce di chi scrive: correggi, non riscrivi a modo tuo. Quando cambi qualcosa di sostanziale, lo segnali.",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-scr-ruoli",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-ruolo",
+        "tag-scrittura"
+      ]
+    },
+    {
+      "id": "prm-col-scr-ruolo-copy",
+      "title": "Ruolo copywriter",
+      "description": "Blocco di contesto riusabile via import: un copywriter che scrive per far agire, non per farsi notare.",
+      "body": "Sei un copywriter che scrive per {{brand}}.\nScrivi per far compiere un'azione a chi legge, non per essere ammirato. Frasi corte, verbi concreti, un'idea per paragrafo.\nNiente superlativi vuoti, niente «innovativo», «rivoluzionario», «unico nel suo genere». Se un beneficio non si può dimostrare, non lo scrivi.",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-scr-ruoli",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-ruolo",
+        "tag-scrittura"
+      ]
+    },
+    {
+      "id": "prm-col-scr-email-followup",
+      "title": "Email di follow-up dopo una riunione",
+      "description": "Riassume decisioni e prossimi passi in un'email che si legge in trenta secondi. Firma con il segnaposto globale «autore».",
+      "body": "Scrivi un'email di follow-up a {{destinatario}} dopo la riunione di oggi su {{argomento}}.\n\nDecisioni prese:\n{{decisioni}}\n\nProssimi passi (chi fa cosa, entro quando):\n{{prossimi_passi}}\n\nRegole: oggetto chiaro che cita l'argomento; prima riga con il perché dell'email; decisioni e passi in elenco puntato, non in prosa; una sola richiesta esplicita alla fine, se serve. Tono {{tono}}.\n\n{{!-- Imposta il globale «autore» in Impostazioni → Segnaposti globali: firma tutte le email senza riscriverla. --}}\nFirma: {{global autore}}",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-scr-email",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-email",
+        "tag-scrittura"
+      ]
+    },
+    {
+      "id": "prm-col-scr-email-difficile",
+      "title": "Email difficile: dire di no o dare una brutta notizia",
+      "description": "Per le email che si rimandano: un rifiuto, un ritardo, un errore da comunicare. Chiara senza essere fredda.",
+      "body": "Devo scrivere a {{destinatario}} ({{relazione}}) per comunicare questo: {{cosa_devo_dire}}\n\nContesto che il destinatario conosce già: {{contesto}}\n\nScrivi l'email seguendo questo ordine: la notizia nella prima frase, senza preamboli; il motivo in due frasi al massimo, senza scaricare la colpa; cosa succede adesso o cosa offro in alternativa; chiusura breve che lascia aperta la porta.\nNiente scuse ripetute, niente «purtroppo» più di una volta, niente frasi passive per nascondere chi ha deciso.\n\nProponi due versioni: una più asciutta e una più calda. Segnami la frase che cambia di più il tono fra le due.",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-scr-email",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-email",
+        "tag-scrittura"
+      ]
+    },
+    {
+      "id": "prm-col-scr-riscrittura",
+      "title": "Riscrivi cambiando registro",
+      "description": "Stesso contenuto, altro registro: da formale a colloquiale, da tecnico a divulgativo. Ha una variante «accorcia» per tagliare a una lunghezza data.",
+      "body": "{{import \"Ruolo editor di testi\" with registro=\"quello richiesto sotto\"}}\n\nRiscrivi il testo qui sotto nel registro «{{registro}}», per un lettore che è {{lettore}}.\n\nMantieni tutti i fatti, i numeri e l'ordine degli argomenti. Cambia lessico, lunghezza delle frasi e tono; non aggiungere contenuto che non c'è.\nAlla fine elenca in tre righe le scelte principali che hai fatto.\n\nTesto:\n{{testo}}",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-scr-testi",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-scrittura",
+        "tag-col-revisione"
+      ]
+    },
+    {
+      "id": "prm-col-scr-riscrittura-b",
+      "title": "Riscrivi cambiando registro",
+      "description": "Variante «accorcia»: stesso registro, metà della lunghezza, senza perdere informazioni.",
+      "body": "{{import \"Ruolo editor di testi\" with registro=\"invariato\"}}\n\nAccorcia il testo qui sotto a circa {{parole}} parole, mantenendo il registro originale.\n\nTaglia nell'ordine: ripetizioni, esempi ridondanti, premesse, avverbi. Non tagliare fatti, numeri, nomi.\nSe per arrivare alla lunghezza richiesta devi togliere un'informazione, fermati e dimmi quale toglieresti e perché.\n\nTesto:\n{{testo}}",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-scr-testi",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-scrittura",
+        "tag-col-revisione"
+      ],
+      "parent_prompt_id": "prm-col-scr-riscrittura",
+      "is_variant": true,
+      "variant_label": "accorcia"
+    },
+    {
+      "id": "prm-col-scr-sintesi",
+      "title": "Sintesi in punti di un documento lungo",
+      "description": "Riassunto in N punti ordinati per importanza, con le cose che il documento NON dice.",
+      "body": "Riassumi il documento qui sotto in {{n_punti}} punti, per un lettore che è {{lettore}} e ha {{tempo}} per leggerli.\n\nOrdine: dal punto più importante al meno importante, non l'ordine del documento.\nOgni punto è una frase completa che si regge da sola, senza «il documento afferma che».\nDopo l'elenco aggiungi una riga «Non dice:» con ciò che un lettore si aspetterebbe di trovare e non c'è.\nSe il documento contiene numeri, riportali esatti.\n\nDocumento:\n{{documento}}",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-scr-testi",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-col-sintesi",
+        "tag-scrittura"
+      ]
+    },
+    {
+      "id": "prm-col-scr-titoli",
+      "title": "Dieci titoli, un criterio",
+      "description": "Titoli alternativi per un articolo o una pagina, con il criterio dichiarato per ciascuno.",
+      "body": "{{import \"Ruolo copywriter\"}}\n\nProponi dieci titoli per questo contenuto: {{contenuto}}\n\nVincoli: massimo {{caratteri}} caratteri; il lettore tipo è {{lettore}}; deve funzionare anche letto da solo, fuori contesto.\n\nPer ogni titolo indica in tre parole la leva usata (curiosità, beneficio, numero, contrasto, domanda…). Non usare la stessa leva più di tre volte.\nAlla fine indica i due che sceglieresti tu e perché, in una riga.",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-scr-testi",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-scrittura",
+        "tag-col-social"
+      ]
+    },
+    {
+      "id": "prm-col-scr-post-social",
+      "title": "Post per i social da un testo lungo",
+      "description": "Da un articolo o una nota a tre post per piattaforme diverse, con il gancio nella prima riga.",
+      "body": "{{import \"Ruolo copywriter\"}}\n\nDal testo qui sotto ricava tre post per {{piattaforma}}, ciascuno con un'angolazione diversa.\n\nRegole: la prima riga deve reggere da sola, è l'unica che si vede prima del «leggi tutto»; un'idea per post; nessun hashtag oltre {{n_hashtag}}; chiusura con una domanda o un invito concreto, mai «cosa ne pensate?».\nRispetta il limite di caratteri della piattaforma.\n\nTesto di partenza:\n{{testo}}",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-scr-testi",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-col-social",
+        "tag-scrittura"
+      ]
+    },
+    {
+      "id": "prm-col-scr-revisione-critica",
+      "title": "Revisione critica di un testo",
+      "description": "Un editor severo legge il testo e dice cosa non funziona, in ordine di gravità, senza riscriverlo.",
+      "body": "{{import \"Ruolo editor di testi\" with registro=\"quello del testo\"}}\n\nLeggi il testo qui sotto, destinato a {{lettore}} con lo scopo di {{scopo}}.\n\nNon riscriverlo. Dimmi cosa non funziona, in ordine di gravità:\n1. Problemi di sostanza: tesi poco chiara, argomenti mancanti, salti logici.\n2. Problemi di struttura: ordine, paragrafi che non si reggono, inizio e fine deboli.\n3. Problemi di frase: ambiguità, ripetizioni, lunghezze.\nPer ogni rilievo cita le parole esatte del testo e proponi la correzione minima.\nChiudi con una riga: il testo raggiunge lo scopo, sì o no, e la singola modifica che cambierebbe di più.\n\nTesto:\n{{testo}}",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-scr-revisione",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-col-revisione",
+        "tag-scrittura"
+      ]
+    },
+    {
+      "id": "prm-col-scr-correzione",
+      "title": "Correzione di bozze con motivazione",
+      "description": "Corregge refusi, grammatica e punteggiatura e spiega ogni correzione non ovvia. Niente riscritture di stile.",
+      "body": "Correggi il testo qui sotto: refusi, grammatica, punteggiatura, concordanze, maiuscole.\n\nNon toccare lo stile, il lessico o la struttura anche se non ti piacciono.\nRestituisci prima il testo corretto per intero; poi un elenco delle correzioni non ovvie, con la regola in una riga.\nSe una frase è ambigua e ammette due letture, non scegliere: segnalala.\n\n{{!-- Utile anche per testi in altre lingue: specifica la lingua se non è l'italiano. --}}\nTesto:\n{{testo}}",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-scr-revisione",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-col-revisione"
+      ]
+    },
+    {
+      "id": "prm-col-scr-traduzione",
+      "title": "Traduzione che suona naturale",
+      "description": "Traduce adattando modi di dire e registro, e segnala i punti dove ha dovuto scegliere.",
+      "body": "Traduci il testo qui sotto da {{lingua_da}} a {{lingua_a}}, registro {{registro}}.\n\nIl risultato deve suonare scritto direttamente in {{lingua_a}}: adatta modi di dire, ordine delle frasi, formule di cortesia. Mantieni nomi propri, numeri, termini tecnici consolidati.\nDopo la traduzione elenca i passaggi dove hai dovuto scegliere fra fedeltà e naturalezza, con l'alternativa scartata.\n\nTesto:\n{{testo}}",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-scr-revisione",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-scrittura"
+      ]
+    }
+  ],
+  "global_placeholders": [],
+  "versions": []
+}

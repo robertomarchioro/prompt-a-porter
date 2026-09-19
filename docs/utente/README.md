@@ -27,6 +27,7 @@ Se sei un nuovo utente, parti da qui:
 | [`mcp.md`](./mcp.md) | Collegare il vault a Claude Desktop, Cursor e altri assistenti AI via Model Context Protocol |
 | [`formato-export-json.md`](./formato-export-json.md) | Il formato di export JSON documentato campo per campo: schema, gestione dei conflitti in import, garanzia anti lock-in |
 | [`markdown-import-export.md`](./markdown-import-export.md) | Import ed export dei prompt come file Markdown, compatibili con Obsidian e Foam |
+| [`collezioni.md`](./collezioni.md) | Collezioni di prompt curate dal progetto, da importare con un click (Impostazioni → Dati) |
 | [`ricerca-semantica.md`](./ricerca-semantica.md) | Trovare i prompt per significato, non solo per parola: come attivare la ricerca ibrida, bilanciarla e cosa comporta per la privacy |
 | [`linting-regole.md`](./linting-regole.md) | Il catalogo delle regole del linter, con esempi pratici per ogni regola |
 | [`cartelle.md`](./cartelle.md) | Organizzare il vault in cartelle: come funzionano e come usarle bene |

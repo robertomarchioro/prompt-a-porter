@@ -8,7 +8,7 @@ use crate::errore::PapErrore;
 use crate::vault::VaultState;
 
 /// Versione corrente del formato di export. Vedi docs/utente/formato-export-json.md.
-const SCHEMA_VERSION: u32 = 1;
+pub(crate) const SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExportV1 {
@@ -1536,6 +1536,22 @@ pub fn vault_export_markdown_zip_su_file(
 ///
 /// `modalita` valida: `"skip"`, `"overwrite"`, `"rename"`. Validare
 /// prima di chiamare (vedi `valida_modalita`).
+/// Id del tag attivo con questo nome, `None` se assente. Il vincolo
+/// `UNIQUE (WorkspaceId, Name)` è case-sensitive; qui il confronto è NOCASE
+/// di proposito, così un export con «codice» si aggancia a un «Codice»
+/// dell'utente invece di creare un quasi-doppione.
+fn tag_id_per_nome(conn: &Connection, nome: &str) -> Option<String> {
+    conn.query_row(
+        "SELECT Id FROM Tags
+         WHERE WorkspaceId = 'ws-personale' AND DeletedAt IS NULL
+           AND Name = ?1 COLLATE NOCASE
+         LIMIT 1",
+        [nome],
+        |r| r.get(0),
+    )
+    .ok()
+}
+
 pub(crate) fn import_pure(
     conn: &Connection,
     export: &ExportV1,
@@ -1592,7 +1608,7 @@ pub(crate) fn import_pure(
                         folder.updated_at
                     ],
                 ) {
-                    log::error!("import cartella {}: {e}", folder.id);
+                    log::error!("import cartella {:?}: {e}", folder.id);
                     report.errori.push(format!(
                         "Cartella {}: importazione non riuscita.",
                         folder.id
@@ -1608,7 +1624,7 @@ pub(crate) fn import_pure(
                      WHERE Id = ?4",
                     rusqlite::params![parent, folder.name, folder.path, folder.id],
                 ) {
-                    log::error!("import cartella {}: {e}", folder.id);
+                    log::error!("import cartella {:?}: {e}", folder.id);
                     report.errori.push(format!(
                         "Cartella {}: importazione non riuscita.",
                         folder.id
@@ -1624,7 +1640,14 @@ pub(crate) fn import_pure(
         }
     }
 
-    // Tags prima.
+    // Tags prima. `tag_map` mappa l'id del tag nell'export all'id effettivo
+    // nel DB: diverso solo quando un tag con lo STESSO NOME esiste già con
+    // un altro id (`UNIQUE (WorkspaceId, Name)`). Senza la mappa l'INSERT
+    // fallirebbe e le associazioni PromptTags punterebbero a un id
+    // inesistente — il caso tipico importando una collezione in un vault
+    // già popolato, dove «codice» o «email» esistono con id propri.
+    let mut tag_map: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
     for tag in &export.tags {
         let esiste: bool = conn
             .query_row(
@@ -1634,6 +1657,14 @@ pub(crate) fn import_pure(
             )
             .unwrap_or(false);
 
+        if !esiste {
+            if let Some(id_omonimo) = tag_id_per_nome(conn, &tag.name) {
+                tag_map.insert(tag.id.clone(), id_omonimo);
+                report.conflitti += 1;
+                continue;
+            }
+        }
+
         match (esiste, modalita) {
             (false, _) => {
                 if let Err(e) = conn.execute(
@@ -1641,7 +1672,7 @@ pub(crate) fn import_pure(
                      VALUES (?1, 'ws-personale', ?2, ?3, ?4, ?4)",
                     rusqlite::params![tag.id, tag.name, tag.color, tag.created_at],
                 ) {
-                    log::error!("import tag {}: {e}", tag.id);
+                    log::error!("import tag {:?}: {e}", tag.id);
                     report.errori.push(format!(
                         "Tag {}: importazione non riuscita.",
                         tag.id
@@ -1659,7 +1690,7 @@ pub(crate) fn import_pure(
                      WHERE Id = ?3",
                     rusqlite::params![tag.name, tag.color, tag.id],
                 ) {
-                    log::error!("import tag {}: {e}", tag.id);
+                    log::error!("import tag {:?}: {e}", tag.id);
                     report.errori.push(format!(
                         "Tag {}: importazione non riuscita.",
                         tag.id
@@ -1789,7 +1820,7 @@ pub(crate) fn import_pure(
             Ok("new") => report.nuovi += 1,
             Ok("agg") => report.aggiornati += 1,
             Err(e) => {
-                log::error!("import prompt {}: {e}", prompt.id);
+                log::error!("import prompt {:?}: {e}", prompt.id);
                 report.errori.push(format!(
                     "Prompt {}: importazione non riuscita.",
                     prompt.id
@@ -1811,7 +1842,8 @@ pub(crate) fn import_pure(
                 .errori
                 .push(format!("Tag del prompt {id_effettivo}: aggiornamento non riuscito."));
         }
-        for tag_id in &prompt.tag_ids {
+        for tag_id_export in &prompt.tag_ids {
+            let tag_id = tag_map.get(tag_id_export).unwrap_or(tag_id_export);
             if let Err(e) = conn.execute(
                 "INSERT OR IGNORE INTO PromptTags (PromptId, TagId) VALUES (?1, ?2)",
                 rusqlite::params![id_effettivo, tag_id],
@@ -1889,7 +1921,7 @@ pub(crate) fn import_pure(
                 ver.created_by_user_id,
             ],
         ) {
-            log::error!("import versione {}: {e}", ver.id);
+            log::error!("import versione {:?}: {e}", ver.id);
             report.errori.push(format!("Versione {}: importazione non riuscita.", ver.id));
         }
     }
@@ -2195,6 +2227,50 @@ mod test {
             .query_row("SELECT COUNT(*) FROM Prompts", [], |r| r.get(0))
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    /// Tag omonimo già presente con un altro id: l'import non deve fallire
+    /// l'INSERT (`UNIQUE (WorkspaceId, Name)`) né perdere l'associazione —
+    /// rimappa al tag esistente e lo conta come conflitto.
+    #[test]
+    fn import_pure_tag_omonimo_con_altro_id_viene_rimappato() {
+        // Arrange: l'utente ha già un tag «Codice» con un id suo.
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO Tags (Id, WorkspaceId, Name, Color, CreatedAt, UpdatedAt)
+             VALUES ('tag-utente', 'ws-personale', 'Codice', '#000', '2026-01-01', '2026-01-01')",
+            [],
+        )
+        .unwrap();
+        let mut payload = payload_minimo("prm-col", "Con tag");
+        payload.tags.push(TagExport {
+            id: "tag-codice".into(),
+            name: "codice".into(),
+            color: Some("#16a34a".into()),
+            created_at: "2026-01-01T00:00:00Z".into(),
+        });
+        payload.prompts[0].tag_ids = vec!["tag-codice".into()];
+
+        // Act
+        let report = import_pure(&conn, &payload, "skip").unwrap();
+
+        // Assert: nessun errore, il tag conta come conflitto, nessun tag nuovo,
+        // e il prompt è associato al tag dell'utente.
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(report.nuovi, 1);
+        assert_eq!(report.conflitti, 1);
+        let n_tag: i64 = conn
+            .query_row("SELECT COUNT(*) FROM Tags", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n_tag, 1);
+        let tag_associato: String = conn
+            .query_row(
+                "SELECT TagId FROM PromptTags WHERE PromptId = 'prm-col'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(tag_associato, "tag-utente");
     }
 
     /// Il vault demo committato (`docs/demo/demo-vault.json`) deve sempre

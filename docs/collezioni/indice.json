@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "collezioni": [
+    {
+      "slug": "scrittura",
+      "titolo": "Scrittura",
+      "descrizione": "Email che si leggono in trenta secondi, riscritture di registro, sintesi, titoli, revisione critica e correzione di bozze. Con un ruolo editor e un ruolo copywriter da importare.",
+      "prompt": 12,
+      "sha256": "3a78556c76844602d48f59dd6626e9d878049eaeb7280aa5476036d4ea215b2e"
+    },
+    {
+      "slug": "sviluppatore",
+      "titolo": "Sviluppatore",
+      "descrizione": "Code review, test unitari, refactoring, commit e pull request, diagnosi di errori, documentazione e SQL. Con un ruolo tech lead e un ruolo reviewer da importare.",
+      "prompt": 13,
+      "sha256": "8029a1a4e72834850709249a127da9c54041a968a8b9935d97a842b39a83425c"
+    }
+  ]
+}

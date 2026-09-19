@@ -52,6 +52,7 @@
   import AiutoSezione from "$lib/aiuto/AiutoSezione.svelte";
   import AboutSezione from "$lib/aiuto/AboutSezione.svelte";
   import PannelloProviderConfig from "$lib/components/PannelloProviderConfig.svelte";
+  import CollezioniCard from "./CollezioniCard.svelte";
   import PannelloLinter from "$lib/components/PannelloLinter.svelte";
   import HotkeyInput from "$lib/components/HotkeyInput.svelte";
   import LogViewer from "$lib/components/LogViewer.svelte";
@@ -439,6 +440,8 @@
         "zip",
         "front-matter",
         "json",
+        "collezioni",
+        "collezione",
       ],
     },
     // ── AI ──
@@ -2041,6 +2044,8 @@
             >formato JSON</a
           > per i dettagli.
         </p>
+
+        <CollezioniCard />
 
         <div class="dati-card">
           <header class="dati-card-h">

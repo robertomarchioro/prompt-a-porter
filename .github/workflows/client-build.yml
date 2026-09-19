@@ -11,6 +11,10 @@ on:
       - "pnpm-workspace.yaml"
       - "pnpm-lock.yaml"
       - ".github/workflows/client-build.yml"
+      # Collezioni curate: i test Rust `collezioni::*` includono i JSON via
+      # include_str! e verificano che l'indice (sha256) non sia stale.
+      - "docs/collezioni/**"
+      - "scripts/collezioni-indice.mjs"
       - "!apps/client/**/*.md"
       - "!apps/client/**/CHANGELOG.md"
       - "!apps/client/**/LICENSE"
@@ -23,6 +27,10 @@ on:
       - "pnpm-workspace.yaml"
       - "pnpm-lock.yaml"
       - ".github/workflows/client-build.yml"
+      # Collezioni curate: i test Rust `collezioni::*` includono i JSON via
+      # include_str! e verificano che l'indice (sha256) non sia stale.
+      - "docs/collezioni/**"
+      - "scripts/collezioni-indice.mjs"
       - "!apps/client/**/*.md"
       - "!apps/client/**/CHANGELOG.md"
       - "!apps/client/**/LICENSE"
