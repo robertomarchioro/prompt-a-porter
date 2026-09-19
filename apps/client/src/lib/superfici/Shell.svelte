@@ -33,6 +33,7 @@
   import DiffLibero from "$lib/superfici/DiffLibero.svelte";
   import CompilaModal from "$lib/superfici/CompilaModal.svelte";
   import InsightModal from "$lib/superfici/InsightModal.svelte";
+  import CollezioniModal from "$lib/superfici/CollezioniModal.svelte";
   import RegressioniModal from "$lib/superfici/RegressioniModal.svelte";
   import ImpostazioniModal from "$lib/superfici/ImpostazioniModal.svelte";
   import PaletteModal from "$lib/superfici/PaletteModal.svelte";
@@ -301,6 +302,7 @@
           onApriExpand={() => (stato.sidebarCollapsed = false)}
           onApriInsight={() => apriModale({ tipo: "insight" })}
           onApriRegressioni={() => apriModale({ tipo: "regressioni" })}
+          onApriCollezioni={() => apriModale({ tipo: "collezioni" })}
         />
       </div>
     {:else}
@@ -318,6 +320,7 @@
           onApriCollapse={() => (stato.sidebarCollapsed = true)}
           onApriInsight={() => apriModale({ tipo: "insight" })}
           onApriRegressioni={() => apriModale({ tipo: "regressioni" })}
+          onApriCollezioni={() => apriModale({ tipo: "collezioni" })}
           onAggiungiCartella={() => apriModale({ tipo: "nuova-cartella" })}
         />
       </div>
@@ -429,6 +432,10 @@
 
 {#if statoModale.attiva?.tipo === "regressioni"}
   <RegressioniModal onChiudi={chiudiModale} />
+{/if}
+
+{#if statoModale.attiva?.tipo === "collezioni"}
+  <CollezioniModal onChiudi={chiudiModale} />
 {/if}
 
 {#if statoModale.attiva?.tipo === "impostazioni"}

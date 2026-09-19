@@ -16,13 +16,18 @@ L'app li legge da `https://raw.githubusercontent.com/robertomarchioro/prompt-a-p
 **basta il merge su `main`** perché una collezione nuova o corretta sia
 disponibile, senza rilasciare l'app. Il client rifiuta un file il cui sha256
 non corrisponde all'indice, quindi l'indice va rigenerato a ogni modifica.
+Lo sha256 nell'indice è anche ciò che fa comparire «aggiornamento
+disponibile» a chi ha già importato (tabella `CollezioniImportate`, V017).
 
 ## Aggiungere o modificare una collezione
 
 1. Scrivi o modifica `docs/collezioni/<slug>.json`. Convenzioni:
    - ids **stabili e con prefisso** (`prm-col-<slug>-…`, `fld-col-<slug>-…`,
-     `tag-col-…`): l'import è idempotente per id, cambiarli crea doppioni
-     a chi ha già importato;
+     `tag-col-…`): l'import è idempotente per id e **Aggiorna** riallinea
+     per id i prompt mai modificati dall'utente (`Version == 1`); cambiare
+     un id significa un doppione per chi ha già importato. Per correggere un
+     prompt si cambia il corpo, mai l'id; per ritirarlo si toglie dal file
+     (resta a chi l'ha importato: aggiorna non cancella);
    - cartella radice `fld-collezioni` («Collezioni») condivisa fra tutte,
      poi una cartella per collezione con eventuali sottocartelle;
    - tag con lo stesso nome del demo vault → **stesso id** del demo

@@ -1,6 +1,6 @@
 # Collezioni di prompt
 
-> Raccolte di prompt curate dal progetto, una per tipo di lavoro, da importare nel vault con un click. Impostazioni → Dati → **Collezioni di prompt**.
+> Raccolte di prompt curate dal progetto, una per tipo di lavoro, da importare nel vault con un click e da tenere aggiornate. Pulsante **Collezioni** in fondo alla sidebar (o Impostazioni → Dati → **Collezioni di prompt**).
 
 Un vault vuoto è una pagina bianca: sai che l'app può fare molto, ma non da dove cominciare. Le collezioni rispondono a questo. Ognuna raccoglie una dozzina di prompt scritti per un tipo di lavoro — chi sviluppa, chi scrive — e costruiti apposta per mostrare ciò che distingue Prompt à Porter da un blocco note: segnaposti da compilare, ruoli riusabili con `{{import}}`, variabili passate con `with`, varianti A/B, commenti che non partono col prompt.
 
@@ -8,11 +8,26 @@ Sono prompt originali del progetto, in italiano, sotto la stessa licenza del rep
 
 ## Come si importano
 
-1. Apri **Impostazioni → Dati**.
-2. Nella card **Collezioni di prompt** premi **Sfoglia collezioni…**. È l'unico momento in cui l'app si collega a GitHub per scaricare l'elenco: non succede da solo all'apertura delle impostazioni.
-3. Scegli una collezione e premi **Importa**. In pochi secondi i prompt compaiono nella libreria, dentro la cartella `Collezioni` (una sottocartella per collezione).
+1. Premi **Collezioni** in fondo alla sidebar (accanto a Insight e Regressioni; con la sidebar ridotta è l'icona del libro). Si apre l'elenco delle collezioni: è l'unico momento in cui l'app si collega a GitHub, e succede perché l'hai chiesto tu.
+2. Scegli una collezione e premi **Importa**. In pochi secondi i prompt compaiono nella libreria, dentro la cartella `Collezioni` (una sottocartella per collezione).
 
-Il riepilogo sotto la collezione ti dice quanti elementi sono stati aggiunti e quanti erano già presenti.
+Il riepilogo sotto la collezione ti dice quanti elementi sono stati aggiunti e quanti erano già presenti. La stessa lista è anche in **Impostazioni → Dati**, card **Collezioni di prompt**, dietro il pulsante **Sfoglia**: lì l'elenco non si carica da solo, perché aprire le impostazioni non deve toccare la rete.
+
+## Tenerle aggiornate
+
+Le collezioni vivono nel repository e migliorano nel tempo: un prompt riscritto meglio, uno nuovo aggiunto. L'app ricorda quale versione hai importato; quando riapri **Collezioni** e una è cambiata, accanto al titolo compare **aggiornamento disponibile** e il pulsante diventa **Aggiorna**.
+
+**Aggiorna** segue una regola sola, pensata per non toccare mai il tuo lavoro:
+
+- un prompt della collezione che **non hai mai salvato** viene riallineato alla versione nuova (titolo, descrizione, corpo, modello suggerito);
+- un prompt che **hai modificato** anche una sola volta resta com'è, e il riepilogo lo conta come *conservato perché modificato da te*;
+- i prompt **nuovi** della collezione vengono aggiunti;
+- cartella, preferito, conteggio degli usi e tag restano sempre tuoi, anche sui prompt riallineati;
+- un prompt che hai messo nel **cestino** non torna;
+- le relazioni fra prompt (variante di, fork di) restano come alla prima importazione: **Aggiorna** cambia il contenuto, non la struttura;
+- se qualche elemento non si aggiorna (il riepilogo lo dice), la collezione resta segnata come da aggiornare, così puoi riprovare.
+
+Il riepilogo dopo l'aggiornamento è esplicito: «3 aggiornati · 1 nuovo · 2 conservati perché modificati da te». Se vuoi che un prompt modificato riprenda la versione della collezione, cancellalo e ri-importa: torna com'è nella collezione. Una collezione già allineata mostra **Aggiornata** e la data.
 
 ## Cosa succede ai prompt che hai già
 
@@ -20,7 +35,7 @@ Niente. L'importazione lavora sempre in modalità *salta*: un prompt, un tag o u
 
 Un dettaglio utile: se hai già un tag con lo stesso nome di uno della collezione (per esempio `codice`), i prompt importati si agganciano al tuo tag invece di crearne un secondo.
 
-Una volta importati, i prompt sono tuoi come tutti gli altri: modificali, spostali, cancellali. Aggiornare l'app non li tocca e non li rimette a posto.
+Una volta importati, i prompt sono tuoi come tutti gli altri: modificali, spostali, cancellali. Aggiornare l'app non li tocca; solo **Aggiorna** nella modale Collezioni li riallinea, e solo quelli mai modificati.
 
 ## Le collezioni disponibili
 

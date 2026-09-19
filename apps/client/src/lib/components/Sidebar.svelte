@@ -9,6 +9,7 @@
     FilePlus,
     FolderPlus,
     Pencil,
+    BookOpen,
   } from "lucide-svelte";
   import NavGroup from "./NavGroup.svelte";
   import NavItem from "./NavItem.svelte";
@@ -63,6 +64,7 @@
     onSelezionaModelTarget: (model: string) => void;
     onApriCollapse?: () => void;
     onApriInsight?: () => void;
+    onApriCollezioni?: () => void;
     onApriRegressioni?: () => void;
     onAggiungiCartella?: () => void;
   }
@@ -79,6 +81,7 @@
     onSelezionaModelTarget,
     onApriCollapse,
     onApriInsight,
+    onApriCollezioni,
     onApriRegressioni,
     onAggiungiCartella,
   }: Props = $props();
@@ -393,6 +396,10 @@
     <button class="footer-link" type="button" onclick={onApriRegressioni}>
       <AlertTriangle size={14} />
       <span>Regressioni</span>
+    </button>
+    <button class="footer-link" type="button" onclick={onApriCollezioni}>
+      <BookOpen size={14} />
+      <span>Collezioni</span>
     </button>
   </footer>
 </aside>

@@ -11,15 +11,18 @@
     Cpu,
     BarChart3,
     AlertTriangle,
+    BookOpen,
   } from "lucide-svelte";
 
   interface Props {
     onApriExpand: () => void;
     onApriInsight?: () => void;
     onApriRegressioni?: () => void;
+    onApriCollezioni?: () => void;
   }
 
-  let { onApriExpand, onApriInsight, onApriRegressioni }: Props = $props();
+  let { onApriExpand, onApriInsight, onApriRegressioni, onApriCollezioni }: Props =
+    $props();
 </script>
 
 <aside class="sidebar-mini">
@@ -87,6 +90,15 @@
     onclick={onApriRegressioni}
   >
     <AlertTriangle size={14} />
+  </button>
+  <button
+    class="ico"
+    type="button"
+    title="Collezioni"
+    aria-label="Collezioni"
+    onclick={onApriCollezioni}
+  >
+    <BookOpen size={14} />
   </button>
 </aside>
 

@@ -91,6 +91,11 @@ static MIGRAZIONI: &[Migrazione] = &[
         nome: "provider_config_gemini",
         sql: include_str!("../migrations/V016__provider_config_gemini.sql"),
     },
+    Migrazione {
+        versione: 17,
+        nome: "collezioni_importate",
+        sql: include_str!("../migrations/V017__collezioni_importate.sql"),
+    },
 ];
 
 /// Crea la tabella di tracking se non esiste.
@@ -221,10 +226,10 @@ mod test {
         let conn = Connection::open_in_memory().unwrap();
         let n = esegui_migrazioni(&conn).unwrap();
         assert!(
-            n >= 16,
-            "Tutte le migrazioni devono essere applicate (almeno 16)"
+            n >= 17,
+            "Tutte le migrazioni devono essere applicate (almeno 17)"
         );
-        assert_eq!(versione_corrente(&conn).unwrap(), 16);
+        assert_eq!(versione_corrente(&conn).unwrap(), 17);
     }
 
     #[test]
@@ -252,6 +257,7 @@ mod test {
 
         let attese = [
             "AuditLog",
+            "CollezioniImportate",
             "Folders",
             "PromptTags",
             "PromptVersions",
