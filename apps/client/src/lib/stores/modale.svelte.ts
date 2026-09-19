@@ -13,6 +13,7 @@ export type ModaleAttiva =
   | { tipo: "compila"; promptId: string }
   | { tipo: "insight" }
   | { tipo: "regressioni" }
+  | { tipo: "collezioni" }
   | { tipo: "impostazioni"; sezione?: string }
   | { tipo: "palette" }
   | { tipo: "nuova-cartella" }

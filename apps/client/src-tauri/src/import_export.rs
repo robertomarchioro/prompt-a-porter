@@ -1552,6 +1552,90 @@ fn tag_id_per_nome(conn: &Connection, nome: &str) -> Option<String> {
     .ok()
 }
 
+/// Esito di `aggiorna_prompt_intatto` (modalità `aggiorna`, collezioni).
+#[derive(Debug, PartialEq)]
+pub(crate) enum EsitoAggiorna {
+    /// Mai modificato dall'utente e diverso dal payload → sovrascritto.
+    Aggiornato,
+    /// Modificato dall'utente (`Version > 1`) → lasciato intatto.
+    Conservato,
+    /// Mai modificato e già identico al payload → nulla da fare.
+    Invariato,
+    /// Nel cestino → non si resuscita.
+    Cestinato,
+}
+
+/// Modalità `aggiorna` (collezioni curate): un prompt già presente viene
+/// sovrascritto SOLO se l'utente non l'ha mai salvato (`Version == 1`: il
+/// salvataggio incrementa sempre la versione, vedi `versioning.rs`). Si
+/// aggiornano i campi di **contenuto** — titolo, descrizione, corpo,
+/// modello, etichetta variante — e non ciò che appartiene
+/// all'organizzazione dell'utente (cartella, preferito, conteggio usi, tag)
+/// né la **struttura** (`IsVariant`, `ParentPromptId`, `ForkOfPromptId`):
+/// le relazioni si fissano alla prima importazione, perché toccarle qui
+/// senza la seconda passata di `import_pure` lascerebbe `IsVariant` senza
+/// parent (review PR passo 2). `Version` resta 1, così il prompt continua a
+/// seguire gli aggiornamenti futuri.
+fn aggiorna_prompt_intatto(
+    conn: &Connection,
+    prompt: &PromptExport,
+) -> Result<EsitoAggiorna, PapErrore> {
+    let (version, cestinato, title, description, body, target_model, variant_label): (
+        i64,
+        bool,
+        String,
+        Option<String>,
+        String,
+        Option<String>,
+        Option<String>,
+    ) = conn.query_row(
+        "SELECT Version, DeletedAt IS NOT NULL, Title, Description, Body,
+                TargetModel, VariantLabel
+         FROM Prompts WHERE Id = ?1",
+        [&prompt.id],
+        |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+            ))
+        },
+    )?;
+    if cestinato {
+        return Ok(EsitoAggiorna::Cestinato);
+    }
+    if version != 1 {
+        return Ok(EsitoAggiorna::Conservato);
+    }
+    let identico = title == prompt.title
+        && description == prompt.description
+        && body == prompt.body
+        && target_model == prompt.target_model
+        && variant_label == prompt.variant_label;
+    if identico {
+        return Ok(EsitoAggiorna::Invariato);
+    }
+    conn.execute(
+        "UPDATE Prompts SET Title = ?1, Description = ?2, Body = ?3,
+                TargetModel = ?4, VariantLabel = ?5,
+                UpdatedAt = datetime('now')
+         WHERE Id = ?6",
+        rusqlite::params![
+            prompt.title,
+            prompt.description,
+            prompt.body,
+            prompt.target_model,
+            prompt.variant_label,
+            prompt.id
+        ],
+    )?;
+    Ok(EsitoAggiorna::Aggiornato)
+}
+
 pub(crate) fn import_pure(
     conn: &Connection,
     export: &ExportV1,
@@ -1633,6 +1717,8 @@ pub(crate) fn import_pure(
                     report.aggiornati += 1;
                 }
             }
+            // aggiorna: la cartella della collezione già presente è attesa.
+            (true, "aggiorna") => {}
             // skip / rename: non duplichiamo alberi di cartelle.
             (true, _) => {
                 report.conflitti += 1;
@@ -1660,7 +1746,11 @@ pub(crate) fn import_pure(
         if !esiste {
             if let Some(id_omonimo) = tag_id_per_nome(conn, &tag.name) {
                 tag_map.insert(tag.id.clone(), id_omonimo);
-                report.conflitti += 1;
+                // In `aggiorna` i conflitti sono «prompt conservati perché
+                // modificati dall'utente»: un tag omonimo riusato non lo è.
+                if modalita != "aggiorna" {
+                    report.conflitti += 1;
+                }
                 continue;
             }
         }
@@ -1684,6 +1774,7 @@ pub(crate) fn import_pure(
             (true, "skip") | (true, "rename") => {
                 report.conflitti += 1;
             }
+            (true, "aggiorna") => {}
             (true, "overwrite") => {
                 if let Err(e) = conn.execute(
                     "UPDATE Tags SET Name = ?1, Color = ?2, UpdatedAt = datetime('now')
@@ -1720,6 +1811,22 @@ pub(crate) fn import_pure(
                 |r| r.get(0),
             )
             .unwrap_or(false);
+
+        if esiste && modalita == "aggiorna" {
+            match aggiorna_prompt_intatto(conn, prompt) {
+                Ok(EsitoAggiorna::Aggiornato) => report.aggiornati += 1,
+                Ok(EsitoAggiorna::Conservato) => report.conflitti += 1,
+                Ok(EsitoAggiorna::Invariato) | Ok(EsitoAggiorna::Cestinato) => {}
+                Err(e) => {
+                    log::error!("aggiorna prompt {:?}: {e}", prompt.id);
+                    report.errori.push(format!(
+                        "Prompt {}: aggiornamento non riuscito.",
+                        prompt.id
+                    ));
+                }
+            }
+            continue;
+        }
 
         let id_effettivo = match (esiste, modalita) {
             (false, _) => prompt.id.clone(),

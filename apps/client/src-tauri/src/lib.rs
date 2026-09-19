@@ -724,6 +724,7 @@ pub fn run() {
             changelog::changelog_sezione_remota,
             collezioni::collezioni_elenca,
             collezioni::collezioni_importa,
+            collezioni::collezioni_aggiorna,
             registra_hotkey,
             app_is_portable,
         ])

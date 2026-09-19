@@ -1,8 +1,9 @@
 # Collezioni curate vs import da siti di condivisione
 
-> **Stato**: decisione di rotta (2026-09-19) → **prima PR in lavorazione lo
-> stesso giorno** (backend `collezioni.rs`, card in Impostazioni → Dati, due
-> collezioni). Decisioni aperte chiuse in fondo al documento.
+> **Stato**: decisione di rotta (2026-09-19) → PR #660 (backend
+> `collezioni.rs`, card in Impostazioni → Dati, due collezioni) mergiata lo
+> stesso giorno; **passo 2**: punto di menù dedicato + aggiornamento delle
+> collezioni (vedi «Passo 2» in fondo).
 > **Domanda**: per rendere PaP più accattivante, conviene offrire liste di
 > prompt curate da scaricare, oppure l'import da siti di condivisione e
 > archivio prompt?
@@ -145,3 +146,18 @@ compromesso. È lo stesso livello di fiducia dell'updater, che punta allo
 stesso repo; una firma Ed25519 con la chiave dell'updater alzerebbe
 l'asticella ma richiede il box firma a ogni modifica di collezione — non
 vale il costo finché il contenuto è testo importato in `skip`.
+
+## Passo 2 — punto di menù e aggiornamento (2026-09-19)
+
+Decisioni dell'utente, chiuse prima del codice:
+
+| # | Domanda | Decisione |
+|---|---|---|
+| P1 | Dove sta il punto di menù? | **Footer della sidebar** («Collezioni» accanto a Insight e Regressioni, anche nella sidebar ridotta) → modale dedicata `CollezioniModal`. La card in Impostazioni → Dati resta come alias. La palette (Ctrl+K) è una palette di *prompt*, senza azioni statiche: aggiungerle è un'altra feature. |
+| P2 | Cosa fa «Aggiorna»? | **Solo i mai modificati**: `Version == 1` (il salvataggio incrementa sempre la versione) → titolo/descrizione/corpo/modello/etichetta variante riallineati, `Version` resta 1; modificati → intatti e contati come *conservati*; nuovi → aggiunti; cestinati → non risorgono. Cartella, preferito, usi e tag restano dell'utente. Modalità `aggiorna` interna a `import_pure`, non esposta all'import JSON manuale. |
+| P3 | Tracciare cosa è stato importato? | **Sì**: migration V017 `CollezioniImportate(Slug, Sha256, ImportataA, AggiornataA)`. L'elenco confronta l'impronta importata con quella remota → stati *nuova* / *aggiornata* / *aggiornabile*. |
+
+Conseguenze per chi cura le collezioni: gli **id sono un contratto** (aggiorna
+lavora per id); si corregge il corpo, mai l'id; ritirare un prompt dal file
+non lo toglie a chi l'ha importato.
+

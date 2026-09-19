@@ -57,6 +57,18 @@ pub struct CollezioneInfo {
     pub sha256: String,
 }
 
+/// Voce dell'indice arricchita con lo stato locale: cosa è stato importato
+/// in questo vault e con quale impronta. È ciò che riceve la modale.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct CollezioneVoce {
+    #[serde(flatten)]
+    pub info: CollezioneInfo,
+    /// Sha256 importato in questo vault, `None` se mai importata.
+    pub importata_sha256: Option<String>,
+    /// Data dell'ultima importazione o aggiornamento (ISO, UTC).
+    pub importata_a: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 struct Indice {
     #[serde(rename = "schemaVersion")]
@@ -123,13 +135,8 @@ pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// Deserializza una collezione come `ExportV1` e la importa in modalità
-/// `skip`. Separata dal download per essere testabile sui file committati.
-pub(crate) fn importa_collezione_pura(
-    conn: &rusqlite::Connection,
-    slug: &str,
-    json: &str,
-) -> Result<ImportReport, PapErrore> {
+/// Parsa una collezione scaricata come `ExportV1`, rifiutando schemi futuri.
+fn deserializza_collezione(slug: &str, json: &str) -> Result<ExportV1, PapErrore> {
     let export: ExportV1 = serde_json::from_str(json).map_err(|e| {
         // `{:?}` + cap: il testo dell'errore serde può citare frammenti del
         // JSON scaricato (dato esterno) — stessa difesa di `changelog.rs`
@@ -149,6 +156,17 @@ pub(crate) fn importa_collezione_pura(
             ),
         ));
     }
+    Ok(export)
+}
+
+/// Deserializza una collezione come `ExportV1` e la importa in modalità
+/// `skip`. Separata dal download per essere testabile sui file committati.
+pub(crate) fn importa_collezione_pura(
+    conn: &rusqlite::Connection,
+    slug: &str,
+    json: &str,
+) -> Result<ImportReport, PapErrore> {
+    let export = deserializza_collezione(slug, json)?;
     let report = import_pure(conn, &export, "skip")?;
     crate::audit::registra(
         conn,
@@ -158,6 +176,75 @@ pub(crate) fn importa_collezione_pura(
         Some(&format!(
             "nuovi={} conflitti={} errori={}",
             report.nuovi,
+            report.conflitti,
+            report.errori.len()
+        )),
+    );
+    Ok(report)
+}
+
+/// Registra (o rinfresca) l'impronta della collezione importata in questo
+/// vault. `ImportataA` resta la prima importazione; `AggiornataA` avanza.
+pub(crate) fn registra_importazione(
+    conn: &rusqlite::Connection,
+    slug: &str,
+    sha256: &str,
+) -> Result<(), PapErrore> {
+    conn.execute(
+        "INSERT INTO CollezioniImportate (Slug, Sha256)
+         VALUES (?1, ?2)
+         ON CONFLICT(Slug) DO UPDATE SET
+             Sha256 = excluded.Sha256,
+             AggiornataA = datetime('now')",
+        rusqlite::params![slug, sha256],
+    )?;
+    Ok(())
+}
+
+/// Unisce l'indice remoto con la tabella locale `CollezioniImportate`.
+pub(crate) fn arricchisci(
+    conn: &rusqlite::Connection,
+    voci: Vec<CollezioneInfo>,
+) -> Result<Vec<CollezioneVoce>, PapErrore> {
+    let mut stmt =
+        conn.prepare("SELECT Sha256, AggiornataA FROM CollezioniImportate WHERE Slug = ?1")?;
+    voci.into_iter()
+        .map(|info| {
+            let locale: Option<(String, String)> = stmt
+                .query_row([&info.slug], |r| Ok((r.get(0)?, r.get(1)?)))
+                .ok();
+            let (importata_sha256, importata_a) = match locale {
+                Some((sha, a)) => (Some(sha), Some(a)),
+                None => (None, None),
+            };
+            Ok(CollezioneVoce {
+                info,
+                importata_sha256,
+                importata_a,
+            })
+        })
+        .collect()
+}
+
+/// Come `importa_collezione_pura` ma in modalità `aggiorna`: i prompt mai
+/// modificati dall'utente vengono riallineati alla collezione, quelli
+/// modificati restano intatti (contati in `conflitti`), i nuovi aggiunti.
+pub(crate) fn aggiorna_collezione_pura(
+    conn: &rusqlite::Connection,
+    slug: &str,
+    json: &str,
+) -> Result<ImportReport, PapErrore> {
+    let export = deserializza_collezione(slug, json)?;
+    let report = import_pure(conn, &export, "aggiorna")?;
+    crate::audit::registra(
+        conn,
+        "collezione.aggiornata",
+        "Collezione",
+        slug,
+        Some(&format!(
+            "nuovi={} aggiornati={} conservati={} errori={}",
+            report.nuovi,
+            report.aggiornati,
             report.conflitti,
             report.errori.len()
         )),
@@ -204,23 +291,22 @@ fn scarica_indice() -> Result<Vec<CollezioneInfo>, PapErrore> {
     parse_indice(&testo)
 }
 
-/// Cmd Tauri: elenca le collezioni disponibili. Chiamato solo su azione
-/// esplicita dell'utente; `async` perché il download non deve bloccare il
-/// thread principale della webview.
+/// Cmd Tauri: elenca le collezioni disponibili, con lo stato locale
+/// (importata? con quale impronta?). Chiamato solo su azione esplicita
+/// dell'utente; `async` perché il download non deve bloccare il thread
+/// principale della webview. La rete viene prima del lock sul vault.
 #[tauri::command(async)]
-pub fn collezioni_elenca() -> Result<Vec<CollezioneInfo>, PapErrore> {
-    scarica_indice()
+pub fn collezioni_elenca(
+    state: State<'_, VaultState>,
+) -> Result<Vec<CollezioneVoce>, PapErrore> {
+    let voci = scarica_indice()?;
+    state.with_conn(|conn| arricchisci(conn, voci))
 }
 
-/// Cmd Tauri: scarica la collezione `slug`, ne verifica lo sha256 contro
-/// l'indice (riscaricato: il comando è stateless e l'indice è minuscolo) e
-/// la importa in modalità `skip`.
-#[tauri::command(async)]
-pub fn collezioni_importa(
-    slug: String,
-    state: State<'_, VaultState>,
-) -> Result<ImportReport, PapErrore> {
-    if !slug_valido(&slug) {
+/// Scarica `<slug>.json` e ne verifica lo sha256 contro l'indice
+/// (riscaricato: stateless e minuscolo). Ritorna il JSON e l'impronta.
+fn scarica_collezione_verificata(slug: &str) -> Result<(String, String), PapErrore> {
+    if !slug_valido(slug) {
         return Err(PapErrore::dominio(
             "Identificativo della collezione non valido.",
             format!(
@@ -251,8 +337,58 @@ pub fn collezioni_importa(
     }
     let json = String::from_utf8(bytes)
         .map_err(|e| PapErrore::dominio("La collezione scaricata non è leggibile.", e))?;
+    Ok((json, calcolato))
+}
 
-    state.with_conn(|conn| importa_collezione_pura(conn, &slug, &json))
+/// Applica la collezione (import o aggiornamento) e registra l'impronta
+/// SOLO se nessun elemento è fallito: con errori parziali la collezione
+/// resta «da importare»/«aggiornabile», così l'utente può riprovare
+/// (review PR passo 2: prima l'impronta veniva registrata comunque e il
+/// bottone si disabilitava senza via di ritorno).
+pub(crate) fn applica_e_registra(
+    conn: &rusqlite::Connection,
+    slug: &str,
+    json: &str,
+    sha256: &str,
+    aggiorna: bool,
+) -> Result<ImportReport, PapErrore> {
+    let report = if aggiorna {
+        aggiorna_collezione_pura(conn, slug, json)?
+    } else {
+        importa_collezione_pura(conn, slug, json)?
+    };
+    if report.errori.is_empty() {
+        registra_importazione(conn, slug, sha256)?;
+    } else {
+        log::warn!(
+            "collezione «{slug}»: {} errori, impronta non registrata",
+            report.errori.len()
+        );
+    }
+    Ok(report)
+}
+
+/// Cmd Tauri: scarica la collezione `slug` (verificata) e la importa in
+/// modalità `skip`, poi registra l'impronta importata.
+#[tauri::command(async)]
+pub fn collezioni_importa(
+    slug: String,
+    state: State<'_, VaultState>,
+) -> Result<ImportReport, PapErrore> {
+    let (json, sha) = scarica_collezione_verificata(&slug)?;
+    state.with_conn(|conn| applica_e_registra(conn, &slug, &json, &sha, false))
+}
+
+/// Cmd Tauri: scarica la collezione `slug` (verificata) e la applica in
+/// modalità `aggiorna` — riallinea i prompt mai modificati, conserva quelli
+/// modificati, aggiunge i nuovi — poi registra la nuova impronta.
+#[tauri::command(async)]
+pub fn collezioni_aggiorna(
+    slug: String,
+    state: State<'_, VaultState>,
+) -> Result<ImportReport, PapErrore> {
+    let (json, sha) = scarica_collezione_verificata(&slug)?;
+    state.with_conn(|conn| applica_e_registra(conn, &slug, &json, &sha, true))
 }
 
 #[cfg(test)]
@@ -454,6 +590,250 @@ mod test {
                 }
             }
         }
+    }
+
+    // ─────────── modalità aggiorna + tracciamento ───────────
+
+    /// Prende la collezione Sviluppatore e ne produce una "versione 2":
+    /// corpo di un prompt cambiato, un prompt nuovo in coda.
+    fn sviluppatore_v2() -> (String, &'static str, &'static str) {
+        let mut export: serde_json::Value =
+            serde_json::from_str(COLLEZIONI_COMMITTATE[0].1).unwrap();
+        let prompts = export["prompts"].as_array_mut().unwrap();
+        let id_modificato = "prm-col-dev-commit";
+        let p = prompts
+            .iter_mut()
+            .find(|p| p["id"] == id_modificato)
+            .unwrap();
+        p["body"] = serde_json::Value::String("CORPO NUOVO {{diff}}".into());
+        let mut nuovo = prompts[0].clone();
+        nuovo["id"] = serde_json::Value::String("prm-col-dev-nuovo-v2".into());
+        nuovo["title"] = serde_json::Value::String("Prompt nuovo della v2".into());
+        prompts.push(nuovo);
+        (export.to_string(), id_modificato, "prm-col-dev-nuovo-v2")
+    }
+
+    fn body_di(conn: &Connection, id: &str) -> String {
+        conn.query_row("SELECT Body FROM Prompts WHERE Id = ?1", [id], |r| r.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn aggiorna_riallinea_i_mai_modificati_e_aggiunge_i_nuovi() {
+        // Arrange: v1 importata, l'utente sposta il prompt in un'altra
+        // cartella e lo mette fra i preferiti (organizzazione sua).
+        let conn = db_test();
+        importa_collezione_pura(&conn, "sviluppatore", COLLEZIONI_COMMITTATE[0].1).unwrap();
+        let (v2, id_mod, id_nuovo) = sviluppatore_v2();
+        conn.execute(
+            "UPDATE Prompts SET FolderId = NULL, IsFavorite = 1, UseCount = 7 WHERE Id = ?1",
+            [id_mod],
+        )
+        .unwrap();
+
+        // Act
+        let report = aggiorna_collezione_pura(&conn, "sviluppatore", &v2).unwrap();
+
+        // Assert: 1 aggiornato, 1 nuovo, nessun conservato, nessun errore.
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(report.aggiornati, 1);
+        assert_eq!(report.nuovi, 1);
+        assert_eq!(report.conflitti, 0, "cartelle/tag esistenti non sono conflitti in aggiorna");
+        assert_eq!(body_di(&conn, id_mod), "CORPO NUOVO {{diff}}");
+        assert!(!body_di(&conn, id_nuovo).is_empty());
+        // L'organizzazione dell'utente resta sua; Version resta 1.
+        let (folder, fav, usi, ver): (Option<String>, bool, i64, i64) = conn
+            .query_row(
+                "SELECT FolderId, IsFavorite, UseCount, Version FROM Prompts WHERE Id = ?1",
+                [id_mod],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(folder, None);
+        assert!(fav);
+        assert_eq!(usi, 7);
+        assert_eq!(ver, 1);
+    }
+
+    #[test]
+    fn aggiorna_conserva_i_prompt_modificati_dall_utente() {
+        // Arrange: l'utente ha salvato il prompt (Version 2, corpo suo).
+        let conn = db_test();
+        importa_collezione_pura(&conn, "sviluppatore", COLLEZIONI_COMMITTATE[0].1).unwrap();
+        let (v2, id_mod, _) = sviluppatore_v2();
+        conn.execute(
+            "UPDATE Prompts SET Body = 'corpo dell utente', Version = 2 WHERE Id = ?1",
+            [id_mod],
+        )
+        .unwrap();
+
+        // Act
+        let report = aggiorna_collezione_pura(&conn, "sviluppatore", &v2).unwrap();
+
+        // Assert
+        assert_eq!(report.aggiornati, 0);
+        assert_eq!(report.conflitti, 1, "il prompt modificato va contato come conservato");
+        assert_eq!(body_di(&conn, id_mod), "corpo dell utente");
+    }
+
+    #[test]
+    fn aggiorna_e_idempotente_e_non_resuscita_dal_cestino() {
+        let conn = db_test();
+        importa_collezione_pura(&conn, "sviluppatore", COLLEZIONI_COMMITTATE[0].1).unwrap();
+        let (v2, id_mod, _) = sviluppatore_v2();
+        conn.execute(
+            "UPDATE Prompts SET DeletedAt = datetime('now') WHERE Id = 'prm-col-dev-sql'",
+            [],
+        )
+        .unwrap();
+
+        let primo = aggiorna_collezione_pura(&conn, "sviluppatore", &v2).unwrap();
+        let secondo = aggiorna_collezione_pura(&conn, "sviluppatore", &v2).unwrap();
+
+        assert_eq!(primo.aggiornati, 1);
+        assert_eq!((secondo.nuovi, secondo.aggiornati, secondo.conflitti), (0, 0, 0));
+        assert!(secondo.errori.is_empty());
+        assert_eq!(body_di(&conn, id_mod), "CORPO NUOVO {{diff}}");
+        let cestinato: bool = conn
+            .query_row(
+                "SELECT DeletedAt IS NOT NULL FROM Prompts WHERE Id = 'prm-col-dev-sql'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(cestinato, "aggiorna non deve resuscitare un prompt cestinato");
+    }
+
+    /// La struttura (variante/parent) si fissa alla prima importazione:
+    /// una v2 che demota la variante non deve lasciare IsVariant senza
+    /// parent né toccare la relazione.
+    #[test]
+    fn aggiorna_non_tocca_la_struttura_delle_varianti() {
+        let conn = db_test();
+        importa_collezione_pura(&conn, "sviluppatore", COLLEZIONI_COMMITTATE[0].1).unwrap();
+        let mut export: serde_json::Value =
+            serde_json::from_str(COLLEZIONI_COMMITTATE[0].1).unwrap();
+        let p = export["prompts"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|p| p["id"] == "prm-col-dev-refactoring-b")
+            .unwrap();
+        p["is_variant"] = serde_json::Value::Bool(false);
+        p["parent_prompt_id"] = serde_json::Value::Null;
+        p["body"] = serde_json::Value::String("corpo v2".into());
+
+        let report = aggiorna_collezione_pura(&conn, "sviluppatore", &export.to_string()).unwrap();
+
+        assert_eq!(report.aggiornati, 1);
+        let (is_variant, parent): (bool, Option<String>) = conn
+            .query_row(
+                "SELECT IsVariant, ParentPromptId FROM Prompts WHERE Id = 'prm-col-dev-refactoring-b'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert!(is_variant, "IsVariant non deve cambiare in aggiorna");
+        assert_eq!(parent.as_deref(), Some("prm-col-dev-refactoring"));
+        assert_eq!(body_di(&conn, "prm-col-dev-refactoring-b"), "corpo v2");
+    }
+
+    /// Un tag omonimo dell'utente riusato non è un «conservato» in aggiorna.
+    #[test]
+    fn aggiorna_non_conta_i_tag_omonimi_come_conservati() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO Tags (Id, WorkspaceId, Name, Color, CreatedAt, UpdatedAt)
+             VALUES ('tag-mio', 'ws-personale', 'codice', '#000', '2026-01-01', '2026-01-01')",
+            [],
+        )
+        .unwrap();
+        let report =
+            aggiorna_collezione_pura(&conn, "sviluppatore", COLLEZIONI_COMMITTATE[0].1).unwrap();
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(report.conflitti, 0);
+        assert_eq!(report.nuovi as usize, 13 + 6 + 6, "13 prompt, 6 cartelle, 6 tag nuovi");
+    }
+
+    /// Con errori parziali l'impronta NON va registrata: la collezione deve
+    /// restare importabile/aggiornabile per riprovare.
+    #[test]
+    fn applica_e_registra_non_registra_con_errori_parziali() {
+        let conn = db_test();
+        // Due cartelle radice omonime con id diversi: la seconda viola
+        // l'indice unique sui fratelli → un errore nel report.
+        let json = r#"{"schemaVersion":1,"exportedAt":"2026-01-01T00:00:00Z",
+            "workspace":{"id":"ws-personale","name":"Personale","type":"personal"},
+            "tags":[],"prompts":[],"versions":[],"global_placeholders":[],
+            "folders":[
+              {"id":"fld-a","parent_folder_id":null,"name":"Doppia","path":"/Doppia","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},
+              {"id":"fld-b","parent_folder_id":null,"name":"Doppia","path":"/Doppia","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}
+            ]}"#;
+        let sha = "1".repeat(64);
+
+        let report = applica_e_registra(&conn, "rotta", json, &sha, false).unwrap();
+        assert_eq!(report.errori.len(), 1, "{:?}", report.errori);
+        let righe: i64 = conn
+            .query_row("SELECT COUNT(*) FROM CollezioniImportate", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(righe, 0, "impronta registrata nonostante gli errori");
+
+        // Senza errori, invece, registra (import e aggiorna).
+        let ok = applica_e_registra(
+            &conn,
+            "sviluppatore",
+            COLLEZIONI_COMMITTATE[0].1,
+            &sha,
+            false,
+        )
+        .unwrap();
+        assert!(ok.errori.is_empty());
+        let ok2 = applica_e_registra(
+            &conn,
+            "sviluppatore",
+            COLLEZIONI_COMMITTATE[0].1,
+            &"2".repeat(64),
+            true,
+        )
+        .unwrap();
+        assert!(ok2.errori.is_empty());
+        let sha_locale: String = conn
+            .query_row(
+                "SELECT Sha256 FROM CollezioniImportate WHERE Slug = 'sviluppatore'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(sha_locale, "2".repeat(64));
+    }
+
+    #[test]
+    fn registra_importazione_fa_upsert_e_arricchisci_riporta_lo_stato() {
+        let conn = db_test();
+        let voci = parse_indice(INDICE_COMMITTATO).unwrap();
+
+        // Mai importata: nessuno stato locale.
+        let prima = arricchisci(&conn, voci.clone()).unwrap();
+        assert!(prima.iter().all(|v| v.importata_sha256.is_none()));
+
+        // Importata con un'impronta vecchia → arricchisci la riporta.
+        registra_importazione(&conn, "sviluppatore", &"0".repeat(64)).unwrap();
+        let dopo = arricchisci(&conn, voci.clone()).unwrap();
+        let dev = dopo.iter().find(|v| v.info.slug == "sviluppatore").unwrap();
+        assert_eq!(dev.importata_sha256.as_deref(), Some("0".repeat(64).as_str()));
+        assert!(dev.importata_a.is_some());
+        let scr = dopo.iter().find(|v| v.info.slug == "scrittura").unwrap();
+        assert!(scr.importata_sha256.is_none());
+
+        // Upsert: la seconda registrazione sostituisce l'impronta, una riga sola.
+        registra_importazione(&conn, "sviluppatore", &dev.info.sha256).unwrap();
+        let righe: i64 = conn
+            .query_row("SELECT COUNT(*) FROM CollezioniImportate", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(righe, 1);
+        let dopo2 = arricchisci(&conn, voci).unwrap();
+        let dev2 = dopo2.iter().find(|v| v.info.slug == "sviluppatore").unwrap();
+        assert_eq!(dev2.importata_sha256.as_deref(), Some(dev2.info.sha256.as_str()));
     }
 
     #[test]
