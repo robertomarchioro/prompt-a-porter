@@ -5,6 +5,7 @@ pub mod audit;
 pub mod cartelle;
 pub mod cestino;
 pub mod changelog;
+pub mod collezioni;
 pub mod commenti;
 pub mod debug_log;
 pub mod editor;
@@ -721,6 +722,8 @@ pub fn run() {
             debug_log::debug_log_esporta_zip,
             debug_log::debug_log_leggi,
             changelog::changelog_sezione_remota,
+            collezioni::collezioni_elenca,
+            collezioni::collezioni_importa,
             registra_hotkey,
             app_is_portable,
         ])

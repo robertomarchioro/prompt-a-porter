@@ -1,6 +1,8 @@
 # Collezioni curate vs import da siti di condivisione
 
-> **Stato**: valutazione + decisione di rotta (2026-09-19). Nessun codice.
+> **Stato**: decisione di rotta (2026-09-19) → **prima PR in lavorazione lo
+> stesso giorno** (backend `collezioni.rs`, card in Impostazioni → Dati, due
+> collezioni). Decisioni aperte chiuse in fondo al documento.
 > **Domanda**: per rendere PaP più accattivante, conviene offrire liste di
 > prompt curate da scaricare, oppure l'import da siti di condivisione e
 > archivio prompt?
@@ -113,11 +115,33 @@ Contro, onesti:
 - Un «marketplace» o server di collezioni: fuori scope Personale, e in
   Enterprise arriverebbe semmai come feature del server (v2.x).
 
-## Decisioni aperte
+## Decisioni chiuse (2026-09-19)
 
-| # | Domanda | Opzioni |
+| # | Domanda | Decisione |
 |---|---|---|
-| D1 | Chi cura le collezioni e con che cadenza? | maintainer a ogni stagione · contributi via PR con review |
-| D2 | Bundle nell'app o asset di release? | bundle finché < ~500 KB totali · release oltre |
-| D3 | Collezioni per persona o per feature? | persona (dev, scrittura, insegnamento, analisi) · feature (composizione, varianti, globali) |
-| D4 | L'importer CSV entra nella prima PR o dopo? | dopo, solo se qualcuno lo chiede |
+| D1 | Chi cura le collezioni e con che cadenza? | **Aperta.** Le prime due le ha scritte il maintainer con la PR; contributi via PR con review, procedura in `docs/collezioni/README.md`. La cadenza si decide quando c'è un secondo contributore. |
+| D2 | Bundle nell'app o scaricate? | **Scaricate da GitHub, non bundlate**: aggiornabili senza rilasciare l'app. In pratica da `raw.githubusercontent.com/…/main/docs/collezioni/` (stesso pattern e stesse difese di `changelog.rs`: URL da costanti, slug validato, timeout, cap byte) e non da asset di release — ottiene lo stesso senza toccare `release.yml` né il box firma. L'indice porta lo sha256 di ogni file e il client lo verifica. Rete **solo al click** «Sfoglia». |
+| D3 | Per persona o per feature? | **Per persona**: Sviluppatore, Scrittura; poi Insegnamento, Analisi dati. Ogni collezione mostra comunque tutte le feature. |
+| D4 | Importer CSV generico? | **Rinviato** ([`rinvii.md`](./rinvii.md)); si fa se qualcuno lo chiede. |
+
+Scelte di dettaglio prese in implementazione:
+
+- cartella radice `Collezioni/` condivisa, una sottocartella per collezione;
+  import sempre `skip`, idempotente per id (re-import = tutto «già presente»);
+- `import_pure` ora **rimappa i tag per nome**: un tag omonimo dell'utente
+  con id diverso viene riusato invece di far fallire l'INSERT
+  (`UNIQUE (WorkspaceId, Name)`) e perdere l'associazione — senza questo le
+  collezioni si rompevano in ogni vault già popolato;
+- nessun `global_placeholders` nelle collezioni: non si seminano valori nel
+  vault dell'utente;
+- la scelta nell'onboarding è rinviata a una PR separata, dopo la prova dal
+  vivo della card.
+
+## Residuo di fiducia (dichiarato, non risolto)
+
+Lo sha256 nell'indice arriva dalla stessa origine dei file: difende da
+download troncati e dallo scarto di cache della CDN, **non** da un repo
+compromesso. È lo stesso livello di fiducia dell'updater, che punta allo
+stesso repo; una firma Ed25519 con la chiave dell'updater alzerebbe
+l'asticella ma richiede il box firma a ogni modifica di collezione — non
+vale il costo finché il contenuto è testo importato in `skip`.

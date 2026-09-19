@@ -32,6 +32,7 @@ export type ChiaveDoc =
   | "fork"
   | "markdown-import-export"
   | "export-json"
+  | "collezioni"
   | "scorciatoie"
   | "troubleshooting"
   | "auto-update"
@@ -81,6 +82,7 @@ export const DOCS: Record<ChiaveDoc, VoceDoc> = {
     titolo: "Import/export Markdown",
   },
   "export-json": { file: "formato-export-json", titolo: "Formato export JSON" },
+  collezioni: { file: "collezioni", titolo: "Collezioni di prompt" },
   scorciatoie: { file: "scorciatoie-tastiera", titolo: "Scorciatoie da tastiera" },
   troubleshooting: { file: "troubleshooting", titolo: "Risoluzione problemi" },
   "auto-update": { file: "auto-update", titolo: "Aggiornamenti automatici" },

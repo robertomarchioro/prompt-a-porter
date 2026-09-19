@@ -161,6 +161,7 @@ export default defineConfig({
             { text: "MCP server", link: "/utente/mcp" },
             { text: "Export/Import JSON", link: "/utente/formato-export-json" },
             { text: "Markdown import/export", link: "/utente/markdown-import-export" },
+            { text: "Collezioni di prompt", link: "/utente/collezioni" },
             { text: "Auto-update", link: "/utente/auto-update" },
           ],
         },

@@ -1,0 +1,354 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-09-19T08:00:00Z",
+  "workspace": {
+    "id": "ws-personale",
+    "name": "Personale",
+    "type": "personal"
+  },
+  "tags": [
+    {
+      "id": "tag-codice",
+      "name": "codice",
+      "color": "#16a34a",
+      "created_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "tag-ruolo",
+      "name": "ruolo",
+      "color": "#64748b",
+      "created_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "tag-col-review",
+      "name": "review",
+      "color": "#0891b2",
+      "created_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "tag-col-test",
+      "name": "test",
+      "color": "#ca8a04",
+      "created_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "tag-col-git",
+      "name": "git",
+      "color": "#ea580c",
+      "created_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "tag-col-debug",
+      "name": "debug",
+      "color": "#dc2626",
+      "created_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "tag-col-docs",
+      "name": "documentazione",
+      "color": "#9333ea",
+      "created_at": "2026-09-19T08:00:00Z"
+    }
+  ],
+  "folders": [
+    {
+      "id": "fld-collezioni",
+      "parent_folder_id": null,
+      "name": "Collezioni",
+      "path": "/Collezioni",
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "fld-col-dev",
+      "parent_folder_id": "fld-collezioni",
+      "name": "Sviluppatore",
+      "path": "/Collezioni/Sviluppatore",
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "fld-col-dev-ruoli",
+      "parent_folder_id": "fld-col-dev",
+      "name": "Ruoli",
+      "path": "/Collezioni/Sviluppatore/Ruoli",
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "fld-col-dev-codice",
+      "parent_folder_id": "fld-col-dev",
+      "name": "Codice",
+      "path": "/Collezioni/Sviluppatore/Codice",
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "fld-col-dev-git",
+      "parent_folder_id": "fld-col-dev",
+      "name": "Git",
+      "path": "/Collezioni/Sviluppatore/Git",
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "fld-col-dev-debug",
+      "parent_folder_id": "fld-col-dev",
+      "name": "Debug e documentazione",
+      "path": "/Collezioni/Sviluppatore/Debug e documentazione",
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z"
+    }
+  ],
+  "prompts": [
+    {
+      "id": "prm-col-dev-ruolo-tech-lead",
+      "title": "Ruolo tech lead",
+      "description": "Blocco di contesto riusabile via import: un tech lead pragmatico che ragiona per trade-off. Il segnaposto {{linguaggio}} si può fissare dall'import con «with».",
+      "body": "Sei un tech lead con quindici anni di esperienza su sistemi in produzione, oggi concentrato su {{linguaggio}}.\nRagioni per trade-off espliciti, non per dogmi: ogni raccomandazione porta il suo costo.\nPreferisci la soluzione più semplice che regge davvero, e lo dici quando una richiesta è più complicata del problema.\nRispondi in italiano, con i termini tecnici in inglese dove sono lo standard.",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-dev-ruoli",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-ruolo",
+        "tag-codice"
+      ]
+    },
+    {
+      "id": "prm-col-dev-ruolo-reviewer",
+      "title": "Ruolo reviewer rigoroso",
+      "description": "Blocco di contesto riusabile via import: un reviewer che cerca i difetti e non fa complimenti.",
+      "body": "Sei un reviewer di codice rigoroso ma equo. Il tuo compito è trovare ciò che non funziona, non lodare ciò che funziona.\nSegnali solo problemi reali e verificabili; se non sei sicuro, lo dici invece di inventare.\nOrdini sempre i rilievi per gravità e per ognuno proponi una correzione concreta.\nNon riscrivi il codice per intero: suggerisci la modifica minima.",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-dev-ruoli",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-ruolo",
+        "tag-col-review"
+      ]
+    },
+    {
+      "id": "prm-col-dev-code-review-pr",
+      "title": "Code review di una pull request",
+      "description": "Review strutturata di un diff, con il ruolo importato e il linguaggio passato dall'import.",
+      "body": "{{import \"Ruolo reviewer rigoroso\"}}\n\nFai la review del diff qui sotto, scritto in {{linguaggio}}.\n\nContesto della modifica: {{contesto}}\n\nControlla nell'ordine:\n1. Bug e casi limite non gestiti\n2. Sicurezza (input non validato, segreti nel codice, injection)\n3. Effetti collaterali e compatibilità con il codice esistente\n4. Test: mancano? coprono il caso negativo oltre a quello felice?\n5. Leggibilità e naming\n\nPer ogni rilievo: gravità (critico / da sistemare / dettaglio), file e riga se disponibili, spiegazione in due frasi, correzione proposta.\nChiudi con un verdetto in una riga: approvabile, approvabile con modifiche, da rifare.\n\n{{!-- Incolla il diff con `git diff main...HEAD` per avere tutti i commit del branch. --}}\n```diff\n{{diff}}\n```",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-dev-codice",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-codice",
+        "tag-col-review"
+      ]
+    },
+    {
+      "id": "prm-col-dev-test-unitari",
+      "title": "Genera test unitari mirati",
+      "description": "Test che coprono i casi limite e il caso negativo, non solo quello felice. Importa il ruolo tech lead: il suo segnaposto {{linguaggio}} viene chiesto una volta sola.",
+      "body": "{{import \"Ruolo tech lead\"}}\n\nScrivi i test unitari per il codice qui sotto usando {{framework_test}}.\n\nRegole:\n- Prima elenca in una tabella i casi che intendi coprire: felice, limite, errore. Poi scrivi i test.\n- Ogni test verifica una cosa sola e ha un nome che descrive il comportamento atteso.\n- Struttura Arrange / Act / Assert, senza logica condizionale dentro i test.\n- Niente mock di ciò che si può usare davvero; spiega ogni mock che introduci.\n- Se il codice è difficile da testare, dillo e proponi la modifica minima che lo renderebbe testabile.\n\n{{!-- Sostituisci framework_test con vitest, pytest, cargo test, go test… --}}\n```{{linguaggio}}\n{{codice}}\n```",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-dev-codice",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-codice",
+        "tag-col-test"
+      ]
+    },
+    {
+      "id": "prm-col-dev-refactoring",
+      "title": "Refactoring guidato",
+      "description": "Refactoring con obiettivo dichiarato e comportamento invariato. Ha una variante «conservativa» per codice legacy.",
+      "body": "Fai il refactoring del codice qui sotto con questo obiettivo: {{obiettivo}}\n\nVincoli:\n- Il comportamento osservabile non cambia: stessi input, stessi output, stessi errori.\n- Procedi per passi piccoli e nominati (estrai funzione, rinomina, sposta), uno alla volta.\n- Per ogni passo mostra il codice dopo la modifica e spiega in una riga perché migliora.\n- Alla fine elenca i test che dovrei eseguire per essere sicuro di non aver rotto nulla.\n\n```{{linguaggio}}\n{{codice}}\n```",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-dev-codice",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-codice"
+      ]
+    },
+    {
+      "id": "prm-col-dev-refactoring-b",
+      "title": "Refactoring guidato",
+      "description": "Variante conservativa: solo modifiche che non cambiano la struttura, per codice senza test.",
+      "body": "Il codice qui sotto non ha test. Proponi SOLO refactoring che si possono verificare a occhio: rinomine, estrazione di costanti, rimozione di codice morto, commenti che spiegano il perché.\n\nNon estrarre funzioni, non cambiare firme, non toccare l'ordine delle operazioni.\nObiettivo: {{obiettivo}}\n\nPer ogni modifica: prima / dopo e perché è sicura senza test.\n\n```{{linguaggio}}\n{{codice}}\n```",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-dev-codice",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-codice"
+      ],
+      "parent_prompt_id": "prm-col-dev-refactoring",
+      "is_variant": true,
+      "variant_label": "conservativo"
+    },
+    {
+      "id": "prm-col-dev-spiega-codice",
+      "title": "Spiega questo codice a un collega",
+      "description": "Spiegazione a livelli: cosa fa, come, e dove sta il rischio. Adatta il registro al livello del lettore.",
+      "body": "Spiega il codice qui sotto a un collega di livello {{livello}}.\n\nStruttura la risposta così:\n1. **In una frase**: cosa fa.\n2. **Come**: il flusso principale, passo per passo, senza parafrasare riga per riga.\n3. **Dove guardare**: le due o tre righe che contano davvero e perché.\n4. **Cosa può andare storto**: input inattesi, casi limite, dipendenze nascoste.\n\n{{!-- livello: junior, senior, non tecnico --}}\n```{{linguaggio}}\n{{codice}}\n```",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-dev-codice",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-codice",
+        "tag-col-docs"
+      ]
+    },
+    {
+      "id": "prm-col-dev-commit",
+      "title": "Messaggio di commit convenzionale",
+      "description": "Un messaggio di commit nel formato conventional commits, ricavato dal diff.",
+      "body": "Scrivi il messaggio di commit per il diff qui sotto, nel formato conventional commits:\n\n```\n<tipo>(<ambito>): <riassunto imperativo, max 72 caratteri>\n\n<corpo: cosa cambia e perché, non come>\n```\n\nTipi ammessi: feat, fix, refactor, docs, test, chore, perf, ci.\nLingua del messaggio: {{lingua}}.\nSe il diff contiene più cambiamenti scollegati, dillo e proponi come spezzarlo in più commit.\n\n```diff\n{{diff}}\n```",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-dev-git",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-col-git"
+      ]
+    },
+    {
+      "id": "prm-col-dev-pr-desc",
+      "title": "Descrizione di una pull request",
+      "description": "Descrizione di PR con cosa cambia, perché, come provarlo. Parte dai commit del branch.",
+      "body": "Scrivi la descrizione della pull request a partire da questi commit:\n\n{{commit}}\n\nIssue collegata: {{issue}}\n\nStruttura:\n- **Cosa cambia** (elenco, una riga per punto, dal più importante)\n- **Perché** (il problema che risolve, in due frasi)\n- **Come provarlo** (passi concreti, cosa ci si aspetta di vedere)\n- **Rischi e cose lasciate fuori**\n\nTono asciutto, niente formule di cortesia. Lingua: {{lingua}}.",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-dev-git",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-col-git",
+        "tag-col-docs"
+      ]
+    },
+    {
+      "id": "prm-col-dev-diagnosi-errore",
+      "title": "Diagnosi di un errore",
+      "description": "Dalla traccia dell'errore alle ipotesi ordinate per probabilità, con il modo per verificarle.",
+      "body": "{{import \"Ruolo tech lead\"}}\n\nAiutami a diagnosticare questo errore.\n\nErrore o traccia:\n```\n{{errore}}\n```\n\nCodice coinvolto:\n```{{linguaggio}}\n{{codice}}\n```\n\nCosa ho già provato: {{cosa_ho_provato}}\n\nNon saltare alla soluzione. Prima elenca le ipotesi in ordine di probabilità; per ognuna dimmi come verificarla in meno di cinque minuti e cosa mi aspetto di vedere se è quella giusta.\nSolo dopo proponi la correzione per l'ipotesi più probabile.",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-dev-debug",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-col-debug",
+        "tag-codice"
+      ]
+    },
+    {
+      "id": "prm-col-dev-docstring",
+      "title": "Documenta una funzione o un'API",
+      "description": "Docstring o commento di documentazione nello stile del linguaggio, con esempio d'uso.",
+      "body": "Scrivi la documentazione per il codice qui sotto nello stile standard di {{linguaggio}} ({{stile_doc}}).\n\nIncludi: cosa fa in una frase, parametri con tipo e vincoli, valore di ritorno, errori o eccezioni, un esempio d'uso minimo che compila.\nNon documentare l'ovvio (`i` è un indice) e non ripetere il nome della funzione come descrizione.\n\n{{!-- stile_doc: JSDoc, rustdoc, docstring Google, godoc… --}}\n```{{linguaggio}}\n{{codice}}\n```",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-dev-debug",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-col-docs",
+        "tag-codice"
+      ]
+    },
+    {
+      "id": "prm-col-dev-piano-impl",
+      "title": "Da requisiti a piano di implementazione",
+      "description": "Trasforma requisiti vaghi in un piano a passi verificabili. Mostra «with»: fissa il segnaposto del ruolo importato senza chiederlo.",
+      "body": "{{import \"Ruolo tech lead\" with linguaggio=\"lo stack indicato sotto\"}}\n\nStack del progetto: {{stack}}\n\nRequisiti:\n{{requisiti}}\n\nVincoli del progetto: {{vincoli}}\n\nProduci un piano di implementazione:\n1. Riformula i requisiti in modo verificabile; segnala ciò che è ambiguo con una domanda precisa.\n2. Spezza il lavoro in passi ordinati, ognuno consegnabile e testabile da solo.\n3. Per ogni passo: file o moduli toccati, come si verifica, stima grossolana (S / M / L).\n4. Rischi e cosa faresti per ridurli prima di iniziare.\n\nSe i requisiti si possono soddisfare con meno lavoro di quello che sembra, dillo.",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-dev-debug",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-codice",
+        "tag-col-docs"
+      ]
+    },
+    {
+      "id": "prm-col-dev-sql",
+      "title": "Query SQL spiegata e ottimizzata",
+      "description": "Spiega una query, trova i problemi di performance e propone la versione ottimizzata per il dialetto indicato.",
+      "body": "Dialetto: {{dialetto}}\n\nSchema delle tabelle coinvolte:\n```sql\n{{schema}}\n```\n\nQuery:\n```sql\n{{query}}\n```\n\n1. Spiega cosa restituisce la query, in italiano semplice.\n2. Individua i problemi: scansioni complete, join senza indice, N+1 mascherati, funzioni sulle colonne indicizzate.\n3. Proponi la versione ottimizzata e gli indici da aggiungere, spiegando il costo di ciascuno.\n4. Indica come misurare la differenza (EXPLAIN o equivalente per {{dialetto}}).",
+      "visibility": "private",
+      "target_model": null,
+      "folder_id": "fld-col-dev-debug",
+      "is_favorite": false,
+      "use_count": 0,
+      "last_used_at": null,
+      "version": 1,
+      "created_at": "2026-09-19T08:00:00Z",
+      "updated_at": "2026-09-19T08:00:00Z",
+      "tag_ids": [
+        "tag-codice",
+        "tag-col-debug"
+      ]
+    }
+  ],
+  "global_placeholders": [],
+  "versions": []
+}
