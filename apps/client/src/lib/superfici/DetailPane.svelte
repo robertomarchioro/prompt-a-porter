@@ -2,7 +2,16 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, onDestroy, untrack } from "svelte";
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
-  import { Star, GitFork, Download, PanelRight, Save, Trash2, Wand2 } from "lucide-svelte";
+  import {
+    Star,
+    GitFork,
+    Download,
+    PanelRight,
+    Save,
+    Trash2,
+    Wand2,
+    Scissors,
+  } from "lucide-svelte";
   import type { EditorView } from "@codemirror/view";
   import DetailTabs, { type TabId } from "$lib/components/DetailTabs.svelte";
   import EditorTab from "$lib/components/EditorTab.svelte";
@@ -275,6 +284,7 @@
     window.addEventListener("pap:goto-line", onGotoLine);
     window.addEventListener("pap:prompt-ripristinato", onPromptRipristinato);
     window.addEventListener("pap:prompt-promosso", onPromptPromosso);
+    window.addEventListener("pap:flush-autosave", onFlushAutosave);
     window.addEventListener("beforeunload", onBeforeUnload);
   });
 
@@ -283,8 +293,22 @@
     window.removeEventListener("pap:goto-line", onGotoLine);
     window.removeEventListener("pap:prompt-ripristinato", onPromptRipristinato);
     window.removeEventListener("pap:prompt-promosso", onPromptPromosso);
+    window.removeEventListener("pap:flush-autosave", onFlushAutosave);
     window.removeEventListener("beforeunload", onBeforeUnload);
   });
+
+  // Cartamodello (o chiunque stia per riscrivere prompt dal backend) chiede
+  // di scrivere subito la bozza pendente: altrimenti l'analisi leggerebbe
+  // il testo vecchio e il reload finale butterebbe via ciò che l'utente
+  // ha digitato dopo l'ultimo autosave.
+  function onFlushAutosave(): void {
+    if (!dirty) return;
+    if (timerAutosave) {
+      clearTimeout(timerAutosave);
+      timerAutosave = undefined;
+    }
+    void salvaBozza();
+  }
 
   function pianificaAutosave(): void {
     if (!dettaglio) return;
@@ -738,6 +762,15 @@
             onclick={() => (ritoccoAperto = true)}
           >
             <Wand2 size={14} />
+          </button>
+          <button
+            class="ico"
+            type="button"
+            title="Cartamodello (scomponi in moduli con AI)"
+            aria-label="Cartamodello"
+            onclick={() => apriModale({ tipo: "cartamodello", promptIds: [promptId] })}
+          >
+            <Scissors size={14} />
           </button>
           <button
             class="primary"

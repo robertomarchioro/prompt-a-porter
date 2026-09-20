@@ -34,6 +34,7 @@
   import CompilaModal from "$lib/superfici/CompilaModal.svelte";
   import InsightModal from "$lib/superfici/InsightModal.svelte";
   import CollezioniModal from "$lib/superfici/CollezioniModal.svelte";
+  import CartamodelloModal from "$lib/superfici/CartamodelloModal.svelte";
   import RegressioniModal from "$lib/superfici/RegressioniModal.svelte";
   import ImpostazioniModal from "$lib/superfici/ImpostazioniModal.svelte";
   import PaletteModal from "$lib/superfici/PaletteModal.svelte";
@@ -436,6 +437,10 @@
 
 {#if statoModale.attiva?.tipo === "collezioni"}
   <CollezioniModal onChiudi={chiudiModale} />
+{/if}
+
+{#if statoModale.attiva?.tipo === "cartamodello"}
+  <CartamodelloModal promptIds={statoModale.attiva.promptIds} onChiudi={chiudiModale} />
 {/if}
 
 {#if statoModale.attiva?.tipo === "impostazioni"}

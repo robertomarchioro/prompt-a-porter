@@ -21,6 +21,7 @@
     FileDown,
     Tag,
     Check,
+    Scissors,
   } from "lucide-svelte";
   import PromptCard from "./PromptCard.svelte";
   import {
@@ -700,6 +701,15 @@
         label: `Esporta ${ids.length} come Markdown`,
         icona: FileDown,
         azione: () => esportaBulkMarkdown(ids),
+      },
+      {
+        id: "cartamodello",
+        label: `Scomponi ${ids.length} in moduli (AI)`,
+        icona: Scissors,
+        // Limite del lotto lato backend (cartamodello::MAX_PROMPT_PER_LOTTO).
+        disabilitato: ids.length > 10,
+        tooltip: ids.length > 10 ? "Al massimo 10 prompt per volta" : undefined,
+        azione: () => apriModale({ tipo: "cartamodello", promptIds: ids }),
       },
       { separatore: true },
       {

@@ -3,6 +3,7 @@
 // visibilità Rust ordinaria.
 pub mod audit;
 pub mod cartamodello;
+pub mod cartamodello_applica;
 pub mod cartamodello_verifica;
 pub mod cartelle;
 pub mod cestino;
@@ -728,6 +729,7 @@ pub fn run() {
             collezioni::collezioni_importa,
             collezioni::collezioni_aggiorna,
             cartamodello::cartamodello_analizza,
+            cartamodello_applica::cartamodello_applica,
             registra_hotkey,
             app_is_portable,
         ])

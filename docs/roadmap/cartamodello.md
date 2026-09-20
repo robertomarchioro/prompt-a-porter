@@ -1,12 +1,13 @@
 # Blueprint — «Cartamodello»: trasformare prompt piatti in prompt componibili
 
-> **Stato**: PR-1 (motore) in lavorazione dal 2026-09-20 — `cartamodello.rs`
-> (meta-prompt, parsing, comando `cartamodello_analizza`) e
-> `cartamodello_verifica.rs` (dedup, linter, import, riuso, anteprima
-> espansa); `provider_ai::risolvi_provider` estratta da Ritocco. Nessuna UI
-> ancora: il comando esiste ma nulla lo chiama. Nome: in
-> sartoria il *cartamodello* è il modello di carta da cui si tagliano i pezzi
-> di un capo — qui l'app taglia un prompt nei suoi pezzi riusabili.
+> **Stato**: PR-1 motore mergiata (#663, 2026-09-20); **PR-2 in lavorazione
+> lo stesso giorno** — `cartamodello_applica.rs` (ri-verifica + transazione),
+> `CartamodelloModal` (scelta provider → analisi → revisione → applicazione),
+> ingressi dal dettaglio (forbici) e dal menu della selezione multipla, guida
+> utente `docs/utente/cartamodello.md`.
+> **Nome**: in sartoria il *cartamodello* è il modello di carta da cui si
+> tagliano i pezzi di un capo — qui l'app taglia un prompt nei suoi pezzi
+> riusabili.
 > **Obiettivo utente**: prendere uno o più prompt scritti «piatti» (propri,
 > importati da un file, copiati da un sito) e ottenerne la versione in
 > modalità PaP: le macro-componenti (ruolo, vincoli, formato di output,
@@ -160,6 +161,13 @@ tipo prima).
 - I **tetti sulla risposta** (`MAX_MODULI_RISPOSTA` ecc.) e la
   neutralizzazione dei marcatori nel corpo sono difese contro un provider
   difettoso o ostile: la proposta è comunque dati, mai istruzioni.
+- `cartamodello_applica` crea i moduli con `prompt_crea_in_db`, che
+  ricostruisce la FTS a ogni chiamata: con N moduli la FTS viene rifatta
+  N+1 volte nella stessa transazione. Innocuo con il tetto attuale; se il
+  lotto cresce, serve una variante batch senza rebuild intermedio.
+- Il titolo del prompt ricomposto resta **quello originale** salvo scelta
+  esplicita dell'utente; il titolo proposto dal modello è mostrato come
+  suggerimento cliccabile. La descrizione non viene toccata (D5).
 - `applica_variabili_scoped` usa `\w` (Unicode) mentre la regola canonica
   dei nomi è ASCII: incoerenza pre-esistente in `prompt_componibili.rs`,
   fuori scope qui.

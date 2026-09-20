@@ -104,6 +104,9 @@ pub struct Proposta {
     pub avvisi: Vec<String>,
     /// Il riuso semantico era disponibile (modello embedding caricato)?
     pub riuso_semantico: bool,
+    /// Path della cartella in cui andrebbero i moduli nuovi (D6), es.
+    /// `/Sviluppo/Moduli`. Calcolato dagli originali del lotto.
+    pub cartella_moduli: String,
     pub tokens_used: Option<u32>,
     pub costo_stimato: Option<f64>,
     pub provider: String,
@@ -196,7 +199,7 @@ fn rimuovi_commenti(corpo: &str) -> String {
 /// distinguere maiuscole/spazi, come tutte le altre risoluzioni di titolo
 /// in questo file (review PR-1: una `replace` testuale case-sensitive
 /// lasciava import pendenti e toccava anche la prosa).
-fn rinomina_import(corpo: &str, rinomine: &HashMap<String, String>) -> String {
+pub(crate) fn rinomina_import(corpo: &str, rinomine: &HashMap<String, String>) -> String {
     if rinomine.is_empty() {
         return corpo.to_string();
     }

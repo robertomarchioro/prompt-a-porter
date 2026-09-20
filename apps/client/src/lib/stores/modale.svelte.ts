@@ -14,6 +14,7 @@ export type ModaleAttiva =
   | { tipo: "insight" }
   | { tipo: "regressioni" }
   | { tipo: "collezioni" }
+  | { tipo: "cartamodello"; promptIds: string[] }
   | { tipo: "impostazioni"; sezione?: string }
   | { tipo: "palette" }
   | { tipo: "nuova-cartella" }
