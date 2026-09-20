@@ -130,7 +130,7 @@ pub fn cerca_lessicale(
 /// modello + libonnxruntime reali su disco — non riproducibile in un test
 /// unitario). Copre esattamente il punto in cui, prima del fix, l'errore
 /// veniva scartato con `let _ = ...`.
-fn valuta_disponibilita_modello(esito: Result<bool, PapErrore>) -> bool {
+pub(crate) fn valuta_disponibilita_modello(esito: Result<bool, PapErrore>) -> bool {
     match esito {
         Ok(_) => true,
         Err(e) => {

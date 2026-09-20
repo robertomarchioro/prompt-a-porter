@@ -181,7 +181,7 @@ pub fn parse_imports(body: &str) -> Vec<ImportRef> {
 /// risolti dal compilatore frontend con i valori utente.
 /// I segnaposti globali (`{{global nome}}`) NON sono toccati: la
 /// loro semantica e' "valore dal DB globale", non override per import.
-fn applica_variabili_scoped(body: &str, vars: &[(String, String)]) -> String {
+pub(crate) fn applica_variabili_scoped(body: &str, vars: &[(String, String)]) -> String {
     if vars.is_empty() {
         return body.to_string();
     }

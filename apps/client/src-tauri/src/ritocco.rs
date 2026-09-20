@@ -234,26 +234,14 @@ pub fn ritocco_esegui(
         let famiglia = famiglia_da_target(&target_model);
         let meta = componi_meta_prompt(guida_per_famiglia(famiglia), &body);
 
-        // Provider: Ollama-on-the-fly se passato un base_url, altrimenti da
-        // config (key dal vault). Tetto token alzato per non troncare la
-        // riscrittura (solo Anthropic lo usa davvero).
-        let provider: Box<dyn crate::provider_ai::AIProvider> = if provider_kind == "ollama"
-            && base_url
-                .as_deref()
-                .map(|u| !u.trim().is_empty())
-                .unwrap_or(false)
-        {
-            // Valida lo schema/host del base_url passato dal frontend prima di
-            // costruire il provider e inviare la richiesta HTTP, come
-            // `provider_ollama_genera` e `istanzia_provider_con_max_tokens`
-            // (blocca SSRF verso host interni/metadata).
-            let url = base_url.clone().unwrap();
-            crate::provider_ai::valida_base_url(&url)?;
-            Box::new(crate::provider_ai::OllamaProvider::new(url))
-        } else {
-            let cfg = crate::provider_ai::config_carica_completa(conn, &provider_kind)?;
-            crate::provider_ai::istanzia_provider_con_max_tokens(&cfg, Some(RITOCCO_MAX_TOKENS))?
-        };
+        // Provider: Ollama «al volo» o config salvata, tetto token alzato
+        // per non troncare la riscrittura (solo Anthropic lo usa davvero).
+        let provider = crate::provider_ai::risolvi_provider(
+            conn,
+            &provider_kind,
+            base_url.as_deref(),
+            Some(RITOCCO_MAX_TOKENS),
+        )?;
 
         let out = provider.generate(&meta, &model)?;
         let risposta = parse_esito_ritocco(&out.content);

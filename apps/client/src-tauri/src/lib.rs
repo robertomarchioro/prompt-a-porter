@@ -2,6 +2,8 @@
 // (Step 10 quality gate). I tipi privati rimangono privati per
 // visibilità Rust ordinaria.
 pub mod audit;
+pub mod cartamodello;
+pub mod cartamodello_verifica;
 pub mod cartelle;
 pub mod cestino;
 pub mod changelog;
@@ -725,6 +727,7 @@ pub fn run() {
             collezioni::collezioni_elenca,
             collezioni::collezioni_importa,
             collezioni::collezioni_aggiorna,
+            cartamodello::cartamodello_analizza,
             registra_hotkey,
             app_is_portable,
         ])

@@ -879,6 +879,29 @@ pub(crate) fn config_carica_completa(
     .map_err(|_| PapErrore::Generico(format!("Provider '{provider}' non configurato")))
 }
 
+/// Risolve il provider per una feature AI on-demand (Ritocco, Cartamodello)
+/// a partire dai parametri che arrivano dal frontend: Ollama «al volo» se
+/// `provider_kind == "ollama"` e c'è un `base_url` (validato contro SSRF
+/// verso host interni/metadata prima di costruire il provider), altrimenti
+/// la configurazione salvata (API key dal vault) con il tetto di token di
+/// output richiesto. Estratta da `ritocco_esegui` per non duplicarla.
+pub(crate) fn risolvi_provider(
+    conn: &rusqlite::Connection,
+    provider_kind: &str,
+    base_url: Option<&str>,
+    max_tokens_output: Option<u32>,
+) -> Result<Box<dyn AIProvider>, PapErrore> {
+    let base_url_valido = base_url.map(str::trim).filter(|u| !u.is_empty());
+    if provider_kind == "ollama" {
+        if let Some(url) = base_url_valido {
+            valida_base_url(url)?;
+            return Ok(Box::new(OllamaProvider::new(url.to_string())));
+        }
+    }
+    let cfg = config_carica_completa(conn, provider_kind)?;
+    istanzia_provider_con_max_tokens(&cfg, max_tokens_output)
+}
+
 /// Costruisce un'istanza `Box<dyn AIProvider>` a partire da una
 /// `ProviderConfigItem` caricata dal DB. Errore se la config richiede
 /// una API key e questa è mancante.

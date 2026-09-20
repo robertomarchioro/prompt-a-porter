@@ -1,6 +1,10 @@
 # Blueprint — «Cartamodello»: trasformare prompt piatti in prompt componibili
 
-> **Stato**: blueprint, nessun codice (2026-09-19). Nome provvisorio: in
+> **Stato**: PR-1 (motore) in lavorazione dal 2026-09-20 — `cartamodello.rs`
+> (meta-prompt, parsing, comando `cartamodello_analizza`) e
+> `cartamodello_verifica.rs` (dedup, linter, import, riuso, anteprima
+> espansa); `provider_ai::risolvi_provider` estratta da Ritocco. Nessuna UI
+> ancora: il comando esiste ma nulla lo chiama. Nome: in
 > sartoria il *cartamodello* è il modello di carta da cui si tagliano i pezzi
 > di un capo — qui l'app taglia un prompt nei suoi pezzi riusabili.
 > **Obiettivo utente**: prendere uno o più prompt scritti «piatti» (propri,
@@ -144,6 +148,21 @@ tipo prima).
   embedding. Tutto o niente; l'embedding può andare in coda (backfill)
   purché i moduli siano trovabili dal linter/resolver subito (lo sono: il
   resolver è SQL, non semantico).
+
+## 6b. Note dalla review della PR-1 (per la PR-2)
+
+- **Ri-verificare al momento di applicare**: fra analisi e applicazione il
+  vault può cambiare (lock rilasciato durante la chiamata al provider).
+  `cartamodello_applica` deve ricontrollare che gli originali esistano e
+  abbiano ancora il corpo analizzato, che i titoli dei moduli siano ancora
+  liberi e che gli import risolvano — non fidarsi della `Proposta` ricevuta
+  dal frontend.
+- I **tetti sulla risposta** (`MAX_MODULI_RISPOSTA` ecc.) e la
+  neutralizzazione dei marcatori nel corpo sono difese contro un provider
+  difettoso o ostile: la proposta è comunque dati, mai istruzioni.
+- `applica_variabili_scoped` usa `\w` (Unicode) mentre la regola canonica
+  dei nomi è ASCII: incoerenza pre-esistente in `prompt_componibili.rs`,
+  fuori scope qui.
 
 ## 7. Piano (tre PR)
 
