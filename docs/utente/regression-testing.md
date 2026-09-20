@@ -44,6 +44,7 @@ Per eseguire i golden serve almeno un provider configurato in
 | **OpenAI** | API key `sk-…` da platform.openai.com | per token |
 | **OpenAI-compat** | URL custom (LM Studio, vLLM) + key generica | varia |
 | **Google (Gemini)** | API key da `aistudio.google.com/apikey`; modelli `gemini-2.5-flash` / `gemini-2.5-pro` | per token |
+| **OpenRouter** | API key da `openrouter.ai/keys`; id modello con prefisso vendor, es. `openai/gpt-4o` / `anthropic/claude-sonnet-4` | per token, varia per modello |
 
 Se vuoi provare la funzione senza spendere nulla e senza mandare testo
 fuori dalla tua macchina, Ollama è la scelta naturale.

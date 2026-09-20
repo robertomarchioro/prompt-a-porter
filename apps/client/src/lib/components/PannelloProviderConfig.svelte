@@ -22,7 +22,8 @@
     | "openai"
     | "ollama"
     | "openai-compat"
-    | "gemini";
+    | "gemini"
+    | "openrouter";
 
   interface ProviderMeta {
     kind: ProviderKind;
@@ -66,7 +67,7 @@
       kind: "openai-compat",
       nome: "OpenAI-compatibile",
       icona: "🔌",
-      descrizione: "Endpoint compatibili (LM Studio, vLLM, OpenRouter)",
+      descrizione: "Endpoint compatibili (LM Studio, vLLM, ecc.)",
       placeholderModel: "modello-locale",
       placeholderBaseUrl: "http://localhost:1234/v1",
       richiedeApiKey: false,
@@ -78,6 +79,17 @@
       descrizione: "Gemini (Flash, Pro) via aistudio.google.com/apikey",
       placeholderModel: modelloPredefinito("gemini"),
       placeholderBaseUrl: "https://generativelanguage.googleapis.com",
+      richiedeApiKey: true,
+    },
+    {
+      kind: "openrouter",
+      nome: "OpenRouter",
+      icona: "🌐",
+      descrizione:
+        "Aggregatore multi-modello via openrouter.ai — id nel formato " +
+        "vendor/modello (es. openai/gpt-4o, anthropic/claude-sonnet-4)",
+      placeholderModel: "openai/gpt-4o",
+      placeholderBaseUrl: "https://openrouter.ai/api/v1",
       richiedeApiKey: true,
     },
   ];

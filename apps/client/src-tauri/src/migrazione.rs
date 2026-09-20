@@ -96,6 +96,11 @@ static MIGRAZIONI: &[Migrazione] = &[
         nome: "collezioni_importate",
         sql: include_str!("../migrations/V017__collezioni_importate.sql"),
     },
+    Migrazione {
+        versione: 18,
+        nome: "provider_config_openrouter",
+        sql: include_str!("../migrations/V018__provider_config_openrouter.sql"),
+    },
 ];
 
 /// Crea la tabella di tracking se non esiste.
@@ -219,6 +224,59 @@ mod test {
     }
 
     #[test]
+    fn v018_permette_provider_openrouter() {
+        crate::embeddings_store::registra_auto_extension();
+        let conn = Connection::open_in_memory().unwrap();
+        esegui_migrazioni(&conn).unwrap();
+
+        // Prima di V018 questo INSERT violava il CHECK di ProviderConfig.
+        conn.execute(
+            "INSERT INTO ProviderConfig
+                (Provider, ApiKey, BaseUrl, DefaultModel, Abilitato, CreatedAt, UpdatedAt)
+             VALUES ('openrouter', 'k', NULL, 'anthropic/claude-sonnet-4', 1,
+                     datetime('now'), datetime('now'))",
+            [],
+        )
+        .expect("dopo V018 il provider 'openrouter' deve essere accettato");
+
+        let n: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM ProviderConfig WHERE Provider = 'openrouter'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn v018_preserva_le_righe_esistenti() {
+        crate::embeddings_store::registra_auto_extension();
+        let conn = Connection::open_in_memory().unwrap();
+        // Applica tutte le migrazioni, inserisci una riga gemini, e verifica
+        // che sopravviva a una nuova esecuzione idempotente di V018.
+        esegui_migrazioni(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO ProviderConfig
+                (Provider, ApiKey, BaseUrl, DefaultModel, Abilitato, CreatedAt, UpdatedAt)
+             VALUES ('gemini', 'k', NULL, 'gemini-2.5-pro', 1,
+                     datetime('now'), datetime('now'))",
+            [],
+        )
+        .unwrap();
+        let applicate = esegui_migrazioni(&conn).unwrap();
+        assert_eq!(applicate, 0);
+        let n: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM ProviderConfig WHERE Provider = 'gemini'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 1);
+    }
+
+    #[test]
     fn migrazioni_su_db_nuovo() {
         // Necessario registrare l'auto-extension sqlite-vec PRIMA di aprire
         // la connessione, perché V005 crea una vec0 virtual table.
@@ -226,10 +284,10 @@ mod test {
         let conn = Connection::open_in_memory().unwrap();
         let n = esegui_migrazioni(&conn).unwrap();
         assert!(
-            n >= 17,
-            "Tutte le migrazioni devono essere applicate (almeno 17)"
+            n >= 18,
+            "Tutte le migrazioni devono essere applicate (almeno 18)"
         );
-        assert_eq!(versione_corrente(&conn).unwrap(), 17);
+        assert_eq!(versione_corrente(&conn).unwrap(), 18);
     }
 
     #[test]

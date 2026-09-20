@@ -403,6 +403,25 @@ content-type: application/json\r\n\
         assert!(out.contains("x-api-key: ***"));
     }
 
+    #[test]
+    fn preludio_openrouter_redige_authorization_ma_non_gli_header_di_attribuzione() {
+        // OpenRouter (#668) riusa `Authorization: Bearer <key>` come OpenAI —
+        // già copertO dal nome header generico `authorization`, nessuna voce
+        // dedicata necessaria in HEADER_SENSIBILI. Gli header di attribuzione
+        // `HTTP-Referer`/`X-Title` NON sono segreti e non vanno redatti.
+        let preludio = "POST /api/v1/chat/completions HTTP/1.1\r\n\
+Authorization: Bearer sk-or-v1-segreto\r\n\
+HTTP-Referer: https://www.promptaporter.it\r\n\
+X-Title: Prompt à Porter\r\n\
+content-type: application/json\r\n\
+\r\n";
+        let out = redigi_valori_header(preludio);
+        assert!(!out.contains("sk-or-v1-segreto"));
+        assert!(out.contains("Authorization: ***"));
+        assert!(out.contains("HTTP-Referer: https://www.promptaporter.it"));
+        assert!(out.contains("X-Title: Prompt à Porter"));
+    }
+
     // ─── evasioni richieste esplicitamente ───
 
     #[test]
