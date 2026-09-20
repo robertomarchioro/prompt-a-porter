@@ -1,5 +1,24 @@
 # Changelog — Prompt a Porter
 
+## v0.8.52 — Il sarto taglia i moduli (2026-09-20)
+
+> Due novità che rispondono alla stessa domanda — «e adesso cosa ci faccio?» — da due lati. Le **collezioni** portano nel vault prompt pronti, curati dal progetto e scritti per mostrare segnaposti, import e varianti; il **Cartamodello** prende i prompt che hai già, scritti in un blocco unico, e li taglia nei loro pezzi riusabili. In mezzo, un import più robusto e una cartella `Moduli` che nasce da sola.
+
+### Novità
+
+- **Collezioni di prompt** (#660, #661): pulsante **Collezioni** in fondo alla sidebar (o Impostazioni → Dati). L'elenco arriva da GitHub solo quando lo chiedi tu; ogni collezione è una raccolta per tipo di lavoro — per ora **Sviluppatore** (13 prompt) e **Scrittura** (12) — importata nella cartella `Collezioni` senza mai toccare i prompt che hai già. L'app ricorda cosa hai importato: quando una collezione cambia nel repository compare **aggiornamento disponibile** e **Aggiorna** riallinea solo i prompt che non hai mai modificato; quelli che hai salvato restano tuoi e vengono contati come *conservati*. Guida in `collezioni.md`; per proporne una nuova basta una PR (`docs/collezioni/README.md`).
+- **Cartamodello: scomporre un prompt in moduli** (#663, #664): dal dettaglio (icona forbici) o selezionando fino a dieci prompt insieme, un modello AI che conosce la sintassi di Prompt à Porter propone i pezzi riusabili — ruolo, vincoli, formato, contesto, esempi — come moduli separati e riscrive ogni prompt come composizione di `{{import}}` più la sua parte specifica, con i valori variabili trasformati in segnaposti. Prima di mostrarti la proposta l'app la verifica: sintassi, import che risolvono, moduli doppi fusi, e per ogni modulo cerca nel vault un prompt equivalente da **riusare** invece di crearne un doppione. In revisione decidi modulo per modulo (crea, usa esistente, scarta), rinomini, e il **Diff con l'originale** ti dice se la scomposizione è fedele. **Applica** crea i moduli nella sottocartella `Moduli` accanto agli originali e salva ogni prompt come **nuova versione**: l'originale resta in Cronologia. Non riscrive e non migliora — per quello c'è Ritocco. Guida in `cartamodello.md`.
+
+### Fix
+
+- **L'import non perde più i tag omonimi** (#660): importando un JSON o una collezione con un tag dello stesso nome di uno tuo ma con un identificativo diverso, l'import falliva su quel tag e i prompt restavano senza. Ora il tag esistente viene riusato.
+
+### Manutenzione
+
+- **Documento di rotta sulle collezioni** (#659) e **blueprint del Cartamodello** (#662) in `docs/roadmap/`: le alternative valutate (collezioni curate contro import da siti di condivisione), le decisioni chiuse e ciò che resta da fare.
+- **Ritocco e Cartamodello condividono la risoluzione del provider AI** (#663): stessa logica, stessa validazione dell'indirizzo di Ollama.
+- **Schema del vault alla migrazione 17** (#661): tabella che traccia le collezioni importate.
+
 ## v0.8.51 — L'export scrive davvero (2026-09-18)
 
 > Release di correzioni, nessuna novità di prodotto. Quattro percorsi di esportazione che non scrivevano mai un file, una guardia di salvataggio troppo severa, una vulnerabilità TLS chiusa in una libreria indiretta, e la ricerca semantica che quando non parte finalmente dice perché.
