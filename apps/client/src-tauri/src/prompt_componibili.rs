@@ -376,15 +376,20 @@ pub fn prompt_compila(
     id: String,
     state: State<'_, VaultState>,
 ) -> Result<String, PapErrore> {
-    state.with_conn(|conn| {
-        let body: String = conn.query_row(
-            "SELECT Body FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
-            [&id],
-            |r| r.get(0),
-        )?;
-        let mut visitati: HashSet<String> = HashSet::new();
-        compila_ricorsivo(conn, &id, &body, &mut visitati, 0)
-    })
+    state.with_conn(|conn| compila_prompt_pure(conn, &id))
+}
+
+/// Body del prompt `id` con gli import espansi ricorsivamente. Logica pura
+/// di `prompt_compila`, riusata dai test di Cartamodello per verificare che
+/// il ricomposto equivalga all'originale.
+pub(crate) fn compila_prompt_pure(conn: &Connection, id: &str) -> Result<String, PapErrore> {
+    let body: String = conn.query_row(
+        "SELECT Body FROM Prompts WHERE Id = ?1 AND DeletedAt IS NULL",
+        [id],
+        |r| r.get(0),
+    )?;
+    let mut visitati: HashSet<String> = HashSet::new();
+    compila_ricorsivo(conn, id, &body, &mut visitati, 0)
 }
 
 /// M5 PR-2: variante di `prompt_compila` che accetta il body inline

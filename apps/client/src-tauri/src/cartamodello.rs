@@ -406,6 +406,9 @@ pub fn cartamodello_analizza(
             Some((state.inner(), rt_state.inner())),
         )?;
         proposta.avvisi.splice(0..0, avvisi_limiti);
+        let ids: Vec<String> = originali.iter().map(|o| o.id.clone()).collect();
+        proposta.cartella_moduli =
+            crate::cartamodello_applica::path_cartella_moduli(conn, &ids)?;
         proposta.tokens_used = out.tokens_used;
         proposta.costo_stimato = costo_stimato;
         proposta.provider = provider_kind;

@@ -33,6 +33,7 @@ export type ChiaveDoc =
   | "markdown-import-export"
   | "export-json"
   | "collezioni"
+  | "cartamodello"
   | "scorciatoie"
   | "troubleshooting"
   | "auto-update"
@@ -83,6 +84,7 @@ export const DOCS: Record<ChiaveDoc, VoceDoc> = {
   },
   "export-json": { file: "formato-export-json", titolo: "Formato export JSON" },
   collezioni: { file: "collezioni", titolo: "Collezioni di prompt" },
+  cartamodello: { file: "cartamodello", titolo: "Cartamodello: scomporre in moduli" },
   scorciatoie: { file: "scorciatoie-tastiera", titolo: "Scorciatoie da tastiera" },
   troubleshooting: { file: "troubleshooting", titolo: "Risoluzione problemi" },
   "auto-update": { file: "auto-update", titolo: "Aggiornamenti automatici" },
