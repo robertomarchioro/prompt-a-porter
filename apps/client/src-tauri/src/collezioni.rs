@@ -755,20 +755,71 @@ mod test {
         assert_eq!(report.nuovi as usize, 13 + 6 + 6, "13 prompt, 6 cartelle, 6 tag nuovi");
     }
 
+    /// Una cartella omonima dell'utente riusata non è un «conservato» in
+    /// aggiorna (#666, stesso schema del test sui tag qui sopra): la radice
+    /// «Collezioni» già presente si riusa, e la cartella figlia della
+    /// collezione finisce sotto quella riusata, non sotto una seconda radice.
+    #[test]
+    fn aggiorna_non_conta_le_cartelle_omonime_come_conservate() {
+        let conn = db_test();
+        conn.execute(
+            "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path, CreatedAt, UpdatedAt)
+             VALUES ('fld-mia', 'ws-personale', NULL, 'Collezioni', '/Collezioni', '2026-01-01', '2026-01-01')",
+            [],
+        )
+        .unwrap();
+
+        let report =
+            aggiorna_collezione_pura(&conn, "sviluppatore", COLLEZIONI_COMMITTATE[0].1).unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(report.conflitti, 0, "una cartella omonima riusata non è un «conservato»");
+        assert_eq!(
+            report.nuovi as usize,
+            13 + 5 + 7,
+            "13 prompt, 5 cartelle nuove (la radice «Collezioni» si riusa), 7 tag nuovi"
+        );
+
+        let radici_collezioni: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Folders WHERE ParentFolderId IS NULL AND Name = 'Collezioni'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(radici_collezioni, 1, "non deve nascere una seconda radice «Collezioni»");
+        let figlie_sotto_mia: i64 = conn
+            .query_row("SELECT COUNT(*) FROM Folders WHERE ParentFolderId = 'fld-mia'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(figlie_sotto_mia, 1, "«Sviluppatore» deve finire sotto la cartella riusata");
+    }
+
     /// Con errori parziali l'impronta NON va registrata: la collezione deve
     /// restare importabile/aggiornabile per riprovare.
+    ///
+    /// L'errore qui non arriva più da due cartelle omonime con id diversi
+    /// (dedup #666, ora gestito senza errori — vedi i test sopra e in
+    /// `import_export.rs`), ma da un tag omonimo di uno GIÀ CESTINATO: il
+    /// vincolo `UNIQUE (WorkspaceId, Name)` di `Tags`, a differenza di
+    /// quello delle cartelle, non è filtrato su `DeletedAt IS NULL`, quindi
+    /// resta un modo genuino (e indipendente da questa issue) per produrre
+    /// un errore parziale.
     #[test]
     fn applica_e_registra_non_registra_con_errori_parziali() {
         let conn = db_test();
-        // Due cartelle radice omonime con id diversi: la seconda viola
-        // l'indice unique sui fratelli → un errore nel report.
+        conn.execute(
+            "INSERT INTO Tags (Id, WorkspaceId, Name, Color, CreatedAt, UpdatedAt, DeletedAt)
+             VALUES ('tag-cestinato', 'ws-personale', 'Doppia', '#000', '2026-01-01', '2026-01-01',
+                     datetime('now'))",
+            [],
+        )
+        .unwrap();
         let json = r#"{"schemaVersion":1,"exportedAt":"2026-01-01T00:00:00Z",
             "workspace":{"id":"ws-personale","name":"Personale","type":"personal"},
-            "tags":[],"prompts":[],"versions":[],"global_placeholders":[],
-            "folders":[
-              {"id":"fld-a","parent_folder_id":null,"name":"Doppia","path":"/Doppia","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},
-              {"id":"fld-b","parent_folder_id":null,"name":"Doppia","path":"/Doppia","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}
-            ]}"#;
+            "tags":[{"id":"tag-nuovo","name":"Doppia","color":null,"created_at":"2026-01-01T00:00:00Z"}],
+            "prompts":[],"versions":[],"global_placeholders":[],"folders":[]}"#;
         let sha = "1".repeat(64);
 
         let report = applica_e_registra(&conn, "rotta", json, &sha, false).unwrap();

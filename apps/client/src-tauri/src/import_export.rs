@@ -1552,6 +1552,35 @@ fn tag_id_per_nome(conn: &Connection, nome: &str) -> Option<String> {
     .ok()
 }
 
+/// Id della cartella con lo stesso genitore (NULL-safe, `parent_id: None` =
+/// root) e nome (case-insensitive) di quella importata, `None` se assente.
+/// Stesso principio di `tag_id_per_nome`, applicato alle cartelle (#666):
+/// senza questo aggancio, importare due volte una collezione — o importarla
+/// in un vault dove l'utente ha già una cartella «ruoli» propria — ne
+/// creerebbe una seconda invece di riusare quella esistente. Il vincolo
+/// `idx_folders_unique_sibling_name` è invece case-sensitive (BINARY): qui
+/// il confronto NOCASE è voluto, per agganciare «Ruoli» a «ruoli».
+///
+/// `DeletedAt IS NULL` esclude le cartelle nel cestino: risuscitarne una di
+/// soppiatto sarebbe più sorprendente che crearne una nuova omonima (stesso
+/// principio del ramo `Cestinato` in `aggiorna_prompt_intatto`).
+fn folder_id_per_nome_e_genitore(
+    conn: &Connection,
+    parent_id: Option<&str>,
+    nome: &str,
+) -> Option<String> {
+    conn.query_row(
+        "SELECT Id FROM Folders
+         WHERE WorkspaceId = 'ws-personale' AND DeletedAt IS NULL
+           AND COALESCE(ParentFolderId, '') = COALESCE(?1, '')
+           AND Name = ?2 COLLATE NOCASE
+         LIMIT 1",
+        rusqlite::params![parent_id, nome],
+        |r| r.get(0),
+    )
+    .ok()
+}
+
 /// Esito di `aggiorna_prompt_intatto` (modalità `aggiorna`, collezioni).
 #[derive(Debug, PartialEq)]
 pub(crate) enum EsitoAggiorna {
@@ -1651,6 +1680,14 @@ pub(crate) fn import_pure(
     // Folders prima di tutto: i prompt referenziano FolderId (FK). L'export
     // le ordina per Path (parent prima dei figli). Se il parent non è
     // risolvibile (es. export di sotto-albero), la cartella diventa root.
+    //
+    // `folder_map` mappa l'id della cartella nell'export all'id effettivo nel
+    // DB: diverso solo quando una cartella con lo STESSO GENITORE e lo
+    // STESSO NOME esiste già con un altro id (dedup per #666, stesso schema
+    // di `tag_map` sopra). Serve sia a risolvere il genitore delle cartelle
+    // figlie sia il `FolderId` dei prompt, entrambi popolati più sotto.
+    let mut folder_map: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
     for folder in &export.folders {
         let esiste: bool = conn
             .query_row(
@@ -1660,23 +1697,47 @@ pub(crate) fn import_pure(
             )
             .unwrap_or(false);
 
+        // Il genitore potrebbe essere già stato deduplicato per nome poco
+        // sopra in questo stesso export: rimappalo PRIMA di controllare se
+        // esiste nel DB, altrimenti un figlio finirebbe orfano sotto un id
+        // (quello originale dell'export) che non è mai stato scritto.
         let parent: Option<String> = match &folder.parent_folder_id {
             Some(pid) => {
+                let pid_effettivo = folder_map.get(pid).cloned().unwrap_or_else(|| pid.clone());
                 let pexists: bool = conn
                     .query_row(
                         "SELECT EXISTS(SELECT 1 FROM Folders WHERE Id = ?1)",
-                        [pid],
+                        [&pid_effettivo],
                         |r| r.get(0),
                     )
                     .unwrap_or(false);
                 if pexists {
-                    Some(pid.clone())
+                    Some(pid_effettivo)
                 } else {
                     None
                 }
             }
             None => None,
         };
+
+        // Nessuna corrispondenza esatta sull'Id: prima di crearne una nuova,
+        // riusa una cartella omonima con lo stesso genitore, se c'è (#666).
+        // Le due collezioni committate che condividono l'id letterale
+        // `fld-collezioni` restano gestite dal ramo "esiste" sotto: qui si
+        // entra solo quando l'Id non è mai stato visto.
+        if !esiste {
+            if let Some(id_omonima) =
+                folder_id_per_nome_e_genitore(conn, parent.as_deref(), &folder.name)
+            {
+                folder_map.insert(folder.id.clone(), id_omonima);
+                // In `aggiorna` i conflitti sono «prompt conservati perché
+                // modificati dall'utente»: una cartella omonima riusata non lo è.
+                if modalita != "aggiorna" {
+                    report.conflitti += 1;
+                }
+                continue;
+            }
+        }
 
         match (esiste, modalita) {
             (false, _) => {
@@ -1849,19 +1910,22 @@ pub(crate) fn import_pure(
             format!("{} (importato)", prompt.title)
         };
 
-        // FolderId è un FK: includilo solo se la cartella esiste già nel DB
+        // FolderId è un FK: rimappalo attraverso `folder_map` (la cartella
+        // dell'export potrebbe essere stata deduplicata per nome sopra,
+        // #666) e includilo solo se la cartella effettiva esiste già nel DB
         // (importata sopra o preesistente). Altrimenti il prompt va a root.
         let folder_ref: Option<String> = match &prompt.folder_id {
             Some(fid) => {
+                let fid_effettivo = folder_map.get(fid).cloned().unwrap_or_else(|| fid.clone());
                 let fexists: bool = conn
                     .query_row(
                         "SELECT EXISTS(SELECT 1 FROM Folders WHERE Id = ?1)",
-                        [fid],
+                        [&fid_effettivo],
                         |r| r.get(0),
                     )
                     .unwrap_or(false);
                 if fexists {
-                    Some(fid.clone())
+                    Some(fid_effettivo)
                 } else {
                     None
                 }
@@ -2770,6 +2834,128 @@ mod test {
             })
             .unwrap();
         assert_eq!(folder_id, None);
+    }
+
+    fn folder_export(
+        id: &str,
+        parent_folder_id: Option<&str>,
+        name: &str,
+        path: &str,
+    ) -> FolderExport {
+        FolderExport {
+            id: id.into(),
+            parent_folder_id: parent_folder_id.map(String::from),
+            name: name.into(),
+            path: path.into(),
+            created_at: "2026-05-07T00:00:00Z".into(),
+            updated_at: "2026-05-07T00:00:00Z".into(),
+        }
+    }
+
+    /// #666: importare una cartella con lo stesso nome e lo stesso genitore
+    /// di una già presente non deve crearne una seconda; il prompt che la
+    /// referenzia deve finire in quella esistente, non a root.
+    #[test]
+    fn import_cartella_omonima_stesso_genitore_si_deduplica() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-ruoli-utente", "ruoli", "/ruoli", None);
+
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.prompts[0].folder_id = Some("fld-ruoli-export".into());
+        exp.folders.push(folder_export("fld-ruoli-export", None, "ruoli", "/ruoli"));
+
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+        assert!(report.errori.is_empty(), "errori: {:?}", report.errori);
+
+        let n_folders: i64 = conn.query_row("SELECT COUNT(*) FROM Folders", [], |r| r.get(0)).unwrap();
+        assert_eq!(n_folders, 1, "non deve nascere una seconda cartella «ruoli»");
+
+        let folder_id: Option<String> = conn
+            .query_row("SELECT FolderId FROM Prompts WHERE Id = 'prm-1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(
+            folder_id.as_deref(),
+            Some("fld-ruoli-utente"),
+            "il prompt deve finire nella cartella esistente, non a root"
+        );
+    }
+
+    /// Caso annidato: il genitore si deduplica per nome e il figlio va
+    /// risolto sotto il genitore RIMAPPATO, senza duplicarsi a sua volta.
+    #[test]
+    fn import_cartelle_annidate_omonime_si_deduplicano_in_cascata() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-mkt-utente", "marketing", "/marketing", None);
+        inserisci_folder(
+            &conn,
+            "fld-email-utente",
+            "email",
+            "/marketing/email",
+            Some("fld-mkt-utente"),
+        );
+
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.prompts[0].folder_id = Some("fld-email-export".into());
+        exp.folders.push(folder_export("fld-mkt-export", None, "marketing", "/marketing"));
+        exp.folders.push(folder_export(
+            "fld-email-export",
+            Some("fld-mkt-export"),
+            "email",
+            "/marketing/email",
+        ));
+
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+        assert!(report.errori.is_empty(), "errori: {:?}", report.errori);
+
+        let n_folders: i64 = conn.query_row("SELECT COUNT(*) FROM Folders", [], |r| r.get(0)).unwrap();
+        assert_eq!(n_folders, 2, "«marketing» ed «email» non devono duplicarsi");
+
+        let folder_id: Option<String> = conn
+            .query_row("SELECT FolderId FROM Prompts WHERE Id = 'prm-1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(folder_id.as_deref(), Some("fld-email-utente"));
+    }
+
+    /// Il dedup è case-insensitive: «Ruoli» dell'utente aggancia «ruoli»
+    /// della collezione (il vincolo unique sui fratelli è invece BINARY).
+    #[test]
+    fn import_cartella_omonima_case_insensitive_si_deduplica() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-ruoli", "Ruoli", "/Ruoli", None);
+
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.folders.push(folder_export("fld-ruoli-export", None, "ruoli", "/ruoli"));
+
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+        assert!(report.errori.is_empty(), "errori: {:?}", report.errori);
+        let n_folders: i64 = conn.query_row("SELECT COUNT(*) FROM Folders", [], |r| r.get(0)).unwrap();
+        assert_eq!(n_folders, 1);
+    }
+
+    /// Una cartella omonima nel cestino non va resuscitata: ne nasce una
+    /// nuova, la cestinata resta cestinata (stesso principio dei prompt).
+    #[test]
+    fn import_non_resuscita_cartella_omonima_cestinata() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-vecchia", "ruoli", "/ruoli", None);
+        conn.execute(
+            "UPDATE Folders SET DeletedAt = datetime('now') WHERE Id = 'fld-vecchia'",
+            [],
+        )
+        .unwrap();
+
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.folders.push(folder_export("fld-nuova", None, "ruoli", "/ruoli"));
+
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+        assert!(report.errori.is_empty(), "errori: {:?}", report.errori);
+
+        let attive: i64 = conn
+            .query_row("SELECT COUNT(*) FROM Folders WHERE DeletedAt IS NULL", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(attive, 1, "nasce una nuova cartella «ruoli» attiva");
+        let totali: i64 = conn.query_row("SELECT COUNT(*) FROM Folders", [], |r| r.get(0)).unwrap();
+        assert_eq!(totali, 2, "la cestinata resta, non viene riusata");
     }
 
     #[test]
