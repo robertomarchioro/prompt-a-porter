@@ -1,5 +1,17 @@
 # Changelog — Prompt a Porter
 
+## v0.8.53 — Un ago in più nel cestino da cucito (2026-09-20)
+
+> Una novità e un fix nati dal collaudo delle collezioni: si può cucire con i modelli di **OpenRouter** e importare una collezione non lascia più cartelle doppie nell'albero.
+
+### Novità
+
+- **OpenRouter tra i provider AI** (#668): in Impostazioni → Provider AI c'è la voce **OpenRouter** accanto a Ollama, Anthropic, OpenAI, Gemini e OpenAI-compatibile. Serve una chiave da openrouter.ai/keys e l'id del modello nel formato `vendor/modello` (es. `openai/gpt-4o`, `anthropic/claude-sonnet-4`): da lì Ritocco, Cartamodello e i test Golden lo usano come qualsiasi altro provider. La chiave resta nel vault cifrato e non finisce mai nei log; il vault viene aggiornato da solo alla prima apertura (migrazione V018).
+
+### Fix
+
+- **Importare una collezione non duplica più le cartelle** (#666): se nel vault esiste già una cartella con lo stesso nome nello stesso punto dell'albero (ad esempio «ruoli»), l'import la riconosce e ci mette dentro i prompt invece di crearne una seconda. Vale per le collezioni e per l'import di un vault, anche con cartelle annidate e senza distinguere maiuscole; una cartella nel Cestino non viene mai riesumata.
+
 ## v0.8.52 — Il sarto taglia i moduli (2026-09-20)
 
 > Due novità che rispondono alla stessa domanda — «e adesso cosa ci faccio?» — da due lati. Le **collezioni** portano nel vault prompt pronti, curati dal progetto e scritti per mostrare segnaposti, import e varianti; il **Cartamodello** prende i prompt che hai già, scritti in un blocco unico, e li taglia nei loro pezzi riusabili. In mezzo, un import più robusto e una cartella `Moduli` che nasce da sola.
