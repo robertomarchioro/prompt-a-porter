@@ -50,6 +50,7 @@ Decisione di rotta dell'autore:
 | [`prompts-as-code.md`](./prompts-as-code.md) | 🧭 *Esplorazione post-1.0 (Deluxe)* — idea strategica "Prompts as Code" (git=versioni, branch=varianti, golden=CI gate, pin a SHA per agent) |
 | [`vault-a-cartella.md`](./vault-a-cartella.md) | 🧭 *Esplorazione post-1.0 (Deluxe)* — blueprint storage a file plain-text no-lock-in, sidecar `.pap/`, fasi F1-F4 |
 | [`collezioni-curate.md`](./collezioni-curate.md) | **Decisione di rotta (2026-09-19)** — collezioni di prompt curate vs import da siti di condivisione: collezioni scaricate da `docs/collezioni/` su `main` con sha256 verificato, nessun connettore per sito, CSV rinviato. Prima PR con backend, card Impostazioni → Dati e due collezioni |
+| [`cartamodello.md`](./cartamodello.md) | ✏️ *Blueprint (2026-09-19)* — «Cartamodello»: scomporre uno o più prompt piatti in moduli riusabili + prompt ricomposto con `{{import}}`/segnaposti, sopra il motore di Ritocco; 6 decisioni aperte, piano in 3 PR |
 | [`ordito-sync-log.md`](./ordito-sync-log.md) | 🧭 *Esplorazione post-1.0 (Deluxe→Enterprise)* — blueprint "Ordito": oplog replicato firmato (HLC, LWW per campo), sync multi-device senza server, DB come proiezione. v3: 7 decisioni chiuse |
 | [`ordito/`](./ordito/blueprint-F1.md) | ✏️ *Blueprint operativi Ordito (design, no codice)* — tagli esecutivi delle 4 fasi F1-F4 |
 | [`website/`](./website/istruzioni-sviluppo-landing.md) | **Thread parallelo — Landing page attiva** (www.promptaporter.it): istruzioni di sviluppo, contenuti, mockup desktop/mobile |
