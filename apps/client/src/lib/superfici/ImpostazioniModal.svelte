@@ -457,6 +457,7 @@
         "ollama",
         "openai-compat",
         "gemini",
+        "openrouter",
         "api key",
         "endpoint",
         "modello",

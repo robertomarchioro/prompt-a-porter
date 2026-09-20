@@ -32,6 +32,7 @@ describe("registro modelli", () => {
   it("i provider senza listino non hanno modelli noti (→ testo libero)", () => {
     expect(providerHaModelliNoti("ollama")).toBe(false);
     expect(providerHaModelliNoti("openai-compat")).toBe(false);
+    expect(providerHaModelliNoti("openrouter")).toBe(false);
     expect(providerHaModelliNoti("")).toBe(false);
   });
 

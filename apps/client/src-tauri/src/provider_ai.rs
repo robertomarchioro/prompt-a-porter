@@ -30,6 +30,15 @@ const ANTHROPIC_DEFAULT_URL: &str = "https://api.anthropic.com";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const OPENAI_DEFAULT_URL: &str = "https://api.openai.com";
 const GEMINI_DEFAULT_URL: &str = "https://generativelanguage.googleapis.com";
+const OPENROUTER_DEFAULT_URL: &str = "https://openrouter.ai/api/v1";
+
+/// Header di attribuzione consigliati da OpenRouter per apparire nella loro
+/// dashboard/ranking pubblico (non richiesti per l'autenticazione, che passa
+/// dal solito `Authorization: Bearer`). Valori fissi del progetto — NON
+/// campi utente: aggiungerli come `ProviderConfigInput` sarebbe speculativo
+/// (YAGNI), non c'è oggi un caso d'uso per personalizzarli per utente.
+const OPENROUTER_REFERER: &str = "https://www.promptaporter.it";
+const OPENROUTER_TITLE: &str = "Prompt à Porter";
 
 /// Timeout HTTP generoso: i modelli Ollama locali su CPU possono
 /// impiegare 30-60s per generare una risposta lunga; gli endpoint
@@ -571,6 +580,90 @@ impl AIProvider for GeminiProvider {
     }
 }
 
+// ─────────── OpenRouter ───────────
+
+/// OpenRouter (openrouter.ai) aggrega decine di modelli di provider diversi
+/// dietro un'unica API OpenAI-compatibile: id modello con prefisso vendor
+/// (`openai/gpt-4o`, `anthropic/claude-sonnet-4`, ecc.). Riusiamo di proposito
+/// `OpenAIRequest`/`OpenAIResponse`/`parse_openai_response` — il body e la
+/// forma della risposta sono identici a `/v1/chat/completions` di OpenAI,
+/// solo l'host e due header di attribuzione cambiano.
+///
+/// No `Debug`: contiene `api_key`.
+#[derive(Clone)]
+pub struct OpenRouterProvider {
+    pub base_url: String,
+    pub api_key: String,
+}
+
+impl OpenRouterProvider {
+    pub fn new(api_key: impl Into<String>, base_url: Option<String>) -> Self {
+        Self {
+            base_url: base_url
+                .filter(|u| !u.trim().is_empty())
+                .unwrap_or_else(|| OPENROUTER_DEFAULT_URL.to_string()),
+            api_key: api_key.into(),
+        }
+    }
+
+    /// Endpoint `<base>/chat/completions` — a differenza di OpenAI, il
+    /// default `base_url` di OpenRouter include già `/api/v1`, quindi qui
+    /// NON si ripete `/v1` (vedi `OPENROUTER_DEFAULT_URL`).
+    pub(crate) fn endpoint(&self) -> String {
+        format!(
+            "{}/chat/completions",
+            self.base_url.trim_end_matches('/')
+        )
+    }
+}
+
+impl AIProvider for OpenRouterProvider {
+    fn name(&self) -> &'static str {
+        "openrouter"
+    }
+
+    fn generate(&self, prompt: &str, model: &str) -> Result<GenerateOutput, PapErrore> {
+        let req = OpenAIRequest {
+            model,
+            messages: vec![OpenAIMsg {
+                role: "user",
+                content: prompt,
+            }],
+        };
+        let body = serde_json::to_string(&req)
+            .map_err(|e| PapErrore::dominio("Impossibile preparare la richiesta per il provider AI.", e))?;
+
+        let agent = ureq::AgentBuilder::new()
+            .timeout(std::time::Duration::from_secs(HTTP_TIMEOUT_SEC))
+            .build();
+
+        let start = Instant::now();
+        let resp = agent
+            .post(&self.endpoint())
+            .set("Authorization", &format!("Bearer {}", self.api_key))
+            .set("content-type", "application/json")
+            .set("HTTP-Referer", OPENROUTER_REFERER)
+            .set("X-Title", OPENROUTER_TITLE)
+            .send_string(&body)
+            .map_err(|e| PapErrore::dominio("Impossibile contattare il provider OpenRouter. Verifica la connessione e l'URL configurato.", e))?;
+        let latency_ms = start.elapsed().as_millis() as u64;
+
+        let json = resp
+            .into_string()
+            .map_err(|e| PapErrore::dominio("Risposta del provider OpenRouter non leggibile.", e))?;
+
+        let (content, tokens) = parse_openai_response(&json)?;
+
+        Ok(GenerateOutput {
+            content,
+            latency_ms,
+            tokens_used: tokens,
+            provider: "openrouter",
+            model: model.to_string(),
+        })
+    }
+}
+
 // ─────────── ProviderConfig storage (V010) ───────────
 
 // No `Debug`: può contenere `api_key`.
@@ -616,6 +709,7 @@ const PROVIDERS_VALIDI: &[&str] = &[
     "ollama",
     "openai-compat",
     "gemini",
+    "openrouter",
 ];
 
 fn valida_provider(name: &str) -> Result<(), PapErrore> {
@@ -961,6 +1055,15 @@ pub(crate) fn istanzia_provider_con_max_tokens(
                 PapErrore::Generico("Gemini richiede una API key configurata".into())
             })?;
             Ok(Box::new(GeminiProvider::new(
+                key.clone(),
+                cfg.base_url.clone(),
+            )))
+        }
+        "openrouter" => {
+            let key = cfg.api_key.as_ref().ok_or_else(|| {
+                PapErrore::Generico("OpenRouter richiede una API key configurata".into())
+            })?;
+            Ok(Box::new(OpenRouterProvider::new(
                 key.clone(),
                 cfg.base_url.clone(),
             )))
@@ -1337,6 +1440,65 @@ mod test {
         assert_eq!(p.name(), "gemini");
     }
 
+    // ─────────── OpenRouter ───────────
+
+    #[test]
+    fn openrouter_endpoint_e_default_url() {
+        let p = OpenRouterProvider::new("k", None);
+        assert_eq!(p.endpoint(), "https://openrouter.ai/api/v1/chat/completions");
+        assert_eq!(p.api_key, "k");
+    }
+
+    #[test]
+    fn openrouter_endpoint_custom_url() {
+        let p = OpenRouterProvider::new("k", Some("https://my-proxy.local/api/v1".into()));
+        assert_eq!(
+            p.endpoint(),
+            "https://my-proxy.local/api/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn openrouter_endpoint_empty_url_usa_default() {
+        let p = OpenRouterProvider::new("k", Some("  ".into()));
+        assert_eq!(p.endpoint(), "https://openrouter.ai/api/v1/chat/completions");
+    }
+
+    #[test]
+    fn openrouter_provider_name() {
+        let p = OpenRouterProvider::new("k", None);
+        assert_eq!(p.name(), "openrouter");
+    }
+
+    #[test]
+    fn istanzia_provider_openrouter_richiede_api_key() {
+        let cfg = ProviderConfigItem {
+            provider: "openrouter".to_string(),
+            api_key: None,
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+            creato_a: "2026-09-20T00:00:00Z".to_string(),
+            aggiornato_a: "2026-09-20T00:00:00Z".to_string(),
+        };
+        assert!(istanzia_provider(&cfg).is_err());
+    }
+
+    #[test]
+    fn istanzia_provider_openrouter_con_api_key_ok() {
+        let cfg = ProviderConfigItem {
+            provider: "openrouter".to_string(),
+            api_key: Some("sk-or-test".to_string()),
+            base_url: None,
+            default_model: None,
+            abilitato: true,
+            creato_a: "2026-09-20T00:00:00Z".to_string(),
+            aggiornato_a: "2026-09-20T00:00:00Z".to_string(),
+        };
+        let p = istanzia_provider(&cfg).unwrap();
+        assert_eq!(p.name(), "openrouter");
+    }
+
     // ─────────── ProviderConfig (storage) ───────────
 
     fn db_test() -> Connection {
@@ -1372,6 +1534,30 @@ mod test {
         assert!(r[0].api_key.is_none());
         assert_eq!(r[0].default_model.as_deref(), Some("claude-sonnet-4.6"));
         assert!(r[0].abilitato);
+    }
+
+    #[test]
+    fn config_salva_openrouter_inserisce_e_lista_lo_ritorna() {
+        // Mirror di `config_salva_inserisce_e_lista_lo_ritorna` per il
+        // provider 'openrouter': verifica anche che il CHECK di
+        // ProviderConfig (V018) accetti la nuova riga.
+        let conn = db_test();
+        let input = ProviderConfigInput {
+            provider: "openrouter".into(),
+            api_key: Some("sk-or-xyz".into()),
+            base_url: None,
+            default_model: Some("anthropic/claude-sonnet-4".into()),
+            abilitato: true,
+        };
+        config_salva_pure(&conn, &input, true).unwrap();
+        let r = config_lista_pure(&conn).unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].provider, "openrouter");
+        assert!(r[0].api_key.is_none());
+        assert_eq!(
+            r[0].default_model.as_deref(),
+            Some("anthropic/claude-sonnet-4")
+        );
     }
 
     #[test]

@@ -762,8 +762,9 @@ pub fn regression_report_csv(
 
 /// Esegue un golden via il provider scelto. Supporta tutti i provider
 /// configurati in `ProviderConfig` (Step 8f): ollama, anthropic,
-/// openai, openai-compat. Per `ollama` accetta override di `base_url`.
-/// Per i provider remote la API key è caricata dal vault.
+/// openai, openai-compat, gemini, openrouter (#668). Per `ollama` accetta
+/// override di `base_url`. Per i provider remote la API key è caricata dal
+/// vault.
 ///
 /// `judge_provider`/`judge_model` sono richiesti solo se la
 /// `similarity_fn` del golden è `llm-judge`. Possono coincidere col

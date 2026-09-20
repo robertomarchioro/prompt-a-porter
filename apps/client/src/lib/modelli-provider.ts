@@ -5,9 +5,11 @@
 // `modelli-refresh.yml` via `scripts/aggiorna-modelli.ts`, e la modifica
 // entra nella release successiva di PAP.
 //
-// `ollama` e `openai-compat` restano volutamente fuori: non hanno un listino
-// pubblico da interrogare (dipendono dall'installazione o dall'endpoint
-// dell'utente) e continuano a usare un campo di testo libero.
+// `ollama`, `openai-compat` e `openrouter` restano volutamente fuori: i primi
+// due dipendono dall'installazione o dall'endpoint dell'utente, il terzo
+// aggrega centinaia di id vendor-prefissati (`openai/gpt-4o`,
+// `anthropic/claude-sonnet-4`, ...) senza un listino unico interrogabile qui.
+// Tutti e tre continuano a usare un campo di testo libero.
 //
 // NON confondere con `modelli-target.ts`, che è un vocabolario di etichette
 // per dire "questo prompt è pensato per Claude Sonnet": è volutamente grosso,
