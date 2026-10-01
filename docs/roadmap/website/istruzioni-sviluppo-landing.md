@@ -171,7 +171,31 @@ Vincoli che il **sito** deve rispettare:
 - **CORS**: l'origin da autorizzare è **`https://www.promptaporter.it`**, non l'apex — `promptaporter.it` fa 301 verso `www` e il browser manda l'origin *dopo* il redirect. Il CORS è gestito da nginx CT 100, non dall'opzione nativa del nodo Webhook n8n (documentata solo per le richieste non-preflight e riportata come inaffidabile).
 - **Risposte non enumeranti**: sempre lo stesso messaggio di esito («Fatto, controlla la posta»), qualunque sia l'errore — coerente col lavoro #512 sugli errori opachi (CWE-209). Vale anche per il rifiuto anti-abuso: chi attacca non deve capire quale difesa è scattata.
 - **Niente email in chiaro nei log**, né lato n8n né lato nginx.
-- **Il contratto dell'endpoint** (forma di richiesta e risposta, status code, comportamento a quota esaurita) va fissato **prima** di scrivere il componente: senza, il form non è scrivibile. Da definire con la Fase 2 del piano Notion.
+- **Il contratto dell'endpoint** va fissato **prima** di scrivere il componente: senza, il form non è scrivibile. ✅ **Fissato il 2026-09-20** e implementato nel workflow n8n «PaP — Mandami il link (Flusso A)» — vedi sotto.
+
+#### Contratto dell'endpoint (2026-09-20)
+
+Base: `https://n8n.giganto.it/webhook` (in prova: `/webhook-test`). CORS a carico di nginx CT 100 (§5.2), verificato 2026-09-20.
+
+**`GET /pap-challenge`** → `200`, `Cache-Control: no-store`, corpo = challenge ALTCHA standard, consumabile dal widget senza adattatori:
+
+```json
+{ "algorithm": "SHA-256", "challenge": "<hex>", "maxnumber": 100000, "salt": "<hex>?expires=<unix>", "signature": "<hex>" }
+```
+
+`maxnumber` 100 000 (PoW ≈ 1 s su un telefono); scadenza 5 minuti dentro il `salt`, poi il widget ne chiede una nuova.
+
+**`POST /pap-download`** — `Content-Type: application/json`:
+
+```json
+{ "email": "…", "altcha": "<payload base64 del widget>", "sito": "" }
+```
+
+`sito` è l'**honeypot**: campo invisibile nel form, deve arrivare vuoto (o assente).
+
+Risposta **sempre** `200 {"esito":"ok"}`, qualunque cosa succeda dentro — email malformata, honeypot pieno, ALTCHA non valido o scaduto, indirizzo già servito nelle ultime 24 h, quota Lettermint esaurita, errore GitHub. La risposta parte **prima** di qualsiasi verifica (`responseMode: onReceived`): dall'esterno una richiesta respinta e una mail inviata sono indistinguibili, anche nel tempo di risposta. Gli unici status diversi li produce nginx (rate limit → 429), mai il workflow.
+
+Dentro il workflow, in quest'ordine (ogni scarto termina nel ramo «Scartata» con un motivo **senza email**): honeypot → formato email → verifica ALTCHA (scadenza, HMAC in `timingSafeEqual`, SHA-256 ricalcolato) → dedup 24 h su **hash SHA-256 dell'indirizzo** nella Data Table `pap_download_dedup` (mai l'email in chiaro; cron orario cancella le righe più vecchie di 24 h) → `releases/latest` di GitHub con gli stessi pattern asset di `download.ts` (fallback: pagina Releases) → Lettermint route `transactional` con `idempotency_key` = hash + giorno → scrittura riga dedup. Quota esaurita: stesso 200 verso l'esterno, execution fallita visibile in n8n.
 
 ### 5.2bis Anti-abuso: ALTCHA — e dove trova posto nella nostra infrastruttura
 
@@ -190,6 +214,8 @@ ALTCHA non richiede un servizio nuovo, ma **richiede comunque quattro posti** ne
 
 **Prerequisito da verificare PRIMA di impegnarsi**: il nodo Code di n8n deve poter usare `crypto`, che su n8n dipende da `NODE_FUNCTION_ALLOW_BUILTIN`. Se risultasse chiuso, la soluzione è **quella variabile d'ambiente su CT 110** — una riga di configurazione su un servizio già gestito, non un servizio in più.
 
+> ✅ **Verificato il 2026-09-20** (workflow di prova, execution reale): `require('crypto')` → *«Module 'crypto' is disallowed»*, e nel sandbox del Code node **non c'è nemmeno la Web Crypto globale** come ripiego. Quindi su CT 110 servono due variabili d'ambiente, persistenti ai riavvii: `NODE_FUNCTION_ALLOW_BUILTIN=crypto` e `PAP_ALTCHA_HMAC_KEY` (32 byte da `openssl rand -hex 32`, letta nei nodi Code con `$env`, che richiede `N8N_BLOCK_ENV_ACCESS_IN_NODE` al default `false`). In modalità queue vanno anche ai worker.
+
 **Protezione replay**: la libreria nuda non impedisce di risolvere il PoW una volta e riusare la stessa soluzione. Si copre con due accorgimenti dentro il workflow, entrambi voluti a prescindere:
 
 - `expires` breve sulla challenge (supportato nativamente da `altcha-lib`);
@@ -199,7 +225,7 @@ ALTCHA non richiede un servizio nuovo, ma **richiede comunque quattro posti** ne
 
 **Valutati e tenuti in panchina**, entrambi da riaprire solo se il form diventasse un bersaglio vero:
 
-- **ALTCHA Sentinel** — backend commerciale self-hosted, da €24/mese a licenza fissa. Aggiunge dashboard, rate limiting, threat intelligence, classificatore ML, protezione replay. Costa più del servizio che protegge, e ogni sua funzione qui è già coperta altrove (Matomo, Grafana, nginx). Usa **lo stesso widget**: passarci un domani significa cambiare un attributo e aggiungere una chiave — non è una scelta che ci incastra.
+- **ALTCHA Sentinel** — backend commerciale self-hosted, da €99/mese (prezzo 2026-09-20; era €24 ad agosto). Aggiunge dashboard, rate limiting, threat intelligence, classificatore ML, protezione replay. Costa più del servizio che protegge, e ogni sua funzione qui è già coperta altrove (Matomo, Grafana, nginx). Usa **lo stesso widget**: passarci un domani significa cambiare un attributo e aggiungere una chiave — non è una scelta che ci incastra.
 - **GateCHA** — server MIT in Go che parla il protocollo ALTCHA, alternativa gratuita a Sentinel. Scartato **non per qualità** (metodo di sviluppo curato) ma per livello e maturità: è un **servizio in esecuzione sul percorso critico del form**, di una persona sola, creato a febbraio 2026, a v0.3.2 con 10 stelle. Una libreria abbandonata è codice che possiedi; un server abbandonato è un servizio di rete non più aggiornato da sostituire di corsa. In cambio darebbe multi-sito, gestione API key e dashboard: cose che qui non servono.
 
 ### 5.2ter Relay di consegna: Lettermint, e il legame fra quota e captcha
@@ -246,18 +272,18 @@ Il form è **solo mobile**: la landing desktop non ne dipende. Quindi:
 - **Fase A** — landing live senza backend: su mobile la CTA degrada a link diretto alla release Latest ("Apri la pagina di download") o resta il form con messaggio "in arrivo". **Decisione consigliata: lanciare con il fallback**, non tenere la landing in ostaggio del backend.
 - **Fase B** — backend attivo: form live, mail transazionale col link + CTA di iscrizione (§5.1).
 
-Stato al 2026-08-02: **siamo in Fase A** — `SezioneDesktop.vue` (albero mobile) espone la CTA di ripiego verso la pagina release, non il form.
+Stato al 2026-09-20: **ancora in Fase A** lato sito — `SezioneDesktop.vue` (albero mobile) espone la CTA di ripiego verso la pagina release, non il form. Il backend della Fase B è costruito ma inattivo (tabella sotto).
 
 Cosa serve su Giganto perché parta la Fase B (riepilogo aggiornato — Matomo esiste già, §3.1):
 
 | # | Pezzo | Stato |
 |---|---|---|
 | 1 | Account **Lettermint** + route `transactional`/`broadcast` + DNS (DKIM, DMARC, CNAME bounces) | ✅ fatto 2026-08-02, `dkim/spf/dmarc=pass` verificati |
-| 2 | **CORS** su nginx CT 100 per il webhook n8n (origin `www`, regex che copre anche `/webhook-test/`) | ⏳ patcher pronto, non applicato |
-| 3 | **Workflow n8n** del Flusso A (7 nodi) + anti-abuso | ⏳ da costruire |
-| 4 | **ALTCHA**: challenge endpoint su n8n, chiave HMAC nei Segreti, `crypto` nel Code node (§5.2bis) | ⏳ da fare — prerequisito `crypto` da verificare per primo |
+| 2 | **CORS** su nginx CT 100 per il webhook n8n (origin `www`, regex che copre anche `/webhook-test/`) | ✅ applicato e verificato dall'esterno 2026-09-20 (preflight, origin apex/estraneo non riflessi, `always` sugli errori) — ⚠️ a workflow attivo verificare che `Access-Control-Allow-Origin` esca **una volta sola** (nginx + opzione `allowedOrigins` del webhook) |
+| 3 | **Workflow n8n** del Flusso A + anti-abuso | ✅ costruito 2026-09-20 («PaP — Mandami il link (Flusso A)», 15 nodi, Data Table `pap_download_dedup`) — **inattivo**: dipende dal punto 4; credenziale Lettermint da selezionare a mano nel nodo HTTP; template mail **di prova**, il definitivo arriva da Claude Design |
+| 4 | **ALTCHA**: challenge endpoint su n8n, chiave HMAC nei Segreti, `crypto` nel Code node (§5.2bis) | ⏳ endpoint e verifica scritti nel workflow; **bloccato** finché su CT 110 non ci sono `NODE_FUNCTION_ALLOW_BUILTIN=crypto` e `PAP_ALTCHA_HMAC_KEY` (verifica 2026-09-20: `crypto` chiuso) |
 | 5 | **CT 150 + listmonk + Postgres** su CT 200, vhost `tikki.giganto.it` | ⏳ da fare (indipendente da 2-4: il Flusso A parte anche senza) |
-| 6 | **Widget ALTCHA + componente form** in `apps/site` | ⏳ da fare, dipende dal contratto dell'endpoint (§5.2) |
+| 6 | **Widget ALTCHA + componente form** in `apps/site` | ⏳ da fare — il contratto ora c'è (§5.2) |
 
 I flussi A (download) e B (liste) sono **indipendenti**: si può mandare live il form senza che listmonk esista, mettendo nella mail una CTA che punterà alla pagina di iscrizione solo quando ci sarà.
 
@@ -265,7 +291,7 @@ I flussi A (download) e B (liste) sono **indipendenti**: si può mandare live il
 
 - **Pagina «Privacy»** nel sito: informativa art. 13 GDPR — titolare (Roberto Marchioro), le due finalità con le rispettive basi giuridiche e retention (§5.1), diritti dell'interessato, contatto. Linkata dal form, dalla pagina di iscrizione e dal footer.
 - Il claim di `contenuti.md` §10 (*"Nessun 'Privacy Policy' complesso perché non raccogliamo dati"*) **decade**: aggiornare `contenuti.md` quando la Fase B parte.
-- **Retention delle execution n8n** — ⚠️ il punto più facile da sbagliare. n8n salva i dati di esecuzione, **email inclusa**: finché non è configurata una retention breve (o il pruning), la frase «non conserviamo il tuo indirizzo» è **falsa** e l'informativa sarebbe sbagliata. Va verificato sul workflow prima di andare live, non dopo.
+- **Retention delle execution n8n** — ⚠️ il punto più facile da sbagliare. n8n salva i dati di esecuzione, **email inclusa**: finché non è configurata una retention breve (o il pruning), la frase «non conserviamo il tuo indirizzo» è **falsa** e l'informativa sarebbe sbagliata. Va verificato sul workflow prima di andare live, non dopo. **Scelta (2026-09-20)**: nel workflow «Save successful executions: Do not save» (nelle execution riuscite l'email è nell'output del nodo «Valida richiesta»); le execution fallite restano per la diagnosi, con pruning a livello istanza (`EXECUTIONS_DATA_PRUNE=true`, `EXECUTIONS_DATA_MAX_AGE=168`) — attenzione: il pruning è globale e tocca anche gli altri workflow dell'istanza.
 - **Responsabili esterni da elencare** nell'informativa: **Lettermint** (Paesi Bassi, transito UE — IP di uscita ad Amsterdam, verificato). Con ALTCHA self-hosted **non se ne aggiungono altri**: è la ragione principale per cui è stato scelto al posto di Turnstile.
 - Unsubscribe in ogni mail della lista (listmonk lo fa da sé); nessun indirizzo nei log applicativi.
 - Il relay scelto è UE: nessun trasferimento extra-UE da dichiarare. Se un domani cambiasse, va detto nell'informativa.
