@@ -1,5 +1,27 @@
 # Changelog — Prompt a Porter
 
+## v0.8.54 — L'imbastitura si scuce tutta (2026-10-09)
+
+> Una release di sostanza su un punto solo: **l'import non lascia più lavori a metà**. Se una scrittura non va a buon fine, l'imbastitura si scuce tutta e il vault resta com'era prima. Intorno, Tauri 2.12, i modelli AI di ottobre e una dipendenza di build sistemata.
+
+### Sicurezza
+
+- **`source-map-js` 1.2.2** (#685): l'advisory GHSA-68fv-2mgg-jv7q (severità alta, blocco del processo tramite una source map costruita ad arte) riguardava una libreria usata solo dagli strumenti di build e di test, non dall'app installata, e che legge solo source map prodotte dal progetto. Cambia solo il lockfile.
+
+### Fix
+
+- **L'import è tutto o niente** (#670): importando un backup del vault o una collezione, se anche una sola scrittura fallisce l'app annulla l'intera operazione; da Impostazioni → Dati e dalle Collezioni lo dice chiaramente: «Importazione annullata: nessuna modifica è stata salvata.» Prima l'import si fermava a metà — una parte dei prompt salvata, il resto no — e diceva comunque «Import completato». Puoi correggere il file e riprovare senza dover ripulire nulla.
+- **Un tag nel Cestino non blocca più l'import** (#670): se il file da importare contiene un tag con lo stesso nome di uno che hai cestinato, quel tag viene ripristinato dal Cestino e riusato, e lo ritrovi nell'elenco dei tag. Prima l'import falliva su quel tag ogni volta, e con la regola del tutto-o-niente avrebbe annullato l'operazione intera.
+- **Tag e cartelle omonimi si agganciano in modo prevedibile** (#670): se nel vault ci sono due tag o due cartelle con lo stesso nome a parte le maiuscole («Ruoli» e «ruoli»), l'import sceglie prima quello scritto esattamente come nel file, poi il più vecchio. Prima la scelta poteva cambiare da un import all'altro.
+- **Le sottocartelle restano al loro posto anche in un export ritoccato a mano** (#670): se in un file JSON una sottocartella compare prima della cartella che la contiene, l'import la mette comunque dentro la cartella giusta invece di lasciarla nella radice.
+
+### Manutenzione
+
+- **Tauri 2.12** (#676, #677, #682, #683): framework e plugin aggiornati insieme, lato Rust e lato interfaccia, alle stesse versioni. L'avvio automatico usa una libreria nuova che scrive nelle stesse posizioni di prima, quindi l'impostazione già attiva resta valida; su Linux l'aggiornamento automatico non impone più i percorsi dei certificati di Debian e usa quelli del sistema.
+- **Registro dei modelli AI aggiornato** (#678, #684): sette modelli nuovi — Claude Opus 5.5, Claude Sonnet 5.5, GPT-6 Sol, GPT-6.1 Sol, GPT-6 Luna, Daybreak Blue e Daybreak Red.
+- **Rotta della landing** (#665): in `docs/roadmap/` il contratto dell'endpoint del sito e lo stato dei lavori.
+- **Aggiornamento dipendenze** (#672, #673, #674, #679, #680, #681): lato Go `modernc.org/sqlite` 1.60.1 per la CLI; lato npm `vitest` 5.0.3 e le patch di CodeMirror, Svelte, `dompurify`, `marked`, `zod` e dell'SDK MCP; action pinnata `taiki-e/install-action` 2.87.22.
+
 ## v0.8.53 — Un ago in più nel cestino da cucito (2026-09-20)
 
 > Una novità e un fix nati dal collaudo delle collezioni: si può cucire con i modelli di **OpenRouter** e importare una collezione non lascia più cartelle doppie nell'albero.
