@@ -18,6 +18,11 @@
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { onMount, onDestroy, untrack } from "svelte";
   import { eseguiInstallaAggiornamento } from "./installa-aggiornamento-logic";
+  import {
+    importFallito,
+    MESSAGGIO_IMPORT_ANNULLATO,
+    type ImportReport,
+  } from "./import-report";
   import { conferma } from "$lib/util/conferma";
   import { logInfoApp, logErroreApp } from "$lib/util/log-app";
   import {
@@ -192,20 +197,13 @@
 
   type ModalitaImportJson = "skip" | "overwrite" | "rename";
 
-  interface ImportReportJson {
-    nuovi: number;
-    aggiornati: number;
-    conflitti: number;
-    errori: string[];
-  }
-
   let inputFileJson: HTMLInputElement | undefined = $state();
 
   let modalitaImportJson = $state<ModalitaImportJson>("skip");
 
   let datiImportJson = $state<{
     inCorso: boolean;
-    report: ImportReportJson | null;
+    report: ImportReport | null;
     errore: string;
   }>({
     inCorso: false,
@@ -328,7 +326,7 @@
     datiImportJson = { inCorso: true, report: null, errore: "" };
     try {
       const json = await file.text();
-      const report = await invoke<ImportReportJson>("vault_import_json", {
+      const report = await invoke<ImportReport>("vault_import_json", {
         json,
         modalita: modalitaImportJson,
       });
@@ -2188,15 +2186,18 @@
           </button>
           {#if datiImportJson.report}
             <div class="dati-report">
-              <p class="dati-report-ok">
-                ✓ Import completato — {datiImportJson.report.nuovi} nuovi,
-                {datiImportJson.report.aggiornati} aggiornati,
-                {datiImportJson.report.conflitti} conflitti
-              </p>
-              {#if datiImportJson.report.errori.length > 0}
-                <p class="dati-report-err">
-                  ✗ {datiImportJson.report.errori.length} errori
+              {#if importFallito(datiImportJson.report)}
+                <p class="dati-report-err" role="alert">
+                  ✗ {MESSAGGIO_IMPORT_ANNULLATO}
                 </p>
+              {:else}
+                <p class="dati-report-ok">
+                  ✓ Import completato — {datiImportJson.report.nuovi} nuovi,
+                  {datiImportJson.report.aggiornati} aggiornati,
+                  {datiImportJson.report.conflitti} conflitti
+                </p>
+              {/if}
+              {#if datiImportJson.report.errori.length > 0}
                 <ul class="dati-report-list">
                   {#each datiImportJson.report.errori as err, i (i)}
                     <li>{err}</li>

@@ -60,19 +60,20 @@ describe("formattaRiepilogoAggiorna", () => {
         aggiornati: 3,
         conflitti: 2,
         errori: [],
+        annullato: false,
       }),
     ).toBe("3 aggiornati · 1 nuovo · 2 conservati perché modificati da te");
   });
 
   it("dice che è già allineata quando non cambia nulla", () => {
     expect(
-      formattaRiepilogoAggiorna({ nuovi: 0, aggiornati: 0, conflitti: 0, errori: [] }),
+      formattaRiepilogoAggiorna({ nuovi: 0, aggiornati: 0, conflitti: 0, errori: [], annullato: false }),
     ).toBe("Già allineata: nessuna modifica");
   });
 
   it("usa il singolare", () => {
     expect(
-      formattaRiepilogoAggiorna({ nuovi: 0, aggiornati: 1, conflitti: 1, errori: ["x"] }),
+      formattaRiepilogoAggiorna({ nuovi: 0, aggiornati: 1, conflitti: 1, errori: ["x"], annullato: false }),
     ).toBe("1 aggiornato · 1 conservato perché modificato da te · 1 non aggiornato");
   });
 });
@@ -92,7 +93,7 @@ describe("eseguiAggiorna", () => {
   it("chiama il comando aggiorna e notifica se ha scritto", async () => {
     const aggiorna = vi
       .fn()
-      .mockResolvedValue({ nuovi: 0, aggiornati: 2, conflitti: 1, errori: [] });
+      .mockResolvedValue({ nuovi: 0, aggiornati: 2, conflitti: 1, errori: [], annullato: false });
     const notificaListaMutata = vi.fn();
 
     const esito = await eseguiAggiorna("sviluppatore", { aggiorna, notificaListaMutata });
@@ -105,6 +106,7 @@ describe("eseguiAggiorna", () => {
         slug: "sviluppatore",
         riepilogo: "2 aggiornati · 1 conservato perché modificato da te",
         errori: [],
+        fallito: false,
       },
     });
   });
@@ -112,7 +114,7 @@ describe("eseguiAggiorna", () => {
   it("non notifica se l'aggiornamento non ha scritto nulla", async () => {
     const aggiorna = vi
       .fn()
-      .mockResolvedValue({ nuovi: 0, aggiornati: 0, conflitti: 0, errori: [] });
+      .mockResolvedValue({ nuovi: 0, aggiornati: 0, conflitti: 0, errori: [], annullato: false });
     const notificaListaMutata = vi.fn();
 
     const esito = await eseguiAggiorna("sviluppatore", { aggiorna, notificaListaMutata });
@@ -125,13 +127,13 @@ describe("eseguiAggiorna", () => {
 describe("formattaRiepilogo", () => {
   it("mostra solo gli aggiunti quando non ci sono conflitti né errori", () => {
     expect(
-      formattaRiepilogo({ nuovi: 12, aggiornati: 0, conflitti: 0, errori: [] }),
+      formattaRiepilogo({ nuovi: 12, aggiornati: 0, conflitti: 0, errori: [], annullato: false }),
     ).toBe("12 elementi aggiunti");
   });
 
   it("usa il singolare per un solo elemento", () => {
     expect(
-      formattaRiepilogo({ nuovi: 1, aggiornati: 0, conflitti: 0, errori: [] }),
+      formattaRiepilogo({ nuovi: 1, aggiornati: 0, conflitti: 0, errori: [], annullato: false }),
     ).toBe("1 elemento aggiunto");
   });
 
@@ -142,6 +144,7 @@ describe("formattaRiepilogo", () => {
         aggiornati: 0,
         conflitti: 20,
         errori: ["Tag x: importazione non riuscita."],
+        annullato: false,
       }),
     ).toBe("0 elementi aggiunti · 20 già presenti · 1 non importato");
   });
@@ -189,7 +192,7 @@ describe("eseguiImporta", () => {
     // Arrange
     const importa = vi
       .fn()
-      .mockResolvedValue({ nuovi: 13, aggiornati: 0, conflitti: 2, errori: [] });
+      .mockResolvedValue({ nuovi: 13, aggiornati: 0, conflitti: 2, errori: [], annullato: false });
     const notificaListaMutata = vi.fn();
 
     // Act
@@ -207,6 +210,7 @@ describe("eseguiImporta", () => {
         slug: "sviluppatore",
         riepilogo: "13 elementi aggiunti · 2 già presenti",
         errori: [],
+        fallito: false,
       },
     });
   });
@@ -214,7 +218,7 @@ describe("eseguiImporta", () => {
   it("NON notifica la libreria se il re-import non ha scritto nulla", async () => {
     const importa = vi
       .fn()
-      .mockResolvedValue({ nuovi: 0, aggiornati: 0, conflitti: 22, errori: [] });
+      .mockResolvedValue({ nuovi: 0, aggiornati: 0, conflitti: 22, errori: [], annullato: false });
     const notificaListaMutata = vi.fn();
 
     const esito = await eseguiImporta("sviluppatore", {
@@ -244,5 +248,64 @@ describe("eseguiImporta", () => {
       ok: false,
       errore: "Il file della collezione non corrisponde all'indice.",
     });
+  });
+});
+
+describe("import annullato dal backend (#670)", () => {
+  const ANNULLATO = {
+    nuovi: 0,
+    aggiornati: 0,
+    conflitti: 0,
+    errori: ["Tag tag-x: importazione non riuscita."],
+    annullato: true,
+  };
+
+  it("mostra il fallimento al posto dei contatori e non notifica la libreria", async () => {
+    const importa = vi.fn().mockResolvedValue(ANNULLATO);
+    const notificaListaMutata = vi.fn();
+
+    const esito = await eseguiImporta("sviluppatore", {
+      importa,
+      notificaListaMutata,
+    });
+
+    expect(notificaListaMutata).not.toHaveBeenCalled();
+    expect(esito).toEqual({
+      ok: true,
+      esito: {
+        slug: "sviluppatore",
+        riepilogo: "Importazione annullata: nessuna modifica è stata salvata.",
+        errori: ["Tag tag-x: importazione non riuscita."],
+        fallito: true,
+      },
+    });
+  });
+
+  it("vale anche per l'aggiornamento", async () => {
+    const aggiorna = vi.fn().mockResolvedValue(ANNULLATO);
+
+    const esito = await eseguiAggiorna("sviluppatore", {
+      aggiorna,
+      notificaListaMutata: vi.fn(),
+    });
+
+    expect(esito.ok && esito.esito.fallito).toBe(true);
+    expect(esito.ok && esito.esito.riepilogo).toBe(
+      "Importazione annullata: nessuna modifica è stata salvata.",
+    );
+  });
+
+  it("un aggiornamento riuscito non è segnato come fallito", async () => {
+    const aggiorna = vi
+      .fn()
+      .mockResolvedValue({ nuovi: 1, aggiornati: 2, conflitti: 0, errori: [], annullato: false });
+
+    const esito = await eseguiAggiorna("sviluppatore", {
+      aggiorna,
+      notificaListaMutata: vi.fn(),
+    });
+
+    expect(esito.ok && esito.esito.fallito).toBe(false);
+    expect(esito.ok && esito.esito.riepilogo).toBe("2 aggiornati · 1 nuovo");
   });
 });
