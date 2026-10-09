@@ -174,10 +174,11 @@ pub(crate) fn importa_collezione_pura(
         "Collezione",
         slug,
         Some(&format!(
-            "nuovi={} conflitti={} errori={}",
+            "nuovi={} conflitti={} errori={} annullato={}",
             report.nuovi,
             report.conflitti,
-            report.errori.len()
+            report.errori.len(),
+            report.annullato
         )),
     );
     Ok(report)
@@ -242,11 +243,12 @@ pub(crate) fn aggiorna_collezione_pura(
         "Collezione",
         slug,
         Some(&format!(
-            "nuovi={} aggiornati={} conservati={} errori={}",
+            "nuovi={} aggiornati={} conservati={} errori={} annullato={}",
             report.nuovi,
             report.aggiornati,
             report.conflitti,
-            report.errori.len()
+            report.errori.len(),
+            report.annullato
         )),
     );
     Ok(report)
@@ -797,37 +799,34 @@ mod test {
     }
 
     /// Con errori parziali l'impronta NON va registrata: la collezione deve
-    /// restare importabile/aggiornabile per riprovare.
+    /// restare importabile/aggiornabile per riprovare, e l'import è annullato
+    /// per intero (#670).
     ///
-    /// L'errore qui non arriva più da due cartelle omonime con id diversi
-    /// (dedup #666, ora gestito senza errori — vedi i test sopra e in
-    /// `import_export.rs`), ma da un tag omonimo di uno GIÀ CESTINATO: il
-    /// vincolo `UNIQUE (WorkspaceId, Name)` di `Tags`, a differenza di
-    /// quello delle cartelle, non è filtrato su `DeletedAt IS NULL`, quindi
-    /// resta un modo genuino (e indipendente da questa issue) per produrre
-    /// un errore parziale.
+    /// L'errore è prodotto da un trigger di test che fa fallire l'INSERT di
+    /// un tag, perché i veri errori noti (cartelle omonime con id diversi,
+    /// tag omonimo nel cestino) sono stati risolti senza errori.
     #[test]
     fn applica_e_registra_non_registra_con_errori_parziali() {
         let conn = db_test();
-        conn.execute(
-            "INSERT INTO Tags (Id, WorkspaceId, Name, Color, CreatedAt, UpdatedAt, DeletedAt)
-             VALUES ('tag-cestinato', 'ws-personale', 'Doppia', '#000', '2026-01-01', '2026-01-01',
-                     datetime('now'))",
-            [],
+        conn.execute_batch(
+            "CREATE TEMP TRIGGER test_fallisce BEFORE INSERT ON Tags
+             WHEN NEW.Name = 'Esplode'
+             BEGIN SELECT RAISE(ABORT, 'test'); END;",
         )
         .unwrap();
         let json = r#"{"schemaVersion":1,"exportedAt":"2026-01-01T00:00:00Z",
             "workspace":{"id":"ws-personale","name":"Personale","type":"personal"},
-            "tags":[{"id":"tag-nuovo","name":"Doppia","color":null,"created_at":"2026-01-01T00:00:00Z"}],
+            "tags":[{"id":"tag-buono","name":"Buono","color":null,"created_at":"2026-01-01T00:00:00Z"},
+                    {"id":"tag-nuovo","name":"Esplode","color":null,"created_at":"2026-01-01T00:00:00Z"}],
             "prompts":[],"versions":[],"global_placeholders":[],"folders":[]}"#;
         let sha = "1".repeat(64);
 
         let report = applica_e_registra(&conn, "rotta", json, &sha, false).unwrap();
-        // L'errore reale più il messaggio di annullamento dell'import
-        // tutto-o-niente (#670).
-        assert_eq!(report.errori.len(), 2, "{:?}", report.errori);
-        assert!(report.errori[0].contains("tag-nuovo"), "{:?}", report.errori);
-        assert!(report.errori[1].contains("annullata"), "{:?}", report.errori);
+        assert_eq!(report.errori.len(), 1, "{:?}", report.errori);
+        assert!(report.annullato);
+        assert_eq!(report.nuovi, 0, "il tag «Buono» è stato annullato");
+        let tag: i64 = conn.query_row("SELECT COUNT(*) FROM Tags", [], |r| r.get(0)).unwrap();
+        assert_eq!(tag, 0);
         let righe: i64 = conn
             .query_row("SELECT COUNT(*) FROM CollezioniImportate", [], |r| r.get(0))
             .unwrap();

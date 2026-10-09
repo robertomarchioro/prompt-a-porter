@@ -81,7 +81,7 @@
       // Il backend registra l'impronta solo senza errori parziali: la voce
       // segue la stessa regola, così con errori il bottone resta attivo e
       // si può riprovare (review PR passo 2).
-      if (esito.esito.errori.length === 0) {
+      if (!esito.esito.fallito) {
         collezioni =
           collezioni?.map((c) =>
             c.slug === slug
@@ -146,7 +146,11 @@
             {/if}
             <p class="voce-desc">{c.descrizione}</p>
             {#if esiti[c.slug]}
-              <p class="report-ok">✓ {esiti[c.slug].riepilogo}</p>
+              {#if esiti[c.slug].fallito}
+                <p class="report-err" role="alert">✗ {esiti[c.slug].riepilogo}</p>
+              {:else}
+                <p class="report-ok">✓ {esiti[c.slug].riepilogo}</p>
+              {/if}
               {#if esiti[c.slug].errori.length > 0}
                 <ul class="report-list">
                   {#each esiti[c.slug].errori as e, i (i)}

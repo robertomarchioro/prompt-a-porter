@@ -108,7 +108,11 @@ pub struct ImportReport {
     pub nuovi: u32,
     pub aggiornati: u32,
     pub conflitti: u32,
+    /// Solo fallimenti reali (statement SQL non riusciti).
     pub errori: Vec<String>,
+    /// `true` se l'import è stato annullato per intero (#670): nulla è stato
+    /// scritto, i contatori sono a zero e `errori` spiega perché.
+    pub annullato: bool,
 }
 
 fn ora_iso() -> String {
@@ -1557,6 +1561,32 @@ fn tag_id_per_nome(conn: &Connection, nome: &str) -> Option<String> {
     .ok()
 }
 
+/// Id del tag nel cestino con esattamente questo nome (confronto BINARY, lo
+/// stesso del vincolo `UNIQUE (WorkspaceId, Name)`, che include le righe
+/// cancellate), `None` se assente.
+fn tag_cestinato_id_per_nome(conn: &Connection, nome: &str) -> Option<String> {
+    conn.query_row(
+        "SELECT Id FROM Tags
+         WHERE WorkspaceId = 'ws-personale' AND DeletedAt IS NOT NULL
+           AND Name = ?1
+         ORDER BY CreatedAt ASC, Id ASC
+         LIMIT 1",
+        [nome],
+        |r| r.get(0),
+    )
+    .ok()
+}
+
+/// Riporta in vita un tag cancellato (`DeletedAt = NULL`). Nome e colore
+/// restano quelli dell'utente.
+fn ripristina_tag(conn: &Connection, id: &str) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE Tags SET DeletedAt = NULL, UpdatedAt = datetime('now') WHERE Id = ?1",
+        [id],
+    )
+    .map(|_| ())
+}
+
 /// Id della cartella con lo stesso genitore (NULL-safe, `parent_id: None` =
 /// root) e nome (case-insensitive) di quella importata, `None` se assente.
 /// Stesso principio di `tag_id_per_nome`, applicato alle cartelle (#666):
@@ -1677,8 +1707,103 @@ fn aggiorna_prompt_intatto(
 /// Nome del savepoint che racchiude `import_pure`.
 const SAVEPOINT_IMPORT: &str = "import_pure";
 
-/// Messaggio aggiunto a `errori` quando l'import viene annullato per intero.
-const MSG_IMPORT_ANNULLATO: &str = "Importazione annullata: nessuna modifica è stata salvata.";
+/// Savepoint con chiusura garantita (#670). Un savepoint lasciato aperto su
+/// una connessione condivisa (`VaultState`) trasformerebbe ogni scrittura
+/// successiva in parte di una transazione mai confermata, persa alla
+/// chiusura: per questo il `Drop` annulla se nessuno ha chiamato
+/// `conferma`/`annulla` (early return, panic) e ogni fallimento di RELEASE o
+/// ROLLBACK TO ripiega su un `ROLLBACK` completo quando il savepoint era
+/// l'unico livello aperto. Alla fine `is_autocommit()` torna com'era
+/// all'ingresso, o si segnala l'errore.
+struct GuardiaSavepoint<'c> {
+    conn: &'c Connection,
+    /// Stato di autocommit PRIMA di aprire il savepoint: se `true`, il
+    /// savepoint è il livello più esterno e il suo RELEASE è un COMMIT.
+    era_autocommit: bool,
+    chiuso: bool,
+}
+
+impl<'c> GuardiaSavepoint<'c> {
+    fn apri(conn: &'c Connection) -> Result<Self, PapErrore> {
+        let era_autocommit = conn.is_autocommit();
+        conn.execute_batch(&format!("SAVEPOINT {SAVEPOINT_IMPORT}"))?;
+        Ok(Self {
+            conn,
+            era_autocommit,
+            chiuso: false,
+        })
+    }
+
+    /// Conferma le scritture (RELEASE; sul livello esterno è il COMMIT). Se
+    /// fallisce (DB occupato, disco pieno, FK differite) le scritture
+    /// vengono annullate e si restituisce un errore opaco.
+    fn conferma(mut self) -> Result<(), PapErrore> {
+        self.chiuso = true;
+        let Err(e) = self
+            .conn
+            .execute_batch(&format!("RELEASE {SAVEPOINT_IMPORT}"))
+        else {
+            return Ok(());
+        };
+        let messaggio = match self.ripulisci() {
+            Ok(()) => "L'importazione non è riuscita: nessuna modifica è stata salvata. Riprova.",
+            Err(_) => MSG_ANNULLAMENTO_FALLITO,
+        };
+        Err(PapErrore::dominio(messaggio, e))
+    }
+
+    /// Annulla le scritture del savepoint e lo chiude.
+    fn annulla(mut self) -> Result<(), PapErrore> {
+        self.chiuso = true;
+        self.ripulisci()
+            .map_err(|e| PapErrore::dominio(MSG_ANNULLAMENTO_FALLITO, e))
+    }
+
+    /// `ROLLBACK TO` e `RELEASE` in due passi separati: se il primo fallisce
+    /// (es. SQLite ha già annullato tutta la transazione per FULL/IOERR e il
+    /// savepoint non esiste più) il secondo va comunque tentato. Se uno dei
+    /// due fallisce e il savepoint era il livello esterno, `ROLLBACK`
+    /// completo: la connessione deve tornare in autocommit.
+    fn ripulisci(&self) -> Result<(), rusqlite::Error> {
+        let rollback_to = self
+            .conn
+            .execute_batch(&format!("ROLLBACK TO {SAVEPOINT_IMPORT}"));
+        let release = self
+            .conn
+            .execute_batch(&format!("RELEASE {SAVEPOINT_IMPORT}"));
+        if rollback_to.is_ok() && release.is_ok() {
+            return Ok(());
+        }
+        let esito = if self.era_autocommit {
+            if self.conn.is_autocommit() {
+                // Transazione già chiusa da SQLite: nulla è rimasto scritto.
+                Ok(())
+            } else {
+                self.conn.execute_batch("ROLLBACK")
+            }
+        } else {
+            // Annidato: il chiamante possiede la transazione; basta che le
+            // nostre scritture siano state annullate.
+            rollback_to
+        };
+        if let Err(e) = &esito {
+            log::error!("pulizia del savepoint di import fallita: {e}");
+        }
+        esito
+    }
+}
+
+impl Drop for GuardiaSavepoint<'_> {
+    fn drop(&mut self) {
+        if !self.chiuso {
+            log::error!("savepoint di import non chiuso (panic o uscita anticipata): rollback");
+            // Errore già loggato da `ripulisci`; in un Drop non c'è altro da fare.
+            let _ = self.ripulisci();
+        }
+    }
+}
+
+const MSG_ANNULLAMENTO_FALLITO: &str = "L'importazione non è riuscita e non è stato possibile annullarla del tutto. Riavvia l'app e controlla la libreria.";
 
 /// Applica `export` in modo tutto-o-niente (#670): se l'import restituisce
 /// `Err` o anche un solo errore in `report.errori`, ogni scrittura viene
@@ -1687,88 +1812,85 @@ const MSG_IMPORT_ANNULLATO: &str = "Importazione annullata: nessuna modifica è 
 ///
 /// Usa un SAVEPOINT e non `conn.transaction()` perché la funzione riceve
 /// `&Connection`; il savepoint funziona sia a livello radice sia dentro una
-/// transazione già aperta dal chiamante.
+/// transazione già aperta dal chiamante (vedi `GuardiaSavepoint`).
 ///
 /// Dopo un rollback il report non rivendica righe annullate: i contatori
-/// sono azzerati e `errori` conserva i fallimenti reali più il messaggio di
-/// annullamento.
+/// sono azzerati, `annullato` è `true` ed `errori` contiene solo i
+/// fallimenti reali.
 pub(crate) fn import_pure(
     conn: &Connection,
     export: &ExportV1,
     modalita: &str,
 ) -> Result<ImportReport, PapErrore> {
-    conn.execute_batch(&format!("SAVEPOINT {SAVEPOINT_IMPORT}"))?;
+    let guardia = GuardiaSavepoint::apri(conn)?;
     match import_pure_inner(conn, export, modalita) {
         Ok(report) if report.errori.is_empty() => {
-            conn.execute_batch(&format!("RELEASE {SAVEPOINT_IMPORT}"))?;
+            guardia.conferma()?;
             Ok(report)
         }
         Ok(report) => {
-            annulla_import(conn)?;
-            let mut errori = report.errori;
-            errori.push(MSG_IMPORT_ANNULLATO.to_string());
+            guardia.annulla()?;
             Ok(ImportReport {
                 nuovi: 0,
                 aggiornati: 0,
                 conflitti: 0,
-                errori,
+                errori: report.errori,
+                annullato: true,
             })
         }
         Err(e) => {
-            annulla_import(conn)?;
+            if let Err(rollback) = guardia.annulla() {
+                log::error!("import fallito ({e}) e rollback non riuscito");
+                return Err(rollback);
+            }
             Err(e)
         }
     }
 }
 
-/// Annulla le scritture del savepoint e lo chiude. Se nemmeno il rollback
-/// riesce lo stato del DB è incerto: lo si segnala come errore invece di
-/// restituire un report che sembri pulito.
-fn annulla_import(conn: &Connection) -> Result<(), PapErrore> {
-    conn.execute_batch(&format!(
-        "ROLLBACK TO {SAVEPOINT_IMPORT}; RELEASE {SAVEPOINT_IMPORT}"
-    ))
-    .map_err(|e| {
-        log::error!("rollback dell'import fallito: {e}");
-        PapErrore::dominio(
-            "L'importazione non è riuscita e non è stato possibile annullarla del tutto. Riavvia l'app e controlla la libreria.",
-            e,
-        )
-    })
-}
-
 /// Cartelle dell'export con ogni genitore PRIMA dei suoi figli, a prescindere
 /// dall'ordine del file (#670: un export scritto a mano con il figlio per
-/// primo lo farebbe finire a root). Ordine stabile: una cartella è pronta
-/// quando non ha genitore, il genitore non fa parte dell'export, oppure è
-/// già stato emesso. Le cartelle in un ciclo (e i loro discendenti) non
-/// diventano mai pronte: vengono accodate nell'ordine originale con un
-/// warning, e l'import le gestisce come prima (genitore non risolvibile →
-/// root). Non è un errore, altrimenti farebbe annullare l'import.
+/// primo lo farebbe finire a root). Ordinamento topologico (Kahn) in
+/// O(n log n): `vault_import_json` non ha un tetto di dimensione. Tra le
+/// cartelle pronte si emette sempre quella con l'indice più basso nel file,
+/// quindi un export già ordinato resta invariato. Una cartella è pronta
+/// quando non ha genitore o il genitore non fa parte dell'export; le altre
+/// aspettano che il genitore sia emesso. Cicli (anche una cartella genitore
+/// di sé stessa) e discendenti non diventano mai pronti: vengono accodati
+/// nell'ordine del file con un warning, e l'import li gestisce come prima
+/// (genitore non risolvibile → root). Non è un errore, altrimenti farebbe
+/// annullare l'import.
 fn ordina_cartelle(cartelle: &[FolderExport]) -> Vec<&FolderExport> {
-    let ids: std::collections::HashSet<&str> = cartelle.iter().map(|f| f.id.as_str()).collect();
-    let mut emessi: std::collections::HashSet<&str> = std::collections::HashSet::new();
-    let mut ordinate: Vec<&FolderExport> = Vec::with_capacity(cartelle.len());
-    let mut restanti: Vec<&FolderExport> = cartelle.iter().collect();
+    use std::cmp::Reverse;
+    use std::collections::{BinaryHeap, HashMap, HashSet};
 
-    loop {
-        let prima = restanti.len();
-        restanti.retain(|f| {
-            let pronta = match f.parent_folder_id.as_deref() {
-                None => true,
-                Some(pid) => !ids.contains(pid) || emessi.contains(pid),
-            };
-            if pronta {
-                emessi.insert(f.id.as_str());
-                ordinate.push(f);
-            }
-            !pronta
-        });
-        if restanti.is_empty() || restanti.len() == prima {
-            break;
+    let ids: HashSet<&str> = cartelle.iter().map(|f| f.id.as_str()).collect();
+    // Figli in attesa, per id del genitore. Con id duplicati i figli si
+    // liberano alla prima emissione di quell'id (la chiave viene rimossa).
+    let mut in_attesa: HashMap<&str, Vec<usize>> = HashMap::new();
+    let mut pronte: BinaryHeap<Reverse<usize>> = BinaryHeap::new();
+    for (i, f) in cartelle.iter().enumerate() {
+        match f.parent_folder_id.as_deref() {
+            Some(pid) if ids.contains(pid) => in_attesa.entry(pid).or_default().push(i),
+            _ => pronte.push(Reverse(i)),
         }
     }
 
+    let mut emesse = vec![false; cartelle.len()];
+    let mut ordinate: Vec<&FolderExport> = Vec::with_capacity(cartelle.len());
+    while let Some(Reverse(i)) = pronte.pop() {
+        emesse[i] = true;
+        ordinate.push(&cartelle[i]);
+        if let Some(figli) = in_attesa.remove(cartelle[i].id.as_str()) {
+            pronte.extend(figli.into_iter().map(Reverse));
+        }
+    }
+
+    let restanti: Vec<&FolderExport> = cartelle
+        .iter()
+        .zip(&emesse)
+        .filter_map(|(f, &emessa)| (!emessa).then_some(f))
+        .collect();
     if !restanti.is_empty() {
         log::warn!(
             "import: {} cartelle con genitori ciclici, importate nell'ordine del file",
@@ -1789,6 +1911,7 @@ fn import_pure_inner(
         aggiornati: 0,
         conflitti: 0,
         errori: Vec::new(),
+        annullato: false,
     };
 
     // Folders prima di tutto: i prompt referenziano FolderId (FK). L'export
@@ -1926,6 +2049,29 @@ fn import_pure_inner(
                 // modificati dall'utente»: un tag omonimo riusato non lo è.
                 if modalita != "aggiorna" {
                     report.conflitti += 1;
+                }
+                continue;
+            }
+            // Nessun tag vivo con questo nome, ma ce n'è uno nel cestino:
+            // `UNIQUE (WorkspaceId, Name)` conta anche le righe cancellate,
+            // quindi l'INSERT fallirebbe a ogni tentativo e, con l'import
+            // tutto-o-niente, la collezione non sarebbe mai importabile.
+            // Lo si ripristina e lo si riusa, come un omonimo vivo.
+            if let Some(id_cestinato) = tag_cestinato_id_per_nome(conn, &tag.name) {
+                match ripristina_tag(conn, &id_cestinato) {
+                    Ok(()) => {
+                        tag_map.insert(tag.id.clone(), id_cestinato);
+                        if modalita != "aggiorna" {
+                            report.conflitti += 1;
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("ripristino tag {:?} dal cestino: {e}", tag.id);
+                        report.errori.push(format!(
+                            "Tag {}: importazione non riuscita.",
+                            tag.id
+                        ));
+                    }
                 }
                 continue;
             }
@@ -2234,7 +2380,10 @@ fn import_pure_inner(
         }
     }
 
-    crate::editor::ricostruisci_fts(conn)?;
+    // Con errori l'import verrà annullato: l'indice non va ricostruito.
+    if report.errori.is_empty() {
+        crate::editor::ricostruisci_fts(conn)?;
+    }
 
     Ok(report)
 }
@@ -2269,12 +2418,13 @@ pub fn vault_import_json(
             "Vault",
             "",
             Some(&format!(
-                "modalita={} nuovi={} aggiornati={} conflitti={} errori={}",
+                "modalita={} nuovi={} aggiornati={} conflitti={} errori={} annullato={}",
                 modalita,
                 report.nuovi,
                 report.aggiornati,
                 report.conflitti,
-                report.errori.len()
+                report.errori.len(),
+                report.annullato
             )),
         );
 
@@ -3867,42 +4017,52 @@ mod test {
         .unwrap();
     }
 
-    /// Payload che fallisce a metà: il tag «Doppia» collide con uno nel
-    /// cestino (`UNIQUE (WorkspaceId, Name)`), mentre cartella e prompt sono
-    /// validi e verrebbero scritti.
+    /// Fa fallire (ABORT) l'INSERT di un prompt con questo titolo: un vero
+    /// errore SQL a metà import, indipendente dai vincoli dello schema.
+    fn fai_fallire_prompt_con_titolo(conn: &Connection, titolo: &str) {
+        conn.execute_batch(&format!(
+            "CREATE TEMP TRIGGER test_fallisce BEFORE INSERT ON Prompts
+             WHEN NEW.Title = '{titolo}'
+             BEGIN SELECT RAISE(ABORT, 'test'); END;"
+        ))
+        .unwrap();
+    }
+
+    /// Payload che fallisce a metà: tag, cartella e il primo prompt vengono
+    /// scritti, poi il secondo prompt («Esplode») fallisce.
     fn payload_con_errore_parziale() -> ExportV1 {
         let mut exp = payload_minimo("prm-1", "Uno");
         exp.folders.push(folder_export("fld-1", None, "Nuova", "/Nuova"));
         exp.prompts[0].folder_id = Some("fld-1".into());
-        exp.tags.push(tag_export("tag-nuovo", "Doppia"));
+        exp.tags.push(tag_export("tag-nuovo", "Nuovo"));
+        exp.prompts[0].tag_ids = vec!["tag-nuovo".into()];
+        let mut secondo = payload_minimo("prm-2", "Esplode").prompts.remove(0);
+        secondo.folder_id = Some("fld-1".into());
+        exp.prompts.push(secondo);
         exp
     }
 
     #[test]
     fn import_con_errore_parziale_annulla_tutto() {
         let conn = db_test();
-        inserisci_tag_cestinato(&conn, "tag-cestinato", "Doppia");
+        fai_fallire_prompt_con_titolo(&conn, "Esplode");
 
         let report = import_pure(&conn, &payload_con_errore_parziale(), "skip").unwrap();
 
-        assert!(!report.errori.is_empty());
-        assert!(
-            report.errori.iter().any(|e| e.contains("annullata")),
-            "manca il messaggio di annullamento: {:?}",
-            report.errori
-        );
+        assert!(report.annullato);
+        assert_eq!(report.errori.len(), 1, "solo l'errore reale: {:?}", report.errori);
+        assert!(report.errori[0].contains("prm-2"), "{:?}", report.errori);
         assert_eq!(conta(&conn, "Prompts"), 0, "prompt rimasto dopo il rollback");
         assert_eq!(conta(&conn, "Folders"), 0, "cartella rimasta dopo il rollback");
-        let tag_attivi: i64 = conn
-            .query_row("SELECT COUNT(*) FROM Tags WHERE DeletedAt IS NULL", [], |r| r.get(0))
-            .unwrap();
-        assert_eq!(tag_attivi, 0);
+        assert_eq!(conta(&conn, "Tags"), 0, "tag rimasto dopo il rollback");
+        assert_eq!(conta(&conn, "PromptTags"), 0);
         // Il report non deve vantare righe che non esistono più.
         assert_eq!(
             (report.nuovi, report.aggiornati, report.conflitti),
             (0, 0, 0),
             "contatori incoerenti con il rollback"
         );
+        assert!(conn.is_autocommit(), "connessione rimasta in transazione");
     }
 
     #[test]
@@ -3916,11 +4076,13 @@ mod test {
         let report = import_pure(&conn, &exp, "skip").unwrap();
 
         assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert!(!report.annullato);
         assert_eq!(report.nuovi, 3);
         assert_eq!(conta(&conn, "Prompts"), 1);
         assert_eq!(conta(&conn, "Folders"), 1);
         // Il savepoint è stato rilasciato: una transazione esplicita
         // successiva deve poter partire.
+        assert!(conn.is_autocommit());
         conn.execute_batch("BEGIN; COMMIT;").unwrap();
     }
 
@@ -3936,21 +4098,23 @@ mod test {
         assert!(r.is_err());
         assert_eq!(conta(&conn, "Folders"), 0, "cartella rimasta dopo l'Err");
         assert_eq!(conta(&conn, "Prompts"), 1, "il prompt preesistente resta");
+        assert!(conn.is_autocommit(), "connessione rimasta in transazione");
         conn.execute_batch("BEGIN; COMMIT;").unwrap();
     }
 
     #[test]
     fn import_dentro_transazione_esterna_annida_il_savepoint() {
         let conn = db_test();
-        inserisci_tag_cestinato(&conn, "tag-cestinato", "Doppia");
+        fai_fallire_prompt_con_titolo(&conn, "Esplode");
         conn.execute_batch("BEGIN").unwrap();
         inserisci_prompt(&conn, "prm-esterno", "Esterno", "body");
 
         // Fallito: annulla solo il lavoro dell'import, non quello esterno.
         let report = import_pure(&conn, &payload_con_errore_parziale(), "skip").unwrap();
-        assert!(!report.errori.is_empty());
+        assert!(report.annullato);
         assert_eq!(conta(&conn, "Prompts"), 1);
         assert_eq!(conta(&conn, "Folders"), 0);
+        assert!(!conn.is_autocommit(), "la transazione esterna deve restare aperta");
 
         // Riuscito: confermato nella transazione esterna, poi COMMIT.
         let ok = import_pure(&conn, &payload_minimo("prm-2", "Due"), "skip").unwrap();
@@ -3958,6 +4122,7 @@ mod test {
         conn.execute_batch("COMMIT").unwrap();
 
         assert_eq!(conta(&conn, "Prompts"), 2);
+        assert!(conn.is_autocommit());
     }
 
     #[test]
@@ -4063,7 +4228,7 @@ mod test {
             folder_export("fld-orfano", Some("fld-assente"), "o", "/o"),
         ];
         let ordine: Vec<&str> = ordina_cartelle(&cartelle).iter().map(|f| f.id.as_str()).collect();
-        assert_eq!(ordine, ["fld-p", "fld-orfano", "fld-figlio", "fld-nipote"]);
+        assert_eq!(ordine, ["fld-p", "fld-figlio", "fld-nipote", "fld-orfano"]);
     }
 
     #[test]
@@ -4101,6 +4266,11 @@ mod test {
         assert_eq!(cartella.as_deref(), Some("fld-figlio"));
     }
 
+    fn genitore_cartella(conn: &Connection, id: &str) -> Option<String> {
+        conn.query_row("SELECT ParentFolderId FROM Folders WHERE Id = ?1", [id], |r| r.get(0))
+            .unwrap()
+    }
+
     #[test]
     fn import_cartelle_con_ciclo_termina_e_importa_entrambe() {
         let conn = db_test();
@@ -4111,6 +4281,221 @@ mod test {
         let report = import_pure(&conn, &exp, "skip").unwrap();
 
         assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert!(!report.annullato);
         assert_eq!(conta(&conn, "Folders"), 2);
+        // Ordine del file: «a» non trova il genitore e va a root, «b» sta sotto «a».
+        assert_eq!(genitore_cartella(&conn, "fld-a"), None);
+        assert_eq!(genitore_cartella(&conn, "fld-b").as_deref(), Some("fld-a"));
+    }
+
+    #[test]
+    fn import_cartella_genitore_di_se_stessa_termina_e_va_a_root() {
+        let conn = db_test();
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.folders.push(folder_export("fld-a", Some("fld-a"), "a", "/a"));
+
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(genitore_cartella(&conn, "fld-a"), None);
+    }
+
+    #[test]
+    fn ordina_cartelle_con_id_duplicati_le_emette_tutte_una_volta() {
+        let cartelle = vec![
+            folder_export("fld-x", None, "x1", "/x1"),
+            folder_export("fld-figlio", Some("fld-x"), "f", "/x1/f"),
+            folder_export("fld-x", None, "x2", "/x2"),
+        ];
+        let nomi: Vec<&str> = ordina_cartelle(&cartelle).iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(nomi, ["x1", "f", "x2"]);
+    }
+
+    #[test]
+    fn ordina_cartelle_ciclo_e_discendenti_in_coda_nell_ordine_del_file() {
+        let cartelle = vec![
+            folder_export("fld-figlio-ciclo", Some("fld-b"), "fc", "/fc"),
+            folder_export("fld-a", Some("fld-b"), "a", "/a"),
+            folder_export("fld-b", Some("fld-a"), "b", "/b"),
+            folder_export("fld-root", None, "r", "/r"),
+        ];
+        let ordine: Vec<&str> = ordina_cartelle(&cartelle).iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(ordine, ["fld-root", "fld-figlio-ciclo", "fld-a", "fld-b"]);
+    }
+
+    /// Catena profonda scritta al contrario: con una scansione ripetuta
+    /// sarebbe quadratica (il formato non ha un tetto di dimensione).
+    #[test]
+    fn ordina_cartelle_catena_profonda_al_contrario_e_veloce() {
+        const N: usize = 20_000;
+        let cartelle: Vec<FolderExport> = (0..N)
+            .rev()
+            .map(|i| {
+                let genitore = (i > 0).then(|| format!("fld-{}", i - 1));
+                folder_export(&format!("fld-{i}"), genitore.as_deref(), "n", "/n")
+            })
+            .collect();
+
+        let inizio = std::time::Instant::now();
+        let ordinate = ordina_cartelle(&cartelle);
+
+        assert!(inizio.elapsed() < std::time::Duration::from_secs(3), "troppo lento");
+        assert_eq!(ordinate.len(), N);
+        assert_eq!(ordinate[0].id, "fld-0");
+        assert_eq!(ordinate[N - 1].id, format!("fld-{}", N - 1));
+    }
+
+    // ─────────── #670: ripristino tag dal cestino ───────────
+
+    #[test]
+    fn import_ripristina_il_tag_omonimo_nel_cestino_e_lo_collega() {
+        let conn = db_test();
+        inserisci_tag_cestinato(&conn, "tag-cestinato", "Doppia");
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.tags.push(tag_export("tag-export", "Doppia"));
+        exp.prompts[0].tag_ids = vec!["tag-export".into()];
+
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert!(!report.annullato);
+        let (cancellato, n_tag): (Option<String>, i64) = conn
+            .query_row(
+                "SELECT DeletedAt, (SELECT COUNT(*) FROM Tags) FROM Tags WHERE Id = 'tag-cestinato'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(cancellato, None, "il tag deve essere stato ripristinato");
+        assert_eq!(n_tag, 1, "non deve nascere un secondo tag");
+        let collegato: String = conn
+            .query_row("SELECT TagId FROM PromptTags WHERE PromptId = 'prm-1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(collegato, "tag-cestinato");
+        assert_eq!(report.conflitti, 1, "riusato come un omonimo vivo");
+        assert_eq!(report.nuovi, 1, "solo il prompt");
+    }
+
+    #[test]
+    fn import_tag_con_maiuscole_diverse_da_uno_nel_cestino_resta_un_tag_nuovo() {
+        let conn = db_test();
+        inserisci_tag_cestinato(&conn, "tag-cestinato", "doppia");
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.tags.push(tag_export("tag-export", "Doppia"));
+
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(conta(&conn, "Tags"), 2);
+        let vivi: i64 = conn
+            .query_row("SELECT COUNT(*) FROM Tags WHERE DeletedAt IS NULL", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(vivi, 1, "quello nel cestino non va toccato");
+    }
+
+    // ─────────── #670: la guardia lascia sempre la connessione in autocommit ───────────
+
+    #[test]
+    fn guardia_annulla_su_panic() {
+        let conn = db_test();
+        let esito = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guardia = GuardiaSavepoint::apri(&conn).unwrap();
+            inserisci_prompt(&conn, "prm-1", "Uno", "body");
+            panic!("panic simulato dentro l'import");
+        }));
+
+        assert!(esito.is_err());
+        assert!(conn.is_autocommit(), "connessione rimasta in transazione");
+        assert_eq!(conta(&conn, "Prompts"), 0);
+    }
+
+    #[test]
+    fn guardia_annulla_su_uscita_anticipata() {
+        let conn = db_test();
+        {
+            let _guardia = GuardiaSavepoint::apri(&conn).unwrap();
+            inserisci_prompt(&conn, "prm-1", "Uno", "body");
+        }
+        assert!(conn.is_autocommit());
+        assert_eq!(conta(&conn, "Prompts"), 0);
+    }
+
+    #[test]
+    fn guardia_conferma_scrive_e_chiude() {
+        let conn = db_test();
+        let guardia = GuardiaSavepoint::apri(&conn).unwrap();
+        inserisci_prompt(&conn, "prm-1", "Uno", "body");
+        guardia.conferma().unwrap();
+        assert!(conn.is_autocommit());
+        assert_eq!(conta(&conn, "Prompts"), 1);
+    }
+
+    /// SQLite chiude da solo la transazione (FULL/IOERR): il savepoint non
+    /// esiste più e `ROLLBACK TO` fallisce, ma la connessione è già pulita.
+    #[test]
+    fn guardia_tollera_transazione_gia_chiusa_da_sqlite() {
+        let conn = db_test();
+        let guardia = GuardiaSavepoint::apri(&conn).unwrap();
+        inserisci_prompt(&conn, "prm-1", "Uno", "body");
+        conn.execute_batch("ROLLBACK").unwrap();
+
+        guardia.annulla().unwrap();
+
+        assert!(conn.is_autocommit());
+        assert_eq!(conta(&conn, "Prompts"), 0);
+    }
+
+    /// Tabelle con una FK differita: una riga orfana fa fallire il COMMIT,
+    /// cioè il RELEASE del savepoint più esterno.
+    fn prepara_commit_che_fallisce(conn: &Connection) {
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON;
+             CREATE TABLE t_padre (id TEXT PRIMARY KEY);
+             CREATE TABLE t_figlio (
+                 pid TEXT REFERENCES t_padre(id) DEFERRABLE INITIALLY DEFERRED
+             );",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn guardia_release_fallito_annulla_e_torna_in_autocommit() {
+        let conn = db_test();
+        prepara_commit_che_fallisce(&conn);
+        let guardia = GuardiaSavepoint::apri(&conn).unwrap();
+        conn.execute("INSERT INTO t_figlio (pid) VALUES ('assente')", []).unwrap();
+        inserisci_prompt(&conn, "prm-1", "Uno", "body");
+
+        let r = guardia.conferma();
+
+        assert!(r.is_err(), "il COMMIT con FK violata deve fallire");
+        assert!(conn.is_autocommit(), "connessione rimasta in transazione");
+        assert_eq!(conta(&conn, "t_figlio"), 0);
+        assert_eq!(conta(&conn, "Prompts"), 0);
+        // E la connessione è di nuovo utilizzabile.
+        inserisci_prompt(&conn, "prm-2", "Due", "body");
+        assert_eq!(conta(&conn, "Prompts"), 1);
+    }
+
+    #[test]
+    fn import_con_commit_fallito_da_errore_e_non_lascia_transazione_aperta() {
+        let conn = db_test();
+        prepara_commit_che_fallisce(&conn);
+        conn.execute_batch(
+            "CREATE TEMP TRIGGER test_orfano AFTER INSERT ON Prompts
+             BEGIN INSERT INTO t_figlio (pid) VALUES ('assente'); END;",
+        )
+        .unwrap();
+
+        let r = import_pure(&conn, &payload_minimo("prm-1", "Uno"), "skip");
+
+        assert!(r.is_err());
+        assert!(conn.is_autocommit(), "connessione rimasta in transazione");
+        assert_eq!(conta(&conn, "Prompts"), 0, "scritture non confermate rimaste");
+        // Un import successivo, senza il trigger, funziona e viene confermato.
+        conn.execute_batch("DROP TRIGGER test_orfano").unwrap();
+        let ok = import_pure(&conn, &payload_minimo("prm-2", "Due"), "skip").unwrap();
+        assert!(ok.errori.is_empty(), "{:?}", ok.errori);
+        assert_eq!(conta(&conn, "Prompts"), 1);
     }
 }

@@ -10,6 +10,14 @@
  * Decisione di rotta: `docs/roadmap/collezioni-curate.md`.
  */
 
+import {
+  importFallito,
+  MESSAGGIO_IMPORT_ANNULLATO,
+  type ImportReport,
+} from "./import-report";
+
+export type { ImportReport };
+
 export interface CollezioneInfo {
   slug: string;
   titolo: string;
@@ -35,18 +43,13 @@ export function statoCollezione(v: CollezioneVoce): StatoCollezione {
   return v.importata_sha256 === v.sha256 ? "aggiornata" : "aggiornabile";
 }
 
-export interface ImportReport {
-  nuovi: number;
-  aggiornati: number;
-  conflitti: number;
-  errori: string[];
-}
-
 export interface EsitoImport {
   slug: string;
   /** Riga di riepilogo pronta per la UI, es. «12 prompt aggiunti · 3 già presenti». */
   riepilogo: string;
   errori: string[];
+  /** Import annullato o con errori: la UI mostra un fallimento, non un successo. */
+  fallito: boolean;
 }
 
 export interface DipendenzeCollezioni {
@@ -149,9 +152,18 @@ async function esegui(
     if (report.nuovi > 0 || report.aggiornati > 0) {
       notificaListaMutata();
     }
+    const fallito = importFallito(report);
     return {
       ok: true,
-      esito: { slug, riepilogo: formatta(report), errori: report.errori },
+      esito: {
+        slug,
+        // Su fallimento i contatori non vanno mostrati: il backend ha
+        // annullato tutto e «0 elementi aggiunti · N non importati» direbbe
+        // il falso.
+        riepilogo: fallito ? MESSAGGIO_IMPORT_ANNULLATO : formatta(report),
+        errori: report.errori,
+        fallito,
+      },
     };
   } catch (err) {
     return { ok: false, errore: messaggioErrore(err) };

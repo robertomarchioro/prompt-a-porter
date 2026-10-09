@@ -13,14 +13,7 @@
   import Modale from "$lib/components/Modale.svelte";
   import { nomeOS } from "$lib/util/os";
   import demoVault from "../../../../../docs/demo/demo-vault.json";
-
-  // Forma del risultato di vault_import_json (mirrors import_export.rs::ImportReport).
-  interface ImportReport {
-    nuovi: number;
-    aggiornati: number;
-    conflitti: number;
-    errori: string[];
-  }
+  import { importFallito, type ImportReport } from "./import-report";
 
   interface Props {
     oncompletato?: () => void;
@@ -165,9 +158,9 @@
             json: JSON.stringify(demoVault),
             modalita: "skip",
           });
-          if (report.errori.length > 0) {
+          if (importFallito(report)) {
             console.warn(
-              "[onboarding] import demo parziale — alcuni elementi ignorati:",
+              "[onboarding] import demo annullato — nessun elemento salvato:",
               report.errori,
             );
           }
