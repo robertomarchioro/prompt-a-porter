@@ -823,7 +823,11 @@ mod test {
         let sha = "1".repeat(64);
 
         let report = applica_e_registra(&conn, "rotta", json, &sha, false).unwrap();
-        assert_eq!(report.errori.len(), 1, "{:?}", report.errori);
+        // L'errore reale più il messaggio di annullamento dell'import
+        // tutto-o-niente (#670).
+        assert_eq!(report.errori.len(), 2, "{:?}", report.errori);
+        assert!(report.errori[0].contains("tag-nuovo"), "{:?}", report.errori);
+        assert!(report.errori[1].contains("annullata"), "{:?}", report.errori);
         let righe: i64 = conn
             .query_row("SELECT COUNT(*) FROM CollezioniImportate", [], |r| r.get(0))
             .unwrap();
