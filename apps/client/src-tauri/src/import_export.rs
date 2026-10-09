@@ -1759,37 +1759,50 @@ impl<'c> GuardiaSavepoint<'c> {
             .map_err(|e| PapErrore::dominio(MSG_ANNULLAMENTO_FALLITO, e))
     }
 
-    /// `ROLLBACK TO` e `RELEASE` in due passi separati: se il primo fallisce
-    /// (es. SQLite ha già annullato tutta la transazione per FULL/IOERR e il
-    /// savepoint non esiste più) il secondo va comunque tentato. Se uno dei
-    /// due fallisce e il savepoint era il livello esterno, `ROLLBACK`
-    /// completo: la connessione deve tornare in autocommit.
+    /// `ROLLBACK TO`, poi `RELEASE` SOLO se il rollback è riuscito: dopo un
+    /// `ROLLBACK TO` fallito col savepoint ancora vivo, il `RELEASE` sul
+    /// livello esterno sarebbe un COMMIT dell'import parziale (e, annidato,
+    /// fonderebbe le scritture parziali nella transazione del chiamante).
+    /// Sul livello esterno ogni fallimento ripiega su un `ROLLBACK` completo:
+    /// la connessione deve tornare in autocommit.
     fn ripulisci(&self) -> Result<(), rusqlite::Error> {
-        let rollback_to = self
+        let esito = match self
             .conn
-            .execute_batch(&format!("ROLLBACK TO {SAVEPOINT_IMPORT}"));
-        let release = self
-            .conn
-            .execute_batch(&format!("RELEASE {SAVEPOINT_IMPORT}"));
-        if rollback_to.is_ok() && release.is_ok() {
-            return Ok(());
-        }
-        let esito = if self.era_autocommit {
-            if self.conn.is_autocommit() {
-                // Transazione già chiusa da SQLite: nulla è rimasto scritto.
-                Ok(())
-            } else {
-                self.conn.execute_batch("ROLLBACK")
-            }
-        } else {
-            // Annidato: il chiamante possiede la transazione; basta che le
-            // nostre scritture siano state annullate.
-            rollback_to
+            .execute_batch(&format!("ROLLBACK TO {SAVEPOINT_IMPORT}"))
+        {
+            Ok(()) => match self
+                .conn
+                .execute_batch(&format!("RELEASE {SAVEPOINT_IMPORT}"))
+            {
+                Ok(()) => return Ok(()),
+                // Le scritture sono già annullate: sul livello esterno si
+                // chiude la transazione (vuota), annidati la chiude il COMMIT
+                // o ROLLBACK del chiamante.
+                Err(e) if self.era_autocommit => self.rollback_completo().map_err(|_| e),
+                Err(e) => {
+                    log::warn!("RELEASE dopo ROLLBACK TO fallito (annidato): {e}");
+                    Ok(())
+                }
+            },
+            // Es. SQLite ha già annullato tutta la transazione (FULL/IOERR)
+            // e il savepoint non esiste più.
+            Err(_) if self.era_autocommit => self.rollback_completo(),
+            Err(e) => Err(e),
         };
         if let Err(e) = &esito {
             log::error!("pulizia del savepoint di import fallita: {e}");
         }
         esito
+    }
+
+    /// `ROLLBACK` dell'intera transazione, solo se ancora aperta: se SQLite
+    /// l'ha già chiusa da sé nulla è rimasto scritto.
+    fn rollback_completo(&self) -> Result<(), rusqlite::Error> {
+        if self.conn.is_autocommit() {
+            Ok(())
+        } else {
+            self.conn.execute_batch("ROLLBACK")
+        }
     }
 }
 
