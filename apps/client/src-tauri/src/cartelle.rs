@@ -100,7 +100,7 @@ fn nome_valido(nome: &str) -> Result<String, PapErrore> {
     Ok(trimmato.to_string())
 }
 
-fn calcola_path(conn: &Connection, parent_id: Option<&str>, nome: &str) -> Result<String, PapErrore> {
+pub(crate) fn calcola_path(conn: &Connection, parent_id: Option<&str>, nome: &str) -> Result<String, PapErrore> {
     match parent_id {
         None => Ok(format!("/{nome}")),
         Some(pid) => {
