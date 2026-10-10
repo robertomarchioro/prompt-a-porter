@@ -43,7 +43,7 @@ jobs:
           # precedente se l'ultima non è ancora nel manifests cache.
           # Da bumpare a ogni patch stdlib con fix sicurezza
           # (storico: GO-2026-5039, GO-2026-5037, GO-2026-5856).
-          go-version: "1.26.8"
+          go-version: "1.26.9"
           cache-dependency-path: apps/server/go.sum
 
       # Pin esatto, mai @latest: una nuova x/vuln può alzare il minimo di Go
@@ -68,7 +68,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.8"
+          go-version: "1.26.9"
 
       - name: Genera go.sum
         working-directory: apps/cli
