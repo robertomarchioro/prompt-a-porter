@@ -1,5 +1,20 @@
 # Changelog — Prompt a Porter
 
+## v0.8.55 — Il cartamodello torna in squadra (2026-10-10)
+
+> Rifinisce l'import in modalità «sovrascrivi»: l'albero delle cartelle resta in squadra anche quando il file da importare dice cose che non tornano. Intorno, Go 1.26.9 per un advisory di sicurezza della libreria HTTP.
+
+### Sicurezza
+
+- **Go 1.26.9** (#688): il server di sync e la CLI sono compilati con Go 1.26.9, che corregge l'advisory GO-2026-6617 nella libreria `net/http`.
+
+### Fix
+
+- **Import senza cartelle in loop** (#687): importando in modalità «sovrascrivi», un file non può più rendere una cartella figlia di sé stessa o di una sua sottocartella. In quel caso la cartella resta dov'è e l'import lo conta tra i conflitti.
+- **Percorsi delle cartelle coerenti dopo l'import** (#687): il percorso di una cartella importata segue la cartella in cui finisce davvero, anche per le sue sottocartelle, e non viene più preso dal file. Una cartella il cui genitore è nel cestino finisce nella radice invece di sparire.
+- **Tag nel cestino ripristinati dall'import** (#687): importando un backup che usa un tag che avevi cestinato, il tag torna visibile invece di restare collegato ai prompt ma nascosto.
+- **Cartelle e tag con lo stesso nome** (#687): quando ce ne sono più di uno, l'import aggancia davvero il più vecchio, anche se le date sono scritte in formati diversi.
+
 ## v0.8.54 — L'imbastitura si scuce tutta (2026-10-09)
 
 > Una release di sostanza su un punto solo: **l'import non lascia più lavori a metà**. Se una scrittura non va a buon fine, l'imbastitura si scuce tutta e il vault resta com'era prima. Intorno, Tauri 2.12, i modelli AI di ottobre e una dipendenza di build sistemata.
