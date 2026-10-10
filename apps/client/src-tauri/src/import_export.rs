@@ -1548,12 +1548,16 @@ pub fn vault_export_markdown_zip_su_file(
 /// «Codice» e «codice» possono coesistere (indice BINARY): a parità di match
 /// NOCASE vince quello esatto, poi il più vecchio, poi l'Id (#670), così
 /// l'aggancio non dipende dall'ordine in cui SQLite restituisce le righe.
+/// «Più vecchio» si confronta con `julianday` e non sul testo: `CreatedAt`
+/// ha formati misti (`datetime('now')` in app, ISO con `T…Z` dai file) e il
+/// confronto testuale sbaglia nello stesso giorno (#687). Un `CreatedAt` non
+/// parsabile (`julianday` NULL) perde invece di vincere.
 fn tag_id_per_nome(conn: &Connection, nome: &str) -> Option<String> {
     conn.query_row(
         "SELECT Id FROM Tags
          WHERE WorkspaceId = 'ws-personale' AND DeletedAt IS NULL
            AND Name = ?1 COLLATE NOCASE
-         ORDER BY (Name = ?1) DESC, CreatedAt ASC, Id ASC
+         ORDER BY (Name = ?1) DESC, julianday(CreatedAt) IS NULL, julianday(CreatedAt) ASC, Id ASC
          LIMIT 1",
         [nome],
         |r| r.get(0),
@@ -1569,7 +1573,7 @@ fn tag_cestinato_id_per_nome(conn: &Connection, nome: &str) -> Option<String> {
         "SELECT Id FROM Tags
          WHERE WorkspaceId = 'ws-personale' AND DeletedAt IS NOT NULL
            AND Name = ?1
-         ORDER BY CreatedAt ASC, Id ASC
+         ORDER BY julianday(CreatedAt) IS NULL, julianday(CreatedAt) ASC, Id ASC
          LIMIT 1",
         [nome],
         |r| r.get(0),
@@ -1585,6 +1589,115 @@ fn ripristina_tag(conn: &Connection, id: &str) -> Result<(), rusqlite::Error> {
         [id],
     )
     .map(|_| ())
+}
+
+/// Se il tag con questo Id è nel cestino lo ripristina e ritorna `true`.
+/// Un tag cestinato con Id coincidente (tipico: backup del proprio vault) va
+/// riportato in vita come quello trovato per nome, altrimenti i prompt
+/// importati verrebbero collegati a un tag invisibile (#687).
+fn ripristina_se_cestinato(conn: &Connection, id: &str) -> Result<bool, rusqlite::Error> {
+    let cestinato: bool = conn.query_row(
+        "SELECT DeletedAt IS NOT NULL FROM Tags WHERE Id = ?1",
+        [id],
+        |r| r.get(0),
+    )?;
+    if cestinato {
+        ripristina_tag(conn, id)?;
+    }
+    Ok(cestinato)
+}
+
+/// `true` se `candidato` è la cartella `cartella_id` stessa o un suo
+/// discendente. CTE con `UNION` (non `UNION ALL`): scarta le righe già
+/// viste, quindi termina anche se nel DB esiste già un ciclo (#687).
+fn e_se_stessa_o_discendente(conn: &Connection, cartella_id: &str, candidato: &str) -> bool {
+    conn.query_row(
+        "WITH RECURSIVE sottoalbero(Id) AS (
+             SELECT ?1
+             UNION
+             SELECT f.Id FROM Folders f JOIN sottoalbero s ON f.ParentFolderId = s.Id
+         )
+         SELECT EXISTS(SELECT 1 FROM sottoalbero WHERE Id = ?2)",
+        [cartella_id, candidato],
+        |r| r.get(0),
+    )
+    .unwrap_or(true)
+}
+
+/// `Path` della cartella derivato dal genitore effettivo (non da quello del
+/// file, che può essere stato rimappato o scartato). Il path scritto nel file
+/// non si usa mai: è dato esterno. Se il genitore non è leggibile il
+/// ripiego è la radice.
+fn path_cartella(conn: &Connection, parent: Option<&str>, nome: &str) -> String {
+    crate::cartelle::calcola_path(conn, parent, nome).unwrap_or_else(|_| format!("/{nome}"))
+}
+
+/// Riscrive il prefisso del `Path` dei discendenti quando la cartella
+/// `cartella_id` cambia path (`vecchio` → `nuovo`). `cartelle.rs` ha una
+/// routine analoga ma intrecciata allo spostamento (controlli e UPDATE della
+/// cartella stessa), quindi qui si replica solo la riscrittura del prefisso.
+///
+/// Tocca solo i veri discendenti (per `ParentFolderId`, CTE con `UNION` come
+/// in `e_se_stessa_o_discendente`) il cui `Path` inizia col prefisso vecchio:
+/// un confronto sul solo prefisso, con `vecchio` vuoto o anomalo, riscriverebbe
+/// cartelle estranee. Le righe già incoerenti si lasciano stare.
+fn riscrivi_path_discendenti(
+    conn: &Connection,
+    cartella_id: &str,
+    vecchio: &str,
+    nuovo: &str,
+) -> Result<(), rusqlite::Error> {
+    if vecchio == nuovo || !vecchio.starts_with('/') {
+        return Ok(());
+    }
+    let prefisso_vecchio = format!("{vecchio}/");
+    conn.execute(
+        "WITH RECURSIVE sottoalbero(Id) AS (
+             SELECT ?3
+             UNION
+             SELECT f.Id FROM Folders f JOIN sottoalbero s ON f.ParentFolderId = s.Id
+         )
+         UPDATE Folders
+         SET Path = ?1 || '/' || SUBSTR(Path, LENGTH(?2) + 1),
+             UpdatedAt = datetime('now')
+         WHERE Id IN (SELECT Id FROM sottoalbero) AND Id <> ?3
+           AND SUBSTR(Path, 1, LENGTH(?2)) = ?2",
+        rusqlite::params![nuovo, prefisso_vecchio, cartella_id],
+    )
+    .map(|_| ())
+}
+
+/// Modalità `overwrite` su una cartella già presente. Il genitore del file
+/// viene applicato solo se non crea un ciclo (non è la cartella stessa né un
+/// suo discendente): altrimenti resta quello attuale, il resto si aggiorna e
+/// ritorna `Ok(true)` (conflitto). `Path` segue il genitore effettivo e, se
+/// cambia, anche quello dei discendenti già nel DB.
+fn sovrascrivi_cartella(
+    conn: &Connection,
+    folder: &FolderExport,
+    parent: Option<String>,
+) -> Result<bool, rusqlite::Error> {
+    let (parent_attuale, path_vecchio): (Option<String>, String) = conn.query_row(
+        "SELECT ParentFolderId, Path FROM Folders WHERE Id = ?1",
+        [&folder.id],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    let crea_ciclo = parent
+        .as_deref()
+        .is_some_and(|p| e_se_stessa_o_discendente(conn, &folder.id, p));
+    if crea_ciclo {
+        log::warn!("import: genitore di {:?} scartato, creerebbe un ciclo", folder.id);
+    }
+    let parent_effettivo = if crea_ciclo { parent_attuale } else { parent };
+    let path_nuovo = path_cartella(conn, parent_effettivo.as_deref(), &folder.name);
+    conn.execute(
+        "UPDATE Folders SET ParentFolderId = ?1, Name = ?2, Path = ?3,
+                UpdatedAt = datetime('now')
+         WHERE Id = ?4",
+        rusqlite::params![parent_effettivo, folder.name, path_nuovo, folder.id],
+    )?;
+    riscrivi_path_discendenti(conn, &folder.id, &path_vecchio, &path_nuovo)?;
+    Ok(crea_ciclo)
 }
 
 /// Id della cartella con lo stesso genitore (NULL-safe, `parent_id: None` =
@@ -1612,7 +1725,7 @@ fn folder_id_per_nome_e_genitore(
          WHERE WorkspaceId = 'ws-personale' AND DeletedAt IS NULL
            AND COALESCE(ParentFolderId, '') = COALESCE(?1, '')
            AND Name = ?2 COLLATE NOCASE
-         ORDER BY (Name = ?2) DESC, CreatedAt ASC, Id ASC
+         ORDER BY (Name = ?2) DESC, julianday(CreatedAt) IS NULL, julianday(CreatedAt) ASC, Id ASC
          LIMIT 1",
         rusqlite::params![parent_id, nome],
         |r| r.get(0),
@@ -1957,7 +2070,7 @@ fn import_pure_inner(
                 let pid_effettivo = folder_map.get(pid).cloned().unwrap_or_else(|| pid.clone());
                 let pexists: bool = conn
                     .query_row(
-                        "SELECT EXISTS(SELECT 1 FROM Folders WHERE Id = ?1)",
+                        "SELECT EXISTS(SELECT 1 FROM Folders WHERE Id = ?1 AND DeletedAt IS NULL)",
                         [&pid_effettivo],
                         |r| r.get(0),
                     )
@@ -1992,6 +2105,7 @@ fn import_pure_inner(
 
         match (esiste, modalita) {
             (false, _) => {
+                let path = path_cartella(conn, parent.as_deref(), &folder.name);
                 if let Err(e) = conn.execute(
                     "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path, CreatedAt, UpdatedAt)
                      VALUES (?1, 'ws-personale', ?2, ?3, ?4, ?5, ?6)",
@@ -1999,7 +2113,7 @@ fn import_pure_inner(
                         folder.id,
                         parent,
                         folder.name,
-                        folder.path,
+                        path,
                         folder.created_at,
                         folder.updated_at
                     ],
@@ -2013,22 +2127,21 @@ fn import_pure_inner(
                     report.nuovi += 1;
                 }
             }
-            (true, "overwrite") => {
-                if let Err(e) = conn.execute(
-                    "UPDATE Folders SET ParentFolderId = ?1, Name = ?2, Path = ?3,
-                            UpdatedAt = datetime('now')
-                     WHERE Id = ?4",
-                    rusqlite::params![parent, folder.name, folder.path, folder.id],
-                ) {
+            (true, "overwrite") => match sovrascrivi_cartella(conn, folder, parent) {
+                Ok(crea_ciclo) => {
+                    report.aggiornati += 1;
+                    if crea_ciclo {
+                        report.conflitti += 1;
+                    }
+                }
+                Err(e) => {
                     log::error!("import cartella {:?}: {e}", folder.id);
                     report.errori.push(format!(
                         "Cartella {}: importazione non riuscita.",
                         folder.id
                     ));
-                } else {
-                    report.aggiornati += 1;
                 }
-            }
+            },
             // aggiorna: la cartella della collezione già presente è attesa.
             (true, "aggiorna") => {}
             // skip / rename: non duplichiamo alberi di cartelle.
@@ -2087,6 +2200,26 @@ fn import_pure_inner(
                     }
                 }
                 continue;
+            }
+        }
+
+        // Stesso Id di un tag nel cestino: va ripristinato in ogni modalità,
+        // perché i prompt NUOVI vi vengono collegati comunque (anche in skip,
+        // che scarta solo i prompt già presenti). In `aggiorna` il ripristino
+        // non è un conflitto, come per il ramo per nome (#687).
+        if esiste {
+            match ripristina_se_cestinato(conn, &tag.id) {
+                // skip/rename contano già il tag come conflitto più sotto.
+                Ok(true) if modalita == "overwrite" => report.conflitti += 1,
+                Ok(_) => {}
+                Err(e) => {
+                    log::error!("ripristino tag {:?} dal cestino: {e}", tag.id);
+                    report.errori.push(format!(
+                        "Tag {}: importazione non riuscita.",
+                        tag.id
+                    ));
+                    continue;
+                }
             }
         }
 
@@ -4510,5 +4643,208 @@ mod test {
         let ok = import_pure(&conn, &payload_minimo("prm-2", "Due"), "skip").unwrap();
         assert!(ok.errori.is_empty(), "{:?}", ok.errori);
         assert_eq!(conta(&conn, "Prompts"), 1);
+    }
+
+    // ─────────── #687: cicli, path, tie-break, tag cestinato ───────────
+
+    fn path_cartella_db(conn: &Connection, id: &str) -> String {
+        conn.query_row("SELECT Path FROM Folders WHERE Id = ?1", [id], |r| r.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn overwrite_scambio_di_genitori_non_crea_cicli() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-a", "a", "/a", None);
+        inserisci_folder(&conn, "fld-b", "b", "/b", None);
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.folders.push(folder_export("fld-a", Some("fld-b"), "a", "/b/a"));
+        exp.folders.push(folder_export("fld-b", Some("fld-a"), "b", "/a/b"));
+
+        let report = import_pure(&conn, &exp, "overwrite").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(genitore_cartella(&conn, "fld-a").as_deref(), Some("fld-b"));
+        assert_eq!(genitore_cartella(&conn, "fld-b"), None, "il secondo scambio chiuderebbe il ciclo");
+        assert_eq!(report.conflitti, 1);
+        assert_eq!(path_cartella_db(&conn, "fld-b"), "/b");
+        assert_eq!(path_cartella_db(&conn, "fld-a"), "/b/a");
+    }
+
+    #[test]
+    fn overwrite_genitore_nipote_mantiene_il_genitore_attuale() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-a", "a", "/a", None);
+        inserisci_folder(&conn, "fld-b", "b", "/a/b", Some("fld-a"));
+        inserisci_folder(&conn, "fld-c", "c", "/a/b/c", Some("fld-b"));
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.folders.push(folder_export("fld-a", Some("fld-c"), "a2", "/a2"));
+
+        let report = import_pure(&conn, &exp, "overwrite").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(genitore_cartella(&conn, "fld-a"), None);
+        assert_eq!(report.conflitti, 1);
+        // Il resto si aggiorna: nuovo nome e path, anche per i discendenti.
+        assert_eq!(path_cartella_db(&conn, "fld-a"), "/a2");
+        assert_eq!(path_cartella_db(&conn, "fld-c"), "/a2/b/c");
+    }
+
+    #[test]
+    fn overwrite_sposta_sotto_un_genitore_valido_e_ricalcola_i_path() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-x", "x", "/x", None);
+        inserisci_folder(&conn, "fld-a", "a", "/a", None);
+        inserisci_folder(&conn, "fld-b", "b", "/a/b", Some("fld-a"));
+        let mut exp = payload_minimo("prm-1", "Uno");
+        // Il path del file è volutamente sbagliato.
+        exp.folders.push(folder_export("fld-a", Some("fld-x"), "a", "/sbagliato"));
+
+        let report = import_pure(&conn, &exp, "overwrite").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(report.conflitti, 0);
+        assert_eq!(genitore_cartella(&conn, "fld-a").as_deref(), Some("fld-x"));
+        assert_eq!(path_cartella_db(&conn, "fld-a"), "/x/a");
+        assert_eq!(path_cartella_db(&conn, "fld-b"), "/x/a/b");
+    }
+
+    #[test]
+    fn nuova_cartella_sotto_genitore_rimappato_prende_il_path_effettivo() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-utente", "ruoli", "/ruoli", None);
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.folders.push(folder_export("fld-exp", None, "ruoli", "/ruoli"));
+        exp.folders.push(folder_export("fld-figlio", Some("fld-exp"), "dev", "/sbagliato/dev"));
+
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(genitore_cartella(&conn, "fld-figlio").as_deref(), Some("fld-utente"));
+        assert_eq!(path_cartella_db(&conn, "fld-figlio"), "/ruoli/dev");
+    }
+
+    #[test]
+    fn lookup_con_formati_data_misti_confronta_il_tempo_non_il_testo() {
+        let conn = db_test();
+        // Testualmente «2026-01-01 10:…» < «2026-01-01T09:…», ma è più recente.
+        inserisci_tag_datato(&conn, "tag-app", "codice", "2026-01-01 10:00:00");
+        inserisci_tag_datato(&conn, "tag-file", "Codice", "2026-01-01T09:00:00Z");
+        assert_eq!(tag_id_per_nome(&conn, "CODICE").as_deref(), Some("tag-file"));
+
+        inserisci_folder_datata(&conn, "fld-app", "ruoli", "2026-01-01 10:00:00");
+        inserisci_folder_datata(&conn, "fld-file", "Ruoli", "2026-01-01T09:00:00Z");
+        assert_eq!(
+            folder_id_per_nome_e_genitore(&conn, None, "RUOLI").as_deref(),
+            Some("fld-file")
+        );
+    }
+
+    #[test]
+    fn overwrite_con_path_vuoto_nel_db_non_riscrive_le_cartelle_estranee() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-x", "x", "/x", None);
+        inserisci_folder(&conn, "fld-rotta", "rotta", "", None);
+        inserisci_folder(&conn, "fld-altra", "altra", "/altra", None);
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.folders.push(folder_export("fld-rotta", Some("fld-x"), "rotta", "/x/rotta"));
+
+        let report = import_pure(&conn, &exp, "overwrite").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(path_cartella_db(&conn, "fld-rotta"), "/x/rotta");
+        assert_eq!(path_cartella_db(&conn, "fld-altra"), "/altra");
+        assert_eq!(path_cartella_db(&conn, "fld-x"), "/x");
+    }
+
+    #[test]
+    fn overwrite_non_riscrive_chi_ha_il_prefisso_ma_non_e_discendente() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-x", "x", "/x", None);
+        inserisci_folder(&conn, "fld-a", "a", "/a", None);
+        inserisci_folder(&conn, "fld-figlia", "figlia", "/a/figlia", Some("fld-a"));
+        inserisci_folder(&conn, "fld-intruso", "y", "/a/x", None);
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.folders.push(folder_export("fld-a", Some("fld-x"), "a", "/x/a"));
+
+        let report = import_pure(&conn, &exp, "overwrite").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(path_cartella_db(&conn, "fld-a"), "/x/a");
+        assert_eq!(path_cartella_db(&conn, "fld-figlia"), "/x/a/figlia");
+        assert_eq!(path_cartella_db(&conn, "fld-intruso"), "/a/x");
+    }
+
+    #[test]
+    fn nuova_cartella_con_genitore_cestinato_finisce_a_root_senza_path_del_file() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-padre", "padre", "/padre", None);
+        conn.execute("UPDATE Folders SET DeletedAt = datetime('now') WHERE Id = 'fld-padre'", [])
+            .unwrap();
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.folders.push(folder_export("fld-nuova", Some("fld-padre"), "nuova", "/da/file/nuova"));
+
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(genitore_cartella(&conn, "fld-nuova"), None);
+        assert_eq!(path_cartella_db(&conn, "fld-nuova"), "/nuova");
+    }
+
+    #[test]
+    fn lookup_tag_con_createdat_non_parsabile_perde_contro_uno_valido() {
+        let conn = db_test();
+        inserisci_tag_datato(&conn, "tag-0", "codice", "x");
+        inserisci_tag_datato(&conn, "tag-1", "Codice", "2026-01-01 10:00:00");
+        assert_eq!(tag_id_per_nome(&conn, "CODICE").as_deref(), Some("tag-1"));
+
+        inserisci_folder_datata(&conn, "fld-0", "ruoli", "x");
+        inserisci_folder_datata(&conn, "fld-1", "Ruoli", "2026-01-01 10:00:00");
+        assert_eq!(
+            folder_id_per_nome_e_genitore(&conn, None, "RUOLI").as_deref(),
+            Some("fld-1")
+        );
+    }
+
+    fn tag_cancellato(conn: &Connection, id: &str) -> bool {
+        conn.query_row("SELECT DeletedAt IS NOT NULL FROM Tags WHERE Id = ?1", [id], |r| r.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn import_ripristina_il_tag_cestinato_con_stesso_id_in_ogni_modalita() {
+        for (modalita, conflitti_attesi) in
+            [("skip", 1), ("rename", 1), ("overwrite", 1), ("aggiorna", 0)]
+        {
+            let conn = db_test();
+            inserisci_tag_cestinato(&conn, "tag-1", "Doppia");
+            let mut exp = payload_minimo("prm-1", "Uno");
+            exp.tags.push(tag_export("tag-1", "Doppia"));
+            exp.prompts[0].tag_ids = vec!["tag-1".into()];
+
+            let report = import_pure(&conn, &exp, modalita).unwrap();
+
+            assert!(report.errori.is_empty(), "{modalita}: {:?}", report.errori);
+            assert!(!tag_cancellato(&conn, "tag-1"), "{modalita}: tag da ripristinare");
+            assert_eq!(report.conflitti, conflitti_attesi, "{modalita}");
+            let collegato: String = conn
+                .query_row("SELECT TagId FROM PromptTags WHERE PromptId = 'prm-1'", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(collegato, "tag-1", "{modalita}");
+        }
+    }
+
+    #[test]
+    fn import_non_tocca_un_tag_vivo_con_stesso_id() {
+        let conn = db_test();
+        inserisci_tag_datato(&conn, "tag-1", "Doppia", "2026-01-01");
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.tags.push(tag_export("tag-1", "Doppia"));
+
+        let report = import_pure(&conn, &exp, "overwrite").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(report.conflitti, 0);
+        assert!(!tag_cancellato(&conn, "tag-1"));
     }
 }
