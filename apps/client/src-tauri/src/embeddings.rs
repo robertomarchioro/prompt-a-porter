@@ -2831,6 +2831,48 @@ mod test {
         assert!(tmp.is_file());
     }
 
+    fn zip_sintetico(voce: &str, contenuto: &[u8]) -> Vec<u8> {
+        use std::io::Write;
+        let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let opzioni = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        w.start_file(voce, opzioni).unwrap();
+        w.write_all(contenuto).unwrap();
+        w.finish().unwrap().into_inner()
+    }
+
+    /// `estrai_da_zip` gira solo su Windows in produzione: senza questo
+    /// roundtrip la CI Linux non coprirebbe un cambio di API della crate
+    /// `zip` (major 8→9, #697) sul lookup per nome della voce.
+    #[test]
+    fn estrai_da_zip_estrae_la_voce_richiesta() {
+        let contenuto = b"contenuto-fittizio-onnxruntime-dll";
+        let voce = "onnxruntime-win-x64-1.23.0/lib/onnxruntime.dll";
+        let archive = zip_sintetico(voce, contenuto);
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("onnxruntime.dll.extract-partial");
+
+        estrai_da_zip(&archive, voce, &dest).expect("la voce presente deve essere estratta");
+
+        assert_eq!(std::fs::read(&dest).unwrap(), contenuto);
+    }
+
+    #[test]
+    fn estrai_da_zip_voce_assente_errore_senza_creare_il_file() {
+        let archive = zip_sintetico("altra/voce.dll", b"x");
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("onnxruntime.dll.extract-partial");
+
+        let r = estrai_da_zip(
+            &archive,
+            "onnxruntime-win-x64-1.23.0/lib/onnxruntime.dll",
+            &dest,
+        );
+
+        assert!(r.is_err(), "una voce assente deve dare errore");
+        assert!(!dest.exists(), "voce assente: nessun file creato");
+    }
+
     #[test]
     fn estrai_libonnxruntime_residuo_regolare_non_blocca_estrazione_successiva() {
         // Fix #569: un `.extract-partial` residuo — lasciato da un
