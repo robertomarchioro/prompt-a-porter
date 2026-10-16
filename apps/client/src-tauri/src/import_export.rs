@@ -3934,7 +3934,7 @@ mod test {
         let mut out = Vec::new();
         for i in 0..ar.len() {
             let mut f = ar.by_index(i).unwrap();
-            let name = f.name().to_string();
+            let name = f.name().unwrap().to_string();
             let mut content = String::new();
             use std::io::Read;
             f.read_to_string(&mut content).unwrap();
