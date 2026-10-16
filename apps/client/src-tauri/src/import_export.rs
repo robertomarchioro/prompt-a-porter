@@ -212,7 +212,7 @@ pub(crate) fn export_pure_filter(
             [fid],
             |r| r.get(0),
         ).map_err(|e| PapErrore::dominio("Cartella non trovata durante l'esportazione.", e))?;
-        let prefisso = format!("{folder_path}/");
+        let prefisso = crate::cartelle::prefisso_discendenti(&folder_path);
 
         let mut stmt = conn.prepare(
             "SELECT p.Id, p.Title, p.Description, p.Body, p.Visibility, p.TargetModel,
@@ -342,7 +342,7 @@ pub(crate) fn export_pure_filter(
             [fid],
             |r| r.get(0),
         )?;
-        let prefisso = format!("{folder_path}/");
+        let prefisso = crate::cartelle::prefisso_discendenti(&folder_path);
         let mut stmt_f = conn.prepare(
             "SELECT Id, ParentFolderId, Name, Path, CreatedAt, UpdatedAt
              FROM Folders
@@ -1345,7 +1345,7 @@ pub(crate) fn export_markdown_zip_pure(
     };
 
     // SELECT prompt + folder path. Filtro:
-    // - se folder_root_path settato: FolderId == root OR Path LIKE root/%
+    // - se folder_root_path settato: FolderId == root OR Path che inizia con root/
     // - altrimenti: tutto il vault
     let sql = "
         SELECT p.Id, p.Title, COALESCE(f.Path, '')
@@ -1358,7 +1358,7 @@ pub(crate) fn export_markdown_zip_pure(
     let root_param: Option<String> = folder_root_path.clone();
     let root_prefix_param: Option<String> = folder_root_path
         .as_ref()
-        .map(|p| format!("{p}/"));
+        .map(|p| crate::cartelle::prefisso_discendenti(p));
 
     let mut stmt = conn.prepare(sql)?;
     let rows: Vec<(String, String, String)> = stmt
@@ -1650,7 +1650,7 @@ fn riscrivi_path_discendenti(
     if vecchio == nuovo || !vecchio.starts_with('/') {
         return Ok(());
     }
-    let prefisso_vecchio = format!("{vecchio}/");
+    let prefisso_vecchio = crate::cartelle::prefisso_discendenti(vecchio);
     conn.execute(
         "WITH RECURSIVE sottoalbero(Id) AS (
              SELECT ?3
@@ -1675,6 +1675,7 @@ fn riscrivi_path_discendenti(
 fn sovrascrivi_cartella(
     conn: &Connection,
     folder: &FolderExport,
+    nome: &str,
     parent: Option<String>,
 ) -> Result<bool, PapErrore> {
     let (parent_attuale, path_vecchio): (Option<String>, String) = conn.query_row(
@@ -1689,15 +1690,16 @@ fn sovrascrivi_cartella(
         log::warn!("import: genitore di {:?} scartato, creerebbe un ciclo", folder.id);
     }
     let parent_effettivo = if crea_ciclo { parent_attuale } else { parent };
-    let path_nuovo = path_cartella(conn, parent_effettivo.as_deref(), &folder.name);
+    let path_nuovo = path_cartella(conn, parent_effettivo.as_deref(), nome);
     crate::cartelle::verifica_limiti_path(&path_nuovo)?;
     conn.execute(
         "UPDATE Folders SET ParentFolderId = ?1, Name = ?2, Path = ?3,
                 UpdatedAt = datetime('now')
          WHERE Id = ?4",
-        rusqlite::params![parent_effettivo, folder.name, path_nuovo, folder.id],
+        rusqlite::params![parent_effettivo, nome, path_nuovo, folder.id],
     )?;
     riscrivi_path_discendenti(conn, &folder.id, &path_vecchio, &path_nuovo)?;
+    crate::cartelle::verifica_limiti_sottoalbero(conn, &path_nuovo)?;
     Ok(crea_ciclo)
 }
 
@@ -2066,10 +2068,13 @@ fn import_pure_inner(
     for folder in ordina_cartelle(&export.folders) {
         // Stessa regola della creazione da UI: un nome con `/` darebbe un
         // `Path` indistinguibile da quello di una vera figlia (#691).
-        if let Err(e) = crate::cartelle::nome_valido(&folder.name) {
-            report.errori.push(errore_cartella(&folder.id, &e));
-            continue;
-        }
+        let nome = match crate::cartelle::nome_valido(&folder.name) {
+            Ok(nome) => nome,
+            Err(e) => {
+                report.errori.push(errore_cartella(&folder.id, &e));
+                continue;
+            }
+        };
         let esiste: bool = conn
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM Folders WHERE Id = ?1)",
@@ -2107,8 +2112,7 @@ fn import_pure_inner(
         // `fld-collezioni` restano gestite dal ramo "esiste" sotto: qui si
         // entra solo quando l'Id non è mai stato visto.
         if !esiste {
-            if let Some(id_omonima) =
-                folder_id_per_nome_e_genitore(conn, parent.as_deref(), &folder.name)
+            if let Some(id_omonima) = folder_id_per_nome_e_genitore(conn, parent.as_deref(), &nome)
             {
                 folder_map.insert(folder.id.clone(), id_omonima);
                 // In `aggiorna` i conflitti sono «prompt conservati perché
@@ -2122,7 +2126,7 @@ fn import_pure_inner(
 
         match (esiste, modalita) {
             (false, _) => {
-                let path = path_cartella(conn, parent.as_deref(), &folder.name);
+                let path = path_cartella(conn, parent.as_deref(), &nome);
                 if let Err(e) = crate::cartelle::verifica_limiti_path(&path) {
                     report.errori.push(errore_cartella(&folder.id, &e));
                     continue;
@@ -2133,7 +2137,7 @@ fn import_pure_inner(
                     rusqlite::params![
                         folder.id,
                         parent,
-                        folder.name,
+                        nome,
                         path,
                         folder.created_at,
                         folder.updated_at
@@ -2148,7 +2152,7 @@ fn import_pure_inner(
                     report.nuovi += 1;
                 }
             }
-            (true, "overwrite") => match sovrascrivi_cartella(conn, folder, parent) {
+            (true, "overwrite") => match sovrascrivi_cartella(conn, folder, &nome, parent) {
                 Ok(crea_ciclo) => {
                     report.aggiornati += 1;
                     if crea_ciclo {
@@ -5037,5 +5041,128 @@ mod test {
 
         assert!(report.annullato);
         assert_eq!(path_cartella_db(&conn, "fld-r"), "/r");
+    }
+
+    // ─────────── #691 (review): sotto-albero, trim, filtro zip ───────────
+
+    /// DB con la catena `/n0/…/n{n-1}` (id `fld-n0…`) e il ramo `/x/y/z`
+    /// (id `fld-x`, `fld-y`, `fld-z`).
+    fn db_con_catena_e_ramo(n: usize) -> Connection {
+        let conn = db_test();
+        let mut path = String::new();
+        for i in 0..n {
+            path.push_str(&format!("/n{i}"));
+            let parent = (i > 0).then(|| format!("fld-n{}", i - 1));
+            inserisci_folder(
+                &conn,
+                &format!("fld-n{i}"),
+                &format!("n{i}"),
+                &path,
+                parent.as_deref(),
+            );
+        }
+        inserisci_folder(&conn, "fld-x", "x", "/x", None);
+        inserisci_folder(&conn, "fld-y", "y", "/x/y", Some("fld-x"));
+        inserisci_folder(&conn, "fld-z", "z", "/x/y/z", Some("fld-y"));
+        conn
+    }
+
+    fn payload_sposta_x_sotto(parent: &str) -> ExportV1 {
+        let mut exp = payload_minimo("prm-9", "Nove");
+        exp.folders
+            .push(folder_export("fld-x", Some(parent), "x", "/x"));
+        exp
+    }
+
+    #[test]
+    fn import_overwrite_con_figli_oltre_la_profondita_annulla_e_non_cambia_nulla() {
+        let conn = db_con_catena_e_ramo(30);
+
+        let report = import_pure(&conn, &payload_sposta_x_sotto("fld-n29"), "overwrite").unwrap();
+
+        assert!(report.annullato, "{:?}", report.errori);
+        assert_eq!(path_cartella_db(&conn, "fld-x"), "/x");
+        assert_eq!(path_cartella_db(&conn, "fld-z"), "/x/y/z");
+    }
+
+    #[test]
+    fn import_overwrite_con_figli_entro_la_profondita_riscrive_i_discendenti() {
+        let conn = db_con_catena_e_ramo(28);
+
+        let report = import_pure(&conn, &payload_sposta_x_sotto("fld-n27"), "overwrite").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        let radice: String = (0..28).map(|i| format!("/n{i}")).collect();
+        assert_eq!(path_cartella_db(&conn, "fld-z"), format!("{radice}/x/y/z"));
+    }
+
+    #[test]
+    fn import_cartella_con_carattere_di_controllo_annulla_tutto() {
+        for nome in ["a\u{0}b", "a\nb"] {
+            let conn = db_test();
+            let mut exp = payload_minimo("prm-1", "Uno");
+            exp.folders.push(folder_export("fld-c", None, nome, "/c"));
+
+            let report = import_pure(&conn, &exp, "skip").unwrap();
+
+            assert!(report.annullato, "nome {nome:?} accettato");
+            assert_eq!(conta(&conn, "Folders"), 0);
+        }
+    }
+
+    #[test]
+    fn import_normalizza_gli_spazi_del_nome_cartella() {
+        let conn = db_test();
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.folders
+            .push(folder_export("fld-a", None, " a ", "/ a "));
+
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        let (nome, path): (String, String) = conn
+            .query_row(
+                "SELECT Name, Path FROM Folders WHERE Id = 'fld-a'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((nome.as_str(), path.as_str()), ("a", "/a"));
+    }
+
+    #[test]
+    fn import_nome_con_spazi_si_aggancia_alla_cartella_omonima() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-mia", "a", "/a", None);
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.folders
+            .push(folder_export("fld-altro", None, " a ", "/ a "));
+
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(conta(&conn, "Folders"), 1, "creato un fratello «a»/« a »");
+    }
+
+    #[test]
+    fn export_zip_filtro_cartella_non_confonde_i_jolly() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-a", "a_b", "/a_b", None);
+        inserisci_folder(&conn, "fld-a2", "figlio", "/a_b/figlio", Some("fld-a"));
+        inserisci_folder(&conn, "fld-b", "axb", "/axb", None);
+        inserisci_folder(&conn, "fld-b2", "figlio", "/axb/figlio", Some("fld-b"));
+        inserisci_prompt_in_folder(&conn, "prm-a", "Vero", Some("fld-a2"));
+        inserisci_prompt_in_folder(&conn, "prm-b", "Estraneo", Some("fld-b2"));
+
+        let mut buf = std::io::Cursor::new(Vec::new());
+        let n = super::export_markdown_zip_pure(&conn, Some("fld-a"), &mut buf).unwrap();
+
+        assert_eq!(n, 1);
+        let nomi: Vec<String> = unzip_entries(&buf.into_inner())
+            .into_iter()
+            .map(|(n, _)| n)
+            .collect();
+        assert!(nomi.iter().any(|n| n.contains("Vero.md")), "{nomi:?}");
+        assert!(!nomi.iter().any(|n| n.contains("Estraneo.md")), "{nomi:?}");
     }
 }

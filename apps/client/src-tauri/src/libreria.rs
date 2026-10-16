@@ -247,7 +247,7 @@ pub fn lista_pure(
                 )
                 .ok(),
         };
-        let folder_path_prefisso = folder_path.as_ref().map(|p| format!("{p}/"));
+        let folder_path_prefisso = folder_path.as_ref().map(|p| crate::cartelle::prefisso_discendenti(p));
 
         // SQL: tutti i named param sono sempre presenti; le condizioni
         // controllano l'attivazione via NULL check / boolean flag.
@@ -914,6 +914,45 @@ mod test {
         assert_eq!(c.preferiti, 2);
         assert_eq!(c.privati, 2);
         assert_eq!(c.team, 1);
+    }
+
+    /// #691: il filtro per cartella usa il prefisso esatto, non un LIKE con
+    /// `_` come jolly: `/a_b` non deve includere i prompt di `/axb`.
+    #[test]
+    fn lista_pure_filtro_cartella_non_confonde_i_jolly() {
+        let conn = db_test();
+        assicura_dati_base(&conn).unwrap();
+        for (id, nome, path, parent) in [
+            ("fld-a", "a_b", "/a_b", None),
+            ("fld-a2", "figlio", "/a_b/figlio", Some("fld-a")),
+            ("fld-b", "axb", "/axb", None),
+            ("fld-b2", "figlio", "/axb/figlio", Some("fld-b")),
+        ] {
+            conn.execute(
+                "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path) VALUES (?1, 'ws-personale', ?2, ?3, ?4)",
+                rusqlite::params![id, parent, nome, path],
+            )
+            .unwrap();
+        }
+        inserisci_prompt(&conn, "p-a", "Vero", "private", 0, None);
+        inserisci_prompt(&conn, "p-b", "Estraneo", "private", 0, None);
+        conn.execute(
+            "UPDATE Prompts SET FolderId = 'fld-a2' WHERE Id = 'p-a'",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE Prompts SET FolderId = 'fld-b2' WHERE Id = 'p-b'",
+            [],
+        )
+        .unwrap();
+        let mut filtro = filtro_default("tutti");
+        filtro.folder_id = Some("fld-a".into());
+
+        let cards = lista_pure(&conn, &filtro).unwrap();
+
+        let ids: Vec<&str> = cards.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(ids, ["p-a"]);
     }
 
     #[test]
