@@ -84,7 +84,29 @@ fn genera_id() -> Result<String, PapErrore> {
     ))
 }
 
-fn nome_valido(nome: &str) -> Result<String, PapErrore> {
+/// Profondità massima di una cartella (numero di segmenti del `Path`).
+pub(crate) const MAX_PROFONDITA_CARTELLE: usize = 32;
+/// Lunghezza massima del `Path` in byte.
+pub(crate) const MAX_LUNGHEZZA_PATH: usize = 1024;
+
+/// Verifica che il `Path` rispetti i limiti di profondità e lunghezza: una
+/// catena arbitrariamente profonda gonfierebbe il DB (ogni `Path` ripete tutti
+/// gli antenati) e renderebbe quadratiche le cascate di rinomina/sposta.
+pub(crate) fn verifica_limiti_path(path: &str) -> Result<(), PapErrore> {
+    if path.matches('/').count() > MAX_PROFONDITA_CARTELLE {
+        return Err(PapErrore::Generico(format!(
+            "Cartelle annidate troppo in profondità (max {MAX_PROFONDITA_CARTELLE} livelli)"
+        )));
+    }
+    if path.len() > MAX_LUNGHEZZA_PATH {
+        return Err(PapErrore::Generico(format!(
+            "Percorso della cartella troppo lungo (max {MAX_LUNGHEZZA_PATH} caratteri)"
+        )));
+    }
+    Ok(())
+}
+
+pub(crate) fn nome_valido(nome: &str) -> Result<String, PapErrore> {
     let trimmato = nome.trim();
     if trimmato.is_empty() {
         return Err(PapErrore::Generico("Nome cartella vuoto".into()));
@@ -164,6 +186,7 @@ pub(crate) fn crea_pure(
 ) -> Result<String, PapErrore> {
     let nome = nome_valido(&dati.nome)?;
     let path = calcola_path(conn, dati.parent_folder_id.as_deref(), &nome)?;
+    verifica_limiti_path(&path)?;
     let id = genera_id()?;
 
     conn.execute(
@@ -220,14 +243,15 @@ fn rinomina_cascata(conn: &Connection, folder_id: &str, nuovo_nome: &str) -> Res
     )?;
 
     // Update discendenti: rimpiazza il prefisso del path.
-    // Pattern: vecchio_path LIKE 'vecchio/%' → nuovo path = nuovo + suffisso.
+    // Pattern: prefisso `vecchio/` → nuovo prefisso `nuovo/` (confronto esatto
+    // con SUBSTR, non LIKE: `_` e `%` nei nomi sarebbero jolly).
     let prefisso_vecchio = format!("{vecchio_path}/");
     let prefisso_nuovo = format!("{nuovo_path}/");
     conn.execute(
         "UPDATE Folders
          SET Path = ?1 || SUBSTR(Path, LENGTH(?2) + 1),
              UpdatedAt = datetime('now')
-         WHERE Path LIKE ?2 || '%' AND DeletedAt IS NULL",
+         WHERE SUBSTR(Path, 1, LENGTH(?2)) = ?2 AND DeletedAt IS NULL",
         params![prefisso_nuovo, prefisso_vecchio],
     )?;
 
@@ -310,7 +334,7 @@ fn sposta_cascata(
         "UPDATE Folders
          SET Path = ?1 || SUBSTR(Path, LENGTH(?2) + 1),
              UpdatedAt = datetime('now')
-         WHERE Path LIKE ?2 || '%' AND DeletedAt IS NULL",
+         WHERE SUBSTR(Path, 1, LENGTH(?2)) = ?2 AND DeletedAt IS NULL",
         params![prefisso_nuovo, prefisso_vecchio],
     )?;
     Ok(())
@@ -511,7 +535,7 @@ pub(crate) fn elimina_pure(conn: &Connection, id: &str) -> Result<(), PapErrore>
     conn.execute(
         "UPDATE Folders
          SET DeletedAt = datetime('now'), UpdatedAt = datetime('now')
-         WHERE (Id = ?1 OR Path LIKE ?2 || '%') AND DeletedAt IS NULL",
+         WHERE (Id = ?1 OR SUBSTR(Path, 1, LENGTH(?2)) = ?2) AND DeletedAt IS NULL",
         params![id, prefisso],
     )?;
     // I prompt dentro la cartella eliminata (e discendenti) tornano a root.
@@ -520,7 +544,7 @@ pub(crate) fn elimina_pure(conn: &Connection, id: &str) -> Result<(), PapErrore>
          SET FolderId = NULL, UpdatedAt = datetime('now')
          WHERE FolderId IN (
              SELECT Id FROM Folders
-             WHERE (Id = ?1 OR Path LIKE ?2 || '%')
+             WHERE (Id = ?1 OR SUBSTR(Path, 1, LENGTH(?2)) = ?2)
          )",
         params![id, prefisso],
     )?;
@@ -706,6 +730,152 @@ mod test {
         assert!(result.is_err(), "Insert con nome duplicato deve fallire");
     }
 
+    // ─────────── #691: jolly `_` e `%` nei nomi non estendono le cascate ───────────
+
+    fn path_di(conn: &Connection, id: &str) -> String {
+        conn.query_row("SELECT Path FROM Folders WHERE Id = ?1", [id], |r| r.get(0))
+            .unwrap()
+    }
+
+    fn eliminata(conn: &Connection, id: &str) -> bool {
+        conn.query_row(
+            "SELECT DeletedAt IS NOT NULL FROM Folders WHERE Id = ?1",
+            [id],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+
+    /// Coppia di alberi `/<vero>/figlio` e `/<omonimo>/figlio`, dove il nome
+    /// del primo contiene un jolly LIKE che combacerebbe col secondo.
+    fn alberi_con_jolly(conn: &Connection, vero: &str, omonimo: &str) -> [String; 4] {
+        let a = crea(conn, vero, None);
+        let a_figlio = crea(conn, "figlio", Some(&a));
+        let b = crea(conn, omonimo, None);
+        let b_figlio = crea(conn, "figlio", Some(&b));
+        [a, a_figlio, b, b_figlio]
+    }
+
+    #[test]
+    fn rinomina_con_jolly_underscore_non_tocca_l_omonimo() {
+        let conn = db_test();
+        let [a, a_figlio, _b, b_figlio] = alberi_con_jolly(&conn, "a_b", "axb");
+
+        rinomina_cascata(&conn, &a, "z").unwrap();
+
+        assert_eq!(path_di(&conn, &a_figlio), "/z/figlio", "vero discendente");
+        assert_eq!(path_di(&conn, &b_figlio), "/axb/figlio", "estraneo toccato");
+    }
+
+    #[test]
+    fn rinomina_con_jolly_percento_non_tocca_l_omonimo() {
+        let conn = db_test();
+        let [a, a_figlio, _b, b_figlio] = alberi_con_jolly(&conn, "a%b", "aXYZb");
+
+        rinomina_cascata(&conn, &a, "z").unwrap();
+
+        assert_eq!(path_di(&conn, &a_figlio), "/z/figlio");
+        assert_eq!(path_di(&conn, &b_figlio), "/aXYZb/figlio");
+    }
+
+    #[test]
+    fn rinomina_rispetta_il_confine_di_segmento_e_le_maiuscole() {
+        let conn = db_test();
+        let ab = crea(&conn, "ab", None);
+        let ab_figlio = crea(&conn, "figlio", Some(&ab));
+        let abc = crea(&conn, "abc", None);
+        let abc_figlio = crea(&conn, "figlio", Some(&abc));
+        let maiusc = crea(&conn, "AB", None);
+        let maiusc_figlio = crea(&conn, "figlio", Some(&maiusc));
+
+        rinomina_cascata(&conn, &ab, "z").unwrap();
+
+        assert_eq!(path_di(&conn, &ab_figlio), "/z/figlio");
+        assert_eq!(path_di(&conn, &abc_figlio), "/abc/figlio");
+        assert_eq!(path_di(&conn, &maiusc_figlio), "/AB/figlio");
+    }
+
+    #[test]
+    fn sposta_con_jolly_underscore_non_tocca_l_omonimo() {
+        let conn = db_test();
+        let [a, a_figlio, _b, b_figlio] = alberi_con_jolly(&conn, "a_b", "axb");
+        let dest = crea(&conn, "dest", None);
+
+        sposta_cascata(&conn, &a, Some(&dest)).unwrap();
+
+        assert_eq!(
+            path_di(&conn, &a_figlio),
+            "/dest/a_b/figlio",
+            "vero discendente"
+        );
+        assert_eq!(path_di(&conn, &b_figlio), "/axb/figlio", "estraneo toccato");
+    }
+
+    #[test]
+    fn elimina_con_jolly_underscore_non_tocca_l_omonimo() {
+        let conn = db_test();
+        let [a, a_figlio, b, b_figlio] = alberi_con_jolly(&conn, "a_b", "axb");
+
+        elimina_pure(&conn, &a).unwrap();
+
+        assert!(eliminata(&conn, &a) && eliminata(&conn, &a_figlio));
+        assert!(!eliminata(&conn, &b), "estraneo eliminato");
+        assert!(!eliminata(&conn, &b_figlio), "estraneo eliminato");
+    }
+
+    #[test]
+    fn elimina_con_jolly_percento_non_tocca_l_omonimo() {
+        let conn = db_test();
+        let [a, a_figlio, b, b_figlio] = alberi_con_jolly(&conn, "a%b", "aXYZb");
+
+        elimina_pure(&conn, &a).unwrap();
+
+        assert!(eliminata(&conn, &a) && eliminata(&conn, &a_figlio));
+        assert!(!eliminata(&conn, &b) && !eliminata(&conn, &b_figlio));
+    }
+
+    // ─────────── #691: limiti di profondità e lunghezza del Path ───────────
+
+    #[test]
+    fn verifica_limiti_path_accetta_il_massimo_e_rifiuta_oltre() {
+        let path_ok = "/a".repeat(32);
+        assert!(verifica_limiti_path(&path_ok).is_ok());
+        let troppo_profondo = "/a".repeat(33);
+        assert!(verifica_limiti_path(&troppo_profondo).is_err());
+
+        let lungo_ok = format!("/{}", "x".repeat(1023));
+        assert!(verifica_limiti_path(&lungo_ok).is_ok());
+        let troppo_lungo = format!("/{}", "x".repeat(1024));
+        assert!(verifica_limiti_path(&troppo_lungo).is_err());
+    }
+
+    #[test]
+    fn crea_oltre_la_profondita_massima_fallisce() {
+        let conn = db_test();
+        let mut parent: Option<String> = None;
+        for livello in 0..32 {
+            let id = crea_pure(
+                &conn,
+                &NuovaCartella {
+                    nome: format!("n{livello}"),
+                    parent_folder_id: parent.clone(),
+                },
+            )
+            .unwrap();
+            parent = Some(id);
+        }
+
+        let oltre = crea_pure(
+            &conn,
+            &NuovaCartella {
+                nome: "troppo".into(),
+                parent_folder_id: parent,
+            },
+        );
+
+        assert!(oltre.is_err(), "il 33° livello va rifiutato");
+    }
+
     // ─────────── Stress test (Step 10 quality gate) ───────────
 
     /// Costruisce 20 catene lineari di profondità 5 → 100 cartelle totali,
@@ -876,7 +1046,7 @@ mod test {
         conn.execute(
             "UPDATE Folders
              SET DeletedAt = datetime('now')
-             WHERE (Id = ?1 OR Path LIKE ?2 || '%') AND DeletedAt IS NULL",
+             WHERE (Id = ?1 OR SUBSTR(Path, 1, LENGTH(?2)) = ?2) AND DeletedAt IS NULL",
             params![&foresta[0][0], prefisso],
         )
         .unwrap();

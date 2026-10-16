@@ -165,7 +165,7 @@ pub(crate) fn export_pure(conn: &Connection) -> Result<ExportV1, PapErrore> {
 
 /// Variante con filtro per `folder_id`: se `Some(id)`, esporta solo i
 /// prompt del sotto-albero della cartella (matching su `Folders.Path`
-/// con LIKE prefix). Se `None`, esporta tutti i prompt attivi.
+/// per prefisso esatto). Se `None`, esporta tutti i prompt attivi.
 /// v0.7.0 Step 2.
 ///
 /// Le `folders` del workspace (o del solo sotto-albero, se filtrato) sono
@@ -190,7 +190,7 @@ pub(crate) fn export_pure_filter(
 
     // Costruzione query Prompts. Se folder_id specificato, risolvi il
     // Path della folder e filtra i prompt nel sotto-albero (path esatto
-    // OR path LIKE "<folder_path>/%").
+    // OR path che inizia con "<folder_path>/").
     #[allow(clippy::type_complexity)]
     type PromptRaw = (String, String, Option<String>, String, String,
                      Option<String>, Option<String>, i64, i64,
@@ -212,7 +212,7 @@ pub(crate) fn export_pure_filter(
             [fid],
             |r| r.get(0),
         ).map_err(|e| PapErrore::dominio("Cartella non trovata durante l'esportazione.", e))?;
-        let prefix_like = format!("{folder_path}/%");
+        let prefisso = format!("{folder_path}/");
 
         let mut stmt = conn.prepare(
             "SELECT p.Id, p.Title, p.Description, p.Body, p.Visibility, p.TargetModel,
@@ -223,10 +223,10 @@ pub(crate) fn export_pure_filter(
              JOIN Folders f ON f.Id = p.FolderId
              WHERE p.DeletedAt IS NULL
                AND f.DeletedAt IS NULL
-               AND (f.Path = ?1 OR f.Path LIKE ?2)
+               AND (f.Path = ?1 OR SUBSTR(f.Path, 1, LENGTH(?2)) = ?2)
              ORDER BY p.CreatedAt ASC",
         )?;
-        let mut rows = stmt.query(rusqlite::params![folder_path, prefix_like])?;
+        let mut rows = stmt.query(rusqlite::params![folder_path, prefisso])?;
         let mut acc: Vec<PromptRaw> = Vec::new();
         while let Some(row) = rows.next()? {
             acc.push(collect_row(row)?);
@@ -342,15 +342,15 @@ pub(crate) fn export_pure_filter(
             [fid],
             |r| r.get(0),
         )?;
-        let prefix_like = format!("{folder_path}/%");
+        let prefisso = format!("{folder_path}/");
         let mut stmt_f = conn.prepare(
             "SELECT Id, ParentFolderId, Name, Path, CreatedAt, UpdatedAt
              FROM Folders
-             WHERE DeletedAt IS NULL AND (Path = ?1 OR Path LIKE ?2)
+             WHERE DeletedAt IS NULL AND (Path = ?1 OR SUBSTR(Path, 1, LENGTH(?2)) = ?2)
              ORDER BY Path ASC",
         )?;
         let out = stmt_f
-            .query_map(rusqlite::params![folder_path, prefix_like], map_folder)?
+            .query_map(rusqlite::params![folder_path, prefisso], map_folder)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         out
     } else {
@@ -1352,13 +1352,13 @@ pub(crate) fn export_markdown_zip_pure(
         FROM Prompts p
         LEFT JOIN Folders f ON f.Id = p.FolderId AND f.DeletedAt IS NULL
         WHERE p.DeletedAt IS NULL
-          AND (:root IS NULL OR f.Path = :root OR f.Path LIKE :root_prefix)
+          AND (:root IS NULL OR f.Path = :root OR SUBSTR(f.Path, 1, LENGTH(:root_prefix)) = :root_prefix)
         ORDER BY f.Path, p.Title COLLATE NOCASE
     ";
     let root_param: Option<String> = folder_root_path.clone();
     let root_prefix_param: Option<String> = folder_root_path
         .as_ref()
-        .map(|p| format!("{p}/%"));
+        .map(|p| format!("{p}/"));
 
     let mut stmt = conn.prepare(sql)?;
     let rows: Vec<(String, String, String)> = stmt
@@ -1676,7 +1676,7 @@ fn sovrascrivi_cartella(
     conn: &Connection,
     folder: &FolderExport,
     parent: Option<String>,
-) -> Result<bool, rusqlite::Error> {
+) -> Result<bool, PapErrore> {
     let (parent_attuale, path_vecchio): (Option<String>, String) = conn.query_row(
         "SELECT ParentFolderId, Path FROM Folders WHERE Id = ?1",
         [&folder.id],
@@ -1690,6 +1690,7 @@ fn sovrascrivi_cartella(
     }
     let parent_effettivo = if crea_ciclo { parent_attuale } else { parent };
     let path_nuovo = path_cartella(conn, parent_effettivo.as_deref(), &folder.name);
+    crate::cartelle::verifica_limiti_path(&path_nuovo)?;
     conn.execute(
         "UPDATE Folders SET ParentFolderId = ?1, Name = ?2, Path = ?3,
                 UpdatedAt = datetime('now')
@@ -1698,6 +1699,16 @@ fn sovrascrivi_cartella(
     )?;
     riscrivi_path_discendenti(conn, &folder.id, &path_vecchio, &path_nuovo)?;
     Ok(crea_ciclo)
+}
+
+/// Messaggio per `report.errori` di una cartella non importabile: il testo
+/// di un errore di validazione (utente-facing) passa, ogni altro errore
+/// resta opaco (il dettaglio è già nel log).
+fn errore_cartella(id: &str, e: &PapErrore) -> String {
+    match e {
+        PapErrore::Generico(motivo) => format!("Cartella {id}: {motivo}."),
+        _ => format!("Cartella {id}: importazione non riuscita."),
+    }
 }
 
 /// Id della cartella con lo stesso genitore (NULL-safe, `parent_id: None` =
@@ -2053,6 +2064,12 @@ fn import_pure_inner(
     let mut folder_map: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
     for folder in ordina_cartelle(&export.folders) {
+        // Stessa regola della creazione da UI: un nome con `/` darebbe un
+        // `Path` indistinguibile da quello di una vera figlia (#691).
+        if let Err(e) = crate::cartelle::nome_valido(&folder.name) {
+            report.errori.push(errore_cartella(&folder.id, &e));
+            continue;
+        }
         let esiste: bool = conn
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM Folders WHERE Id = ?1)",
@@ -2106,6 +2123,10 @@ fn import_pure_inner(
         match (esiste, modalita) {
             (false, _) => {
                 let path = path_cartella(conn, parent.as_deref(), &folder.name);
+                if let Err(e) = crate::cartelle::verifica_limiti_path(&path) {
+                    report.errori.push(errore_cartella(&folder.id, &e));
+                    continue;
+                }
                 if let Err(e) = conn.execute(
                     "INSERT INTO Folders (Id, WorkspaceId, ParentFolderId, Name, Path, CreatedAt, UpdatedAt)
                      VALUES (?1, 'ws-personale', ?2, ?3, ?4, ?5, ?6)",
@@ -2136,10 +2157,7 @@ fn import_pure_inner(
                 }
                 Err(e) => {
                     log::error!("import cartella {:?}: {e}", folder.id);
-                    report.errori.push(format!(
-                        "Cartella {}: importazione non riuscita.",
-                        folder.id
-                    ));
+                    report.errori.push(errore_cartella(&folder.id, &e));
                 }
             },
             // aggiorna: la cartella della collezione già presente è attesa.
@@ -3479,6 +3497,26 @@ mod test {
         assert!(r.is_err());
         let msg = format!("{:?}", r.unwrap_err());
         assert!(msg.contains("non trovata"));
+    }
+
+    /// #691: `_` nel nome della cartella esportata non fa da jolly LIKE e non
+    /// trascina il sotto-albero dell'omonima `/axb`; il vero figlio c'è.
+    #[test]
+    fn export_pure_filter_non_confonde_i_jolly_nel_nome() {
+        let conn = db_test();
+        inserisci_folder(&conn, "fld-a", "a_b", "/a_b", None);
+        inserisci_folder(&conn, "fld-a2", "figlio", "/a_b/figlio", Some("fld-a"));
+        inserisci_folder(&conn, "fld-b", "axb", "/axb", None);
+        inserisci_folder(&conn, "fld-b2", "figlio", "/axb/figlio", Some("fld-b"));
+        inserisci_prompt_in_folder(&conn, "prm-a", "Figlio vero", Some("fld-a2"));
+        inserisci_prompt_in_folder(&conn, "prm-b", "Estraneo", Some("fld-b2"));
+
+        let exp = export_pure_filter(&conn, Some("fld-a")).unwrap();
+
+        let prompt: Vec<&str> = exp.prompts.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(prompt, ["prm-a"]);
+        let cartelle: Vec<&str> = exp.folders.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(cartelle, ["fld-a", "fld-a2"]);
     }
 
     #[test]
@@ -4846,5 +4884,158 @@ mod test {
         assert!(report.errori.is_empty(), "{:?}", report.errori);
         assert_eq!(report.conflitti, 0);
         assert!(!tag_cancellato(&conn, "tag-1"));
+    }
+
+    // ─────────── #691: validazione nome e limiti del Path all'import ───────────
+
+    /// Catena lineare di `n` cartelle `fld-0 … fld-(n-1)`, ciascuna figlia
+    /// della precedente, con nomi lunghi `lunghezza_nome`.
+    fn catena_cartelle(n: usize, lunghezza_nome: usize) -> ExportV1 {
+        let mut exp = payload_minimo("prm-1", "Uno");
+        for i in 0..n {
+            let nome = format!("{i:03}{}", "x".repeat(lunghezza_nome - 3));
+            let parent = (i > 0).then(|| format!("fld-{}", i - 1));
+            exp.folders.push(folder_export(
+                &format!("fld-{i}"),
+                parent.as_deref(),
+                &nome,
+                "",
+            ));
+        }
+        exp
+    }
+
+    #[test]
+    fn import_cartella_con_slash_nel_nome_annulla_tutto() {
+        let conn = db_test();
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.folders.push(folder_export("fld-a", None, "a", "/a"));
+        exp.folders
+            .push(folder_export("fld-ab", None, "a/b", "/a/b"));
+
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+
+        assert!(report.annullato);
+        assert_eq!(report.errori.len(), 1, "{:?}", report.errori);
+        assert!(report.errori[0].contains("fld-ab"), "{:?}", report.errori);
+        assert_eq!(
+            conta(&conn, "Folders"),
+            0,
+            "cartelle rimaste dopo il rollback"
+        );
+        assert_eq!(conta(&conn, "Prompts"), 0);
+    }
+
+    #[test]
+    fn import_cartella_con_nome_vuoto_o_troppo_lungo_annulla_tutto() {
+        for nome in ["", "   ", &"x".repeat(101)] {
+            let conn = db_test();
+            let mut exp = payload_minimo("prm-1", "Uno");
+            exp.folders.push(folder_export("fld-x", None, nome, "/x"));
+
+            let report = import_pure(&conn, &exp, "skip").unwrap();
+
+            assert!(report.annullato, "nome {nome:?} accettato");
+            assert_eq!(conta(&conn, "Folders"), 0);
+        }
+    }
+
+    #[test]
+    fn import_cartella_con_slash_in_overwrite_non_tocca_la_esistente() {
+        let conn = db_test();
+        inserisci_folder_datata(&conn, "fld-a", "a", "2026-01-01");
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.folders
+            .push(folder_export("fld-a", None, "x/y", "/x/y"));
+
+        let report = import_pure(&conn, &exp, "overwrite").unwrap();
+
+        assert!(report.annullato);
+        assert_eq!(path_cartella_db(&conn, "fld-a"), "/a");
+    }
+
+    #[test]
+    fn import_cartelle_con_nomi_validi_resta_ok() {
+        let conn = db_test();
+        let mut exp = payload_minimo("prm-1", "Uno");
+        exp.folders
+            .push(folder_export("fld-a", None, "a_b %c", "/a_b %c"));
+        exp.folders.push(folder_export(
+            "fld-f",
+            Some("fld-a"),
+            &"y".repeat(100),
+            "/x",
+        ));
+
+        let report = import_pure(&conn, &exp, "skip").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(conta(&conn, "Folders"), 2);
+        assert_eq!(path_cartella_db(&conn, "fld-a"), "/a_b %c");
+    }
+
+    #[test]
+    fn import_catena_oltre_la_profondita_massima_annulla_tutto() {
+        let conn = db_test();
+
+        let report = import_pure(&conn, &catena_cartelle(33, 5), "skip").unwrap();
+
+        assert!(report.annullato);
+        assert!(
+            report.errori.iter().any(|e| e.contains("fld-32")),
+            "{:?}",
+            report.errori
+        );
+        assert_eq!(conta(&conn, "Folders"), 0);
+    }
+
+    #[test]
+    fn import_catena_alla_profondita_massima_resta_ok() {
+        let conn = db_test();
+
+        let report = import_pure(&conn, &catena_cartelle(32, 5), "skip").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(conta(&conn, "Folders"), 32);
+    }
+
+    #[test]
+    fn import_catena_oltre_la_lunghezza_massima_del_path_annulla_tutto() {
+        let conn = db_test();
+
+        // 11 livelli da 100 byte: 11 * 101 = 1111 > 1024, profondità ok.
+        let report = import_pure(&conn, &catena_cartelle(11, 100), "skip").unwrap();
+
+        assert!(report.annullato);
+        assert_eq!(conta(&conn, "Folders"), 0);
+    }
+
+    #[test]
+    fn import_catena_entro_la_lunghezza_massima_del_path_resta_ok() {
+        let conn = db_test();
+
+        // 10 livelli da 100 byte: 10 * 101 = 1010 <= 1024.
+        let report = import_pure(&conn, &catena_cartelle(10, 100), "skip").unwrap();
+
+        assert!(report.errori.is_empty(), "{:?}", report.errori);
+        assert_eq!(conta(&conn, "Folders"), 10);
+    }
+
+    #[test]
+    fn import_overwrite_che_supera_la_profondita_annulla_tutto() {
+        let conn = db_test();
+        // Esistono già 32 livelli e una radice a parte: spostare la radice
+        // sotto l'ultimo livello porterebbe a 33.
+        let esistente = import_pure(&conn, &catena_cartelle(32, 5), "skip").unwrap();
+        assert!(esistente.errori.is_empty());
+        inserisci_folder_datata(&conn, "fld-r", "r", "2026-01-01");
+        let mut exp = payload_minimo("prm-9", "Nove");
+        exp.folders
+            .push(folder_export("fld-r", Some("fld-31"), "r", "/r"));
+
+        let report = import_pure(&conn, &exp, "overwrite").unwrap();
+
+        assert!(report.annullato);
+        assert_eq!(path_cartella_db(&conn, "fld-r"), "/r");
     }
 }

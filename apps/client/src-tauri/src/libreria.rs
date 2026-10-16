@@ -247,7 +247,7 @@ pub fn lista_pure(
                 )
                 .ok(),
         };
-        let folder_path_prefix_like = folder_path.as_ref().map(|p| format!("{p}/%"));
+        let folder_path_prefisso = folder_path.as_ref().map(|p| format!("{p}/"));
 
         // SQL: tutti i named param sono sempre presenti; le condizioni
         // controllano l'attivazione via NULL check / boolean flag.
@@ -272,7 +272,8 @@ pub fn lista_pure(
                    OR p.FolderId IN (
                        SELECT Id FROM Folders
                        WHERE DeletedAt IS NULL
-                         AND (Path = :folder_path OR Path LIKE :folder_prefix)
+                         AND (Path = :folder_path
+                              OR SUBSTR(Path, 1, LENGTH(:folder_prefix)) = :folder_prefix)
                    )
                )
              GROUP BY p.Id
@@ -289,7 +290,7 @@ pub fn lista_pure(
                     ":target_model": target_model_param,
                     ":folder_solo_root": folder_solo_root,
                     ":folder_path": folder_path,
-                    ":folder_prefix": folder_path_prefix_like,
+                    ":folder_prefix": folder_path_prefisso,
                 },
                 riga_a_card,
             )?
