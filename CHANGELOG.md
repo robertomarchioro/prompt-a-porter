@@ -1,8 +1,8 @@
 # Changelog — Prompt a Porter
 
-## v0.8.56 — Il vault cambia fodera (2026-11-15)
+## v0.8.57 — Il vault cambia fodera (2026-11-15)
 
-> Release di manutenzione e sicurezza: il motore di cifratura del vault passa a SQLCipher 4.20 e i vault creati con le versioni precedenti si aprono senza migrazione. L'import delle cartelle diventa più rigoroso e si chiudono gli advisory di sicurezza aperti da metà ottobre su TLS, archivi zip, crittografia e server MCP.
+> Sostituisce la v0.8.56, taggata ma mai pubblicata: la sua build di release non ha prodotto la versione macOS perché GitHub ha ritirato il runner macos-14, e i tag di release sono immutabili per regola del repository. Release di manutenzione e sicurezza: il motore di cifratura del vault passa a SQLCipher 4.20 e i vault creati con le versioni precedenti si aprono senza migrazione. L'import delle cartelle diventa più rigoroso e si chiudono gli advisory di sicurezza aperti da metà ottobre su TLS, archivi zip, crittografia e server MCP.
 
 ### Sicurezza
 
@@ -21,6 +21,7 @@
 
 - **Nuovi modelli AI selezionabili** (#696, #712, #721, #727): il registro sale a 53 modelli, con Claude Haiku 5.5, Gemini 4 Argon, Gemini Pro latest e GPT-6.1 Terra. I modelli usciti dal listino restano disponibili, marcati come obsoleti.
 - **zip 9.0.4** (#697): tutta la linea 8.x è stata ritirata da crates.io.
+- **Build macOS su macos-15** (#739): la versione per Mac, universale per Apple Silicon e Intel, si compila sul nuovo runner di GitHub.
 - Aggiornati i plugin Tauri dialog (2.8.4, finestra di dialogo nativa rfd 0.17) e updater (2.14.1), più gli aggiornamenti di routine delle dipendenze (Dependabot).
 
 ## v0.8.55 — Il cartamodello torna in squadra (2026-10-10)
