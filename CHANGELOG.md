@@ -1,5 +1,28 @@
 # Changelog — Prompt a Porter
 
+## v0.8.56 — Il vault cambia fodera (2026-11-15)
+
+> Release di manutenzione e sicurezza: il motore di cifratura del vault passa a SQLCipher 4.20 e i vault creati con le versioni precedenti si aprono senza migrazione. L'import delle cartelle diventa più rigoroso e si chiudono gli advisory di sicurezza aperti da metà ottobre su TLS, archivi zip, crittografia e server MCP.
+
+### Sicurezza
+
+- **Motore del vault aggiornato** (#735, #736): SQLCipher passa da 4.14 a 4.20 (SQLite 3.54.1) e chiude una vulnerabilità del database (CVE-2026-119375, RUSTSEC-2026-0459 e RUSTSEC-2026-0502). I vault cifrati esistenti si aprono senza alcuna migrazione.
+- **Connessioni TLS più sicure** (#698, #703): rustls 0.23.46 chiude 4 advisory, tra cui segreti TLS esposti nei log di debug e un possibile declassamento dello scambio di chiavi. Aggiornati anche i certificati radice e la loro verifica (rustls-webpki, webpki-roots).
+- **Aggiornamento automatico senza la libreria zip vulnerabile** (#703): l'updater ora usa zip 9 e scompare l'ultima copia di zip 4.6.1, segnalata come critica.
+- **Confronti crittografici a tempo costante** (#716): ctutils 0.4.5 nella catena argon2/sha2 che protegge la password del vault (RUSTSEC-2026-0385).
+- **Server di sync e CLI su Go 1.26.11** (#703, #736): corretti un difetto nella verifica dei certificati (`crypto/x509`) e un possibile crash del server HTTP (GO-2026-6859).
+- **Server MCP** (#722): aggiornate 4 dipendenze indirette con alert noti (body-parser, qs, ip-address, fast-uri).
+
+### Fix
+
+- **Cartelle più robuste all'import** (#691): i nomi di cartella importati seguono le stesse regole dell'app; un nome non valido annulla l'import invece di entrare nel vault. Rinominare, spostare o eliminare una cartella non tocca più per errore cartelle dal nome simile (ad esempio con `_` o `%`). Sono introdotti limiti a profondità (32 livelli) e lunghezza del percorso, applicati anche quando si sposta o rinomina un intero ramo.
+
+### Manutenzione
+
+- **Nuovi modelli AI selezionabili** (#696, #712, #721, #727): il registro sale a 53 modelli, con Claude Haiku 5.5, Gemini 4 Argon, Gemini Pro latest e GPT-6.1 Terra. I modelli usciti dal listino restano disponibili, marcati come obsoleti.
+- **zip 9.0.4** (#697): tutta la linea 8.x è stata ritirata da crates.io.
+- Aggiornati i plugin Tauri dialog (2.8.4, finestra di dialogo nativa rfd 0.17) e updater (2.14.1), più gli aggiornamenti di routine delle dipendenze (Dependabot).
+
 ## v0.8.55 — Il cartamodello torna in squadra (2026-10-10)
 
 > Rifinisce l'import in modalità «sovrascrivi»: l'albero delle cartelle resta in squadra anche quando il file da importare dice cose che non tornano. Intorno, Go 1.26.9 per un advisory di sicurezza della libreria HTTP.
