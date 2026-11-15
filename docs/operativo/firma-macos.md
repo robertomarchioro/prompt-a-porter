@@ -10,7 +10,7 @@
 
 ## Cosa produce la pipeline
 
-Per ogni tag `v*`, il job `macos-14` della matrix di `release.yml` builda
+Per ogni tag `v*`, il job `macos-15` della matrix di `release.yml` builda
 `--target universal-apple-darwin --bundles app,dmg` (binario **universale**
 arm64+x86_64, funziona sia su Apple Silicon sia su Mac Intel) e, con i
 secret `APPLE_*` presenti:

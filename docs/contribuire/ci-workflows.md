@@ -14,7 +14,7 @@
 | `security-audit.yml` | `workflow_dispatch` + `schedule cron giornaliero 05:23 UTC` | `cargo audit`, `govulncheck` server+CLI, `pnpm audit`; su failure il job `notifica-fallimento` apre/aggiorna la issue "Security Audit fallito: intervenire" |
 | `dep-canary.yml` | `workflow_dispatch` + `schedule cron mar/ven 05:17 UTC` | Canary **non bloccante**: toolchain Rust latest senza pin + `cargo update` (ignora il lock) per scoprire rotture upstream; su failure apre/aggiorna una issue con label `dep-canary` |
 | `modelli-refresh.yml` | `workflow_dispatch` + `schedule cron lunedì 06:17 UTC` | Aggiorna `apps/client/src/lib/modelli-registro.json` da [models.dev](https://models.dev) (pubblico, **senza chiave**); se il listino è cambiato esegue lint+test e apre una PR. ⚠️ La CI **non** gira sulla PR generata (limite delle PR aperte con `GITHUB_TOKEN`): il gate è il client-build su main dopo il merge |
-| `macos-smoke.yml` | `workflow_dispatch` (solo manuale) | Smoke build Tauri unsigned su `macos-14` (artifact di workflow, retention 7 gg, mai su release). Nato pre-certificato Apple; utile per validare cambi alla toolchain macOS senza taggare |
+| `macos-smoke.yml` | `workflow_dispatch` (solo manuale) | Smoke build Tauri unsigned su `macos-15` (artifact di workflow, retention 7 gg, mai su release). Nato pre-certificato Apple; utile per validare cambi alla toolchain macOS senza taggare |
 | `site-deploy.yml` | `push:main` su `apps/site/**` ∪ `docs/**` ∪ `pnpm-workspace.yaml` ∪ `pnpm-lock.yaml` ∪ `.github/workflows/site-deploy.yml` + `workflow_dispatch` — **niente trigger su PR** | `build` (VitePress) → `deploy` su GitHub Pages (www.promptaporter.it) |
 
 ## Path → workflow attivati (mappa esaustiva)

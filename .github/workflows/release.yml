@@ -16,7 +16,7 @@ jobs:
         include:
           # NOTE: target Windows (NSIS + portable), Linux (deb + AppImage)
           # e macOS (app + dmg, binario UNIVERSALE arm64+x86_64) attivi.
-          - platform: macos-14
+          - platform: macos-15
             # macOS: bundle .app + .dmg come binario UNIVERSALE
             # (universal-apple-darwin = lipo di aarch64 + x86_64), così gira
             # nativo sia su Apple Silicon sia su Mac Intel. Un solo .dmg per
@@ -98,7 +98,7 @@ jobs:
       # e la build fallisce con "Target x86_64-apple-darwin is not installed".
       # Verificato col workflow macos-smoke prima di v0.8.36.
       - name: Aggiungi target x86_64 per il binario universale (macOS)
-        if: matrix.platform == 'macos-14'
+        if: matrix.platform == 'macos-15'
         working-directory: apps/client/src-tauri
         run: rustup target add x86_64-apple-darwin
 

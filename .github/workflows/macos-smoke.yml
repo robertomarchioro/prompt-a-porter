@@ -1,6 +1,6 @@
 # Smoke build macOS — SOLO manuale (workflow_dispatch).
 #
-# Scopo: verificare che il client Tauri compili e bundli su macos-14
+# Scopo: verificare che il client Tauri compili e bundli su macos-15
 # (aarch64) PRIMA che il certificato Apple Developer sia disponibile.
 # La build è unsigned (nessun secret APPLE_*): gli artifact NON sono
 # distribuibili e infatti non vengono caricati su nessuna release —
@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   smoke:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 45
 
     steps:
