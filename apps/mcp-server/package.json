@@ -21,7 +21,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@pap/shared-schema": "workspace:*",
-    "better-sqlite3": "^13.0.3",
+    "better-sqlite3": "^13.1.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
