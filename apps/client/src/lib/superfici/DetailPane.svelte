@@ -11,6 +11,8 @@
     Trash2,
     Wand2,
     Scissors,
+    ChevronDown,
+    ChevronRight,
   } from "lucide-svelte";
   import type { EditorView } from "@codemirror/view";
   import DetailTabs, { type TabId } from "$lib/components/DetailTabs.svelte";
@@ -33,22 +35,11 @@
   import { conferma, avvisa } from "$lib/util/conferma";
   import { logInfoApp, logErroreApp } from "$lib/util/log-app";
   import { puoSalvare } from "./salvataggio-logic";
+  import { caricaFlag, salvaFlag } from "$lib/stores/flag-locale";
 
   const META_KEY = "pap.detail.meta-collapsed";
-  function caricaMetaCollapsed(): boolean {
-    try {
-      return localStorage.getItem(META_KEY) === "1";
-    } catch {
-      return false;
-    }
-  }
-  function salvaMetaCollapsed(v: boolean): void {
-    try {
-      localStorage.setItem(META_KEY, v ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  }
+  // #747: descrizione + riga metadati comprimibili per dare spazio all'editor.
+  const INTESTAZIONE_KEY = "pap.detail.intestazione-compressa";
 
   interface TagInfo {
     id: string;
@@ -104,7 +95,8 @@
   let cartelleCache = $state<Cartella[]>([]);
   let erroreCaricamento = $state<string | null>(null);
   let salvatoTs = $state<string | null>(null);
-  let metaCollapsed = $state(caricaMetaCollapsed());
+  let metaCollapsed = $state(caricaFlag(META_KEY));
+  let intestazioneCompressa = $state(caricaFlag(INTESTAZIONE_KEY));
   let diagnosiCount = $state(0);
   let goldenCount = $state(0);
   let cronologiaCount = $state(0);
@@ -122,7 +114,11 @@
   let promptIdPrec = $state<string | null>(null);
 
   $effect(() => {
-    salvaMetaCollapsed(metaCollapsed);
+    salvaFlag(META_KEY, metaCollapsed);
+  });
+
+  $effect(() => {
+    salvaFlag(INTESTAZIONE_KEY, intestazioneCompressa);
   });
 
   async function caricaDettaglio(id: string): Promise<void> {
@@ -693,6 +689,24 @@
   <article class="detail-pane" data-tour="editor">
     <header class="detail-header">
       <div class="title-row">
+        <button
+          class="ico toggle-intestazione"
+          type="button"
+          title={intestazioneCompressa
+            ? "Mostra descrizione e dettagli"
+            : "Comprimi descrizione e dettagli"}
+          aria-label={intestazioneCompressa
+            ? "Mostra descrizione e dettagli"
+            : "Comprimi descrizione e dettagli"}
+          aria-expanded={!intestazioneCompressa}
+          onclick={() => (intestazioneCompressa = !intestazioneCompressa)}
+        >
+          {#if intestazioneCompressa}
+            <ChevronRight size={16} />
+          {:else}
+            <ChevronDown size={16} />
+          {/if}
+        </button>
         <input
           class="titolo"
           type="text"
@@ -792,30 +806,32 @@
         </div>
       </div>
 
-      <textarea
-        class="descrizione"
-        bind:value={descrizione}
-        placeholder="Descrizione…"
-        rows="1"
-        oninput={pianificaAutosave}
-      ></textarea>
+      {#if !intestazioneCompressa}
+        <textarea
+          class="descrizione"
+          bind:value={descrizione}
+          placeholder="Descrizione…"
+          rows="1"
+          oninput={pianificaAutosave}
+        ></textarea>
 
-      <div class="meta-row">
-        <span class="chip" data-vis={dettaglio.visibilita}>
-          <span class="dot" aria-hidden="true"></span>
-          {dettaglio.visibilita === "private" ? "Privato" : "Team"}
-        </span>
-        {#if folderNome}
-          <span class="chip">📁 {folderNome}</span>
-        {/if}
-        {#if dettaglio.target_model}
-          <span class="chip">🎯 {dettaglio.target_model}</span>
-        {/if}
-        <span class="chip muted">Usato {dettaglio.uso_count}×</span>
-        <span class="chip muted">
-          Aggiornato {tempoRelativo(dettaglio.aggiornato_a)}
-        </span>
-      </div>
+        <div class="meta-row">
+          <span class="chip" data-vis={dettaglio.visibilita}>
+            <span class="dot" aria-hidden="true"></span>
+            {dettaglio.visibilita === "private" ? "Privato" : "Team"}
+          </span>
+          {#if folderNome}
+            <span class="chip">📁 {folderNome}</span>
+          {/if}
+          {#if dettaglio.target_model}
+            <span class="chip">🎯 {dettaglio.target_model}</span>
+          {/if}
+          <span class="chip muted">Usato {dettaglio.uso_count}×</span>
+          <span class="chip muted">
+            Aggiornato {tempoRelativo(dettaglio.aggiornato_a)}
+          </span>
+        </div>
+      {/if}
 
       <DetailTabs
         {tabAttivo}
@@ -991,6 +1007,10 @@
     display: flex;
     align-items: center;
     gap: var(--sp-2);
+  }
+
+  .toggle-intestazione {
+    flex-shrink: 0;
   }
 
   .titolo {
