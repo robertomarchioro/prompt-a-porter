@@ -1,5 +1,22 @@
 # Changelog — Prompt a Porter
 
+## v0.8.58 — Il colletto si ripiega (2026-11-22)
+
+> L'intestazione sopra l'editor si può comprimere, così chi scrive prompt lunghi ha più spazio. Il server MCP chiude 7 advisory sulle sue dipendenze HTTP, il registro dei modelli sale a 56 voci e le dipendenze dell'app, del server di sync e della CLI vengono aggiornate.
+
+### Novità
+
+- **Più spazio per scrivere** (#747): una freccia accanto al titolo comprime la descrizione e la riga dei metadati sopra l'editor. La scelta resta valida per tutti i prompt, anche dopo il riavvio.
+
+### Sicurezza
+
+- **Server MCP** (#740): hono 4.13.18 e @hono/node-server 2.1.8 chiudono 7 advisory sulle dipendenze indirette. L'esposizione era bassa, perché il server comunica con il client AI via stdio e non apre porte HTTP.
+
+### Manutenzione
+
+- **Nuovi modelli AI selezionabili** (#746): il registro sale a 56 modelli, con Claude Fable 5.2, Gemini 4 Carbon e Gemini 4 Hydrogen. I modelli usciti dal listino restano disponibili, marcati come obsoleti.
+- Aggiornamenti di routine delle dipendenze (Dependabot, #741–#745): plugin Tauri log (2.10.2) e opener (2.7.3), zip 9.5.1, marked 18.2, driver.js 1.12 per la guida interattiva, vite 8.3.8; per il server di sync golang.org/x/crypto 0.59, per la CLI modernc.org/sqlite 1.62.
+
 ## v0.8.57 — Il vault cambia fodera (2026-11-15)
 
 > Sostituisce la v0.8.56, taggata ma mai pubblicata: la sua build di release non ha prodotto la versione macOS perché GitHub ha ritirato il runner macos-14, e i tag di release sono immutabili per regola del repository. Release di manutenzione e sicurezza: il motore di cifratura del vault passa a SQLCipher 4.20 e i vault creati con le versioni precedenti si aprono senza migrazione. L'import delle cartelle diventa più rigoroso e si chiudono gli advisory di sicurezza aperti da metà ottobre su TLS, archivi zip, crittografia e server MCP.
