@@ -79,7 +79,7 @@ La **barra laterale** (a sinistra) è il punto di partenza di ogni ricerca: racc
 
 La **lista dei prompt** (colonna centrale) mostra i prompt della vista corrente, ognuno con un'anteprima del body: è qui che scorri e selezioni.
 
-Il **pannello di dettaglio** (a destra) mostra tutto del prompt selezionato — titolo, body, tag, modello target, varianti, cronologia — ed è dove lo modifichi.
+Il **pannello di dettaglio** (a destra) mostra tutto del prompt selezionato — titolo, body, tag, modello target, varianti, cronologia — ed è dove lo modifichi. Se ti serve più spazio per scrivere, la freccia accanto al titolo comprime la descrizione e la riga dei metadati sotto di esso; la scelta resta valida per tutti i prompt finché non la riapri.
 
 In alto trovi la barra di ricerca con i filtri rapidi; in basso, la status bar con il conteggio dei prompt e le hotkey suggerite.
 

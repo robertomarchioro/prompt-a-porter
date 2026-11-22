@@ -58,7 +58,8 @@ voti di un prompt:
 Se un prompt non ha ancora voti, la tab mostra uno stato vuoto che ti invita
 a valutarlo dalla modale di compilazione. Nella riga dei metadati del
 pannello di dettaglio compare intanto il numero di utilizzi, come chip
-**Usato N×**.
+**Usato N×** (se non la vedi, riapri l'intestazione con la freccia accanto
+al titolo).
 
 ## Cosa significano i tre valori
 
